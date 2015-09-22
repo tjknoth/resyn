@@ -22,18 +22,32 @@ import Control.Lens hiding (both)
 
 {- Interface -}
 
-evalFixPointSolver = runReaderT
+-- | 'initialCandidate' : initial candidate solution
+initialCandidate :: SMTSolver s => s Candidate
+initialCandidate = do
+  initSolver
+  return $ Candidate (topSolution Map.empty) Set.empty Set.empty "0"
 
--- | 'solveWithParams' @params quals constraints@: 'greatestFixPoint' @quals constraints@ with solver parameters @params@
-solveWithParams :: SMTSolver s => SolverParams -> QMap -> [Clause] -> (Candidate -> Doc) -> s (Maybe Solution)
-solveWithParams params quals constraints candidateDoc = evalFixPointSolver go params
+-- | 'refineCandidates' @params quals constraints cands@ : solve @constraints@ using @quals@ starting from initial candidates @cands@;
+-- if there is no solution, produce an empty list of candidates; otherwise the first candidate in the list is a complete solution
+refineCandidates :: SMTSolver s => SolverParams -> QMap -> [Clause] -> [Candidate] -> s [Candidate]
+refineCandidates params quals constraints cands = evalFixPointSolver go params
   where
-    go = do      
-      quals' <- ifM (asks pruneQuals)
-        (traverse (traverseOf qualifiers pruneQualifiers) quals) -- remove redundant qualifiers
-        (return quals)      
-      greatestFixPoint quals' constraints candidateDoc
+    go = do
+      debug 1 (vsep [nest 2 $ text "Constraints" $+$ vsep (map pretty constraints), nest 2 $ text "QMap" $+$ pretty quals]) $ return ()
+      cands' <- mapM addConstraints cands
+      case find (Set.null . invalidConstraints) cands' of
+        Just c -> return $ c : delete c cands'
+        Nothing -> greatestFixPoint quals cands'
       
+    addConstraints (Candidate sol valids invalids label) = do
+      let sol' = merge (topSolution quals) sol  -- Add new unknowns
+      (valids', invalids') <- partitionM (isValidClause . clauseApplySolution sol') constraints -- Evaluate new constraints
+      return $ Candidate sol' (valids `Set.union` Set.fromList valids') (invalids `Set.union` Set.fromList invalids') label
+      
+pruneQualifiers :: SMTSolver s => SolverParams -> QSpace -> s QSpace    
+pruneQualifiers params quals = evalFixPointSolver (ifM (asks pruneQuals) (pruneQSpace quals) (return quals)) params
+
 -- | Strategies for picking the next candidate solution to strengthen
 data CandidatePickStrategy = FirstCandidate | WeakCandidate | InitializedWeakCandidate
       
@@ -50,50 +64,46 @@ data SolverParams = SolverParams {
   semanticPrune :: Bool,                                  -- ^ After solving each constraints, remove semantically non-optimal solutions
   agressivePrune :: Bool,                                 -- ^ Perform pruning on the LHS-pValuation of as opposed to per-variable valuations
   candidatePickStrategy :: CandidatePickStrategy,         -- ^ How should the next candidate solution to strengthen be picked?
-  constraintPickStrategy :: ConstraintPickStrategy        -- ^ How should the next constraint to solve be picked?
+  constraintPickStrategy :: ConstraintPickStrategy,       -- ^ How should the next constraint to solve be picked?
+  candDoc :: Candidate -> Doc                             -- ^ How should candidate solutions be printed in debug output?
 }
  
+{- Implementation -}
+
 -- | Fix point solver execution 
 type FixPointSolver s a = ReaderT SolverParams s a
 
-{- Implementation -}
+evalFixPointSolver = runReaderT
 
 -- | 'greatestFixPoint' @quals constraints@: weakest solution for a system of second-order constraints @constraints@ over qualifiers @quals@.
-greatestFixPoint :: SMTSolver s => QMap -> [Clause] -> (Candidate -> Doc) -> FixPointSolver s (Maybe Solution)
-greatestFixPoint quals constraints candidateDoc = do
-    debug 1 (vsep [nest 2 $ text "Constraints" $+$ vsep (map pretty constraints), nest 2 $ text "QMap" $+$ pretty quals]) $ return ()
-    let sol0 = topSolution quals
-    (valids, invalids) <- partitionM (isValidClause . clauseApplySolution sol0) constraints
-    if null invalids
-      then return $ Just sol0
-      else go [Candidate sol0 (Set.fromList valids) (Set.fromList invalids) "0"]
+greatestFixPoint :: SMTSolver s => QMap -> [Candidate] -> FixPointSolver s [Candidate]
+greatestFixPoint _ [] = return []
+greatestFixPoint quals candidates = do
+    (cand@(Candidate sol _ _ _), rest) <- pickCandidate candidates <$> asks candidatePickStrategy
+    constraint <- asks constraintPickStrategy >>= pickConstraint cand
+    case constraint of
+      Disjunctive disjuncts -> do
+        debugOutputSplit candidates cand constraint
+        newCandidates <- mapM (updateWithDisjuct constraint cand) (zip disjuncts [0..])
+        greatestFixPoint quals (newCandidates ++ rest)
+      Horn fml -> do            
+        let modifiedConstraint = instantiateRhs sol fml 
+        debugOutput candidates cand fml modifiedConstraint
+        diffs <- strengthen quals modifiedConstraint sol                        
+        (newCandidates, rest') <- if length diffs == 1
+          then do -- Propagate the diff to all equivalent candidates
+            let unknowns = Set.map unknownName $ unknownsOf fml
+            let (equivs, nequivs) = partition (\(Candidate s valids invalids _) -> restrictDomain unknowns s == restrictDomain unknowns sol && Set.member constraint invalids) rest
+            nc <- mapM (\c -> updateCandidate constraint c diffs (head diffs)) (cand : equivs)
+            return (nc, nequivs)
+          else do -- Only update the current candidate
+            nc <- mapM (updateCandidate constraint cand diffs) diffs
+            return (nc, rest)
+        case find (Set.null . invalidConstraints) newCandidates of
+          Just cand' -> return $ cand' : (delete cand' newCandidates ++ rest')  -- Solution found
+          Nothing -> greatestFixPoint quals (newCandidates ++ rest')
+
   where
-    go [] = return Nothing
-    go candidates = do
-        (cand@(Candidate sol _ _ _), rest) <- pickCandidate candidates <$> asks candidatePickStrategy
-        constraint <- asks constraintPickStrategy >>= pickConstraint cand
-        case constraint of
-          Disjunctive disjuncts -> do
-            debugOutputSplit candidates cand constraint $ return ()
-            newCandidates <- mapM (updateWithDisjuct constraint cand) (zip disjuncts [0..])
-            go (newCandidates ++ rest)
-          Horn fml -> do            
-            let modifiedConstraint = instantiateRhs sol fml 
-            debugOutput candidates cand fml modifiedConstraint $ return ()
-            diffs <- strengthen quals modifiedConstraint sol                        
-            (newCandidates, rest') <- if length diffs == 1
-              then do -- Propagate the diff to all equivalent candidates
-                let unknowns = Set.map unknownName $ unknownsOf fml
-                let (equivs, nequivs) = partition (\(Candidate s valids invalids _) -> restrictDomain unknowns s == restrictDomain unknowns sol && Set.member constraint invalids) rest
-                nc <- mapM (\c -> updateCandidate constraint c diffs (head diffs)) (cand : equivs)
-                return (nc, nequivs)
-              else do -- Only update the current candidate
-                nc <- mapM (updateCandidate constraint cand diffs) diffs
-                return (nc, rest)
-            case find (Set.null . invalidConstraints) newCandidates of
-              Just cand' -> debug 1 (nest 2 $ text "Solution" $+$ pretty (solution cand')) $ return $ Just (solution cand') -- Solution found
-              Nothing -> go (newCandidates ++ rest')
-              
     instantiateRhs sol fml = case fml of
       Binary Implies lhs rhs -> Binary Implies lhs (applySolution sol rhs)
       _ -> error $ unwords ["greatestFixPoint: encountered ill-formed constraint", show fml]              
@@ -135,16 +145,22 @@ greatestFixPoint quals constraints candidateDoc = do
             let spaceSize (Horn fml) = maxValSize quals sol (unknownsOf (leftHandSide fml))
             return $ minimumBy (\x y -> compare (spaceSize x) (spaceSize y)) (Set.toList hs)
 
-    debugOutput cands cand inv modified = debug 1 $ vsep [
-      nest 2 $ text "Candidates" <+> parens (pretty $ length cands) $+$ (vsep $ map candidateDoc cands), 
-      text "Chosen candidate:" <+> candidateDoc cand,
-      text "Invalid Constraint:" <+> pretty inv,
-      text "Strengthening:" <+> pretty modified]
+    debugOutput cands cand inv modified = do
+      candidateDoc <- asks candDoc
+      debug 1 (vsep [
+        nest 2 $ text "Candidates" <+> parens (pretty $ length cands) $+$ (vsep $ map candidateDoc cands), 
+        text "Chosen candidate:" <+> candidateDoc cand,
+        text "Invalid Constraint:" <+> pretty inv,
+        text "Strengthening:" <+> pretty modified]) $
+        return ()
       
-    debugOutputSplit cands cand inv = debug 1 $ vsep [
-      nest 2 $ text "Candidates" <+> parens (pretty $ length cands) $+$ (vsep $ map candidateDoc cands), 
-      text "Chosen candidate:" <+> candidateDoc cand, 
-      text "Splitting Invalid Constraint:" <+> pretty inv]      
+    debugOutputSplit cands cand inv = do
+      candidateDoc <- asks candDoc 
+      debug 1 (vsep [
+        nest 2 $ text "Candidates" <+> parens (pretty $ length cands) $+$ (vsep $ map candidateDoc cands), 
+        text "Chosen candidate:" <+> candidateDoc cand, 
+        text "Splitting Invalid Constraint:" <+> pretty inv]) $
+        return ()
     
 -- | 'strengthen' @quals fml sol@: all minimal strengthenings of @sol@ using qualifiers from @quals@ that make @fml@ valid;
 -- | @fml@ must have the form "/\ u_i ==> const".
@@ -281,9 +297,11 @@ pruneValuations assumptions = let isSubsumed val vals = let fml = conjunction (v
   in prune isSubsumed
   
 -- | 'pruneQualifiers' @quals@: eliminate logical duplicates from @quals@
-pruneQualifiers :: SMTSolver s => [Formula] -> FixPointSolver s [Formula]   
-pruneQualifiers = let isSubsumed qual quals = anyM (\q -> isValidFml $ qual |<=>| q) quals
-  in prune isSubsumed
+pruneQSpace :: SMTSolver s => QSpace -> FixPointSolver s QSpace 
+pruneQSpace qSpace = let isSubsumed qual quals = anyM (\q -> isValidFml $ qual |<=>| q) quals
+  in do
+    quals <- prune isSubsumed (qSpace ^. qualifiers)
+    return $ set qualifiers quals qSpace
   
 -- | 'prune' @isSubsumed xs@ : prune all elements of @xs@ subsumed by another element according to @isSubsumed@  
 prune :: SMTSolver s => (a -> [a] -> FixPointSolver s Bool) -> [a] -> FixPointSolver s [a]

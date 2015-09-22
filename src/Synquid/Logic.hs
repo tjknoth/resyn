@@ -12,13 +12,19 @@ import qualified Data.Map as Map
 import Data.Map (Map)
 
 import Control.Lens hiding (both)
+import Control.Monad
 
 -- | Identifiers
 type Id = String
 
 -- | Base types  
-data BaseType = BoolT | IntT | ListT | SetT
+data BaseType = BoolT | IntT | TypeVarT Id | DatatypeT Id | SetT BaseType
   deriving (Eq, Ord)
+  
+isSetT (SetT _) = True
+isSetT _ = False
+elemT (SetT b) = b
+dtName (DatatypeT name) = name  
 
 {- Formulas of the refinement logic -}
 
@@ -47,7 +53,7 @@ inverse s = Map.fromList [(y, Var b x) | (x, Var b y) <- Map.toList s]
 data Formula =
   BoolLit Bool |                      -- ^ Boolean literal  
   IntLit Integer |                    -- ^ Integer literal
-  SetLit [Formula] |                  -- ^ Set literal
+  SetLit BaseType [Formula] |         -- ^ Set literal
   Var BaseType Id |                   -- ^ Input variable (universally quantified first-order variable)
   Unknown Substitution Id |           -- ^ Predicate unknown (with a pending substitution)
   Unary UnOp Formula |                -- ^ Unary expression  
@@ -63,10 +69,12 @@ varType (Var t _) = t
   
 ftrue = BoolLit True
 ffalse = BoolLit False
+boolVar = Var BoolT
+valBool = boolVar valueVarName
 intVar = Var IntT
-listVar = Var ListT
 valInt = intVar valueVarName
-valList = listVar valueVarName
+vartVar n = Var (TypeVarT n)
+valVart n = vartVar n valueVarName
 fneg = Unary Neg
 fnot = Unary Not
 (|*|) = Binary Times
@@ -82,8 +90,12 @@ fnot = Unary Not
 (|||) = Binary Or
 (|=>|) = Binary Implies
 (|<=>|) = Binary Iff
-conjunction fmls = if Set.null fmls then ftrue else foldr1 (|&|) (Set.toList fmls)
-disjunction fmls = if Set.null fmls then ffalse else foldr1 (|||) (Set.toList fmls)
+
+andClean l r = if l == ftrue then r else (if r == ftrue then l else l |&| r)    
+orClean l r = if l == ffalse then r else (if r == ffalse then l else l ||| r)    
+conjunction fmls = foldr andClean ftrue (Set.toList fmls)
+disjunction fmls = foldr orClean ffalse (Set.toList fmls)
+
 (/+/) = Binary Union
 (/*/) = Binary Intersect
 (/-/) = Binary Diff
@@ -99,7 +111,7 @@ infix 4 |<=>|
   
 -- | 'varsOf' @fml@ : set of all input variables of @fml@
 varsOf :: Formula -> Set Formula
-varsOf (SetLit elems) = Set.unions $ map varsOf elems
+varsOf (SetLit _ elems) = Set.unions $ map varsOf elems
 varsOf v@(Var _ _) = Set.singleton v
 varsOf (Unary _ e) = varsOf e
 varsOf (Binary _ e1 e2) = varsOf e1 `Set.union` varsOf e2
@@ -134,24 +146,30 @@ conjunctsOf (Binary And l r) = conjunctsOf l `Set.union` conjunctsOf r
 conjunctsOf f = Set.singleton f
 
 -- | Base type of a term in the refinement logic
-baseTypeOf :: Formula -> BaseType
-baseTypeOf (BoolLit _)                        = BoolT
-baseTypeOf (IntLit _)                         = IntT
-baseTypeOf (SetLit _)                         = SetT
-baseTypeOf (Var b _ )                         = b
-baseTypeOf (Unknown _ _)                      = BoolT
-baseTypeOf (Unary op _)
-  | op == Neg                                 = IntT
-  | otherwise                                 = BoolT
-baseTypeOf (Binary op _ _)
-  | op == Times || op == Plus || op == Minus  = IntT
-  | otherwise                                 = BoolT
-baseTypeOf (Measure b _ _)                    = b
-
+baseTypeOf :: Formula -> Maybe BaseType
+baseTypeOf (BoolLit _)                        = Just $ BoolT
+baseTypeOf (IntLit _)                         = Just $ IntT
+baseTypeOf (SetLit b es)                      = mapM_ (\e -> baseTypeOf e >>= guard . (== b)) es >> return (SetT b)  
+baseTypeOf (Var b _ )                         = Just $ b
+baseTypeOf (Unknown _ _)                      = Just $ BoolT
+baseTypeOf (Unary op e)
+  | op == Neg                                 = (baseTypeOf e >>= guard . (== IntT)) >> return IntT
+  | otherwise                                 = (baseTypeOf e >>= guard . (== BoolT)) >> return BoolT
+baseTypeOf (Binary op e1 e2)
+  | op == Times || op == Plus || op == Minus            = do l <- baseTypeOf e1; guard (l == IntT); r <- baseTypeOf e2; guard (r == IntT); return IntT
+  | op == Eq  || op == Neq                              = do l <- baseTypeOf e1; r <- baseTypeOf e2; guard (l == r); return BoolT
+  -- | op == Lt || op == Le || op == Gt || op == Ge        = do l <- baseTypeOf e1; guard (l == IntT); r <- baseTypeOf e2; guard (r == IntT); return BoolT
+  | op == Lt || op == Le || op == Gt || op == Ge        = do l <- baseTypeOf e1; r <- baseTypeOf e2; guard (l == r); return BoolT -- make comparisons generic
+  | op == And || op == Or || op == Implies || op == Iff = do l <- baseTypeOf e1; guard (l == BoolT); r <- baseTypeOf e2; guard (r == BoolT); return BoolT
+  | op == Union || op == Intersect || op == Diff        = do l <- baseTypeOf e1; guard (isSetT l); r <- baseTypeOf e2; guard (r == l); return l
+  | op == Member                                        = do l <- baseTypeOf e1; r <- baseTypeOf e2; guard (r == SetT l); return BoolT 
+  | op == Subset                                        = do l <- baseTypeOf e1; guard (isSetT l); r <- baseTypeOf e2; guard (r == l); return BoolT
+baseTypeOf (Measure b _ _)                    = Just $ b
+  
 -- | 'substitute' @subst fml@: Replace first-order variables in @fml@ according to @subst@
 substitute :: Substitution -> Formula -> Formula
 substitute subst fml = case fml of
-  SetLit elems -> SetLit $ map (substitute subst) elems
+  SetLit b elems -> SetLit b $ map (substitute subst) elems
   Var _ name -> case Map.lookup name subst of
     Just f -> f
     Nothing -> fml
@@ -171,7 +189,7 @@ substitute subst fml = case fml of
                 Just (Var b' v) -> if b == b' 
                   then Map.insert x (Var b v) $ compose old' (Map.delete y new)
                   else error "Base type mismatch when composing pending substitutions"
-
+                  
 {- Qualifiers -}
 
 -- | Search space for valuations of a single unknown
@@ -267,5 +285,4 @@ data Candidate = Candidate {
     validConstraints :: Set Clause,
     invalidConstraints :: Set Clause,
     label :: String
-  } deriving (Eq, Ord)  
-
+  } deriving (Eq, Ord)
