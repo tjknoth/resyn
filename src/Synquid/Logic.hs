@@ -19,7 +19,7 @@ type Id = String
 
 -- | Sorts
 data Sort = BoolS | IntS | UninterpretedS Id | UnknownS | SetS Sort
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
   
 isSetS (SetS _) = True
 isSetS _ = False
@@ -27,8 +27,8 @@ isSetS _ = False
 {- Formulas of the refinement logic -}
 
 -- | Unary operators
-data UnOp = Neg | Not
-  deriving (Eq, Ord, Show)
+data UnOp = Neg | Abs | Not
+  deriving (Eq, Ord)
 
 -- | Binary operators  
 data BinOp = 
@@ -38,7 +38,7 @@ data BinOp =
     And | Or | Implies | Iff |      -- ^ Bool -> Bool -> Bool
     Union | Intersect | Diff |      -- ^ Set -> Set -> Set
     Member | Subset                 -- ^ Int/Set -> Set -> Bool
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
   
 -- | Variable substitution  
 type Substitution = Map Id Formula
@@ -57,7 +57,7 @@ data Formula =
   Unary UnOp Formula |                -- ^ Unary expression  
   Binary BinOp Formula Formula |      -- ^ Binary expression
   Measure Sort Id Formula             -- ^ Measure application
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
   
 valueVarName = "_v"
 unknownName (Unknown _ name) = name
@@ -73,6 +73,7 @@ valInt = intVar valueVarName
 vartVar n = Var (UninterpretedS n)
 valVart n = vartVar n valueVarName
 fneg = Unary Neg
+fabs = Unary Abs
 fnot = Unary Not
 (|*|) = Binary Times
 (|+|) = Binary Plus
@@ -88,8 +89,8 @@ fnot = Unary Not
 (|=>|) = Binary Implies
 (|<=>|) = Binary Iff
 
-andClean l r = if l == ftrue then r else (if r == ftrue then l else l |&| r)    
-orClean l r = if l == ffalse then r else (if r == ffalse then l else l ||| r)    
+andClean l r = if l == ftrue then r else (if r == ftrue then l else (if l == ffalse || r == ffalse then ffalse else l |&| r))    
+orClean l r = if l == ffalse then r else (if r == ffalse then l else (if l == ftrue || r == ftrue then ftrue else l ||| r))    
 conjunction fmls = foldr andClean ftrue (Set.toList fmls)
 disjunction fmls = foldr orClean ffalse (Set.toList fmls)
 
@@ -150,7 +151,7 @@ sortOf (SetLit b es)                          = mapM_ (\e -> sortOf e >>= guard 
 sortOf (Var s _ )                             = Just s
 sortOf (Unknown _ _)                          = Just BoolS
 sortOf (Unary op e)
-  | op == Neg                                 = (sortOf e >>= guard . (== IntS)) >> return IntS
+  | op == Neg || op == Abs                    = (sortOf e >>= guard . (== IntS)) >> return IntS
   | otherwise                                 = (sortOf e >>= guard . (== BoolS)) >> return BoolS
 sortOf (Binary op e1 e2)
   | op == Times || op == Plus || op == Minus            = do l <- sortOf e1; guard (l == IntS); r <- sortOf e2; guard (r == IntS); return IntS

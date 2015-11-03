@@ -35,18 +35,29 @@ refineCandidates params quals constraints cands = evalFixPointSolver go params
   where
     go = do
       debug 1 (vsep [nest 2 $ text "Constraints" $+$ vsep (map pretty constraints), nest 2 $ text "QMap" $+$ pretty quals]) $ return ()
-      cands' <- mapM addConstraints cands
+      let constraints' = filter isNew constraints
+      cands' <- mapM (addConstraints constraints') cands
       case find (Set.null . invalidConstraints) cands' of
         Just c -> return $ c : delete c cands'
         Nothing -> greatestFixPoint quals cands'
+        
+    isNew c = not (c `Set.member` validConstraints (head cands)) && not (c `Set.member` invalidConstraints (head cands))
       
-    addConstraints (Candidate sol valids invalids label) = do
+    addConstraints constraints (Candidate sol valids invalids label) = do
       let sol' = merge (topSolution quals) sol  -- Add new unknowns
       (valids', invalids') <- partitionM (isValidFml . applySolution sol') constraints -- Evaluate new constraints
       return $ Candidate sol' (valids `Set.union` Set.fromList valids') (invalids `Set.union` Set.fromList invalids') label
       
+-- | 'pruneQualifiers' @params quals@ : remove logically equivalent qualifiers from @quals@
 pruneQualifiers :: SMTSolver s => SolverParams -> QSpace -> s QSpace    
 pruneQualifiers params quals = evalFixPointSolver (ifM (asks pruneQuals) (pruneQSpace quals) (return quals)) params
+
+-- | 'checkConsistency' @fmls cands@ : return those candidates from @cands@ under which all @fmls@ are satisfiable
+checkConsistency :: SMTSolver s => [Formula] -> [Candidate] -> s [Candidate]
+checkConsistency fmls cands = filterM checkCand cands
+  where
+    checkCand (Candidate sol valids invalids label) = let fmls' = map (applySolution sol) fmls 
+      in debug 1 (text "Consistency Check" <+> pretty fmls') $ not <$> anyM isValid (map fnot fmls')      
 
 -- | Strategies for picking the next candidate solution to strengthen
 data CandidatePickStrategy = FirstCandidate | WeakCandidate | InitializedWeakCandidate
@@ -151,8 +162,8 @@ strengthen quals fml@(Binary Implies lhs rhs) sol = do
     pruned <- ifM (asks semanticPrune) 
       (ifM (asks agressivePrune)
         (do 
-          -- valuations' <- pruneValuations usedLhsQuals (Map.keys splitting)
-          valuations' <- pruneValuations Set.empty (Map.keys splitting)
+          valuations' <- pruneValuations usedLhsQuals (Map.keys splitting) -- TODO: is this dangeorous??? the result might not cover the pruned alternatives in a different context!
+          -- valuations' <- pruneValuations Set.empty (Map.keys splitting)
           debug 1 (text "Pruned valuations:" $+$ vsep (map pretty valuations')) $ return ()
           return $ concatMap (splitting Map.!) valuations')   -- Prune LHS valuations and then return the splits of only optimal valuations
         (pruneSolutions unknownsList allSolutions))           -- Prune per-variable
@@ -208,7 +219,7 @@ optimalValuationsBFS maxSize quals lhs rhs = map qualsAt <$> filterSubsets (chec
     qualsAt = Set.map (qualsList !!)
     check val = let 
                   n = Set.size val 
-                  lhs' = conjunction lhs |&| conjunction val                  
+                  lhs' = conjunction lhs `andClean` conjunction val                  
       in if 1 <= n && n <= maxSize
           then isValidFml $ lhs' |=>| rhs
           else return False

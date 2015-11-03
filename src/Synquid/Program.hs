@@ -17,19 +17,20 @@ import Control.Lens
 {- Type skeletons -}
 
 data BaseType = BoolT | IntT | DatatypeT Id | TypeVarT Id
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
   
 -- | Type skeletons (parametrized by refinements)
 data TypeSkeleton r =
   ScalarT BaseType [TypeSkeleton r]  r |
   FunctionT Id (TypeSkeleton r) (TypeSkeleton r)  
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
   
 toSort BoolT = BoolS
 toSort IntT = IntS
 toSort (DatatypeT name) = UninterpretedS name
 toSort (TypeVarT name) = UninterpretedS name
   
+baseTypeOf (ScalarT baseT _ _) = baseT
 isFunctionType (FunctionT _ _ _) = True
 isFunctionType _ = False
 argType (FunctionT _ t _) = t
@@ -41,6 +42,11 @@ arity _ = 0
 lastType t@(ScalarT _ _ _) = t
 lastType (FunctionT _ _ tRes) = lastType tRes
 
+allArgs (ScalarT _ _ _) = Set.empty
+allArgs (FunctionT x tArg tRes) = case tArg of
+  ScalarT baseT _ _ -> Set.insert (Var (toSort baseT) x) $ allArgs tRes 
+  _ -> allArgs tRes
+  
 varRefinement x b = let s = toSort b in (Var s valueVarName |=| Var s x)
 isVarRefinemnt (Binary Eq (Var _ v) (Var _ _)) = v == valueVarName
 isVarRefinemnt _ = False
@@ -49,7 +55,7 @@ isVarRefinemnt _ = False
 data SchemaSkeleton r = 
   Monotype (TypeSkeleton r) |
   Forall Id (SchemaSkeleton r)
-  deriving (Show, Eq)
+  deriving (Eq)
   
 toMonotype :: SchemaSkeleton r -> TypeSkeleton r
 toMonotype (Monotype t) = t
@@ -63,32 +69,25 @@ typeSubstitute :: TypeSubstitution -> RType -> RType
 typeSubstitute subst t@(ScalarT (TypeVarT a) [] r) = case Map.lookup a subst of
   Just t' -> addRefinement (typeSubstitute subst t') (typeSubstituteFML subst r) -- In {v: a | r}, we might have to substitute sorts inside r
   Nothing -> t
-  where
-    addRefinement (ScalarT base tArgs fml) fml' = if isVarRefinemnt fml'
-      then ScalarT base tArgs fml' -- the type of a polymorphic variable does not require any other refinements
-      else ScalarT base tArgs (fml `andClean` fml')
-    addRefinement t (BoolLit True) = t
-    addRefinement t _ = error $ "addRefinement: applied to function type"
-    
-    typeSubstituteFML subst fml = case fml of 
-      SetLit el es -> SetLit (substSort el) (map (typeSubstituteFML subst) es)
-      Var s name -> Var (substSort s) name
-      Unknown s name -> Unknown (Map.map (typeSubstituteFML subst) s) name
-      Unary op e -> Unary op (typeSubstituteFML subst e)
-      Binary op l r -> Binary op (typeSubstituteFML subst l) (typeSubstituteFML subst r)
-      Measure s name e -> Measure (substSort s) name (typeSubstituteFML subst e)
-      _ -> fml
-      where
-        substSort s@(UninterpretedS name) = case Map.lookup name subst of
-          Just (ScalarT b _ _) -> toSort b
-          Just _ -> error $ unwords ["typeSubstituteFML: cannot substitute function type for", name]
-          Nothing -> s
-        substSort (SetS el) = SetS (substSort el)
-        substSort s = s    
-  
 typeSubstitute subst (ScalarT baseT tArgs r) = let tArgs' = map (typeSubstitute subst) tArgs 
-  in ScalarT baseT tArgs' r -- Here no need to substitute sorts inside r, since type arguments do not get reflected in the sort
+  in ScalarT baseT tArgs' (typeSubstituteFML subst r)
 typeSubstitute subst (FunctionT x tArg tRes) = FunctionT x (typeSubstitute subst tArg) (typeSubstitute subst tRes)
+
+typeSubstituteFML subst fml = case fml of 
+  SetLit el es -> SetLit (substSort el) (map (typeSubstituteFML subst) es)
+  Var s name -> Var (substSort s) name
+  Unknown s name -> Unknown (Map.map (typeSubstituteFML subst) s) name
+  Unary op e -> Unary op (typeSubstituteFML subst e)
+  Binary op l r -> Binary op (typeSubstituteFML subst l) (typeSubstituteFML subst r)
+  Measure s name e -> Measure (substSort s) name (typeSubstituteFML subst e)
+  _ -> fml
+  where
+    substSort s@(UninterpretedS name) = case Map.lookup name subst of
+      Just (ScalarT b _ _) -> toSort b
+      Just _ -> error $ unwords ["typeSubstituteFML: cannot substitute function type for", name]
+      Nothing -> s
+    substSort (SetS el) = SetS (substSort el)
+    substSort s = s
 
 -- | 'typeVarsOf' @t@ : all type variables in @t@
 typeVarsOf :: TypeSkeleton r -> Set Id
@@ -130,6 +129,13 @@ refineTop (FunctionT x tArg tFun) = FunctionT x (refineBot tArg) (refineTop tFun
 refineBot :: SType -> RType
 refineBot (ScalarT base tArgs _) = ScalarT base (map refineBot tArgs) ffalse
 refineBot (FunctionT x tArg tFun) = FunctionT x (refineTop tArg) (refineBot tFun)
+
+addRefinement (ScalarT base tArgs fml) fml' = if isVarRefinemnt fml'
+  then ScalarT base tArgs fml' -- the type of a polymorphic variable does not require any other refinements
+  else ScalarT base tArgs (fml `andClean` fml')
+addRefinement t (BoolLit True) = t
+addRefinement t _ = error $ "addRefinement: applied to function type"
+
       
 -- | 'renameVar' @old new t@: rename all occurrences of @old@ in @t@ into @new@
 renameVar :: Id -> Id -> RType -> RType -> RType
@@ -172,6 +178,78 @@ vart n = ScalarT (TypeVarT n) []
 vart_ n = vart n ()
 vartAll n = vart n ftrue
 
+{- Program terms -}    
+    
+-- | One case inside a pattern match expression
+data Case r = Case {
+  constructor :: Id,      -- ^ Constructor name
+  argNames :: [Id],       -- ^ Bindings for constructor arguments
+  expr :: Program r       -- ^ Result of the match in this case
+} deriving Eq    
+    
+-- | Program skeletons parametrized by information stored symbols, conditionals, and by node types
+data BareProgram r =
+  PSymbol Id |                            -- ^ Symbol (variable or constant)
+  PApp (Program r) (Program r) |          -- ^ Function application
+  PFun Id (Program r) |                   -- ^ Lambda abstraction
+  PIf Formula (Program r) (Program r) |   -- ^ Conditional
+  PMatch (Program r) [Case r] |           -- ^ Pattern match on datatypes
+  PFix [Id] (Program r)                   -- ^ Fixpoint  
+  deriving Eq
+  
+-- | Programs annotated with types  
+data Program r = Program {
+  content :: BareProgram r,
+  typeOf :: TypeSkeleton r
+} deriving Eq
+
+-- | Fully defined programs 
+type RProgram = Program Formula
+
+hole t = Program (PSymbol "??") t
+
+symbolList (Program (PSymbol name) _) = [name]
+symbolList (Program (PApp fun arg) _) = symbolList fun ++ symbolList arg
+
+-- | Instantiate type variables in a program
+programSubstituteTypes :: TypeSubstitution -> RProgram -> RProgram
+programSubstituteTypes subst (Program p t) = Program (programSubstituteTypes' p) (typeSubstitute subst t)
+  where
+    pst = programSubstituteTypes subst
+    
+    programSubstituteTypes' (PSymbol name) = PSymbol name
+    programSubstituteTypes' (PApp fun arg) = PApp (pst fun) (pst arg)
+    programSubstituteTypes' (PFun name p) = PFun name (pst p)    
+    programSubstituteTypes' (PIf fml p1 p2) = PIf fml (pst p1) (pst p2)
+    programSubstituteTypes' (PMatch scr cases) = PMatch (pst scr) (map (\(Case ctr args p) -> Case ctr args (pst p)) cases)
+    programSubstituteTypes' (PFix args p) = PFix args (pst p)
+
+-- | Instantiate unknowns in a program
+programApplySolution :: Solution -> RProgram -> RProgram
+programApplySolution sol (Program p t) = Program (programApplySolution' p) (typeApplySolution sol t)
+  where
+    pas = programApplySolution sol
+    
+    programApplySolution' (PSymbol name) = PSymbol name
+    programApplySolution' (PApp fun arg) = PApp (pas fun) (pas arg)
+    programApplySolution' (PFun name p) = PFun name (pas p)    
+    programApplySolution' (PIf fml p1 p2) = PIf (applySolution sol fml) (pas p1) (pas p2)
+    programApplySolution' (PMatch scr cases) = PMatch (pas scr) (map (\(Case ctr args p) -> Case ctr args (pas p)) cases)
+    programApplySolution' (PFix args p) = PFix args (pas p)
+    
+-- | Substitute a symbol for a subterm in a program    
+programSubstituteSymbol :: Id -> RProgram -> RProgram -> RProgram
+programSubstituteSymbol name subterm (Program p t) = Program (programSubstituteSymbol' p) t
+  where
+    pss = programSubstituteSymbol name subterm
+    
+    programSubstituteSymbol' (PSymbol x) = if x == name then content subterm else p
+    programSubstituteSymbol' (PApp fun arg) = PApp (pss fun) (pss arg)
+    programSubstituteSymbol' (PFun name pBody) = PFun name (pss pBody)    
+    programSubstituteSymbol' (PIf fml p1 p2) = PIf fml (pss p1) (pss p2)
+    programSubstituteSymbol' (PMatch scr cases) = PMatch (pss scr) (map (\(Case ctr args pBody) -> Case ctr args (pss pBody)) cases)
+    programSubstituteSymbol' (PFix args pBody) = PFix args (pss pBody)
+
 {- Evaluation environment -}
 
 -- | Typing environment
@@ -185,14 +263,15 @@ data Environment = Environment {
   _assumptions :: Set Formula,             -- ^ Positive unknown assumptions
   _negAssumptions :: Set Formula,          -- ^ Negative unknown assumptions
   _shapeConstraints :: Map Id SType,       -- ^ For polymorphic recursive calls, the shape their types must have
-  _typeSynonyms :: TypeSubstitution
+  _typeSynonyms :: TypeSubstitution,
+  _usedScrutinees :: [RProgram]            -- ^ Program terms that has already been scrutinized
 }
 
 makeLenses ''Environment  
 
 -- | Environment with no symbols or assumptions
 emptyEnv :: Environment
-emptyEnv = Environment Map.empty Set.empty Map.empty [] Map.empty Map.empty Set.empty Set.empty Map.empty Map.empty
+emptyEnv = Environment Map.empty Set.empty Map.empty [] Map.empty Map.empty Set.empty Set.empty Map.empty Map.empty []
 
 -- | 'symbolsOfArity' @n env@: all symbols of arity @n@ in @env@
 symbolsOfArity n env = Map.findWithDefault Map.empty n (env ^. symbols) 
@@ -237,6 +316,13 @@ addDatatype name dt env =
       in addMeasure measureName (inputSort, returnSort) env'
     Nothing -> env'
 
+-- | 'lookupConstructor' @ctor env@ : the name of the datatype for which @ctor@ is regisered as a constructor in @env@, if any
+lookupConstructor :: Id -> Environment -> Maybe Id
+lookupConstructor ctor env = let m = Map.filter (\dt -> ctor `elem` dt ^. constructors) (env ^. datatypes)
+  in if Map.null m
+      then Nothing
+      else Just $ fst $ Map.findMin m
+
 -- | 'addTypeVar' @a@ : Add bound type variable @a@ to the environment
 addTypeVar :: Id -> Environment -> Environment
 addTypeVar a = over boundTypeVars (a :)
@@ -257,6 +343,10 @@ addAssumption f = assumptions %~ Set.insert f
 addNegAssumption :: Formula -> Environment -> Environment
 addNegAssumption f = negAssumptions %~ Set.insert f
 
+-- | 'addScrutinee' @p env@ : @env@ with @p@ marked as having been scrutinized already
+addScrutinee :: RProgram -> Environment -> Environment
+addScrutinee p = usedScrutinees %~ (p :)
+
 -- | Positive and negative formulas encoded in an environment    
 embedding :: Environment -> TypeSubstitution -> (Set Formula, Set Formula)    
 embedding env subst = ((env ^. assumptions) `Set.union` (Map.foldlWithKey (\fmls name sch -> fmls `Set.union` embedBinding name sch) Set.empty allSymbols), env ^.negAssumptions)
@@ -272,90 +362,15 @@ embedding env subst = ((env ^. assumptions) `Set.union` (Map.foldlWithKey (\fmls
       else Set.singleton $ substitute (Map.singleton valueVarName (Var (toSort baseT) x)) fml
     embedBinding _ _ = Set.empty -- Ignore polymorphic things, since they could only be constants
     
-{- Program terms -}    
-    
--- | One case inside a pattern match expression
-data Case r = Case {
-  constructor :: Id,      -- ^ Constructor name
-  argNames :: [Id],       -- ^ Bindings for constructor arguments
-  expr :: Program r       -- ^ Result of the match in this case
-}    
-    
--- | Program skeletons parametrized by information stored symbols, conditionals, and by node types
-data BareProgram r =
-  PSymbol Id |                            -- ^ Symbol (variable or constant)
-  PApp (Program r) (Program r) |          -- ^ Function application
-  PFun Id (Program r) |                   -- ^ Lambda abstraction
-  PIf Formula (Program r) (Program r) |   -- ^ Conditional
-  PMatch (Program r) [Case r] |           -- ^ Pattern match on datatypes
-  PFix [Id] (Program r)                   -- ^ Fixpoint  
-  
--- | Programs annotated with types  
-data Program r = Program {
-  content :: BareProgram r,
-  typ :: TypeSkeleton r
-}
-
--- | Fully defined programs 
-type RProgram = Program Formula
-
-hole t = Program (PSymbol "??") t
-
--- | Instantiate type variables in a program
-programSubstituteTypes :: TypeSubstitution -> RProgram -> RProgram
-programSubstituteTypes subst (Program p t) = Program (programSubstituteTypes' p) (typeSubstitute subst t)
-  where
-    pst = programSubstituteTypes subst
-    
-    programSubstituteTypes' (PSymbol name) = PSymbol name
-    programSubstituteTypes' (PApp fun arg) = PApp (pst fun) (pst arg)
-    programSubstituteTypes' (PFun name p) = PFun name (pst p)    
-    programSubstituteTypes' (PIf fml p1 p2) = PIf fml (pst p1) (pst p2)
-    programSubstituteTypes' (PMatch scr cases) = PMatch (pst scr) (map (\(Case ctr args p) -> Case ctr args (pst p)) cases)
-    programSubstituteTypes' (PFix args p) = PFix args (pst p)
-
--- | Instantiate unknowns in a program
-programApplySolution :: Solution -> RProgram -> RProgram
-programApplySolution sol (Program p t) = Program (programApplySolution' p) (typeApplySolution sol t)
-  where
-    pas = programApplySolution sol
-    
-    programApplySolution' (PSymbol name) = PSymbol name
-    programApplySolution' (PApp fun arg) = PApp (pas fun) (pas arg)
-    programApplySolution' (PFun name p) = PFun name (pas p)    
-    programApplySolution' (PIf fml p1 p2) = PIf (applySolution sol fml) (pas p1) (pas p2)
-    programApplySolution' (PMatch scr cases) = PMatch (pas scr) (map (\(Case ctr args p) -> Case ctr args (pas p)) cases)
-    programApplySolution' (PFix args p) = PFix args (pas p)
-    
--- | Substitute a symbol for a subterm in a program    
-programSubstituteSymbol :: Id -> RProgram -> RProgram -> RProgram
-programSubstituteSymbol name subterm (Program p t) = Program (programSubstituteSymbol' p) t
-  where
-    pss = programSubstituteSymbol name subterm
-    
-    programSubstituteSymbol' (PSymbol x) = if x == name then content subterm else p
-    programSubstituteSymbol' (PApp fun arg) = PApp (pss fun) (pss arg)
-    programSubstituteSymbol' (PFun name pBody) = PFun name (pss pBody)    
-    programSubstituteSymbol' (PIf fml p1 p2) = PIf fml (pss p1) (pss p2)
-    programSubstituteSymbol' (PMatch scr cases) = PMatch (pss scr) (map (\(Case ctr args pBody) -> Case ctr args (pss pBody)) cases)
-    programSubstituteSymbol' (PFix args pBody) = PFix args (pss pBody)    
-
 {- Misc -}
           
 -- | Typing constraints
-data Constraint = Subtype Environment RType RType
+data Constraint = Subtype Environment RType RType Bool
   | WellFormed Environment RType
   | WellFormedCond Environment Formula
   
--- | Synthesis goal
-data Goal = Goal {
-  gName :: Id, 
-  gEnvironment :: Environment, 
-  gSpec :: RSchema
-}
-  
 type ProgramAst = [Declaration]
-data ConstructorDef = ConstructorDef Id RSchema-- deriving Show
+data ConstructorDef = ConstructorDef Id RSchema
   deriving (Eq)
 data Declaration =
   TypeDef Id RType | -- | Type name and definition.

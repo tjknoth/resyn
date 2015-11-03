@@ -28,8 +28,8 @@ import Control.Lens
 -- in the typing environment @env@ and follows template @templ@,
 -- using conditional qualifiers @cquals@ and type qualifiers @tquals@,
 -- with parameters for template generation, constraint generation, and constraint solving @templGenParam@ @consGenParams@ @solverParams@ respectively
-synthesize :: ExplorerParams Z3State -> SolverParams -> Goal -> [Formula] -> [Formula] -> IO (Maybe RProgram)
-synthesize explorerParams solverParams goal cquals tquals = do
+synthesize :: Goal -> SolverParams -> [Formula] -> [Formula] -> IO (Maybe RProgram)
+synthesize goal solverParams cquals tquals = do
   ps <- evalZ3State $ observeManyT 1 $ programs
   case ps of
     [] -> return Nothing
@@ -40,22 +40,20 @@ synthesize explorerParams solverParams goal cquals tquals = do
     programs :: LogicT Z3State RProgram
     programs = let
         -- Initialize missing explorer parameters
-        explorerParams' =  set solver (ConstraintSolver init refine prune) .
-                           set condQualsGen condQuals .
+        explorerParams' =  set condQualsGen condQuals .
                            set typeQualsGen typeQuals
-                           $ explorerParams
-      in explore explorerParams' goal
+                           $ gParams goal
+      in explore goal { gParams = explorerParams' } (ConstraintSolver init refine prune checkConsistency)
       
     init :: Z3State Candidate
     init = initialCandidate
       
     refine :: [Formula] -> QMap -> RProgram -> [Candidate] -> Z3State [Candidate]
-    -- refine fmls qmap p cands = refineCandidates (solverParams { candDoc = candidateDoc p }) qmap fmls cands
     refine fmls qmap p cands = refineCandidates (solverParams { candDoc = candidateDoc p }) qmap fmls cands
     
     prune :: QSpace -> Z3State QSpace  
     prune = pruneQualifiers solverParams
-  
+    
     -- | Qualifier generator for conditionals
     condQuals = toSpace . foldl (|++|) (const []) (map extractCondQGen cquals)
     

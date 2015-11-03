@@ -8,7 +8,9 @@
 module Synquid.Resolver where
 
 import Synquid.Program
+import Synquid.Explorer
 import Synquid.Logic
+import Synquid.Pretty
 import Control.Applicative
 import Control.Monad.Except
 import Text.Printf
@@ -30,7 +32,7 @@ resolveProgramAst declarations = do
   env <- foldM (resolveDeclaration) emptyEnv declarations
   (SynthesisGoal goalName) <- maybeErr (find isSynthesisGoal declarations) "No synthesis goal specified"
   goalType <- maybeErr (allSymbols env ^. at goalName) "No type signature for synthesis goal"
-  return $ Goal goalName env goalType
+  return $ Goal goalName env goalType undefined
   where
     isSynthesisGoal (SynthesisGoal _) = True
     isSynthesisGoal _ = False
