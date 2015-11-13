@@ -35,18 +35,20 @@ BENCHMARKS = [
     ('List-Drop', []),
     ('List-Delete', []),
     ('List-Map', []),
+    #('List-ZipWith', []),
     ('List-ZipWith', []),
     ('List-ToNat', []),
     # Unique lists
     ('UniqueList-Insert', []),
     ('UniqueList-Delete', []),
+    ('UniqueList-Delete', []),
     ('List-Nub', ['-f=FirstArgument', '-m=1']),
     # Trees
     ('Tree-Elem', []),
-    ('Tree-Flatten', []),    
+    ('Tree-Flatten', []),
     # Insertion Sort
     ('IncList-Insert', []),
-    ('IncList-InsertSort', []),    
+    ('IncList-InsertSort', []),
     # Merge sort
     ('List-Split', ['-s=1', '-m=3']),
     ('IncList-Merge', ['-h']),
@@ -54,7 +56,7 @@ BENCHMARKS = [
     # Quick sort
     ('List-Partition', ['-s=1']),
     ('IncList-PivotAppend', []),
-    ('IncList-QuickSort', ['-a=2', '-s=1']),    
+    ('IncList-QuickSort', ['-a=2', '-s=1']),
     # Binary search tree
     ('BST-Member', []),
     ('BST-Insert', []),
@@ -65,7 +67,7 @@ class SynthesisResult:
     def __init__(self, name, time):
         self.name = name
         self.time = time
-        
+
     def str(self):
         return self.name + ', ' + '{0:0.2f}'.format(self.time) + ', '
 
@@ -77,14 +79,26 @@ def run_benchmark(name, opts):
       logfile.seek(0, os.SEEK_END)
       return_code = call([synquid_path] + COMMON_OPTS + opts + [name + '.sq'], stdout=logfile, stderr=logfile)
       end = time.time()
-      
-    print '{0:0.2f}'.format(end - start),
-    if return_code:        
-        print Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL
-    else:
-        results [name] = SynthesisResult(name, (end - start))
-        print Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL
-            
+
+      print '{0:0.2f}'.format(end - start),
+      if return_code:
+          print Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL,
+      else:
+          results [name] = SynthesisResult(name, (end - start))
+          print Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL,
+
+      start = time.time()
+      logfile.seek(0, os.SEEK_END)
+      return_code = call([SYNQUID_PATH] + COMMON_OPTS + ["-u=0"] + opts + [name + '.sq'], stdout=logfile, stderr=logfile)
+      end = time.time()
+
+      print '{0:0.2f}'.format(end - start),
+      if return_code:
+          print Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL
+      else:
+          results [name] = SynthesisResult(name, (end - start))
+          print Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL
+
 def postprocess():
     with open(OUTFILE_NAME, 'w') as outfile:
         for (name, args) in BENCHMARKS:
@@ -94,7 +108,7 @@ def postprocess():
                 outfile.write ('{0:0.2f}'.format(res.time))
                 outfile.write (',')
             outfile.write ('\n')
-            
+
     if os.path.isfile(ORACLE_NAME):
         fromlines = open(ORACLE_NAME).readlines()
         tolines = open(LOGFILE_NAME, 'U').readlines()
@@ -110,12 +124,12 @@ if __name__ == '__main__':
         synquid_path = SYNQUID_PATH_LINUX
     else:
         synquid_path = SYNQUID_PATH_WINDOWS
-    
+
     if os.path.isfile(LOGFILE_NAME):
-      os.remove(LOGFILE_NAME)    
-    
+      os.remove(LOGFILE_NAME)
+
     for (name, args) in BENCHMARKS:
         run_benchmark(name, args)
-    
+
     postprocess()
-  
+

@@ -24,7 +24,7 @@ import Control.Lens
 import Control.Monad.Trans.Maybe
 import Debug.Trace
 
-type Memo = Map (Environment, RType, Int) [RProgram]
+type Memo = Map (Environment, RType, Int) [(Environment, RProgram)]
 
 {- Interface -}
 
@@ -63,13 +63,14 @@ data ExplorerParams = ExplorerParams {
   _fixStrategy :: FixpointStrategy,       -- ^ How to generate terminating fixpoints
   _polyRecursion :: Bool,                 -- ^ Enable polymorphic recursion?
   _hideScrutinees :: Bool,
-  _abduceScrutinees :: Bool,                    -- ^ Should we match eagerly on all unfolded variables?
+  _abduceScrutinees :: Bool,              -- ^ Should we match eagerly on all unfolded variables?
   _consistencyChecking :: Bool,           -- ^ Check consistency of fucntion's type with the goal before exploring arguments?
   _condQualsGen :: QualsGen,              -- ^ Qualifier generator for conditionals
   _matchQualsGen :: QualsGen,
   _typeQualsGen :: QualsGen,              -- ^ Qualifier generator for types
   _context :: RProgram -> RProgram,       -- ^ Context in which subterm is currently being generated (used only for logging)
-  _explorerLogLevel :: Int                -- ^ How verbose logging is
+  _explorerLogLevel :: Int,               -- ^ How verbose logging is
+  _useMemoization :: Bool                 -- ^ Should we memoize enumerated terms (and corresponding environments)
 }
 
 makeLenses ''ExplorerParams
@@ -408,14 +409,27 @@ generateEAt env typ 0 = do
 generateEAt env typ d = do
   let maxArity = fst $ Map.findMax (env ^. symbols)
   guard $ arity typ < maxArity
-  
-  solv <- asks snd
-  memo <- lift . lift . lift $ csGetMemo solv  
-  -- writeLog 1 (text "MEMO" <+> pretty memo)
-  
-  generateApp (\e t -> generateEUpTo e t (d - 1)) (\e t -> generateEAt e t (d - 1)) `mplus`
-    generateApp (\e t -> generateEAt e t d) (\e t -> generateEUpTo e t (d - 1))
+
+  -- if using memoization, try to fetch from memoization store
+  useMemoization <- asks $ (_useMemoization . fst)
+  if (useMemoization) then do
+    solv <- asks snd
+    mem <- lift . lift . lift $ csGetMemo solv
+    -- writeLog 1 (text "MEMO" <+> pretty memo)
+    case Map.lookup (env, typ, d) mem of
+      Just pApps -> do
+        writeLog 1 (text "Fetching from the memory store for: " <+> pretty (env, typ, d))
+        --msum $ map (\x -> return (env, x)) pApps
+        msum $ map return pApps
+      Nothing -> do
+        writeLog 1 (text "No fetching for: " <+> pretty (env, typ, d))
+        generateAllApps
+  else
+    generateAllApps
   where
+    generateAllApps =
+      generateApp (\e t -> generateEUpTo e t (d - 1)) (\e t -> generateEAt e t (d - 1)) `mplus`
+        generateApp (\e t -> generateEAt e t d) (\e t -> generateEUpTo e t (d - 1))
     generateApp genFun genArg = do
       a <- freshId "_a"
       x <- freshId "x"
@@ -435,11 +449,11 @@ generateEAt env typ d = do
           (env''', y) <- toSymbol arg env''
           return (env''', Program (PApp fun arg) (renameVar x y tArg tRes))
       ifM (asks $ _hideScrutinees . fst) (guard $ not $ elem pApp (env ^. usedScrutinees)) (return ())
-      
+
       solv <- asks snd
       memo <- lift . lift . lift $ csGetMemo solv
-      lift . lift . lift $ csPutMemo solv (Map.insertWith (flip (++)) (env, typ, d) [pApp] memo)
-      
+      lift . lift . lift $ csPutMemo solv (Map.insertWith (flip (++)) (env, typ, d) [(envfinal, pApp)] memo)
+
       return (envfinal, pApp)
 
     generateFun genFun env tFun = do
