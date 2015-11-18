@@ -3,6 +3,7 @@ import os, os.path
 import platform
 import shutil
 import time
+import re
 import difflib
 from subprocess import call, check_output
 from colorama import init, Fore, Back, Style
@@ -15,7 +16,7 @@ LOGFILE_NAME = 'run_all.log'
 ORACLE_NAME_WINDOWS = 'oracle'
 ORACLE_NAME_LINUX = 'oracle_nx'
 OUTFILE_NAME = 'run_all.csv'
-COMMON_OPTS = []
+COMMON_OPTS = ['--print-solution-size=True', '--print-spec-info=True']
 
 BENCHMARKS = [
     # Integers
@@ -67,6 +68,9 @@ BENCHMARKS = [
     ('BST-Delete', ['-m=1', '-e', '-a=2']),
     # Binary heap
     ('BinHeap-Member', []),
+    # Evaluation
+    ('Evaluator', []),
+    ('Evaluator-Vars', []),
 ]
 
 ABS_BENCHMARKS = [
@@ -77,12 +81,16 @@ ABS_BENCHMARKS = [
 ]
 
 class SynthesisResult:
-    def __init__(self, name, time):
+    def __init__(self, name, time, size, specSize, nMeasures, nComponents):
         self.name = name
         self.time = time
+        self.size = size
+        self.specSize = specSize
+        self.nMeasures = nMeasures
+        self.nComponents = nComponents
 
     def str(self):
-        return self.name + ', ' + '{0:0.2f}'.format(self.time) + ', '
+        return self.name + ', ' + '{0:0.2f}'.format(self.time) + ', ' + self.size + ', ' + self.specSize + ', ' + self.nMeasures + ', ' + self.nComponents
 
 def run_benchmark(name, opts, path=''):
     print name,
@@ -97,27 +105,28 @@ def run_benchmark(name, opts, path=''):
       if return_code:
           print Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL
       else:
-          results [name] = SynthesisResult(name, (end - start))
+          lastLines = os.popen("tail -n 5 %s" % LOGFILE_NAME).read().split('\n')
+          solutionSize = re.match("\(Size: (\d+)\).*$", lastLines[0]).group(1)
+          specSize = re.match("\(Spec size: (\d+)\).*$", lastLines[1]).group(1)
+          measures = re.match("\(#measures: (\d+)\).*$", lastLines[2]).group(1)
+          components = re.match("\(#components: (\d+)\).*$", lastLines[3]).group(1)
+          results [name] = SynthesisResult(name, (end - start), solutionSize, specSize, measures, components)
           print Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL
 
 def postprocess():
     with open(OUTFILE_NAME, 'w') as outfile:
         for (name, args) in BENCHMARKS:
-            outfile.write (name + ',')
             if name in results:
                 res = results [name]
-                outfile.write ('{0:0.2f}'.format(res.time))
-                outfile.write (',')
-            outfile.write ('\n')        
-            
+                outfile.write (res.str())
+            outfile.write ('\n')
+
         for (short_name, args) in ABS_BENCHMARKS:
-            name = short_name + '-Abs' 
-            outfile.write (name + ',')
+            name = short_name + '-Abs'
             if name in results:
                 res = results [name]
-                outfile.write ('{0:0.2f}'.format(res.time))
-                outfile.write (',')
-            outfile.write ('\n')            
+                outfile.write (res.str())
+            outfile.write ('\n')
 
     if os.path.isfile(oracle_name):
         fromlines = open(oracle_name).readlines()
@@ -144,7 +153,7 @@ if __name__ == '__main__':
         run_benchmark(name, args)
     print Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'Abstract refinements' + Style.RESET_ALL
     for (name, args) in ABS_BENCHMARKS:
-        run_benchmark(name, args, 'abstract/')    
+        run_benchmark(name, args, 'abstract/')
 
     postprocess()
 
