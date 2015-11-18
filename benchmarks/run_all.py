@@ -5,7 +5,6 @@ import shutil
 import time
 import re
 import difflib
-import itertools
 from subprocess import call, check_output
 from colorama import init, Fore, Back, Style
 
@@ -89,13 +88,19 @@ BENCHMARKS = [
         ('Evaluator-Vars', 'desugar AST with variables', [])]
     ]
 ]
-#BENCHMARKS = dict(map(lambda (k,v): [k].extend(v), my_dictionary.iteritems()))
 
 ABS_BENCHMARKS = [
     # Integers
     ('Int-Max', []),
     # Insertion Sort
     ('IncList-Insert', []),
+]
+
+RBT_BENCHMARKS = [
+    ('RBT-Constructors', ['-m=0', '-a=2']),
+    ('RBT-BalanceL', ['-m=1', '-a=2', '-u', '-h', '-f=DisableFixpoint']),
+    ('RBT-BalanceR', ['-m=1', '-a=2', '-u', '-h', '-f=DisableFixpoint']),
+    ('RBT-Balance', ['-m=2', '-a=2', '-u', '-h', '-f=DisableFixpoint']),
 ]
 
 COMPONENTS = {
@@ -130,7 +135,7 @@ class SynthesisResult:
         self.nComponents = nComponents
 
     def str(self):
-        return ' & ' + self.nMeasures + '& ' + self.nComponents + ' & & ' + self.size + '& ' + '{0:0.2f}'.format(self.time) + ' & ' + '{0:0.2f}'.format(self.time)  + '& ' + '{0:0.2f}'.format(self.time)  + '& ' + '{0:0.2f}'.format(self.time) + ' \\\\'
+        return self.name + ', ' + '{0:0.2f}'.format(self.time) + ', ' + self.size + ', ' + self.specSize + ', ' + self.nMeasures + ', ' + self.nComponents
 
 def run_benchmark(name, opts, path=''):
     print name,
@@ -214,6 +219,9 @@ if __name__ == '__main__':
     print Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'Abstract refinements' + Style.RESET_ALL
     for (name, args) in ABS_BENCHMARKS:
         run_benchmark(name, args, 'abstract/')
+    print Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'Red-Black-Trees' + Style.RESET_ALL
+    for (name, args) in RBT_BENCHMARKS:
+        run_benchmark(name, args, 'abstract/')        
 
     postprocess()
 
