@@ -25,7 +25,7 @@ TIMEOUT_COMMAND = 'timeout'
 TIMEOUT= '120'
 
 BENCHMARKS = [
-    # # Integers
+    # Integers
     # ["Integer", [],
     #     [('Int-Max2', 'maximum of 2 elements', []),
     #     ('Int-Max3', 'maximum of 3 elements', []),
@@ -42,7 +42,7 @@ BENCHMARKS = [
     #     ('List-Append', 'append two lists', ['-m=1']),
     #     ('List-Concat', 'concatenate list of lists', []),
     #     ('List-Take', 'take first n elements', []),
-    #     ('List-Drop', 'drop last n elements', []),
+    #     ('List-Drop', 'drop first n elements', []),
     #     ('List-Delete', 'delete given element', []),
     #     ('List-Map', 'list map', []),
     #     ('List-ZipWith', 'list zip with', []),
@@ -57,36 +57,41 @@ BENCHMARKS = [
     #     ('List-Nub', 'deduplication', ['-f=FirstArgument', '-m=1']),
     #     ('List-Compress', 'dedup subsequences', ['-h'])]
     # ],
-    ["Sorting",  ['-a=2', '-m=3', '-s=1'],
-    # Insertion Sort
-        [('IncList-Insert', 'insertion', []),
-        ('IncList-InsertSort', 'insertion sort', []),
-        ('StrictIncList-Insert', 'insertion (strict order)', []),
-        ('StrictIncList-Delete', 'deletion (strict order)', []),
-        # Merge sort
-        # Merge sort
-        ('List-Split', 'balanced split', ['-s=1', '-m=3']),
-        ('IncList-Merge', 'sorted merge', ['-h']),
-        ('IncList-MergeSort', 'merge sort', ['-a=2', '-s=1', '-m=3']),
-        # Quick sort
-        ('List-Partition', 'partition', ['-s=1']),
-        ('IncList-PivotAppend', 'append pivot', []),
-        ('IncList-QuickSort', 'quick sort', ['-a=2', '-s=1'])]
-    ],
+    # ["Sorting",  ['-a=2', '-m=3', '-s=1'],
+    # # Insertion Sort
+    #     [('IncList-Insert', 'insertion', []),
+    #     ('IncList-InsertSort', 'insertion sort', []),
+    #     ('StrictIncList-Insert', 'insertion (strict order)', []),
+    #     ('StrictIncList-Delete', 'deletion (strict order)', []),
+    #     # Merge sort
+    #     # Merge sort
+    #     ('List-Split', 'balanced split', ['-s=1', '-m=3']),
+    #     ('IncList-Merge', 'sorted merge', ['-h']),
+    #     ('IncList-MergeSort', 'merge sort', ['-a=2', '-s=1', '-m=3']),
+    #     # Quick sort
+    #     ('List-Partition', 'partition', ['-s=1']),
+    #     ('IncList-PivotAppend', 'append pivot', []),
+    #     ('IncList-QuickSort', 'quick sort', ['-a=2', '-s=1'])]
+    # ],
     # # Trees
     # ["Trees",  [],
     #     [('Tree-Elem', 'membership',[]),
     #     ('Tree-Flatten', 'flatten to a list', []),
     #     ('Tree-HBal', 'create balanced tree', [])]
     # ],
-    ["BST", ['-e', '-a=2'],
-        [# Binary search tree
-        ('BST-Member', 'membership', []),
-        ('BST-Insert', 'insertion', []),
-        # works with: -m=2 -e (fast), -m=2 slower
-        ('BST-Delete', 'deletion', ['-m=1', '-e', '-a=2']),
-        ('BST-Sort', 'BST sort', [])]
-    ],
+    # ["BST", ['-m=1', '-e', '-a=2'],
+    #     [# Binary search tree
+    #     ('BST-Member', 'membership', []),
+    #     ('BST-Insert', 'insertion', []),
+    #     # works with: -m=2 -e (fast), -m=2 slower
+    #     ('BST-Delete', 'deletion', ['-m=1', '-e', '-a=2']),
+    #     ('BST-Sort', 'BST sort', [])]
+    # ],
+    # ["RBT", ['-m=2', '-a=2', '-u', '-h', '-f=DisableFixpoint'],
+    #     [('RBT-BalanceL', '' ['-m=1', '-a=2', '-u', '-h', '-f=DisableFixpoint']),
+    #     ('RBT-BalanceR', ['-m=1', '-a=2', '-u', '-h', '-f=DisableFixpoint']),
+    #     ('RBT-Balance', ['-m=2', '-a=2', '-u', '-h', '-f=DisableFixpoint'])]
+    # ],
     # ["Heap", [],
     #     # Binary heap
     #     [('BinHeap-Member', 'membership', []),
@@ -108,7 +113,7 @@ ABS_BENCHMARKS = [
     ('List-Reverse', []),
     ('List-Fold', ['-e']),
     # Insertion Sort
-    ('IncList-Insert', []),
+    ('IncList-Insert', [])
 ]
 
 RBT_BENCHMARKS = [
@@ -116,6 +121,7 @@ RBT_BENCHMARKS = [
     ('RBT-BalanceL', ['-m=1', '-a=2', '-u', '-h', '-f=DisableFixpoint']),
     ('RBT-BalanceR', ['-m=1', '-a=2', '-u', '-h', '-f=DisableFixpoint']),
     ('RBT-Balance', ['-m=2', '-a=2', '-u', '-h', '-f=DisableFixpoint']),
+    #('RBT-Ins', ['-m=1', '-a=2', '-e'])
 ]
 
 COMPONENTS = {
@@ -192,69 +198,67 @@ def run_benchmark(name, opts, defOpts, path=''):
           results[name].otherTimes[4] = (end - start)
           print Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL,
 
-      print
+      start = time.time()
+      logfile.seek(0, os.SEEK_END)
+      return_code = call([TIMEOUT_COMMAND] + [TIMEOUT] + [synquid_path] + COMMON_OPTS + opts + BFS_ON_OPT + [path + name + '.sq'], stdout=logfile, stderr=logfile)
+      end = time.time()
 
-      # start = time.time()
-      # logfile.seek(0, os.SEEK_END)
-      # return_code = call([TIMEOUT_COMMAND] + [TIMEOUT] + [synquid_path] + COMMON_OPTS + opts + BFS_ON_OPT + [path + name + '.sq'], stdout=logfile, stderr=logfile)
-      # end = time.time()
+      print '{0:0.2f}'.format(end - start),
+      if return_code == 124:
+          print Back.RED + Fore.RED + Style.BRIGHT + 'TIMEOUT' + Style.RESET_ALL,
+          results[name].otherTimes[0] = -1
+      elif return_code:
+          print Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL,
+      else:
+          results[name].otherTimes[0] = (end - start)
+          print Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL,
 
-      # print '{0:0.2f}'.format(end - start),
-      # if return_code == 124:
-      #     print Back.RED + Fore.RED + Style.BRIGHT + 'TIMEOUT' + Style.RESET_ALL,
-      #     results[name].otherTimes[0] = -1
-      # elif return_code:
-      #     print Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL,
-      # else:
-      #     results[name].otherTimes[0] = (end - start)
-      #     print Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL,
+      start = time.time()
+      logfile.seek(0, os.SEEK_END)
+      return_code = call([TIMEOUT_COMMAND] + [TIMEOUT] + [synquid_path] + COMMON_OPTS + opts + INCREMENTAL_OFF_OPT + [path + name + '.sq'], stdout=logfile, stderr=logfile)
+      end = time.time()
 
-      # start = time.time()
-      # logfile.seek(0, os.SEEK_END)
-      # return_code = call([TIMEOUT_COMMAND] + [TIMEOUT] + [synquid_path] + COMMON_OPTS + opts + INCREMENTAL_OFF_OPT + [path + name + '.sq'], stdout=logfile, stderr=logfile)
-      # end = time.time()
-
-      # print '{0:0.2f}'.format(end - start),
-      # if return_code == 124:
-      #     print Back.RED + Fore.RED + Style.BRIGHT + 'TIMEOUT' + Style.RESET_ALL,
-      #     results[name].otherTimes[1] = -1
-      # elif return_code:
-      #     print Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL,
-      # else:
-      #     results[name].otherTimes[1] = (end - start)
-      #     print Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL,
+      print '{0:0.2f}'.format(end - start),
+      if return_code == 124:
+          print Back.RED + Fore.RED + Style.BRIGHT + 'TIMEOUT' + Style.RESET_ALL,
+          results[name].otherTimes[1] = -1
+      elif return_code:
+          print Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL,
+      else:
+          results[name].otherTimes[1] = (end - start)
+          print Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL,
 
 
-      # start = time.time()
-      # logfile.seek(0, os.SEEK_END)
-      # return_code = call([TIMEOUT_COMMAND] + [TIMEOUT] + [synquid_path] + COMMON_OPTS + opts + CONSISTENCY_OFF_OPT + [path + name + '.sq'], stdout=logfile, stderr=logfile)
-      # end = time.time()
+      start = time.time()
+      logfile.seek(0, os.SEEK_END)
+      return_code = call([TIMEOUT_COMMAND] + [TIMEOUT] + [synquid_path] + COMMON_OPTS + opts + CONSISTENCY_OFF_OPT + [path + name + '.sq'], stdout=logfile, stderr=logfile)
+      end = time.time()
 
-      # print '{0:0.2f}'.format(end - start),
-      # if return_code == 124:
-      #     print Back.RED + Fore.RED + Style.BRIGHT + 'TIMEOUT' + Style.RESET_ALL,
-      #     results[name].otherTimes[2] = -1
-      # elif return_code:
-      #     print Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL,
-      # else:
-      #     results[name].otherTimes[2] = (end - start)
-      #     print Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL,
+      print '{0:0.2f}'.format(end - start),
+      if return_code == 124:
+          print Back.RED + Fore.RED + Style.BRIGHT + 'TIMEOUT' + Style.RESET_ALL,
+          results[name].otherTimes[2] = -1
+      elif return_code:
+          print Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL,
+      else:
+          results[name].otherTimes[2] = (end - start)
+          print Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL,
 
 
-      # start = time.time()
-      # logfile.seek(0, os.SEEK_END)
-      # return_code = call([TIMEOUT_COMMAND] + [TIMEOUT] + [synquid_path] + COMMON_OPTS + opts + MEMOIZATION_ON_OPT + [path + name + '.sq'], stdout=logfile, stderr=logfile)
-      # end = time.time()
+      start = time.time()
+      logfile.seek(0, os.SEEK_END)
+      return_code = call([TIMEOUT_COMMAND] + [TIMEOUT] + [synquid_path] + COMMON_OPTS + opts + MEMOIZATION_ON_OPT + [path + name + '.sq'], stdout=logfile, stderr=logfile)
+      end = time.time()
 
-      # print '{0:0.2f}'.format(end - start),
-      # if return_code == 124:
-      #     print Back.RED + Fore.RED + Style.BRIGHT + 'TIMEOUT' + Style.RESET_ALL
-      #     results[name].otherTimes[3] = -1
-      # elif return_code:
-      #     print Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL
-      # else:
-      #     results[name].otherTimes[3] = (end - start)
-      #     print Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL
+      print '{0:0.2f}'.format(end - start),
+      if return_code == 124:
+          print Back.RED + Fore.RED + Style.BRIGHT + 'TIMEOUT' + Style.RESET_ALL
+          results[name].otherTimes[3] = -1
+      elif return_code:
+          print Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL
+      else:
+          results[name].otherTimes[3] = (end - start)
+          print Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL
 
 def postprocess():
     with open(OUTFILE_NAME, 'w') as outfile:
@@ -277,8 +281,10 @@ def postprocess():
                     ' & ' + res.nMeasures + '& ' + res.nComponents + \
                     ' & ' + COMPONENTS.get(name, '') + \
                     ' & ' + res.size + '& ' + '{0:0.2f}'.format(res.time) + \
-                    ' & ' + '{0:0.2f}'.format(res.otherTimes[0])  + '& ' + '{0:0.2f}'.format(res.otherTimes[1]) + \
-                    ' & ' + '{0:0.2f}'.format(res.otherTimes[2])  + '& ' + '{0:0.2f}'.format(res.otherTimes[3]) + ' \\\\'
+                    ' & ' + '{0:0.2f}'.format(res.otherTimes[3])  + '& ' + '{0:0.2f}'.format(res.otherTimes[2]) + \
+                    ' & ' + '{0:0.2f}'.format(res.otherTimes[0]) + '& ' + \
+                    ' & ' + '{0:0.2f}'.format(res.otherTimes[4]) + '& ' + \
+                    '{0:0.2f}'.format(res.otherTimes[1])  + ' \\\\'
                     outfile.write (row)
                 outfile.write ('\n')
             outfile.write ('\\hline')
@@ -311,17 +317,17 @@ if __name__ == '__main__':
     if os.path.isfile(LOGFILE_NAME):
       os.remove(LOGFILE_NAME)
 
-    benchmarkArray = [ (item, array[1]) for array in BENCHMARKS for item in array[2]]
-    #print([str(item) for item in benchmarkArray])
-    for ((name, _, args), defOpts) in benchmarkArray:
-        #print(str(name) + str(args))
-        run_benchmark(name, args, defOpts)
-    print Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'Abstract refinements' + Style.RESET_ALL
-    #for (name, args) in ABS_BENCHMARKS:
-    #    run_benchmark(name, args, 'abstract/')
+    # benchmarkArray = [ (item, array[1]) for array in BENCHMARKS for item in array[2]]
+    # #print([str(item) for item in benchmarkArray])
+    # for ((name, _, args), defOpts) in benchmarkArray:
+    #     #print(str(name) + str(args))
+    #     run_benchmark(name, args, defOpts)
+    # print Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'Abstract refinements' + Style.RESET_ALL
+    for (name, args) in ABS_BENCHMARKS:
+       run_benchmark(name, args, [], 'abstract/')
     # print Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'Red-Black-Trees' + Style.RESET_ALL
     # for (name, args) in RBT_BENCHMARKS:
-    #     run_benchmark(name, args, 'abstract/')
+    #     run_benchmark(name, args, ['-m=2', '-a=2', '-u', '-h', '-f=DisableFixpoint'], 'abstract/')
 
     postprocess()
 
