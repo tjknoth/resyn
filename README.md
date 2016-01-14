@@ -24,3 +24,7 @@ Synquid is based on the combination of [bidirectional synthesis](http://dl.acm.o
 
 * **Try [in your browser](http://comcom.csail.mit.edu/comcom/#Synquid)!**
 * **Build from sources:** you will need recent versions of [GHC and Cabal](https://www.haskell.org/platform/) (we are using GHC 7.10.2 and Cabal 1.22.6.0). Clone this repository and then run ```cabal install``` from its top-level directory.
+
+## Testimonials ##
+
+![testimonial.png](https://bitbucket.org/repo/qXe57A/images/104717122-testimonial.png)
