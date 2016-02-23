@@ -31,8 +31,6 @@ reconstruct eParams tParams goal = do
     go = do
       pMain <- reconstructTopLevel goal
       pAuxs <- reconstructAuxGoals
-      writeLog 1 $ text "FINAL TYPE CHECK"
-      runInSolver $ isFinal .= True >> solveTypeConstraints -- Run the final pass of type checking, where ambiguous type variables are assigned a default type
       let p = foldr (\(x, e1) e2 -> Program (PLet x e1 e2) (typeOf e2)) pMain pAuxs
       runInSolver $ finalizeProgram p      
 
@@ -144,7 +142,7 @@ reconstructI' env t@(FunctionT x tArg tRes) impl = case impl of
 reconstructI' env t@(ScalarT _ _) impl = case impl of
   PFun _ _ -> throwError $ errorText "Cannot assign non-function type" </> squotes (pretty t) </>
                            errorText "to lambda term" </> squotes (pretty $ untyped impl)
-  
+                           
   PLet x iDef iBody -> do
     (env', pathCond, pDef) <- inContext (\p -> Program (PLet x p (Program PHole t)) t) $ reconstructECond env AnyT iDef
     pBody <- inContext (\p -> Program (PLet x pDef p) t) $ reconstructI (addVariable x (typeOf pDef) env') t iBody
@@ -155,7 +153,7 @@ reconstructI' env t@(ScalarT _ _) impl = case impl of
     addConstraint $ WellFormedCond env cUnknown
     pThen <- inContext (\p -> Program (PIf (Program PHole boolAll) p (Program PHole t)) t) $ reconstructI (addAssumption cUnknown env) t iThen
     cond <- conjunction <$> currentValuation cUnknown
-    pCond <- generateCondition env cond
+    pCond <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateCondition env cond
     pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (fnot cond) env) t iElse 
     return $ Program (PIf pCond pThen pElse) t
   
@@ -206,9 +204,10 @@ reconstructI' env t@(ScalarT _ _) impl = case impl of
                           _ -> throwError $ errorText "Not in scope: data constructor" </> squotes (text consName)
     checkCases _ [] = return []
   
-reconstructCase env scrVar pScrutinee t (Case consName args iBody) consT = do
-  runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
-  let ScalarT baseT _ = (typeOf pScrutinee)
+reconstructCase env scrVar pScrutinee t (Case consName args iBody) consT = do  
+  scrType <- runInSolver $ currentAssignment (typeOf pScrutinee)
+  runInSolver $ matchConsType (lastType consT) scrType
+  let ScalarT baseT _ = scrType
   (syms, ass) <- caseSymbols scrVar args (symbolType env consName consT)
   deadUnknown <- Unknown Map.empty <$> freshId "u"
   solveLocally $ WellFormedCond env deadUnknown  -- TODO: we are not even looking for a condition here!
@@ -259,7 +258,7 @@ reconstructE' env typ (PSymbol name) = do
       else instantiate env sch True
 reconstructE' env typ (PApp iFun iArg) = do
   x <- freshId "x"
-  (env', pFun) <- inContext (\p -> Program (PApp p (Program PHole AnyT)) typ) $ reconstructE env (FunctionT x AnyT typ) iFun
+  (env', pFun) <- inContext (\p -> Program (PApp p uHole) typ) $ reconstructE env (FunctionT x AnyT typ) iFun
   let FunctionT x tArg tRes = typeOf pFun
 
   (envfinal, pApp) <- if isFunctionType tArg
@@ -301,7 +300,7 @@ wrapInConditional :: MonadHorn s => Environment -> Formula -> RProgram -> RType 
 wrapInConditional env cond p t = if cond == ftrue
   then return p
   else do
-    pCond <- generateCondition env cond        
+    pCond <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateCondition env cond        
     let pElse = Program PHole t
     -- pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond p0 p) t) $ generateI (addAssumption (fnot cond) env) t
     return $ Program (PIf pCond p pElse) t

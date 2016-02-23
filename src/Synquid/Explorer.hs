@@ -45,6 +45,7 @@ data ExplorerParams = ExplorerParams {
   _predPolyRecursion :: Bool,             -- ^ Enable recursion polymorphic in abstract predicates?
   _hideScrutinees :: Bool,                -- ^ Should scrutinized variables be removed from the environment?
   _abduceScrutinees :: Bool,              -- ^ Should we match eagerly on all unfolded variables?
+  _unfoldLocals :: Bool,                  -- ^ Unfold binders introduced by matching (to use them in match abduction)?
   _partialSolution :: Bool,               -- ^ Should implementations that only cover part of the input space be accepted?
   _incrementalChecking :: Bool,           -- ^ Solve subtyping constraints during the bottom-up phase
   _consistencyChecking :: Bool,           -- ^ Check consistency of function's type with the goal before exploring arguments?
@@ -101,8 +102,9 @@ generateI env t@(FunctionT x tArg tRes) = do
   return $ ctx pBody
 generateI env t@(ScalarT _ _) = do
   maEnabled <- asks $ _abduceScrutinees . fst -- Is match abduction enabled?
+  d <- asks $ _matchDepth . fst
   maPossible <- runInSolver $ hasPotentialScrutinees env -- Are there any potential scrutinees in scope?
-  if maEnabled && maPossible then generateMaybeMatchIf env t else generateMaybeIf env t            
+  if maEnabled && d > 0 && maPossible then generateMaybeMatchIf env t else generateMaybeIf env t            
 
 -- | Generate a possibly conditional term type @t@, depending on whether a condition is abduced
 generateMaybeIf :: MonadHorn s => Environment -> RType -> Explorer s RProgram
@@ -120,7 +122,7 @@ generateMaybeIf env t = ifte generateThen generateElse (generateMatch env t) -- 
     generateElse (cond, pThen) = if cond == ftrue
       then return pThen -- @pThen@ is valid under no assumptions: return it
       else do -- @pThen@ is valid under a nontrivial assumption, proceed to look for the solution for the rest of the inputs
-        pCond <- generateCondition env cond        
+        pCond <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateCondition env cond        
         pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $ generateI (addAssumption (fnot cond) env) t
         return $ Program (PIf pCond pThen pElse) t
             
@@ -170,7 +172,7 @@ generateMatch env t = do
             else do -- First case is valid under a condition
               pCases <- mapM (cut . generateCase (addAssumption cond env'') x pScrutinee t) (tail ctors)  -- Generate a case for each of the remaining constructors under the assumption
               let pThen = Program (PMatch pScrutinee (pCase : pCases)) t
-              pCond <- generateCondition env cond
+              pCond <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateCondition env cond
               pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $               -- Generate the else branch
                           generateI (addAssumption (fnot cond) env) t            
               return $ Program (PIf pCond pThen pElse) t
@@ -215,7 +217,8 @@ generateCase env scrVar pScrutinee t consName = do
       let consT' = symbolType env consName consT
       binders <- replicateM (arity consT') (freshId "x")
       (syms, ass) <- caseSymbols scrVar binders consT'
-      let caseEnv = foldr (uncurry addVariable) (addAssumption ass env) syms
+      unfoldSyms <- asks $ _unfoldLocals . fst
+      let caseEnv = (if unfoldSyms then unfoldAllVariables else id) $ foldr (uncurry addVariable) (addAssumption ass env) syms
       pCaseExpr <- optionalInPartial t $ local (over (_1 . matchDepth) (-1 +))
                                        $ inContext (\p -> Program (PMatch pScrutinee [Case consName binders p]) t)
                                        $ generateError caseEnv `mplus` generateI caseEnv t
@@ -273,9 +276,9 @@ caseSymbols x (name : names) (FunctionT y tArg tRes) = do
   (syms, ass) <- caseSymbols x names (renameVar y name tArg tRes)
   return ((name, tArg) : syms, ass)  
 
--- | Generate a possibly conditinal possibly match term, depending on which conditions are abduced
+-- | Generate a possibly conditional possibly match term, depending on which conditions are abduced
 generateMaybeMatchIf :: MonadHorn s => Environment -> RType -> Explorer s RProgram
-generateMaybeMatchIf env t = ifte generateOneBranch generateOtherBranches (generateMatch env t)
+generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplus` (generateMatch env t) -- might need to backtrack a successful match due to match depth limitation
   where
     -- | Guess an E-term and abduce a condition and a match-condition for it
     generateOneBranch = do
@@ -303,13 +306,13 @@ generateMaybeMatchIf env t = ifte generateOneBranch generateOtherBranches (gener
       [] -> if cond == ftrue
         then return p0 -- @p0@ is valid under no assumptions: return it
         else do -- @p0@ is valid under a nontrivial assumption, but no need to match
-              pCond <- generateCondition env cond
+              pCond <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateCondition env cond
               pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond p0 p) t) $ generateI (addAssumption (fnot cond) env) t
               return $ Program (PIf pCond p0 pElse) t
       _ -> if cond == ftrue
         then generateMatchesFor env matchConds p0 t
         else do -- @p0@ needs both a match and a condition; let's put the match inside the conditional because it's easier
-              pCond <- generateCondition env cond
+              pCond <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateCondition env cond
               pThen <- cut $ generateMatchesFor (addAssumption cond env) matchConds p0 t
               pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $
                           generateI (addAssumption (fnot cond) env) t
@@ -318,7 +321,7 @@ generateMaybeMatchIf env t = ifte generateOneBranch generateOtherBranches (gener
     generateMatchesFor env [] pBaseCase t = return pBaseCase
     generateMatchesFor env (matchCond : rest) pBaseCase t = do
       let matchVar@(Var _ x) = Set.findMin $ varsOf matchCond
-      let scrT@(ScalarT (DatatypeT scrDT _ _) _) = toMonotype $ symbolsOfArity 0 env Map.! x
+      scrT@(ScalarT (DatatypeT scrDT _ _) _) <- runInSolver $ currentAssignment (toMonotype $ symbolsOfArity 0 env Map.! x)
       let pScrutinee = Program (PSymbol x) scrT
       let ctors = ((env ^. datatypes) Map.! scrDT) ^. constructors
       pBaseCase' <- cut $ inContext (\p -> Program (PMatch pScrutinee [Case (head ctors) [] p]) t) $
@@ -327,7 +330,7 @@ generateMaybeMatchIf env t = ifte generateOneBranch generateOtherBranches (gener
 
     generateKnownMatch :: MonadHorn s => Environment -> Formula -> RProgram -> RType -> Explorer s RProgram
     generateKnownMatch env var@(Var s x) pBaseCase t = do
-      let scrT@(ScalarT (DatatypeT scrDT _ _) _) = toMonotype $ symbolsOfArity 0 env Map.! x
+      scrT@(ScalarT (DatatypeT scrDT _ _) _) <- runInSolver $ currentAssignment (toMonotype $ symbolsOfArity 0 env Map.! x)
       let pScrutinee = Program (PSymbol x) scrT
       let ctors = ((env ^. datatypes) Map.! scrDT) ^. constructors
       let env' = addScrutinee pScrutinee env
@@ -404,7 +407,7 @@ checkE env typ p = do
       ifM (asks $ _consistencyChecking . fst) (addConstraint $ Subtype env (typeOf p) typ True) (return ()) -- add constraint that t and tFun be consistent (i.e. not provably disjoint)
       
   fTyp <- runInSolver $ finalizeType typ
-  typingState . errorContext .= errorText "when checking" </> pretty p </> text "::" </> pretty fTyp </> errorText "in" $+$ pretty (ctx p)
+  typingState . errorContext .= errorText "when checking" </> pretty p </> text "::" </> pretty fTyp </> errorText "in" $+$ pretty (ctx p)  
   solveIncrementally
   typingState . errorContext .= empty
   where
@@ -460,7 +463,7 @@ enumerateAt env typ d = do
 
     generateApp genFun genArg = do
       x <- freshId "x"
-      (env', fun) <- inContext (\p -> Program (PApp p (Program PHole AnyT)) typ)
+      (env', fun) <- inContext (\p -> Program (PApp p uHole) typ)
                             $ genFun env (FunctionT x AnyT typ) -- Find all functions that unify with (? -> typ)
       let FunctionT x tArg tRes = typeOf fun
 
@@ -497,6 +500,7 @@ toVar (Program _ t) env = do
 
 enqueueGoal env typ impl = do
   g <- freshId "f"
+  -- env <- runInSolver $ use initEnv
   auxGoals %= ((Goal g env (Monotype typ) impl) :)
   return $ Program (PSymbol g) typ
 
@@ -533,7 +537,7 @@ runInSolver f = do
       return res
       
 solveIncrementally :: MonadHorn s => Explorer s ()        
-solveIncrementally = ifM (asks $ _incrementalChecking . fst) (runInSolver solveTypeConstraints) (return ())
+solveIncrementally = ifM (asks $ _incrementalChecking . fst) (runInSolver $ isFinal .= False >> solveTypeConstraints >> isFinal .= True) (return ())
 
 solveLocally :: MonadHorn s => Constraint -> Explorer s ()  
 solveLocally c = do
