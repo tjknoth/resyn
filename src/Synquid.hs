@@ -19,7 +19,7 @@ import System.Exit
 import System.Console.CmdArgs
 import System.Console.ANSI
 import Data.Time.Calendar
-import Data.Map (size, elems, keys)
+import qualified Data.Map as Map
 
 programName = "synquid"
 versionName = "0.3"
@@ -41,11 +41,11 @@ main = do
                    consistency 
                    log_ 
                    memoize 
+                   symmetry
                    bfs
                    outFormat
                    print_spec
-                   print_spec_size
-                   print_solution_size) <- cmdArgs cla
+                   print_stats) <- cmdArgs cla
   let explorerParams = defaultExplorerParams {
     _eGuessDepth = appMax,
     _scrutineeDepth = scrutineeMax,
@@ -59,6 +59,7 @@ main = do
     _incrementalChecking = incremental,
     _consistencyChecking = consistency,
     _useMemoization = memoize,
+    _symmetryReduction = symmetry,
     _explorerLogLevel = log_
     }
   let solverParams = defaultHornSolverParams {
@@ -68,8 +69,7 @@ main = do
   let synquidParams = defaultSynquidParams {
     outputFormat = outFormat,
     showSpec = print_spec,
-    showSpecSize = print_spec_size,
-    showSolutionSize = print_solution_size
+    showStats = print_stats
   }
   runOnFile synquidParams explorerParams solverParams file
 
@@ -98,13 +98,13 @@ data CommandLineArgs
         consistency :: Bool,
         log_ :: Int,
         memoize :: Bool,
+        symmetry :: Bool,
         -- | Solver params
         bfs_solver :: Bool,
         -- | Output
         output :: OutputFormat,
         print_spec :: Bool,
-        print_spec_size :: Bool,
-        print_solution_size :: Bool
+        print_stats :: Bool
       }
   deriving (Data, Typeable, Show, Eq)
 
@@ -114,8 +114,8 @@ cla = CommandLineArgs {
   scrutinee_max       = 1               &= help ("Maximum depth of a match scrutinee (default: 1)"),
   match_max           = 2               &= help ("Maximum depth of matches (default: 2)"),
   aux_max             = 1               &= help ("Maximum depth of auxiliary functions (default: 1)") &= name "x",
-  fix                 = AllArguments    &= help (unwords ["What should termination metric for fixpoints be derived from?", show AllArguments, show FirstArgument, show DisableFixpoint, "(default:", show AllArguments, ")"]),
-  generalize_preds    = False           &= help ("Make recursion polymorphic in abstract refinements (default: False)"),
+  fix                 = FirstArgument   &= help (unwords ["What should termination metric for fixpoints be derived from?", show AllArguments, show FirstArgument, show DisableFixpoint, "(default:", show FirstArgument, ")"]),
+  generalize_preds    = True            &= help ("Make recursion polymorphic in abstract refinements (default: False)"),
   explicit_match      = False           &= help ("Do not abduce match scrutinees (default: False)"),
   unfold_locals       = False           &= help ("Use all variables, as opposed to top-level function arguments only, in match scrutinee abduction (default: False)"),
   partial             = False           &= help ("Generate best-effort partial solutions (default: False)") &= name "p",
@@ -123,11 +123,11 @@ cla = CommandLineArgs {
   consistency         = True            &= help ("Check incomplete application types for consistency (default: True)"),
   log_                = 0               &= help ("Logger verboseness level (default: 0)"),
   memoize             = False           &= help ("Use memoization (default: False)") &= name "z",
+  symmetry            = False           &= help ("Use symmetry reductions (default: False)") &= name "s",
   bfs_solver          = False           &= help ("Use BFS instead of MARCO to solve second-order constraints (default: False)"),
   output              = defaultFormat   &= help ("Output format: Plain, Ansi or Html (default: " ++ show defaultFormat ++ ")"),
   print_spec          = True            &= help ("Show specification of each synthesis goal (default: True)"),
-  print_spec_size     = False           &= help ("Show specification size (default: False)"),
-  print_solution_size = False           &= help ("Show solution size (default: False)")
+  print_stats         = False           &= help ("Show specification and solution size (default: False)")
   } &= help "Synthesize goals specified in the input file" &= program programName &= summary (programName ++ " v" ++ versionName ++ ", " ++ showGregorian releaseDate)
     where
       defaultFormat = outputFormat defaultSynquidParams
@@ -147,6 +147,7 @@ defaultExplorerParams = ExplorerParams {
   _incrementalChecking = True,
   _consistencyChecking = True,
   _useMemoization = False,
+  _symmetryReduction = False,
   _context = id,
   _explorerLogLevel = 0
 }
@@ -178,15 +179,13 @@ printDoc Html doc = putStr (showDocHtml (renderPretty 0.4 100 doc))
 data SynquidParams = SynquidParams {
   outputFormat :: OutputFormat,                -- ^ Output format
   showSpec :: Bool,                            -- ^ Print specification for every synthesis goal 
-  showSpecSize :: Bool,                        -- ^ Print specification size
-  showSolutionSize :: Bool                     -- ^ Print solution size
+  showStats :: Bool                            -- ^ Print specification and solution size
 }
 
 defaultSynquidParams = SynquidParams {
   outputFormat = Plain,
   showSpec = True,
-  showSpecSize = False,
-  showSolutionSize = False
+  showStats = False
 }
 
 -- | Parse and resolve file, then synthesize the specified goals
@@ -198,7 +197,9 @@ runOnFile synquidParams explorerParams solverParams file = do
     -- Right ast -> print $ vsep $ map pretty ast
     Right decls -> case resolveDecls decls of
       Left resolutionError -> (pdoc $ errorDoc $ text resolutionError) >> pdoc empty >> exitFailure
-      Right (goals, cquals, tquals) -> mapM_ (synthesizeGoal cquals tquals) goals
+      Right (goals, cquals, tquals) -> do
+        results <- mapM (synthesizeGoal cquals tquals) goals
+        when (not (null results) && showStats synquidParams) $ printStats results
   where
     pdoc = printDoc (outputFormat synquidParams)
     synthesizeGoal cquals tquals goal = do
@@ -208,16 +209,24 @@ runOnFile synquidParams explorerParams solverParams file = do
       -- print $ vMapDoc pretty pretty (_measures $ gEnvironment goal)
       mProg <- synthesize explorerParams solverParams goal cquals tquals
       case mProg of
-        Left err -> pdoc err >> pdoc empty >> exitFailure
+        Left err -> pdoc (errorDoc $ text "No solution. Last candidate failed with error:\n")
+                    >> pdoc empty
+                    >> pdoc err
+                    >> pdoc empty 
+                    >> exitFailure
         Right prog -> do
           pdoc (prettySolution goal prog)
-          when (showSolutionSize synquidParams) $ pdoc (parens (text "Size:" <+> pretty (programNodeCount prog)))
-          when (showSpecSize synquidParams) $ pdoc specSizeDoc
-          where
-            specSizeDoc = let allConstructors = concatMap _constructors $ elems $ _datatypes $ gEnvironment goal in
-                parens (text "Spec size:" <+> pretty (typeNodeCount $ toMonotype $ gSpec goal)) $+$
-                  parens (text "#measures:" <+> pretty (size $ _measures $ gEnvironment goal)) $+$
-                  parens (text "#components:" <+>
-                    pretty (length $ filter (not . flip elem allConstructors) $ keys $ allSymbols $ gEnvironment goal)) -- we only solve one goal
-      pdoc empty
+          pdoc empty
+          return (goal, prog)
+    printStats results = do
+      let measureCount = Map.size $ _measures $ gEnvironment (fst $ head results)
+      let specSize = sum $ map (typeNodeCount . toMonotype . unresolvedSpec . fst) results
+      let solutuionSize = sum $ map (programNodeCount . snd) results
+      pdoc $ vsep [
+              parens (text "Goals:" <+> pretty (length results)),
+              parens (text "Measures:" <+> pretty measureCount),
+              parens (text "Spec size:" <+> pretty specSize),
+              parens (text "Solution size:" <+> pretty solutuionSize),
+              empty
+              ]
       

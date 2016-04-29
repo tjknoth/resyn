@@ -28,7 +28,9 @@ data TypeSkeleton r =
   FunctionT Id (TypeSkeleton r) (TypeSkeleton r) |
   AnyT
   deriving (Eq, Ord)
-    
+
+isScalarType (ScalarT _ _) = True
+isScalarType _ = False
 baseTypeOf (ScalarT baseT _) = baseT
 baseTypeOf _ = error "baseTypeOf: applied to a function type"
 isFunctionType (FunctionT _ _ _) = True
@@ -98,6 +100,15 @@ allArgTypes _ = []
 allArgs (ScalarT _ _) = []
 allArgs (FunctionT x (ScalarT baseT _) tRes) = (Var (toSort baseT) x) : (allArgs tRes)
 allArgs (FunctionT x _ tRes) = (allArgs tRes)
+
+-- | Free variables of a type
+varsOfType :: RType -> Set Id
+varsOfType (ScalarT baseT fml) = varsOfBase baseT `Set.union` (Set.map varName $ varsOf fml)
+  where
+    varsOfBase (DatatypeT name tArgs pArgs) = Set.unions (map varsOfType tArgs) `Set.union` (Set.map varName $ Set.unions (map varsOf pArgs))
+    varsOfBase _ = Set.empty
+varsOfType (FunctionT x tArg tRes) = varsOfType tArg `Set.union` (Set.delete x $ varsOfType tRes)
+varsOfType AnyT = Set.empty    
   
 varRefinement x s = Var s valueVarName |=| Var s x
 isVarRefinemnt (Binary Eq (Var _ v) (Var _ _)) = v == valueVarName
@@ -182,6 +193,7 @@ typeVarsOf t@(ScalarT baseT r) = case baseT of
   DatatypeT _ tArgs _ -> Set.unions (map typeVarsOf tArgs)
   _ -> Set.empty
 typeVarsOf (FunctionT _ tArg tRes) = typeVarsOf tArg `Set.union` typeVarsOf tRes
+typeVarsOf _ = Set.empty
 
 {- Refinement types -}
 
@@ -243,24 +255,31 @@ addRefinementToLast (FunctionT x tArg tRes) fml = FunctionT x tArg (addRefinemen
 addRefinementToLastSch (Monotype t) fml = Monotype $ addRefinementToLast t fml
 addRefinementToLastSch (ForallT a sch) fml = ForallT a $ addRefinementToLastSch sch fml
 addRefinementToLastSch (ForallP p sorts sch) fml = ForallP p sorts $ addRefinementToLastSch sch fml
+
+-- | Apply variable substitution in all formulas inside a type
+substituteInType :: Substitution -> RType -> RType
+substituteInType subst (ScalarT baseT fml) = case baseT of
+  DatatypeT name tArgs pArgs -> ScalarT (DatatypeT name (map (substituteInType subst) tArgs) (map (substitute subst) pArgs)) (substitute subst fml)
+  _ -> ScalarT baseT (substitute subst fml)
+substituteInType subst (FunctionT x tArg tRes) = FunctionT x (substituteInType subst tArg) (substituteInType subst tRes)
+substituteInType subst AnyT = AnyT
       
 -- | 'renameVar' @old new t typ@: rename all occurrences of @old@ in @typ@ into @new@ of type @t@
 renameVar :: Id -> Id -> RType -> RType -> RType
-renameVar old new (FunctionT _ _ _)   t = t -- function arguments cannot occur in types
 renameVar old new (ScalarT b _)       t = renameVarFml old (Var (toSort b) new) t
+renameVar old new _                   t = t -- function arguments cannot occur in types (and AnyT is assumed to be function)
 
 -- | 'renameVarFml' @old new typ@: rename all occurrences of @old@ in @typ@ into @new@ (represented as a formula)
 renameVarFml :: Id -> Formula -> RType -> RType
-renameVarFml old new (ScalarT baseT fml) = let subst = substitute (Map.singleton old new)
-  in case baseT of
-        DatatypeT name tArgs pArgs -> ScalarT (DatatypeT name (map (renameVarFml old new) tArgs) (map subst pArgs)) (subst fml)
-        _ -> ScalarT baseT (subst fml)
-renameVarFml old new (FunctionT x tArg tRes) = FunctionT x (renameVarFml old new tArg) (renameVarFml old new tRes)
+renameVarFml old new = substituteInType (Map.singleton old new)
     
 -- | Intersection of two types (assuming the types were already checked for consistency)
 intersection t AnyT = t
 intersection AnyT t = t
-intersection t (ScalarT _ fml) = addRefinement t fml
+intersection (ScalarT baseT fml) (ScalarT baseT' fml') = case baseT of
+  DatatypeT name tArgs pArgs -> let DatatypeT _ tArgs' pArgs' = baseT' in
+                                  ScalarT (DatatypeT name (zipWith intersection tArgs tArgs') (zipWith andClean pArgs pArgs')) (fml `andClean` fml')
+  _ -> ScalarT baseT (fml `andClean` fml')
 intersection (FunctionT x tArg tRes) (FunctionT y tArg' tRes') = FunctionT x tArg (intersection tRes (renameVar y x tArg tRes')) 
 
 -- | 'unknownsOfType' @t: all unknowns in @t@
@@ -276,10 +295,14 @@ typeApplySolution sol (ScalarT base fml) = ScalarT base (applySolution sol fml)
 typeApplySolution sol (FunctionT x tArg tRes) = FunctionT x (typeApplySolution sol tArg) (typeApplySolution sol tRes) 
 typeApplySolution _ AnyT = AnyT
 
+-- | Predicate signature: name and argument sorts  
+data PredSig = PredSig Id [Sort] Sort
+  deriving (Eq, Ord)
+
 -- | User-defined datatype representation
 data DatatypeDef = DatatypeDef {
-  _typeArgs :: [Id],      -- ^ Number of type parameters
-  _predArgs :: [[Sort]],  -- ^ Signatures of predicate parameters
+  _typeArgs :: [Id],      -- ^ Type parameters
+  _predArgs :: [PredSig], -- ^ Signatures of predicate parameters
   _constructors :: [Id],  -- ^ Constructor names
   _wfMetric :: Maybe Id   -- ^ Name of the measure that serves as well founded termination metric
 } deriving (Eq, Ord)
@@ -333,7 +356,8 @@ data BareProgram t =
   PMatch (Program t) [Case t] |               -- ^ Pattern match on datatypes
   PFix [Id] (Program t) |                     -- ^ Fixpoint
   PLet Id (Program t) (Program t) |           -- ^ Let binding
-  PHole                                       -- ^ Hole (program to fill in)
+  PHole |                                     -- ^ Hole (program to fill in)
+  PErr                                        -- ^ Error
   deriving (Eq, Ord, Functor)
   
 -- | Programs annotated with types  
@@ -361,11 +385,12 @@ isHole _ = False
 eraseTypes :: RProgram -> UProgram
 eraseTypes = fmap (const AnyT)
 
+symbolName (Program (PSymbol name) _) = name
 symbolList (Program (PSymbol name) _) = [name]
 symbolList (Program (PApp fun arg) _) = symbolList fun ++ symbolList arg
 
-errorProgram = Program (PSymbol "error") (vart dontCare ftrue)
-isError (Program (PSymbol x) _) = x == "error"
+errorProgram = Program PErr (vart dontCare ftrue)
+isError (Program PErr _) = True
 isError _ = False
     
 -- | Substitute a symbol for a subterm in a program    
@@ -411,11 +436,10 @@ fmlToProgram fml@(Binary op e1 e2) = let
 renameAsImpl :: UProgram -> RType -> RType
 renameAsImpl p t = renameAsImpl' Map.empty p t
   where
-    renameAsImpl' subst  _                        (ScalarT baseT fml)     = ScalarT baseT (substitute subst fml)      
     renameAsImpl' subst (Program (PFun y pRes) _) (FunctionT x tArg tRes) = case tArg of
-      FunctionT _ _ _ -> FunctionT y tArg (renameAsImpl' subst pRes tRes)
-      ScalarT baseT fml -> FunctionT y (ScalarT baseT (substitute subst fml)) (renameAsImpl' (Map.insert x (Var (toSort baseT) y) subst) pRes tRes)    
-    renameAsImpl' _     _                         t                       = t
+      ScalarT baseT fml -> FunctionT y (substituteInType subst tArg) (renameAsImpl' (Map.insert x (Var (toSort baseT) y) subst) pRes tRes)    
+      _ -> FunctionT y (substituteInType subst tArg) (renameAsImpl' subst pRes tRes)      
+    renameAsImpl' subst  _ t = substituteInType subst t      
 
 {- Evaluation environment -}
 
@@ -435,7 +459,8 @@ data Environment = Environment {
   _datatypes :: Map Id DatatypeDef,        -- ^ Datatype definitions
   _globalPredicates :: Map Id [Sort],      -- ^ Signatures of module-level logic functions (measures, predicates) 
   _measures :: Map Id MeasureDef,          -- ^ Measure definitions
-  _typeSynonyms :: Map Id ([Id], RType)    -- ^ Type synonym definitions
+  _typeSynonyms :: Map Id ([Id], RType),   -- ^ Type synonym definitions
+  _unresolvedConstants :: Map Id RSchema   -- ^ Unresolved types of components (used for reporting specifications with macros)
 }
 
 makeLenses ''Environment
@@ -460,7 +485,8 @@ emptyEnv = Environment {
   _globalPredicates = Map.empty,
   _datatypes = Map.empty,
   _measures = Map.empty,
-  _typeSynonyms = Map.empty
+  _typeSynonyms = Map.empty,
+  _unresolvedConstants = Map.empty
 }
 
 -- | 'symbolsOfArity' @n env@: all symbols of arity @n@ in @env@
@@ -484,7 +510,6 @@ lookupSymbol name a env
     
 unOpType Neg       = Monotype $ FunctionT "x" intAll (int (valInt |=| fneg (intVar "x")))
 unOpType Not       = Monotype $ FunctionT "x" boolAll (bool (valBool |=| fnot (boolVar "x")))
-unOpType Abs       = Monotype $ FunctionT "x" intAll (int (valInt |=| fabs (intVar "x"))) 
 binOpType Times    = Monotype $ FunctionT "x" intAll (FunctionT "y" intAll (int (valInt |=| intVar "x" |*| intVar "y")))
 binOpType Plus     = Monotype $ FunctionT "x" intAll (FunctionT "y" intAll (int (valInt |=| intVar "x" |+| intVar "y")))
 binOpType Minus    = Monotype $ FunctionT "x" intAll (FunctionT "y" intAll (int (valInt |=| intVar "x" |-| intVar "y")))
@@ -523,6 +548,9 @@ addConstant name t = addPolyConstant name (Monotype t)
 -- | 'addPolyConstant' @name sch env@ : add type binding @name@ :: @sch@ to @env@
 addPolyConstant :: Id -> RSchema -> Environment -> Environment
 addPolyConstant name sch = addPolyVariable name sch . (constants %~ Set.insert name)
+
+addUnresolvedConstant :: Id -> RSchema -> Environment -> Environment
+addUnresolvedConstant name sch = unresolvedConstants %~ Map.insert name sch
 
 removeVariable :: Id -> Environment -> Environment
 removeVariable name env = case Map.lookup name (allSymbols env) of
@@ -600,30 +628,11 @@ allMeasurePostconditions _ _ _ = []
 
 typeSubstituteEnv :: TypeSubstitution -> Environment -> Environment
 typeSubstituteEnv tass env = over symbols (Map.map (Map.map (schemaSubstitute tass))) env
-
--- | Assumptions encoded in an environment    
-embedding :: Environment -> TypeSubstitution -> Substitution -> Set Id -> Set Formula
-embedding env subst pSubst includeQuantified = (Set.map substAssumption $ env ^. assumptions) `Set.union` 
-    (Map.foldlWithKey (\fmls name sch -> fmls `Set.union` embedBinding name sch) Set.empty allSymbols)
-  where
-    substAssumption = substitutePredicate pSubst . sortSubstituteFml (asSortSubst subst)
-    allSymbols = symbolsOfArity 0 env `Map.union` Map.map Monotype (env ^. ghosts)
-    embedBinding x (Monotype t) = if Set.member x (env ^. constants) 
-      then Set.empty -- Ignore constants
-      else case typeSubstitute subst t of
-            ScalarT baseT fml -> Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x))) 
-                                    ((substitutePredicate pSubst fml) : allMeasurePostconditions includeQuantified baseT env)
-            _ -> error "embedding: encountered non-scalar variable in 0-arity bucket"
-    embedBinding _ _ = Set.empty -- Ignore polymorphic things, since they could only be constants      
     
 {- Input language declarations -}
 
 -- | Constructor signature: name and type
 data ConstructorSig = ConstructorSig Id RType
-  deriving (Eq)
-  
--- | Predicate signature: name and argument sorts  
-data PredSig = PredSig Id [Sort] Sort
   deriving (Eq)
 
 data Declaration =
@@ -634,6 +643,7 @@ data Declaration =
   PredDecl PredSig |                                        -- ^ Module-level predicate
   QualifierDecl [Formula] |                                 -- ^ Qualifiers
   MutualDecl [Id] |                                         -- ^ Mutual recursion group
+  InlineDecl Id [Id] Formula |                              -- ^ Inline predicate
   SynthesisGoal Id UProgram                                 -- ^ Name and template for the function to reconstruct
   deriving (Eq)
 
@@ -657,4 +667,6 @@ data Goal = Goal {
   gImpl :: UProgram,            -- ^ Implementation template
   gDepth :: Int                 -- ^ Maximum level of auxiliary goal nesting allowed inside this goal
 } deriving (Eq, Ord)
+
+unresolvedSpec goal = (gEnvironment goal ^. unresolvedConstants) Map.! gName goal
   

@@ -6,8 +6,8 @@ module Synquid.Explorer where
 import Synquid.Logic
 import Synquid.Program
 import Synquid.SolverMonad
-import Synquid.TypeConstraintSolver hiding (freshId)
-import qualified Synquid.TypeConstraintSolver as TCSolver (freshId)
+import Synquid.TypeConstraintSolver hiding (freshId, freshVar)
+import qualified Synquid.TypeConstraintSolver as TCSolver (freshId, freshVar)
 import Synquid.Util
 import Synquid.Pretty
 import Synquid.Tokens
@@ -31,6 +31,7 @@ data FixpointStrategy =
     DisableFixpoint   -- ^ Do not use fixpoint
   | FirstArgument     -- ^ Fixpoint decreases the first well-founded argument
   | AllArguments      -- ^ Fixpoint decreases the lexicographical tuple of all well-founded argument in declaration order
+  | Nonterminating    -- ^ Fixpoint without termination check
 
 -- | Choices for the order of e-term enumeration
 data PickSymbolStrategy = PickDepthFirst | PickInterleave
@@ -50,7 +51,8 @@ data ExplorerParams = ExplorerParams {
   _incrementalChecking :: Bool,           -- ^ Solve subtyping constraints during the bottom-up phase
   _consistencyChecking :: Bool,           -- ^ Check consistency of function's type with the goal before exploring arguments?
   _context :: RProgram -> RProgram,       -- ^ Context in which subterm is currently being generated (used only for logging)
-  _useMemoization :: Bool,                -- ^ Should we memoize enumerated terms (and corresponding environments)
+  _useMemoization :: Bool,                -- ^ Should enumerated terms be memoized?
+  _symmetryReduction :: Bool,             -- ^ Should partial applications be memoized to check for redundancy?
   _explorerLogLevel :: Int                -- ^ How verbose logging is
 } 
 
@@ -58,9 +60,11 @@ makeLenses ''ExplorerParams
 
 -- | State of program exploration
 data ExplorerState = ExplorerState {
-  _typingState :: TypingState,    -- ^ Type-checking state
-  _auxGoals :: [Goal],            -- ^ Subterms to be synthesized independently
-  _symbolUseCount :: Map Id Int   -- ^ Number of times each symbol has been used in the program so far
+  _typingState :: TypingState,                     -- ^ Type-checking state
+  _auxGoals :: [Goal],                             -- ^ Subterms to be synthesized independently
+  _newAuxGoals :: [Id],                            -- ^ Higher-order arguments that have been synthesized but not yet let-bound
+  _lambdaLets :: Map Id (Environment, UProgram),   -- ^ Local function bindings to be checked upon use (in type checking mode)  
+  _symbolUseCount :: Map Id Int                    -- ^ Number of times each symbol has been used in the program so far
 } deriving (Eq, Ord)
 
 makeLenses ''ExplorerState
@@ -81,6 +85,7 @@ instance Pretty MemoKey where
 type Memo = Map MemoKey [(Environment, RProgram, ExplorerState)]
 
 data PartialKey = PartialKey {
+    pState :: ExplorerState,
     pKeyContext :: RProgram,
     pEnvironment :: Environment
 } deriving (Eq, Ord)
@@ -101,18 +106,19 @@ type Explorer s = StateT ExplorerState (ReaderT (ExplorerParams, TypingParams) (
 -- | 'runExplorer' @eParams tParams initTS go@ : execute exploration @go@ with explorer parameters @eParams@, typing parameters @tParams@ in typing state @initTS@
 runExplorer :: MonadHorn s => ExplorerParams -> TypingParams -> TypingState -> Explorer s a -> s (Either TypeError a)
 runExplorer eParams tParams initTS go = do
-  (ress, (PersistentState _ _ errs)) <- runStateT (observeManyT 1 $ runReaderT (evalStateT go (ExplorerState initTS [] Map.empty)) (eParams, tParams)) (PersistentState Map.empty Map.empty [])
+  (ress, (PersistentState _ _ errs)) <- runStateT (observeManyT 1 $ runReaderT (evalStateT go initExplorerState) (eParams, tParams)) (PersistentState Map.empty Map.empty [])
   case ress of
     [] -> return $ Left $ if null errs then text "No solution" else head errs
     (res : _) -> return $ Right res
+  where
+    initExplorerState = ExplorerState initTS [] [] Map.empty Map.empty
 
 -- | 'generateI' @env t@ : explore all terms that have refined type @t@ in environment @env@
 -- (top-down phase of bidirectional typechecking)
 generateI :: MonadHorn s => Environment -> RType -> Explorer s RProgram
 generateI env t@(FunctionT x tArg tRes) = do
-  x' <- if x == dontCare then freshId "x" else return x
-  let ctx = \p -> Program (PFun x' p) t
-  pBody <- inContext ctx $ generateI (unfoldAllVariables $ addVariable x' tArg $ env) tRes
+  let ctx = \p -> Program (PFun x p) t
+  pBody <- inContext ctx $ generateI (unfoldAllVariables $ addVariable x tArg $ env) tRes
   return $ ctx pBody
 generateI env t@(ScalarT _ _) = do
   maEnabled <- asks $ _abduceScrutinees . fst -- Is match abduction enabled?
@@ -200,7 +206,7 @@ generateFirstCase env scrVar pScrutinee t consName = do
       consT <- instantiate env consSch True
       runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
       consT' <- runInSolver $ currentAssignment consT
-      binders <- replicateM (arity consT') (freshId "x")
+      binders <- replicateM (arity consT') (freshVar env "x")
       (syms, ass) <- caseSymbols scrVar binders consT'
       let caseEnv = foldr (uncurry addVariable) (addAssumption ass env) syms
 
@@ -225,7 +231,7 @@ generateCase env scrVar pScrutinee t consName = do
       consT <- instantiate env consSch True
       runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
       consT' <- runInSolver $ currentAssignment consT
-      binders <- replicateM (arity consT') (freshId "x")
+      binders <- replicateM (arity consT') (freshVar env "x")
       (syms, ass) <- caseSymbols scrVar binders consT'
       unfoldSyms <- asks $ _unfoldLocals . fst
       let caseEnv = (if unfoldSyms then unfoldAllVariables else id) $ foldr (uncurry addVariable) (addAssumption ass env) syms
@@ -291,7 +297,14 @@ generateE env typ = do
   (finalEnv, Program pTerm pTyp) <- generateEUpTo env typ d
   pTyp' <- runInSolver $ solveTypeConstraints >> currentAssignment pTyp
   cleanupTypeVars
-  return (finalEnv, Program pTerm pTyp')
+  pTerm' <- addLambdaLets pTyp' (Program pTerm pTyp')
+  return (finalEnv, pTerm')
+  where
+    addLambdaLets t body = do
+      newGoals <- use newAuxGoals      
+      newAuxGoals .= []
+      return $ foldr (\f p -> Program (PLet f uHole p) t) body newGoals
+
 
 -- | Forget free type variables, which cannot escape an E-term
 -- (after substituting outstanding auxiliary goals)
@@ -303,7 +316,7 @@ cleanupTypeVars = do
   where
     goalSubstituteTypes g = do
       spec' <- runInSolver $ currentAssignment (toMonotype $ gSpec g)
-      return g { gSpec = Monotype spec' }
+      return g { gSpec = Monotype spec' }      
   
 -- | 'generateEUpTo' @env typ d@ : explore all applications of type shape @shape typ@ in environment @env@ of depth up to @d@
 generateEUpTo :: MonadHorn s => Environment -> RType -> Int -> Explorer s (Environment, RProgram)
@@ -357,62 +370,53 @@ generateEAt env typ d = do
 checkE :: MonadHorn s => Environment -> RType -> RProgram -> Explorer s ()
 checkE env typ p@(Program pTerm pTyp) = do
   ctx <- asks $ _context . fst
-  let fixedContext = ctx (untyped PHole)
-  writeLog 1 $ text "Checking" <+> pretty p <+> text "::" <+> pretty typ <+> text "in" $+$ pretty fixedContext
-
-  if arity typ == 0
-    then addConstraint $ Subtype env pTyp typ False
-    else do
-      -- Symmetry checking
-      let partialKey = PartialKey fixedContext env
-      startPartials <- getPartials
-      let pastPartials = Map.findWithDefault Map.empty partialKey startPartials
-      let myCount = Map.findWithDefault 0 p pastPartials
-      let repeatPartials = filter (\(key, count) -> count > myCount) $ Map.toList pastPartials
-
-      writeLog 1 $ text "Checking" <+> pretty pTyp <+> text "doesn't match any of" <+> pretty repeatPartials <+> text "myCount is" <+> pretty myCount
-
-      -- Check that pTyp is not a subtype of multiple stored partials which match each other.
-      mapM_ (\(Program _ oldTyp) -> ifte (solveLocally $ Subtype env pTyp oldTyp False)
-                                  (\_ -> do
-                                    writeLog 1 $ text "Subtype of failed predecessor:" <+> pretty pTyp <+> text "in" <+> pretty fixedContext <+> text "Is a subtype of" <+> pretty oldTyp
-                                    mzero)
-                                  (return ())) $ map fst repeatPartials
-
-      let newCount = 1 + myCount
-      let newPartials = Map.insert p newCount pastPartials
-      let newPartialMap = Map.insert partialKey newPartials startPartials
-      putPartials newPartialMap
-
-      -- Normal checks
-      addConstraint $ Subtype env (removeDependentRefinements (Set.fromList $ allArgs pTyp) (lastType pTyp)) (lastType typ) False
-      ifM (asks $ _consistencyChecking . fst) (addConstraint $ Subtype env pTyp typ True) (return ()) -- add constraint that t and tFun be consistent (i.e. not provably disjoint)
-      
+  writeLog 1 $ text "Checking" <+> pretty p <+> text "::" <+> pretty typ <+> text "in" $+$ pretty (ctx (untyped PHole))
+  
+  ifM (asks $ _symmetryReduction . fst) checkSymmetry (return ())
+  
+  addConstraint $ Subtype env pTyp typ False
+  when (arity typ > 0) $
+    ifM (asks $ _consistencyChecking . fst) (addConstraint $ Subtype env pTyp typ True) (return ()) -- add constraint that t and tFun be consistent (i.e. not provably disjoint)
   fTyp <- runInSolver $ finalizeType typ
   typingState . errorContext .= errorText "when checking" </> pretty p </> text "::" </> pretty fTyp </> errorText "in" $+$ pretty (ctx p)  
   solveIncrementally
   typingState . errorContext .= empty
+    where      
+      checkSymmetry = do
+        ctx <- asks $ _context . fst
+        let fixedContext = ctx (untyped PHole)
+        if arity typ > 0
+          then do
+              solverState <- get
+              let partialKey = PartialKey solverState fixedContext env
+              startPartials <- getPartials
+              let pastPartials = Map.findWithDefault Map.empty partialKey startPartials
+              let myCount = Map.findWithDefault 0 p pastPartials
+              let repeatPartials = filter (\(key, count) -> count > myCount) $ Map.toList pastPartials
 
-    where
-      removeDependentRefinements argNames (ScalarT (DatatypeT name typeArgs pArgs) fml) = 
-        ScalarT (DatatypeT name (map (removeDependentRefinements argNames) typeArgs) (map (removeFrom argNames) pArgs)) (removeFrom argNames fml)
-      removeDependentRefinements argNames (ScalarT baseT fml) = ScalarT baseT (removeFrom argNames fml)
-      removeFrom argNames fml = if varsOf fml `disjoint` argNames then fml else ffalse
+              writeLog 1 $ text "Checking" <+> pretty pTyp <+> text "doesn't match any of" <+> pretty repeatPartials <+> text "myCount is" <+> pretty myCount
+
+              -- Check that pTyp is not a subtype of multiple stored partials which match each other.
+              mapM_ (\(Program _ oldTyp) -> ifte (solveLocally $ Subtype env pTyp oldTyp False)
+                                          (\_ -> do
+                                            writeLog 1 $ text "Subtype of failed predecessor:" <+> pretty pTyp <+> text "in" <+> pretty fixedContext <+> text "Is a subtype of" <+> pretty oldTyp
+                                            mzero)
+                                          (return ())) $ map fst repeatPartials
+
+              let newCount = 1 + myCount
+              let newPartials = Map.insert p newCount pastPartials
+              let newPartialMap = Map.insert partialKey newPartials startPartials
+              putPartials newPartialMap
+          else return ()
 
 enumerateAt :: MonadHorn s => Environment -> RType -> Int -> Explorer s (Environment, RProgram)
 enumerateAt env typ 0 = do
-  -- case soleConstructor (lastType typ) of
-    -- Just (name, sch) -> do -- @typ@ is a datatype with only on constructor, so all terms must start with that constructor
-      -- guard $ arity (toMonotype sch) == arity typ
-      -- pickSymbol (name, sch)
-
-    -- Nothing -> do
-      let symbols = Map.toList $ symbolsOfArity (arity typ) env
-      useCounts <- use symbolUseCount
-      let symbols' = if arity typ == 0
-                        then sortBy (mappedCompare (\(x, _) -> (Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
-                        else sortBy (mappedCompare (\(x, _) -> (not $ Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
-      msum $ map pickSymbol symbols'
+    let symbols = Map.toList $ symbolsOfArity (arity typ) env
+    useCounts <- use symbolUseCount
+    let symbols' = if arity typ == 0
+                      then sortBy (mappedCompare (\(x, _) -> (Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
+                      else sortBy (mappedCompare (\(x, _) -> (not $ Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
+    msum $ map pickSymbol symbols'
   where
     pickSymbol (name, sch) = do
       t <- freshInstance sch
@@ -421,7 +425,7 @@ enumerateAt env typ 0 = do
       symbolUseCount %= Map.insertWith (+) name 1      
       case Map.lookup name (env ^. shapeConstraints) of
         Nothing -> return ()
-        Just sch -> solveLocally $ Subtype env (refineBot $ shape t) (refineTop sch) False      
+        Just sc -> solveLocally $ Subtype env (refineBot $ shape t) (refineTop sc) False      
       return (env, p)
       
     freshInstance sch = if arity (toMonotype sch) == 0
@@ -444,7 +448,7 @@ enumerateAt env typ d = do
         generateApp (\e t -> generateEAt e t d) (\e t -> generateEUpTo e t (d - 1))
 
     generateApp genFun genArg = do
-      x <- freshId "x"
+      x <- freshId "A"
       (env', fun) <- inContext (\p -> Program (PApp p uHole) typ)
                             $ genFun env (FunctionT x AnyT typ) -- Find all functions that unify with (? -> typ)
       let FunctionT x tArg tRes = typeOf fun
@@ -454,11 +458,13 @@ enumerateAt env typ d = do
           d <- asks $ _auxDepth . fst
           when (d <= 0) $ writeLog 1 (text "Cannot synthesize higher-order argument: no auxiliary functions allowed") >> mzero
           arg <- enqueueGoal env' tArg (untyped PHole) (d - 1)
+          newAuxGoals %= (++ [symbolName arg])
           return (env', Program (PApp fun arg) tRes)
         else do -- First-order argument: generate now
+          let mbCut = if Set.member x (varsOfType tRes) then id else cut
           (env'', arg) <- local (over (_1 . eGuessDepth) (-1 +))
                             $ inContext (\p -> Program (PApp fun p) tRes)
-                            $ genArg env' tArg
+                            $ mbCut (genArg env' tArg)
           writeLog 2 (text "Synthesized argument" <+> pretty arg <+> text "of type" <+> pretty (typeOf arg))
           (env''', y) <- toVar arg env''
           return (env''', Program (PApp fun arg) (renameVarFml x y tRes))
@@ -469,31 +475,24 @@ generateError :: MonadHorn s => Environment -> Explorer s RProgram
 generateError env = do
   ctx <- asks $ _context . fst  
   writeLog 1 $ text "Checking" <+> pretty errorProgram <+> text "in" $+$ pretty (ctx errorProgram)
-  addConstraint $ Subtype env (int ftrue) (int ffalse) False
+  tass <- use (typingState . typeAssignment)
+  addConstraint $ Subtype env (int $ conjunction $ Set.fromList $ map trivial (allScalars env tass)) (int ffalse) False
   typingState . errorContext .= errorText "when checking" </> pretty errorProgram </> errorText "in" $+$ pretty (ctx errorProgram)
   runInSolver solveTypeConstraints
   typingState . errorContext .= empty
   return errorProgram
+  where
+    trivial var = var |=| var
 
 -- | 'toVar' @p env@: a variable representing @p@ (can be @p@ itself or a fresh ghost)
 toVar (Program (PSymbol name) t) env 
   | not (isConstant name env)  = return (env, Var (toSort $ baseTypeOf t) name)
 toVar p@(Program _ t) env = do
-  -- let g = show $ plain $ pretty p <> pretty t
-  g <- freshId "g"
+  g <- freshId "G"
   return (addGhost g t env, (Var (toSort $ baseTypeOf t) g))
 
-enqueueGoal _ typ (Program (PSymbol f) _) depth = do -- Known goal, must have been defined before with a let
- goalsByName <- uses auxGoals (filter (\g -> gName g == f))
- if null goalsByName
-  then throwError $ errorText "Not in scope: function" </> squotes (text f)
-  else do
-    let goal@(Goal _ env _ impl _) = head goalsByName
-    auxGoals %= ((Goal f env (Monotype typ) impl depth) :) . delete goal
-    return $ Program (PSymbol f) typ  
 enqueueGoal env typ impl depth = do
-  g <- freshId "f"
-  -- env' <- (set boundTypeVars (env ^. boundTypeVars ) . set boundPredicates (env ^. boundPredicates )) <$> runInSolver (use initEnv)
+  g <- freshVar env "f"
   auxGoals %= ((Goal g env (Monotype typ) impl depth) :)
   return $ Program (PSymbol g) typ
 
@@ -549,6 +548,9 @@ solveLocally c = do
 freshId :: MonadHorn s => String -> Explorer s String
 freshId = runInSolver . TCSolver.freshId
 
+freshVar :: MonadHorn s => Environment -> String -> Explorer s String
+freshVar env prefix = runInSolver $ TCSolver.freshVar env prefix
+
 currentValuation :: MonadHorn s => Formula -> Explorer s (Set Formula)
 currentValuation u = do
   results <- runInSolver $ currentValuations u
@@ -583,13 +585,14 @@ instantiate env sch top = do
       instantiate' subst (Map.insert p fml pSubst) sch        
     instantiate' subst pSubst (Monotype t) = go subst pSubst t
     go subst pSubst (FunctionT x tArg tRes) = do
-      x' <- freshId "x"
+      x' <- freshVar env "x"
       liftM2 (FunctionT x') (go subst pSubst tArg) (go subst pSubst (renameVar x x' tArg tRes))
     go subst pSubst t = return $ typeSubstitutePred pSubst . typeSubstitute subst $ t  
     
 symbolType env x t@(ScalarT b _)
-  | isConstant x env = t -- x is a constant, use it's type (it must be very precise)
-  | otherwise        = ScalarT b (varRefinement x (toSort b)) -- x is a scalar variable, use _v = x
+  | isLiteral x = t -- x is a literal of a primitive type, it's type is precise
+  | Set.null (typeVarsOf t Set.\\ Set.fromList (env ^. boundTypeVars)) = ScalarT b (varRefinement x (toSort b)) -- x is a scalar variable or monomorphic scalar constant, use _v = x
+  | otherwise = t
 symbolType _ _ t = t
   
 -- | Perform an exploration, and once it succeeds, do not backtrack it  

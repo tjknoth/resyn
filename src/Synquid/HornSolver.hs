@@ -15,6 +15,7 @@ import Synquid.SolverMonad
 import Synquid.Util
 import Synquid.Pretty
 
+import Data.Function
 import Data.List
 import Data.Maybe
 import qualified Data.Set as Set
@@ -188,7 +189,7 @@ strengthen quals extractAssumptions fml@(Binary Implies lhs rhs) sol = do
     pruned <- ifM (asks semanticPrune) 
       (ifM (asks agressivePrune)
         (do
-          let pruneAssumptions = if rhs == ffalse then Set.empty else usedLhsQuals -- TODO: is this dangeorous??? the result might not cover the pruned alternatives in a different context!
+          let pruneAssumptions = if rhs == ffalse then Set.empty else usedLhsQuals -- TODO: is this dangerous??? the result might not cover the pruned alternatives in a different context!
           valuations' <- pruneValuations pruneAssumptions (Map.keys splitting)
           writeLog 2 (text "Pruned valuations:" $+$ vsep (map pretty valuations'))
           return $ concatMap (splitting Map.!) valuations')   -- Prune LHS valuations and then return the splits of only optimal valuations
@@ -221,9 +222,18 @@ strengthen quals extractAssumptions fml@(Binary Implies lhs rhs) sol = do
       unknownsVal <- mapM (singleUnknownCandidates lhsVal) unknownsList
       let isValidsplit ss s = Set.unions ss == s && sum (map Set.size ss) == Set.size s
       guard $ isValidsplit unknownsVal lhsVal
-      return $ Map.fromListWith Set.union $ zipWith unsubst unknownsList unknownsVal
-      
-    unsubst u@(Unknown s name) quals = (name, Set.map (substitute (inverse s)) quals)
+      Map.fromListWith Set.union <$> zipWithM unsubst unknownsList unknownsVal
+
+    -- | Given an unknown @[subst]u@ and its valuation @quals@, get all possible valuations of @u@
+    unsubst :: Formula -> Set Formula -> [(Id, Set Formula)]
+    unsubst u@(Unknown s name) quals = nub $ map (\inv -> (name, Set.map (substitute inv) quals)) (inverses s)
+        
+    -- | All inverses of a substitution, assuming its range only contains unknowns; 
+    -- duplicates in the range result in multiple inverses
+    inverses :: Substitution -> [Substitution]
+    inverses s = let pairs = [(y, Var b x) | (x, Var b y) <- Map.toList s] in
+                 let byKey = groupBy ((==) `on` fst) . sortBy (compare `on` fst) $ pairs in
+                 map Map.fromList $ sequence byKey    
           
 strengthen _ _ fml _ = error $ unwords ["strengthen: encountered ill-formed constraint", show fml]
 

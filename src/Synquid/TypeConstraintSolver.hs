@@ -22,11 +22,13 @@ module Synquid.TypeConstraintSolver (
   matchConsType,
   hasPotentialScrutinees,
   freshId,
+  freshVar,
   currentAssignment,
   finalizeType,
   finalizeProgram,
   currentValuations,
-  initEnv
+  initEnv,
+  allScalars
 ) where
 
 import Synquid.Logic
@@ -166,7 +168,11 @@ processAllPredicates = do
 processAllConstraints :: MonadHorn s => TCSolver s ()
 processAllConstraints = do
   tcs <- uses simpleConstraints nub
-  mapM_ processConstraint tcs
+  let (subs, wfs) = partition isSubtyping tcs
+  mapM_ processConstraint (wfs ++ subs) -- process well-formedness constraints first
+  where
+    isSubtyping (Subtype _ _ _ _) = True
+    isSubtyping _ = False
   
 -- | Signal type error  
 throwError :: MonadHorn s => TypeError -> TCSolver s ()  
@@ -206,7 +212,7 @@ simplifyConstraint c = do
   simplifyConstraint' tass pass c
 
 -- Any type: drop
-simplifyConstraint' _ _ (Subtype _ t AnyT _) = return ()
+simplifyConstraint' _ _ (Subtype _ _ AnyT _) = return ()
 simplifyConstraint' _ _ c@(Subtype _ AnyT _ _) = return ()
 simplifyConstraint' _ _ c@(WellFormed _ AnyT) = return ()
 -- Well-formedness of a known predicate drop  
@@ -252,14 +258,13 @@ simplifyConstraint' _ _ (Subtype env (ScalarT (DatatypeT name [] (pArg:pArgs)) f
 simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1) (FunctionT y tArg2 tRes2) False)
   = do -- TODO: rename type vars
       simplifyConstraint (Subtype env tArg2 tArg1 False)
-      simplifyConstraint (Subtype (addVariable y tArg2 env) (renameVar x y tArg2 tRes1) tRes2 False)
+      if isScalarType tArg1
+        then simplifyConstraint (Subtype (addVariable y tArg2 env) (renameVar x y tArg1 tRes1) tRes2 False)
+        else simplifyConstraint (Subtype env tRes1 tRes2 False)
 simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1) (FunctionT y tArg2 tRes2) True)
   = -- TODO: rename type vars
-      if arity tArg1 == 0 
-        then do
-          simplifyConstraint (Subtype env tArg2 tArg1 False) -- Function types are only consistent if their argument types are the same
-          simplifyConstraint (Subtype env tArg1 tArg2 False)
-          simplifyConstraint (Subtype (addGhost y tArg1 env) (renameVar x y tArg1 tRes1) tRes2 True)
+      if isScalarType tArg1
+        then simplifyConstraint (Subtype (addVariable x tArg1 env) tRes1 tRes2 True)
         else simplifyConstraint (Subtype env tRes1 tRes2 True)
 simplifyConstraint' _ _ (WellFormed env (ScalarT (DatatypeT name (tArg:tArgs) pArgs) fml))
   = do
@@ -297,13 +302,18 @@ processPredicate c@(WellFormedPredicate env sorts p) = do
     then do
       writeLog 2 $ text "WARNING: free vars in predicate" <+> pretty c
       modify $ addTypingConstraint c -- Still has type variables: cannot determine shape
-    else  do                 
+    else do                 
       u <- freshId "u"
       addPredAssignment p (Unknown Map.empty u)
       let sorts' = map (sortSubstitute $ asSortSubst tass) sorts
       let vars = zipWith Var sorts' deBrujns
-      tq <- asks _typeQualsGen
-      addQuals u (tq (env, last vars : (init vars ++ allScalars env tass)))
+      if null vars
+        then do -- TODO: this is a hack
+          cq <- asks _condQualsGen
+          addQuals u (cq (env, allScalars env tass))
+        else do
+          tq <- asks _typeQualsGen
+          addQuals u (tq (env, last vars : (init vars ++ allScalars env tass)))        
   where
     isFreeVariable tass a = not (isBound a env) && not (Map.member a tass)
 processPredicate c = modify $ addTypingConstraint c
@@ -316,20 +326,32 @@ processConstraint c@(Subtype env (ScalarT baseTL l) (ScalarT baseTR r) False) | 
       else do
         tass <- use typeAssignment
         pass <- use predAssignment
-        let l' = substitutePredicate pass $ sortSubstituteFml (asSortSubst tass) l
-        let r' = substitutePredicate pass $ sortSubstituteFml (asSortSubst tass) r
+        qmap <- use qualifierMap
+        let l' = substitutePredicate pass l
+        let r' = substitutePredicate pass r
         if Set.null $ (predsOf l' `Set.union` predsOf r') Set.\\ (Map.keysSet $ allPredicates env)
           then do
-            let lhss = embedding env tass pass (predsOf r') `Set.union` Set.fromList [l'] -- (sortSubstFml l : allMeasurePostconditions baseT env)
-            hornClauses %= ((conjunction lhss |=>| r') :)
+            let relevantVars = potentialVars qmap (l' |&| r')
+            emb <- embedding env relevantVars (predsOf r')
+            let sSubst = sortSubstituteFml (asSortSubst tass)
+            let lhss = uDNF $ sSubst $ conjunction (Set.insert l' emb)
+            let clauses = map (|=>| sSubst r') lhss
+            hornClauses %= (clauses ++)
           else modify $ addTypingConstraint c -- Constraint contains free predicate: add back and wait until more type variables get unified, so predicate variables can be instantiated
 processConstraint (Subtype env (ScalarT baseTL l) (ScalarT baseTR r) True) | baseTL == baseTR
   = do -- TODO: abs ref here
       tass <- use typeAssignment
       pass <- use predAssignment
-      let l' = substitutePredicate pass $ sortSubstituteFml (asSortSubst tass) l
-      let r' = substitutePredicate pass $ sortSubstituteFml (asSortSubst tass) r      
-      consistencyChecks %= (conjunction (Set.insert l' $ Set.insert r' $ embedding env tass pass Set.empty) :)
+      qmap <- use qualifierMap
+      let l' = substitutePredicate pass l
+      let r' = substitutePredicate pass r
+      if l' == ftrue || r' == ftrue
+        then return ()
+        else do
+          let relevantVars = potentialVars qmap (l' |&| r')
+          emb <- embedding env relevantVars Set.empty
+          let clause = sortSubstituteFml (asSortSubst tass) (conjunction (Set.insert l' $ Set.insert r' emb))
+          consistencyChecks %= (clause :)
 processConstraint (WellFormed env (ScalarT baseT fml)) 
   = case fml of
       Unknown _ u -> do      
@@ -378,6 +400,37 @@ hasPotentialScrutinees :: Monad s => Environment -> TCSolver s Bool
 hasPotentialScrutinees env = do
   tass <- use typeAssignment
   return $ not $ null $ allPotentialScrutinees env tass
+  
+-- | Assumptions encoded in an environment    
+embedding :: Monad s => Environment -> Set Id -> Set Id -> TCSolver s (Set Formula)
+embedding env vars measures = do
+    tass <- use typeAssignment
+    pass <- use predAssignment
+    qmap <- use qualifierMap
+    let ass = Set.map (substitutePredicate pass) $ (env ^. assumptions)
+    let allVars = vars `Set.union` potentialVars qmap (conjunction ass)
+    return $ addBindings tass pass qmap ass allVars
+  where
+    addBindings tass pass qmap fmls vars = 
+      if Set.null vars
+        then fmls
+        else let (x, rest) = Set.deleteFindMin vars in
+              case Map.lookup x allSymbols of
+                Nothing -> addBindings tass pass qmap  fmls rest -- Variable not found (useful to ignore value variables)
+                Just (Monotype t) -> case typeSubstitute tass t of
+                  ScalarT baseT fml -> 
+                    let fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x))) 
+                                          ((substitutePredicate pass fml) : allMeasurePostconditions measures baseT env) in
+                    addBindings tass pass qmap (fmls `Set.union` fmls') (rest `Set.union` potentialVars qmap fml)
+                  AnyT -> Set.singleton ffalse
+                  _ -> error $ unwords ["embedding: encountered non-scalar variable", x, "in 0-arity bucket"]
+    allSymbols = symbolsOfArity 0 env `Map.union` Map.map Monotype (env ^. ghosts)
+
+-- | 'potentialVars' @qmap fml@ : variables of @fml@ if all unknowns get strongest valuation according to @quals@    
+potentialVars :: QMap -> Formula -> Set Id
+potentialVars qmap fml = Set.map varName $ Set.unions (varsOf fml : map (uVars qmap) (Set.toList $ unknownsOf fml))
+  where
+    uVars qmap u@(Unknown subst name) = Set.unions (map (varsOf . substitute subst) (lookupQuals qmap qualifiers u))  
 
 -- | 'freshId' @prefix@ : fresh identifier starting with @prefix@
 freshId :: Monad s => String -> TCSolver s String
@@ -385,8 +438,15 @@ freshId prefix = do
   i <- uses idCount (Map.findWithDefault 0 prefix)
   idCount %= Map.insert prefix (i + 1)
   return $ prefix ++ show i
+  
+freshVar :: Monad s => Environment -> String -> TCSolver s String 
+freshVar env prefix = do
+  x <- freshId prefix
+  if Map.member x (allSymbols env)
+    then freshVar env prefix
+    else return x
 
--- | 'fresh @t@ : a type with the same shape as @t@ but fresh type variables and fresh unknowns as refinements
+-- | 'fresh' @t@ : a type with the same shape as @t@ but fresh type variables and fresh unknowns as refinements
 fresh :: Monad s => Environment -> RType -> TCSolver s RType
 fresh env (ScalarT (TypeVarT a) _) | not (isBound a env) = do
   a' <- freshId "a"
@@ -399,7 +459,7 @@ fresh env (ScalarT (DatatypeT name tArgs _) _) = do
   let substToUnique = Map.fromList $ zip tVars (map VarS deBrujns)
   let substFromUnique = asSortSubst $ Map.fromList $ zip deBrujns tArgs'
   
-  pArgs' <- mapM (freshPred env . map (sortSubstitute substFromUnique) . map (sortSubstitute substToUnique)) pVars  
+  pArgs' <- mapM (\(PredSig _ sorts _) -> freshPred env . map (sortSubstitute substFromUnique) . map (sortSubstitute substToUnique) $ sorts) pVars  
   return $ ScalarT (DatatypeT name tArgs' pArgs') (Unknown Map.empty k)
 fresh env (ScalarT baseT _) = do
   k <- freshId "u"
@@ -464,10 +524,14 @@ instantiateConsAxioms env fml = let inst = instantiateConsAxioms env in
     -- All x e -> ?
     _ -> Set.empty  
   where
-    measureAxiom resS ctor args (MeasureDef _ _ defs _) = 
+    measureAxiom resS ctor args (MeasureDef inSort _ defs _) = 
       let MeasureCase _ vars body = head $ filter (\(MeasureCase c _ _) -> c == ctor) defs in
-      let subst = Map.fromList $ (valueVarName, Cons resS ctor args) : zip vars args in
-      substitute subst body  
+      let sArgs = sortArgsOf inSort in
+      let uniqueSubst = Map.fromList $ zip (map varSortName sArgs) (map VarS deBrujns) in
+      let inSort' = sortSubstitute uniqueSubst inSort in
+      let (Right sortSubst) = unifySorts [inSort'] [resS] in
+      let subst = Map.fromList $ (valueVarName, Cons resS ctor args) : zip vars args in      
+      substitute subst (sortSubstituteFml sortSubst . sortSubstituteFml uniqueSubst $ body)
     
 -- | 'matchConsType' @formal@ @actual@ : unify constructor return type @formal@ with @actual@
 matchConsType formal@(ScalarT (DatatypeT d vars pVars) _) actual@(ScalarT (DatatypeT d' args pArgs) _) | d == d' 

@@ -187,9 +187,6 @@ toAST expr = case expr of
 
     unOp :: UnOp -> AST -> Z3State AST
     unOp Neg = mkUnaryMinus
-    unOp Abs = \arg -> do
-      cond <- toZ3Sort IntS >>= mkInt 0 >>= mkGe arg
-      mkUnaryMinus arg >>= mkIte cond arg
     unOp Not = mkNot
 
     binOp :: BinOp -> AST -> AST -> Z3State AST
@@ -216,33 +213,41 @@ toAST expr = case expr of
     list2 o x y = o [x, y]
 
     -- | Lookup or create a variable with name `ident' and sort `s'
-    var s ident = do
-      z3s <- toZ3Sort s
-      let ident' = ident ++ show s
+    var s ident = do      
+      let ident' = ident ++ show (asZ3Sort s)
       varMb <- uses vars (Map.lookup ident')
 
       case varMb of
         Just v -> return v
         Nothing -> do
-          symb <- mkStringSymbol ident
+          symb <- mkStringSymbol ident'
+          z3s <- toZ3Sort s
           v <- mkConst symb z3s
-          vars %= Map.insert ident v
+          vars %= Map.insert ident' v
           return v
 
     -- | Lookup or create a function declaration with name `name', return type `resT', and argument types `argTypes'
     function resT name argTypes = do
-      -- let name' = name -- ++ show argType
-      declMb <- uses functions (Map.lookup name)
+      let name' = name ++ concatMap (show . asZ3Sort) (resT : argTypes)
+      declMb <- uses functions (Map.lookup name')
       case declMb of
         Just d -> return d
         Nothing -> do
-          symb <- mkStringSymbol name
+          symb <- mkStringSymbol name'
           argSorts <- mapM toZ3Sort argTypes
           resSort <- toZ3Sort resT
           decl <- mkFuncDecl symb argSorts resSort
-          functions %= Map.insert name decl
+          functions %= Map.insert name' decl
           -- return $ traceShow (text "DECLARE" <+> text name <+> pretty argTypes <+> pretty resT) decl
           return decl
+          
+    -- | Sort as Z3 sees it
+    asZ3Sort s = case s of
+      VarS name -> IntS
+      DataS name args -> IntS
+      SetS el -> SetS (asZ3Sort el)
+      _ -> s
+          
 
 -- | 'getAllMUSs' @assumption mustHave fmls@ : find all minimal unsatisfiable subsets of @fmls@ with @mustHave@, which contain @mustHave@, assuming @assumption@
 -- (implements Marco algorithm by Mark H. Liffiton et al.)

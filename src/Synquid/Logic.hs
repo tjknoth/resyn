@@ -25,11 +25,20 @@ isSetS (SetS _) = True
 isSetS _ = False
 isData (DataS _ _) = True
 isData _ = False
+sortArgsOf (DataS _ sArgs) = sArgs
+varSortName (VarS name) = name
+
+-- | 'typeVarsOfSort' @s@ : all type variables in @s@
+typeVarsOfSort :: Sort -> Set Id
+typeVarsOfSort (VarS name) = Set.singleton name  
+typeVarsOfSort (DataS _ sArgs) = Set.unions (map typeVarsOfSort sArgs)
+typeVarsOfSort (SetS s) = typeVarsOfSort s
+typeVarsOfSort _ = Set.empty
 
 {- Formulas of the refinement logic -}
 
 -- | Unary operators
-data UnOp = Neg | Abs | Not
+data UnOp = Neg | Not
   deriving (Eq, Ord)
 
 -- | Binary operators  
@@ -44,10 +53,6 @@ data BinOp =
   
 -- | Variable substitution  
 type Substitution = Map Id Formula
-
--- | 'inverse' @s@ : inverse of substitution @s@, provided that the range of @s@ only contains variables
-inverse :: Substitution -> Substitution
-inverse s = Map.fromList [(y, Var b x) | (x, Var b y) <- Map.toList s]
 
 -- | Formulas of the refinement logic
 data Formula =
@@ -84,7 +89,6 @@ valInt = intVar valueVarName
 vartVar n = Var (VarS n)
 valVart n = vartVar n valueVarName
 fneg = Unary Neg
-fabs = Unary Abs
 fnot = Unary Not
 (|*|) = Binary Times
 (|+|) = Binary Plus
@@ -151,6 +155,18 @@ posNegUnknowns _ = (Set.empty, Set.empty)
 posUnknowns = fst . posNegUnknowns
 negUnknowns = snd . posNegUnknowns
 
+posNegPreds :: Formula -> (Set Id, Set Id)
+posNegPreds (Pred BoolS p es) = (Set.singleton p, Set.empty)
+posNegPreds (Unary Not e) = swap $ posNegPreds e
+posNegPreds (Binary Implies e1 e2) = both2 Set.union (swap $ posNegPreds e1) (posNegPreds e2)
+posNegPreds (Binary Iff e1 e2) = both2 Set.union (posNegPreds $ e1 |=>| e2) (posNegPreds $ e2 |=>| e1)
+posNegPreds (Binary _ e1 e2) = both2 Set.union (posNegPreds e1) (posNegPreds e2)
+posNegPreds (Ite e e1 e2) = both2 Set.union (posNegPreds $ e |=>| e1) (posNegPreds $ fnot e |=>| e2)
+posNegPreds _ = (Set.empty, Set.empty)
+
+posPreds = fst . posNegPreds
+negPreds = snd . posNegPreds
+
 predsOf :: Formula -> Set Id
 predsOf (Pred _ p es) = Set.insert p (Set.unions $ map predsOf es)
 predsOf (SetLit _ elems) = Set.unions $ map predsOf elems
@@ -176,7 +192,7 @@ sortOf (SetLit b _)                              = SetS b
 sortOf (Var s _ )                                = s
 sortOf (Unknown _ _)                             = BoolS
 sortOf (Unary op _)
-  | op == Neg || op == Abs                       = IntS
+  | op == Neg                                    = IntS
   | otherwise                                    = BoolS
 sortOf (Binary op e1 _)
   | op == Times || op == Plus || op == Minus     = IntS
@@ -203,7 +219,7 @@ substitute subst fml = case fml of
   Var s name -> case Map.lookup name subst of
     Just f -> f
     Nothing -> fml
-  Unknown s name -> Unknown (s `compose` subst) name 
+  Unknown s name -> Unknown (s `compose` (removeId subst)) name 
   Unary op e -> Unary op (substitute subst e)
   Binary op e1 e2 -> Binary op (substitute subst e1) (substitute subst e2)
   Ite e0 e1 e2 -> Ite (substitute subst e0) (substitute subst e1) (substitute subst e2)
@@ -214,7 +230,11 @@ substitute subst fml = case fml of
                             else All v (substitute subst e)
   otherwise -> fml
   where
+    -- | Compose substitutions
     compose old new = Map.map (substitute new) old `Map.union` new
+    -- | Remove identity substitutions
+    removeId :: Substitution -> Substitution
+    removeId = Map.filterWithKey (\x fml -> not $ isVar fml && varName fml == x)
                   
 deBrujns = map (\i -> dontCare ++ show i) [0..] 
                   
@@ -228,6 +248,38 @@ substitutePredicate pSubst fml = case fml of
   Ite e0 e1 e2 -> Ite (substitutePredicate pSubst e0) (substitutePredicate pSubst e1) (substitutePredicate pSubst e2)
   All v@(Var _ x) e -> All v (substitutePredicate pSubst e)
   _ -> fml
+  
+-- | Negation normal form of a formula:
+-- no negation above boolean connectives, no boolean connectives except @&&@ and @||@
+negationNF :: Formula -> Formula
+negationNF fml = case fml of
+  Unary Not e -> case e of
+    Unary Not e' -> negationNF e'
+    Binary And e1 e2 -> negationNF (fnot e1) ||| negationNF (fnot e2)
+    Binary Or e1 e2 -> negationNF (fnot e1) |&| negationNF (fnot e2)
+    Binary Implies e1 e2 -> negationNF e1 |&| negationNF (fnot e2)
+    Binary Iff e1 e2 -> (negationNF e1 |&| negationNF (fnot e2)) ||| (negationNF (fnot e1) |&| negationNF e2)
+    _ -> fml
+  Binary Implies e1 e2 -> negationNF (fnot e1) ||| negationNF e2
+  Binary Iff e1 e2 -> (negationNF e1 |&| negationNF e2) ||| (negationNF (fnot e1) |&| negationNF (fnot e2))
+  Binary op e1 e2 
+    | op == And || op == Or -> Binary op (negationNF e1) (negationNF e2)
+    | otherwise -> fml
+  Ite cond e1 e2 -> (negationNF cond |&| negationNF e1) ||| (negationNF (fnot cond) |&| negationNF e2)
+  _ -> fml
+
+-- | Disjunctive normal form for unknowns (known predicates treated as atoms)
+uDNF :: Formula -> [Formula]
+uDNF = dnf' . negationNF
+  where
+    dnf' e@(Binary Or e1 e2) = if (Set.null $ unknownsOf e1) || (Set.null $ unknownsOf e2) 
+                                then return e
+                                else dnf' e1 ++ dnf' e2
+    dnf' (Binary And e1 e2) = do
+                                lClause <- dnf' e1
+                                rClause <- dnf' e2
+                                return $ lClause |&| rClause
+    dnf' fml = [fml]
 
 {- Qualifiers -}
 

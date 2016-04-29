@@ -90,6 +90,7 @@ extractCondQGen qual (env, syms) = filter (not . isDataEq) $ -- TODO: disallowin
     isDataEq (Binary op e1 _)
       | op == Eq || op == Neq = isData (sortOf e1)
       | otherwise = False
+    isDataEq _ = False
 
 extractMatchQGen (_, (DatatypeDef _ _ [] _)) (_, _) = []
 extractMatchQGen (dtName, (DatatypeDef _ _ ctors _)) (env, syms) = 
@@ -114,7 +115,7 @@ extractQGenFromType True (ScalarT baseT fml) (env, syms) =
       in substitute (Map.singleton (varName lastVar) (Var (sortOf lastVar) valueVarName)) pArg    
     extractFromBase (DatatypeT _ tArgs pArgs) = 
       let
-        ps = Set.toList $ Set.unions (map (conjunctsOf . replaceWithValueVar) pArgs)
+        ps = Set.toList $ Set.unions (map (conjunctsOf . replaceWithValueVar) . filter (not . null . varsOf) $ pArgs)
         res = concatMap (flip extractTypeQGen (env, syms)) ps
       in concatMap (flip (extractQGenFromType True) (env, syms)) tArgs ++ res
     extractFromBase _ = []
