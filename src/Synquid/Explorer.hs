@@ -85,13 +85,10 @@ instance Pretty MemoKey where
 type Memo = Map MemoKey [(Environment, RProgram, ExplorerState)]
 
 data PartialKey = PartialKey {
-    pKeyEnv :: Environment,
-    pKeyType :: RType,
-    pKeyState :: ExplorerState,
-    pKeyMaxDepth :: Int
+    pKeyContext :: RProgram
 } deriving (Eq, Ord)
 
-type PartialMemo = Map PartialKey [RType]
+type PartialMemo = Map PartialKey (Map RProgram (Int, Environment))
 -- | Persistent state accross explorations
 data PersistentState = PersistentState {
   _termMemo :: Memo,
@@ -331,7 +328,7 @@ generateEAt env typ d = do
   if not useMem || d == 0
     then do -- Do not use memoization
       (envFinal, p) <- enumerateAt env typ d
-      checkE envFinal typ p (Just d)
+      checkE envFinal typ p
       return (envFinal, p)
     else do -- Try to fetch from memoization store
       startState <- get
@@ -354,59 +351,78 @@ generateEAt env typ d = do
 
           putMemo memo'
 
-          checkE envFinal typ p (Just d)
+          checkE envFinal typ p
           return (envFinal, p)
   where
     applyMemoized (finalEnv, p, finalState) = do
       put finalState
       let env' = joinEnv env finalEnv
-      checkE env' typ p (Just d)
+      checkE env' typ p
       return (env', p)
 
     joinEnv currentEnv memoEnv = over ghosts (Map.union (memoEnv ^. ghosts)) currentEnv
 
--- | Check that @p@ has type @typ@ in @env@:
--- if @p@ is a (partially applied) function, also check consistency
-checkE :: MonadHorn s => Environment -> RType -> RProgram -> Maybe Int -> Explorer s ()
-checkE env typ p@(Program pTerm pTyp) md = do
+-- | Perform a gradual check that @p@ has type @typ@ in @env@:
+-- if @p@ is a scalar, perform a full subtyping check;
+-- if @p@ is a (partially applied) function, check as much as possible with unknown arguments
+checkE :: MonadHorn s => Environment -> RType -> RProgram -> Explorer s ()
+checkE env typ p@(Program pTerm pTyp) = do
   ctx <- asks $ _context . fst
-  writeLog 1 $ text "Checking" <+> pretty p <+> text "::" <+> pretty typ <+> text "in" $+$ pretty (ctx p)
+  writeLog 1 $ text "Checking" <+> pretty p <+> text "::" <+> pretty typ <+> text "in" $+$ pretty (ctx (untyped PHole))
   
   ifM (asks $ _symmetryReduction . fst) checkSymmetry (return ())
   
   addConstraint $ Subtype env pTyp typ False
   when (arity typ > 0) $
     ifM (asks $ _consistencyChecking . fst) (addConstraint $ Subtype env pTyp typ True) (return ()) -- add constraint that t and tFun be consistent (i.e. not provably disjoint)
-
   fTyp <- runInSolver $ finalizeType typ
   typingState . errorContext .= errorText "when checking" </> pretty p </> text "::" </> pretty fTyp </> errorText "in" $+$ pretty (ctx p)  
   solveIncrementally
   typingState . errorContext .= empty
     where      
-      checkSymmetry = 
-        case md of
-          Just d -> do          
-            startState <- get
-            let partialKey = PartialKey env typ startState d
-            startPartials <- getPartials
-            let pastPartials = maybe [] id (Map.lookup partialKey startPartials)
+      unknownId :: Formula -> Maybe Id
+      unknownId (Unknown _ i) = Just i
+      unknownId _ = Nothing
 
-            writeLog 1 $ text "Checking" <+> pretty pTyp <+> text "doesn't match any of" <+> pretty pastPartials <+> text "at depth" <+> pretty d
+      checkSymmetry = do
+        ctx <- asks $ _context . fst
+        let fixedContext = ctx (untyped PHole)
+        if arity typ > 0
+          then do
+              solverState <- get
+              let partialKey = PartialKey fixedContext
+              startPartials <- getPartials
+              let pastPartials = Map.findWithDefault Map.empty partialKey startPartials
+              let (myCount, _) = Map.findWithDefault (0, env) p pastPartials
+              let repeatPartials = filter (\(key, (count, _)) -> count > myCount) $ Map.toList pastPartials
 
-            -- Check that pTyp is not a subtype of any stored partial.
-            if d > 0
-              then mapM_ (\oldTyp -> ifte (solveLocally $ Subtype env pTyp oldTyp False)
-                                        (\_ -> do
-                                          writeLog 1 $ text "Subtype of failed predecessor:" <+> pretty pTyp <+> text "Is a subtype of" <+> pretty oldTyp
-                                          mzero)
-                                        (return ())) pastPartials
-              else return ()
+              -- Turn off all qualifiers, and thus all match abductions.
+              let qmap = Map.map id $ solverState ^. typingState ^. qualifierMap
+              let qualifiersToBlock = map unknownId $ Set.toList (env ^. assumptions)
+              typingState . qualifierMap .= Map.mapWithKey (\key val -> if elem (Just key) qualifiersToBlock then QSpace [] 0 else val) qmap
 
-            let newPartials = pTyp : pastPartials
-            let newPartialMap = Map.insert partialKey newPartials startPartials
-            putPartials newPartialMap
+              writeLog 1 $ text "Checking" <+> pretty pTyp <+> text "doesn't match any of" <+> pretty repeatPartials <+> text "myCount is" <+> pretty myCount
 
-          Nothing -> return ()
+              -- Check that pTyp is not a subtype of multiple stored partials which match each other.
+              mapM_ (\(Program _ oldTyp, oldEnv) ->
+                               ifte (solveLocally $ Subtype (combineEnv env oldEnv) oldTyp pTyp False)
+                               (\_ -> do
+                                    writeLog 1 $ text "Subtype of failed predecessor:" <+> pretty pTyp <+> text "in" <+> pretty fixedContext <+> text "Is a subtype of" <+> pretty oldTyp
+                                    typingState . qualifierMap .= qmap
+                                    mzero)
+                               (return ())) $ map (\(prog, (count, env)) -> (prog, env)) repeatPartials
+
+              let newCount = 1 + myCount
+              let newPartials = Map.insert p (newCount, env) pastPartials
+              let newPartialMap = Map.insert partialKey newPartials startPartials
+              putPartials newPartialMap
+
+              typingState . qualifierMap .= qmap
+          else return ()
+
+      combineEnv :: Environment -> Environment -> Environment
+      combineEnv env oldEnv =
+        env {_ghosts = Map.union (_ghosts env) (_ghosts oldEnv)}
 
 enumerateAt :: MonadHorn s => Environment -> RType -> Int -> Explorer s (Environment, RProgram)
 enumerateAt env typ 0 = do
@@ -487,7 +503,8 @@ generateError env = do
 toVar (Program (PSymbol name) t) env 
   | not (isConstant name env)  = return (env, Var (toSort $ baseTypeOf t) name)
 toVar p@(Program _ t) env = do
-  g <- freshId "G"
+  let g = show $ plain $ pretty p <> pretty t
+  -- g <- freshId "G"
   return (addGhost g t env, (Var (toSort $ baseTypeOf t) g))
 
 enqueueGoal env typ impl depth = do
