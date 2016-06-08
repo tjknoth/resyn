@@ -124,13 +124,13 @@ fmlToProgram fml@(Binary op e1 e2) = let
       | otherwise                                 = bool $ valBool |=| Binary op (intVar "x") (intVar "y")
       
 -- | 'renameAsImpl' @p t@: change argument names in function type @t@ to be the same as in the abstraction @p@
-renameAsImpl :: UProgram -> RType -> RType
-renameAsImpl p t = renameAsImpl' Map.empty p t
+renameAsImpl :: (Id -> Bool) -> UProgram -> RType -> RType
+renameAsImpl isBound p t = renameAsImpl' Map.empty p t
   where
     renameAsImpl' subst (Program (PFun y pRes) _) (FunctionT x tArg tRes) = case tArg of
-      ScalarT baseT fml -> FunctionT y (substituteInType subst tArg) (renameAsImpl' (Map.insert x (Var (toSort baseT) y) subst) pRes tRes)    
-      _ -> FunctionT y (substituteInType subst tArg) (renameAsImpl' subst pRes tRes)      
-    renameAsImpl' subst  _ t = substituteInType subst t
+      ScalarT baseT fml -> FunctionT y (substituteInType isBound subst tArg) (renameAsImpl' (Map.insert x (Var (toSort baseT) y) subst) pRes tRes)    
+      _ -> FunctionT y (substituteInType isBound subst tArg) (renameAsImpl' subst pRes tRes)      
+    renameAsImpl' subst  _ t = substituteInType isBound subst t
     
 {- Top-level definitions -}
 
@@ -250,8 +250,8 @@ isConstant name env = (name `elem` ["True", "False"]) ||
                       (name `Set.member` (env ^. constants))    
 
 -- | 'isBound' @tv env@: is type variable @tv@ bound in @env@?
-isBound :: Id -> Environment -> Bool
-isBound tv env = tv `elem` env ^. boundTypeVars
+isBound :: Environment -> Id -> Bool
+isBound env tv = tv `elem` env ^. boundTypeVars
 
 addVariable :: Id -> RType -> Environment -> Environment
 addVariable name t = addPolyVariable name (Monotype t)
@@ -365,7 +365,7 @@ refineTop env (ScalarT (DatatypeT name tArgs pArgs) _) =
   ScalarT (DatatypeT name (map (refineTop env) tArgs) (map (BoolLit . not) variances)) ftrue
 refineTop _ (ScalarT IntT _) = ScalarT IntT ftrue
 refineTop _ (ScalarT BoolT _) = ScalarT BoolT ftrue
-refineTop _ (ScalarT (TypeVarT a) _) = ScalarT (TypeVarT a) ftrue
+refineTop _ (ScalarT (TypeVarT vSubst a) _) = ScalarT (TypeVarT vSubst a) ftrue
 refineTop env (FunctionT x tArg tFun) = FunctionT x (refineBot env tArg) (refineTop env tFun)
 
 -- | Insert strongest refinement
@@ -375,7 +375,7 @@ refineBot env (ScalarT (DatatypeT name tArgs pArgs) _) =
   ScalarT (DatatypeT name (map (refineBot env) tArgs) (map BoolLit variances)) ffalse
 refineBot _ (ScalarT IntT _) = ScalarT IntT ffalse
 refineBot _ (ScalarT BoolT _) = ScalarT BoolT ffalse
-refineBot _ (ScalarT (TypeVarT a) _) = ScalarT (TypeVarT a) ffalse
+refineBot _ (ScalarT (TypeVarT vSubst a) _) = ScalarT (TypeVarT vSubst a) ffalse
 refineBot env (FunctionT x tArg tFun) = FunctionT x (refineTop env tArg) (refineBot env tFun)
     
 {- Input language declarations -}
