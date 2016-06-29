@@ -456,6 +456,7 @@ enumerateAt env typ 0 = do
     msum $ map pickSymbol symbols'
   where
     pickSymbol (name, sch) = do
+      when (Set.member name (env ^. letBound)) mzero
       t <- symbolType env name sch
       let p = Program (PSymbol name) t
       writeLog 1 $ text "Trying" <+> pretty p
@@ -520,10 +521,10 @@ generateError env = do
     trivial var = var |=| var
 
 -- | 'toVar' @p env@: a variable representing @p@ (can be @p@ itself or a fresh ghost)
-toVar (Program (PSymbol name) t) env 
-  | not (isConstant name env)  = return (env, Var (toSort $ baseTypeOf t) name)
+toVar (Program (PSymbol name) t) env
+  | Set.null (typeVarsOf t Set.\\ Set.fromList (env ^. boundTypeVars)) = return (env, Var (toSort $ baseTypeOf t) name)
+  -- | not (isConstant name env) = return (env, Var (toSort $ baseTypeOf t) name)
 toVar p@(Program _ t) env = do
-  -- let g = show $ plain $ pretty p <> pretty t
   g <- freshId "G"
   return (addGhost g t env, (Var (toSort $ baseTypeOf t) g))
 
@@ -598,20 +599,7 @@ currentValuation u = do
     val c = valuation (solution c) u
     pickCandidiate cands' = do
       typingState . candidates .= cands'
-      return $ val (head cands')  
-
--- currentValuation u = do
-  -- (first : rest) <- use (typingState . candidates)
-  -- pickFirst first `mplus` pickRest rest
-  -- where
-    -- val c = valuation (solution c) u
-    -- pickFirst first = do
-      -- typingState . candidates .= [first]
-      -- return $ val first
-    -- pickRest rest = do
-      -- typingState . candidates .= rest
-      -- runInSolver solveTypeConstraints
-      -- currentValuation u      
+      return $ val (head cands')
 
 inContext ctx f = local (over (_1 . context) (. ctx)) f
     

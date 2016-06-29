@@ -8,9 +8,11 @@ import Synquid.Error
 import Synquid.SolverMonad
 import Synquid.TypeConstraintSolver hiding (freshId, freshVar)
 import Synquid.Explorer
+import Synquid.TypeChecker
 import Synquid.Util
 import Synquid.Pretty
 import Synquid.Resolver
+import Synquid.Tokens
 
 import Data.List
 import qualified Data.Set as Set
@@ -24,23 +26,30 @@ import Control.Monad.Reader
 import Control.Applicative hiding (empty)
 import Control.Lens
 
+import Debug.Trace
+
 -- | 'localize' @eParams tParams goal@ : reconstruct intermediate type annotations in @goal@
 -- and return the resulting program in ANF together with a list of type-violating bindings
-localize :: MonadHorn s => ExplorerParams -> TypingParams -> Goal -> s (Either ErrorMessage (RProgram, Requirements))
-localize eParams tParams goal = do
+localize :: MonadHorn s => Bool -> ExplorerParams -> TypingParams -> Goal -> s (Either ErrorMessage (RProgram, Requirements))
+localize isRecheck eParams tParams goal = do
     initTS <- initTypingState $ gEnvironment goal
     runExplorer (eParams { _sourcePos = gSourcePos goal }) tParams initTS go
   where
     go = do
-      aImpl <- aNormalForm (gImpl goal)
+      aImpl <- aNormalForm "T" (gImpl goal)
       writeLog 2 (pretty aImpl)      
       
-      p <- localizeTopLevel goal { gImpl = aImpl, gDepth = _auxDepth eParams }      
+      p <- localizeTopLevel goal { gImpl = aImpl }
       labels <- runInSolver getViolatingLabels
       reqs <- uses requiredTypes (restrictDomain labels) >>= (mapM (liftM nub . mapM (runInSolver . finalizeType)))
       finalP <- runInSolver $ finalizeProgram p
-      
-      return (finalP, reqs)
+      if isRecheck
+        then if Map.null reqs
+              then return (deANF finalP, Map.empty)
+              else throwErrorWithDescription $ (nest 2 (text "Repair failed with violations:" $+$ vMapDoc text pretty reqs)) $+$ text "when checking" $+$ pretty p
+        else if Map.null reqs
+              then return (deANF finalP, Map.empty)
+              else return (finalP, reqs)        
       
 repair :: MonadHorn s => ExplorerParams -> TypingParams -> Environment -> RProgram -> Requirements -> s (Either ErrorMessage RProgram)
 repair eParams tParams env p violations = do
@@ -57,23 +66,22 @@ repair eParams tParams env p violations = do
 localizeTopLevel :: MonadHorn s => Goal -> Explorer s RProgram
 localizeTopLevel (Goal funName env (ForallT a sch) impl depth pos) = localizeTopLevel (Goal funName (addTypeVar a env) sch impl depth pos)
 localizeTopLevel (Goal funName env (ForallP sig sch) impl depth pos) = localizeTopLevel (Goal funName (addBoundPredicate sig env) sch impl depth pos)
-localizeTopLevel (Goal funName env (Monotype typ@(FunctionT _ _ _)) impl depth _) = local (set (_1 . auxDepth) depth) $ localizeFix
-  where
-    localizeFix = do
-      let typ' = renameAsImpl (isBound env) impl typ
-      recCalls <- runInSolver (currentAssignment typ') >>= recursiveCalls
-      polymorphic <- asks $ _polyRecursion . fst
-      predPolymorphic <- asks $ _predPolyRecursion . fst
-      let tvs = env ^. boundTypeVars
-      let pvs = env ^. boundPredicates      
-      let predGeneralized sch = if predPolymorphic then foldr ForallP sch pvs else sch -- Version of @t'@ generalized in bound predicate variables of the enclosing function          
-      let typeGeneralized sch = if polymorphic then foldr ForallT sch tvs else sch -- Version of @t'@ generalized in bound type variables of the enclosing function
-      
-      let env' = foldr (\(f, t) -> addPolyVariable f (typeGeneralized . predGeneralized . Monotype $ t) . (shapeConstraints %~ Map.insert f (shape typ'))) env recCalls
-      let ctx = \p -> if null recCalls then p else Program (PFix (map fst recCalls) p) typ'
-      p <- inContext ctx  $ localizeI env' typ' impl
-      return $ ctx p
+localizeTopLevel (Goal funName env (Monotype typ@(FunctionT _ _ _)) impl depth _) = do
+  let typ' = renameAsImpl (isBound env) impl typ
+  recCalls <- runInSolver (currentAssignment typ') >>= recursiveCalls
+  polymorphic <- asks $ _polyRecursion . fst
+  predPolymorphic <- asks $ _predPolyRecursion . fst
+  let tvs = env ^. boundTypeVars
+  let pvs = env ^. boundPredicates      
+  let predGeneralized sch = if predPolymorphic then foldr ForallP sch pvs else sch -- Version of @t'@ generalized in bound predicate variables of the enclosing function          
+  let typeGeneralized sch = if polymorphic then foldr ForallT sch tvs else sch -- Version of @t'@ generalized in bound type variables of the enclosing function
+  
+  let env' = foldr (\(f, t) -> addPolyVariable f (typeGeneralized . predGeneralized . Monotype $ t) . (shapeConstraints %~ Map.insert f (shape typ'))) env recCalls
+  let ctx = \p -> if null recCalls then p else Program (PFix (map fst recCalls) p) typ'
+  p <- inContext ctx  $ localizeI env' typ' impl
+  return $ ctx p
 
+  where
     -- | 'recursiveCalls' @t@: name-type pairs for recursive calls to a function with type @t@ (0 or 1)
     recursiveCalls t = do
       fixStrategy <- asks $ _fixStrategy . fst
@@ -124,7 +132,7 @@ localizeTopLevel (Goal funName env (Monotype typ@(FunctionT _ _ _)) impl depth _
                               metric (Var argSort valueVarName) |>=| IntLit 0  |&| metric (Var argSort valueVarName) |<=| metric (Var argSort argName))
     terminationRefinement _ _ = Nothing
 
-localizeTopLevel (Goal _ env (Monotype t) impl depth _) = local (set (_1 . auxDepth) depth) $ localizeI env t impl
+localizeTopLevel (Goal _ env (Monotype t) impl depth _) = localizeI env t impl
 
 -- | 'localizeI' @env t impl@ :: reconstruct unknown types and terms in a judgment @env@ |- @impl@ :: @t@ where @impl@ is a (possibly) introduction term
 -- (top-down phase of bidirectional reconstruction)
@@ -139,6 +147,7 @@ localizeI' env t (PLet x iDef@(Program (PFun _ _) _) iBody) = do -- lambda-let: 
   (_, pDef) <- uses lambdaLets (Map.! x)
   return $ Program (PLet x pDef pBody) t
 localizeI' env t@(FunctionT _ tArg tRes) impl = case impl of 
+  PFix _ impl -> localizeI env t impl
   PFun y impl -> do
     let ctx = \p -> Program (PFun y p) t
     pBody <- inContext ctx $ localizeI (unfoldAllVariables $ addVariable y tArg $ env) tRes impl
@@ -152,7 +161,7 @@ localizeI' env t@(ScalarT _ _) impl = case impl of
                            
   PLet x iDef iBody -> do -- E-term let (since lambda-let was considered before)
     pDef <- inContext (\p -> Program (PLet x p (Program PHole t)) t) $ localizeETopLevel env AnyT iDef
-    pBody <- inContext (\p -> Program (PLet x pDef p) t) $ localizeI (addVariable x (typeOf pDef) env) t iBody
+    pBody <- inContext (\p -> Program (PLet x pDef p) t) $ localizeI (addLetBound x (typeOf pDef) env) t iBody
     return $ Program (PLet x pDef pBody) t
     
   PIf iCond iThen iElse -> do
@@ -166,14 +175,8 @@ localizeI' env t@(ScalarT _ _) impl = case impl of
     (consNames, consTypes) <- unzip <$> checkCases Nothing iCases
     let scrT = refineTop env $ shape $ lastType $ head consTypes
     
-    pScrutinee <- inContext (\p -> Program (PMatch p []) t) $ localizeETopLevel env scrT iScr
-    let scrutineeSymbols = symbolList pScrutinee
-    let isGoodScrutinee = (not $ head scrutineeSymbols `elem` consNames) &&                 -- Is not a value
-                          (any (not . flip Set.member (env ^. constants)) scrutineeSymbols) -- Has variables (not just constants)
-    when (not isGoodScrutinee) $ throwErrorWithDescription $ text "Match scrutinee" </> squotes (pretty pScrutinee) </> text "is constant"
-            
-    (env', x) <- toVar pScrutinee (addScrutinee pScrutinee env)
-    pCases <- zipWithM (localizeCase env' x pScrutinee t) iCases consTypes    
+    pScrutinee <- inContext (\p -> Program (PMatch p []) t) $ localizeETopLevel env scrT iScr            
+    pCases <- zipWithM (localizeCase env pScrutinee t) iCases consTypes    
     return $ Program (PMatch pScrutinee pCases) t
       
   _ -> localizeETopLevel env t (untyped impl)
@@ -200,13 +203,12 @@ localizeI' env t@(ScalarT _ _) impl = case impl of
                           _ -> throwErrorWithDescription $ text "Not in scope: data constructor" </> squotes (text consName)
     checkCases _ [] = return []
   
-localizeCase env scrVar pScrutinee t (Case consName args iBody) consT = cut $ do  
+localizeCase env pScrutinee@(Program (PSymbol x) scrT) t (Case consName args iBody) consT = cut $ do  
   runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
   consT' <- runInSolver $ currentAssignment consT
-  (syms, ass) <- caseSymbols env scrVar args consT'
+  (syms, ass) <- caseSymbols env (Var (toSort $ baseTypeOf scrT) x) args consT'
   let caseEnv = foldr (uncurry addVariable) (addAssumption ass env) syms
-  pCaseExpr <- local (over (_1 . matchDepth) (-1 +)) $
-               inContext (\p -> Program (PMatch pScrutinee [Case consName args p]) t) $ 
+  pCaseExpr <- inContext (\p -> Program (PMatch pScrutinee [Case consName args p]) t) $ 
                localizeI caseEnv t iBody
   return $ Case consName args pCaseExpr  
 
@@ -286,88 +288,301 @@ replaceViolations env (Program (PIf cond thn els) t) = do
   thn' <- replaceViolations (addAssumption (substitute (Map.singleton valueVarName ftrue) fml) env) thn
   els' <- replaceViolations (addAssumption (substitute (Map.singleton valueVarName ffalse) fml) env) els
   return $ Program (PIf cond thn' els') t
--- replaceViolations (Program (PMatch scr cases) t) = do
-  -- (defsScr, aScr) <- anfE scr True
-  -- aCases <- mapM (\(Case ctor binders e) -> (Case ctor binders) <$> aNormalForm e) cases
-  -- return $ foldDefs defsScr (Program (PMatch aScr aCases) t) t
--- replaceViolations (Program (PFix xs body) t) = do
-  -- aBody <- aNormalForm body
-  -- return $ Program (PFix xs aBody) t
+replaceViolations env (Program (PMatch scr cases) t) = do
+  cases' <- mapM replaceInCase cases
+  return $ Program (PMatch scr cases') t
+  where
+    replaceInCase (Case consName args body) = do
+      let scrT = typeOf scr
+      let consSch = allSymbols env Map.! consName
+      consT <- instantiate env consSch True []    
+      runInSolver $ matchConsType (lastType consT) scrT
+      consT' <- runInSolver $ currentAssignment consT
+      (syms, ass) <- caseSymbols env (Var (toSort $ baseTypeOf scrT) (symbolName scr)) args consT'
+      let caseEnv = foldr (uncurry addVariable) (addAssumption ass env) syms
+      body' <- replaceViolations caseEnv body
+      return $ Case consName args body'
+replaceViolations env (Program (PFix xs body) t) = do
+  body' <- replaceViolations env body
+  return body'
 replaceViolations env (Program (PLet x def body) t) = do
   reqs <- use requiredTypes
-  def' <- case Map.lookup x reqs of
-            Nothing -> replaceViolations env def
+  (newDefs, def') <- case Map.lookup x reqs of
+            Nothing -> do
+                          def'<- replaceViolations env def
+                          return ([], def')
             Just ts -> generateRepair env (head ts) def -- ToDo: other ts
-  body' <- replaceViolations (addVariable x (typeOf def) env) body
-  return $ Program (PLet x def' body') t
+  body' <- replaceViolations (addLetBound x (typeOf def') env) body
+  return $ foldDefs (newDefs ++ [(x, def')]) body' t
 replaceViolations env (Program (PApp fun arg) t) = do
   fun' <- replaceViolations env fun
   arg' <- replaceViolations env arg
   return $ Program (PApp fun' arg') t
 replaceViolations _ p = return p
 
-generateRepair :: MonadHorn s => Environment -> RType -> RProgram -> Explorer s RProgram
+generateRepair :: MonadHorn s => Environment -> RType -> RProgram -> Explorer s ([(Id, RProgram)], RProgram)
 generateRepair env typ p = do
   writeLog 1 $ text "Generating repair for" <+> pretty p <+> text "::" <+> pretty typ
   cUnknown <- Unknown Map.empty <$> freshId "C"
   addConstraint $ WellFormedCond env cUnknown
   addConstraint $ Subtype (addAssumption cUnknown env) (typeOf p) typ False ""
-  runInSolver $ solveTypeConstraints
-  cond <- conjunction <$> currentValuation cUnknown -- Todo: multiple valuations: disjunction
-  let pCond = Program PHole (ScalarT BoolT $ valBool |=| cond)
   pElse <- defaultValue
-  return $ Program (PIf pCond p pElse) typ
+  ifte (runInSolver $ solveTypeConstraints)
+    (const $ do -- Condition found
+      disjuncts <- map conjunction <$> allCurrentValuations cUnknown
+      condANFs <- mapM generateDisjunct disjuncts
+      let allDefs = concatMap fst condANFs
+      let allConds = map snd condANFs            
+      mkCheck allDefs allConds p pElse)
+    (return ([], pElse)) -- No condition found, Todo: issue a warning
   where
+    targetPolicy = case typ of
+      ScalarT (DatatypeT _ _ [fml]) _ -> fml
+      _ -> error $ unwords ["generateRepair: ill-formed target type", show typ]
+  
+    -- | Public version of @p@
     defaultValue = do
       let f = head $ symbolList p
-      let f' = "default" ++ drop 3 f -- ToDo: better way of finding default value
+      let f' = defaultPrefix ++ drop 3 f -- ToDo: better way of finding default value
       case lookupSymbol f' 0 env of
         Nothing -> throwErrorWithDescription $ text "No default value found for sensitive component" $+$ text f
         Just (Monotype t) -> return $ Program (PSymbol f') t
 
+    -- | Synthesize a tagged Boolean program with value equivalent to @fml@ and policy (@targetPolicy@ && @fml@)
+    generateDisjunct:: MonadHorn s => Formula -> Explorer s ([(Id, RProgram)], RProgram)
+    generateDisjunct fml = do
+      let strippedEnv = over symbols (Map.map (Map.foldlWithKey (updateSymbol fml) Map.empty)) env
+      let allConjuncts = Set.toList $ conjunctsOf fml
+      conjuncts <- mapM (genPureConjunct strippedEnv) allConjuncts
+      lifted <- mapM (liftCondition env strippedEnv) conjuncts    
+      let defs = concatMap fst lifted
+      let conjuncts' = map snd lifted
+      let liftAndSymb = untyped (PSymbol "liftAnd")
+      let conjoin p1 p2 = untyped (PApp (untyped (PApp liftAndSymb p1)) p2)
+      let pCond = foldl1 conjoin conjuncts'
+      return (defs, pCond)
+      (defs', xCond) <- anfE "TT" pCond False
+      return (defs ++ defs', xCond)
+              
+    genPureConjunct strippedEnv c = do
+      let targetType = ScalarT BoolT $ valBool |<=>| c
+      c' <- local (over (_2 . condQualsGen) (const (\_ _ -> emptyQSpace))) $ cut (reconstructE strippedEnv targetType)
+      aNormalForm "TT" c'
+      
+    updateSymbol :: Formula -> Map Id RSchema -> Id -> RSchema -> Map Id RSchema
+    updateSymbol _ m name _ | -- This is a default value: remove
+      take (length defaultPrefix) name == defaultPrefix   = m
+    updateSymbol targetRefinement m name (Monotype t) = 
+      let 
+        t' = stripTags t 
+        symbolPreds = predsOfType t'
+        targetPreds = predsOf targetRefinement
+      in if t /= t' && disjoint symbolPreds targetPreds 
+          -- trace (unwords ["updateSymbol: ignoring", name, "with symbol preds", show symbolPreds, "and target preds", show targetPreds]) $
+          then m -- This is a stripped component whose type has no predicates in common with our target: exclude it form the environment
+          else Map.insert name (Monotype t') m
+    updateSymbol _ m name sch | -- This is a function from base tagged library: remove
+      isTagged (lastType $ toMonotype sch)                = m                  
+    updateSymbol _ m name sch = Map.insert name sch m
+      
+    defaultPrefix = "default"
+    
+    isTagged (ScalarT (DatatypeT dtName _ _) _) | dtName == "Tagged" = True
+    isTagged t = False
+    
+    stripTags t@(ScalarT (DatatypeT dtName [dtArg] _) _) 
+      | isTagged t   = dtArg    
+    stripTags (FunctionT x tArg tRes) = FunctionT x tArg (stripTags tRes)
+    stripTags t = t
+    
+    -- | 'liftCondition' @env strippedEnv p@: turn a pure E-term @p@ into a tagged one, 
+    -- by binding all lets that have different types in @env@ and @strippedEnv@
+    liftCondition env strippedEnv (Program (PLet x def body) typ) = do
+      let arity = length (symbolList def) - 1
+      let headSymbol = head $ symbolList def
+      let realType = case lookupSymbol headSymbol arity env of
+                    Nothing -> error $ unwords ["liftCondition: cannot find", headSymbol, "in original environment"]
+                    Just t -> t
+      let strippedType = case lookupSymbol headSymbol arity strippedEnv of
+                        Nothing -> error $ unwords ["liftCondition: cannot find", headSymbol, "in stripped environment"]
+                        Just t -> t
+      let addX = addLetBound x (typeOf def)
+      (defs', body') <- liftCondition (addX env) (addX strippedEnv) body
+      if realType == strippedType
+        then return ((x, def):defs', body') -- This definition hasn't been stripped: leave as is
+        else do -- This definition has been stripped: turn into a bind
+          y <- freshVar env "x"
+          let body'' = programSubstituteSymbol x (untyped (PSymbol y)) (foldDefs defs' body' AnyT)
+          return ([(x, def)], mkBind x y body'')
+    liftCondition env strippedEnv pCond = do
+      tmp <- freshId "TT"
+      return ([(tmp, mkReturn pCond)], untyped $ PSymbol tmp)
+
+    mkTagged a policy = DatatypeT "Tagged" [a] [policy]
+    
+    mkBind argName x body = 
+      let 
+        app = untyped (PApp (untyped (PSymbol "bind")) (untyped (PSymbol argName)))
+        fun = untyped (PFun x body)
+      in untyped (PApp app fun)
+      
+    mkReturn p = untyped (PApp (untyped (PSymbol "return")) p)
+    
+    mkCheck defs conds pThen pElse = do
+      cTmps <- replicateM (length conds) (freshId "TT")
+      pTmp <- freshId "TT"
+      let allDefs = defs ++ zip cTmps conds ++ [(pTmp, pThen)]
+      let app1 cTmp = untyped (PApp (untyped (PSymbol "if_")) (untyped (PSymbol cTmp)))
+      let app2 cTmp = untyped (PApp (app1 cTmp) (untyped (PSymbol pTmp)))      
+      return (allDefs, foldr (\cTmp els -> untyped $ PApp (app2 cTmp) els) pElse cTmps)
+
 {- Misc -}  
                                             
 -- | 'aNormalForm' @p@: program equivalent to @p@ where arguments and top-level e-terms do not contain applications
-aNormalForm :: MonadHorn s => RProgram -> Explorer s RProgram
-aNormalForm (Program (PFun x body) t) = do
-  aBody <- aNormalForm body
+aNormalForm :: MonadHorn s => Id -> RProgram -> Explorer s RProgram
+aNormalForm prefix (Program (PFun x body) t) = do
+  aBody <- aNormalForm prefix body
   return $ Program (PFun x aBody) t
-aNormalForm (Program (PIf cond thn els) t) = do
-  (defsCond, aCond) <- anfE cond True
-  aThn <- aNormalForm thn
-  aEls <- aNormalForm els
+aNormalForm prefix (Program (PIf cond thn els) t) = do
+  (defsCond, aCond) <- anfE prefix cond True
+  aThn <- aNormalForm prefix thn
+  aEls <- aNormalForm prefix els
   return $ foldDefs defsCond (Program (PIf aCond aThn aEls) t) t
-aNormalForm (Program (PMatch scr cases) t) = do
-  (defsScr, aScr) <- anfE scr True
-  aCases <- mapM (\(Case ctor binders e) -> (Case ctor binders) <$> aNormalForm e) cases
+aNormalForm prefix (Program (PMatch scr cases) t) = do
+  (defsScr, aScr) <- anfE prefix scr True
+  aCases <- mapM (\(Case ctor binders e) -> (Case ctor binders) <$> aNormalForm prefix e) cases
   return $ foldDefs defsScr (Program (PMatch aScr aCases) t) t
-aNormalForm (Program (PFix xs body) t) = do
-  aBody <- aNormalForm body
+aNormalForm prefix (Program (PFix xs body) t) = do
+  aBody <- aNormalForm prefix body
   return $ Program (PFix xs aBody) t
-aNormalForm (Program (PLet x def body) t) = do
-  (defsX, aX) <- anfE def False
-  aBody <- aNormalForm body
+aNormalForm prefix (Program (PLet x def body) t) = do
+  (defsX, aX) <- anfE prefix def False
+  aBody <- aNormalForm prefix body
   return $ foldDefs defsX (Program (PLet x aX aBody) t) t
-aNormalForm (Program PErr t) = return $ Program PErr t
-aNormalForm (Program PHole t) = error "aNormalForm: got a hole"
-aNormalForm eTerm@(Program _ t) = do
-  (defs, a) <- anfE eTerm True
+aNormalForm _ (Program PErr t) = return $ Program PErr t
+aNormalForm _ (Program PHole t) = error "aNormalForm: got a hole"
+aNormalForm prefix eTerm@(Program _ t) = do
+  (defs, a) <- anfE prefix eTerm True
   return $ foldDefs defs a t
   
 foldDefs defs body t = foldr (\(name, def) p -> Program (PLet name def p) t) body defs
   
 -- | 'anfE' @p varRequired@: convert E-term @p@ to a list of bindings and either a variable (if @varRequired@) or a flat application (if not @varRequired@)
-anfE :: MonadHorn s => RProgram -> Bool -> Explorer s ([(Id, RProgram)], RProgram)
-anfE p@(Program (PSymbol x) t) _ = return ([], p)
-anfE (Program (PApp pFun pArg) t) varRequired = do
-  (defsFun, xFun) <- anfE pFun False
-  (defsArg, xArg) <- anfE pArg True
+anfE :: MonadHorn s => Id -> RProgram -> Bool -> Explorer s ([(Id, RProgram)], RProgram)
+anfE prefix p@(Program (PSymbol x) t) _ = return ([], p)
+anfE prefix (Program (PApp pFun pArg) t) varRequired = do
+  (defsFun, xFun) <- anfE prefix pFun False
+  (defsArg, xArg) <- anfE prefix pArg True
   if varRequired
     then do
-      tmp <- freshId "T"
+      tmp <- freshId prefix
       return (defsFun ++ defsArg ++ [(tmp, Program (PApp xFun xArg) t)], (Program (PSymbol tmp) t))
     else return (defsFun ++ defsArg, (Program (PApp xFun xArg) t))
-anfE p@(Program (PFun _ _) t) _ = do -- A case for abstraction, which can appear in applications and let-bindings
-  p' <- aNormalForm p
+anfE prefix p@(Program (PFun _ _) t) _ = do -- A case for abstraction, which can appear in applications and let-bindings
+  p' <- aNormalForm prefix p
   return ([], p')    
-anfE p _ = error $ unwords ["anfE: not an E-term or abstraction", show p]    
+anfE _ p _ = error $ unwords ["anfE: not an E-term or abstraction", show p]
+
+deANF :: RProgram -> RProgram
+deANF p = deANF' Map.empty Map.empty p
+
+deANF' :: Map Id RProgram -> Map RProgram Id -> RProgram -> RProgram
+deANF' tmpDefs userDefs (Program (PFun x body) t) = 
+  let body' = deANF' tmpDefs userDefs body
+  in Program (PFun x body') t
+deANF' tmpDefs userDefs (Program (PIf cond thn els) t) = 
+  let
+    cond' = deANF' tmpDefs userDefs cond
+    thn' = deANF' tmpDefs userDefs thn
+    els' = deANF' tmpDefs userDefs els
+  in Program (PIf cond' thn' els') t
+deANF' tmpDefs userDefs (Program (PMatch scr cases) t) = 
+  let
+    scr' = deANF' tmpDefs userDefs scr
+    cases' = map (\(Case ctor binders e) -> Case ctor binders (deANF' tmpDefs userDefs e)) cases
+  in Program (PMatch scr' cases') t
+deANF' tmpDefs userDefs (Program (PFix xs body) t) = 
+  let body' = deANF' tmpDefs userDefs body
+  in Program (PFix xs body') t
+deANF' tmpDefs userDefs (Program (PLet x def body) t) =   
+  let def' = deANF' tmpDefs userDefs def 
+  in if isIdentifier x
+    then let body' = deANF' tmpDefs (Map.insert (eraseTypes def') x userDefs) body
+         in Program (PLet x def' body') t
+    else deANF' (newMap def') userDefs body
+  where
+    newMap def' = case Map.lookup (eraseTypes def') userDefs of
+                    Nothing -> Map.insert x def' tmpDefs
+                    Just y -> Map.insert x (Program (PSymbol y) (typeOf def')) tmpDefs
+deANF' tmpDefs userDefs (Program (PApp pFun pArg) t) =
+  let
+    pFun' = deANF' tmpDefs userDefs pFun
+    pArg' = deANF' tmpDefs userDefs pArg
+  in (Program (PApp pFun' pArg') t)    
+deANF' tmpDefs userDefs p@(Program (PSymbol name) t) =
+  case Map.lookup name tmpDefs of
+    Nothing -> p
+    Just def -> def
+deANF' _ _ (Program PErr t) = Program PErr t
+deANF' _ _ (Program PHole t) = error "deANF': got a hole"
+
+-- ToDo: replace this with TypeChecker functionality
+reconstructE :: MonadHorn s => Environment -> RType -> Explorer s RProgram
+reconstructE env t = do
+  oldGoals <- use auxGoals
+  auxGoals .= []
+  (finalEnv, p) <- generateE env t
+  (Program pTerm pTyp) <- fillInAuxGoals p
+  auxGoals .= oldGoals
+  pTyp' <- runInSolver $ currentAssignment pTyp
+  return $ Program pTerm pTyp'
+
+fillInAuxGoals :: MonadHorn s => RProgram -> Explorer s RProgram
+fillInAuxGoals pMain = do
+  pAuxs <- reconstructAuxGoals
+  return $ foldl (\e2 (x, e1) -> insertAuxSolution x e1 e2) pMain pAuxs
+  where
+    reconstructAuxGoals = do
+      goals <- use auxGoals
+      writeLog 2 $ text "Auxiliary goals are:" $+$ vsep (map pretty goals)
+      case goals of
+        [] -> return []
+        (g : gs) -> do
+            auxGoals .= gs
+            -- let g' = g {
+                          -- gEnvironment = removeVariable (gName goal) (gEnvironment g)  -- remove recursive calls of the main goal
+                       -- }
+            writeLog 1 $ text "PICK AUXILIARY GOAL" <+> pretty g
+            p <- reconstructTopLevel g
+            rest <- reconstructAuxGoals
+            return $ (gName g, p) : rest
+            
+-- | 'insertAuxSolution' @x pAux pMain@: insert solution @pAux@ to the auxiliary goal @x@ into @pMain@;
+-- @pMain@ is assumed to contain either a "let x = ??" or "f x ..."
+insertAuxSolution :: Id -> RProgram -> RProgram -> RProgram
+insertAuxSolution x pAux (Program body t) = flip Program t $ 
+  case body of
+    PLet y def p -> if x == y 
+                    then PLet x pAux p
+                    else PLet y (ins def) (ins p) 
+    PSymbol y -> if x == y
+                    then content $ pAux
+                    else body
+    PApp p1 p2 -> PApp (ins p1) (ins p2)
+    PFun y p -> PFun y (ins p)
+    PIf c p1 p2 -> PIf (ins c) (ins p1) (ins p2)
+    PMatch s cases -> PMatch (ins s) (map (\(Case c args p) -> Case c args (ins p)) cases)
+    PFix ys p -> PFix ys (ins p)
+    _ -> body  
+  where
+    ins = insertAuxSolution x pAux
+    
+-- | Return all current valuations of @u@
+allCurrentValuations :: MonadHorn s => Formula -> Explorer s [Valuation]
+allCurrentValuations u = do
+  runInSolver $ solveAllCandidates
+  cands <- use (typingState . candidates)
+  let candGroups = groupBy (\c1 c2 -> val c1 == val c2) $ sortBy (\c1 c2 -> setCompare (val c1) (val c2)) cands
+  return $ map (val. head) candGroups
+  where
+    val c = valuation (solution c) u    

@@ -96,6 +96,7 @@ programSubstituteSymbol name subterm (Program p t) = Program (programSubstituteS
     programSubstituteSymbol' (PIf c p1 p2) = PIf (pss c) (pss p1) (pss p2)
     programSubstituteSymbol' (PMatch scr cases) = PMatch (pss scr) (map (\(Case ctr args pBody) -> Case ctr args (pss pBody)) cases)
     programSubstituteSymbol' (PFix args pBody) = PFix args (pss pBody)
+    programSubstituteSymbol' (PLet x pDef pBody) = PLet x (pss pDef) (pss pBody)
 
 -- | Convert an executable formula into a program    
 fmlToProgram :: Formula -> RProgram
@@ -172,6 +173,7 @@ data Environment = Environment {
   _shapeConstraints :: Map Id SType,       -- ^ For polymorphic recursive calls, the shape their types must have
   _usedScrutinees :: [RProgram],           -- ^ Program terms that has already been scrutinized
   _unfoldedVars :: Set Id,                 -- ^ In eager match mode, datatype variables that can be scrutinized
+  _letBound :: Set Id,                     -- ^ Subset of symbols that are let-bound
   -- | Constant part:
   _constants :: Set Id,                    -- ^ Subset of symbols that are constants  
   _datatypes :: Map Id DatatypeDef,        -- ^ Datatype definitions
@@ -199,6 +201,7 @@ emptyEnv = Environment {
   _shapeConstraints = Map.empty,
   _usedScrutinees = [],
   _unfoldedVars = Set.empty,
+  _letBound = Set.empty,
   _constants = Set.empty,
   _globalPredicates = Map.empty,
   _datatypes = Map.empty,
@@ -266,6 +269,9 @@ addConstant name t = addPolyConstant name (Monotype t)
 -- | 'addPolyConstant' @name sch env@ : add type binding @name@ :: @sch@ to @env@
 addPolyConstant :: Id -> RSchema -> Environment -> Environment
 addPolyConstant name sch = addPolyVariable name sch . (constants %~ Set.insert name)
+
+addLetBound :: Id -> RType -> Environment -> Environment
+addLetBound name t = addVariable name t . (letBound %~ Set.insert name)
 
 addUnresolvedConstant :: Id -> RSchema -> Environment -> Environment
 addUnresolvedConstant name sch = unresolvedConstants %~ Map.insert name sch

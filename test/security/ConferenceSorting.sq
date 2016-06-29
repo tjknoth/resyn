@@ -15,11 +15,7 @@ measure elems :: List a -> Set a where
   
 eq :: x: a -> y: a -> {Bool | _v == (x == y)}
 not :: x: Bool -> {Bool | _v == !x}
-and :: x: Bool -> y: Bool -> {Bool | _v == (x && y)}
 elem :: x: a -> xs: List a -> {Bool | _v == (x in elems xs)}  
-
-map :: f: (a -> b) -> xs: List a -> {List b | len _v == len xs}
-
   
 -- Tagged things
 
@@ -28,10 +24,10 @@ data User
 data Tagged a <visibleTo :: User -> Bool>!
 measure content :: Tagged a -> a
 
-return :: x: a -> Tagged {a | _v == x} <{True}>
+return :: <rp :: User -> Bool> . x: a -> Tagged {a | _v == x} <rp>
 
-bind :: <bp :: User -> Bool> . 
-  (Tagged a <bp>) -> (a -> Tagged b <bp>) -> Tagged b <bp>
+bind :: <bp :: User -> Bool> . <bf :: a -> b -> Bool> .
+  x: Tagged a <bp> -> (u: a -> Tagged {b | bf u _v} <bp>) -> Tagged {b | bf (content x) _v} <bp>
 
 if_ :: <ip :: User -> Bool> . <ic :: Bool> .
   cond: Tagged {Bool | _v ==> ic} <{ic && ip _0}> 
@@ -50,6 +46,11 @@ lift2 :: <l2p :: User -> Bool> . <l2f :: a -> b -> c -> Bool> .
   x: Tagged a <l2p> ->
   y: Tagged b <l2p> ->
   Tagged {c | l2f (content x) (content y) _v} <l2p>  
+  
+liftAnd :: <l2p :: User -> Bool> . 
+  x: Tagged Bool <l2p> ->
+  y: Tagged Bool <l2p> ->
+  Tagged {Bool | _v == (content x) && (content y)} <l2p>  
   
 sequence :: <seqp :: User -> Bool> . xs: List (Tagged a <seqp>) -> Tagged (List a) <seqp>
   
@@ -88,7 +89,9 @@ predicate chair :: World -> User
 getChair :: w: World -> Tagged {User | _v == chair w} <{True}>
 
 getPaperScore :: w: World -> PaperId -> Tagged Int <{_0 == chair w}>
+defaultPaperScore :: Tagged Int <{True}>
 
+-- qualifier {_v == (x == y), _v == (x in y)}
 qualifier {x == w, x in y, !(x in y)}
 
 -- Sort papers according to score
@@ -96,16 +99,16 @@ test :: w: World -> pids: List PaperId -> World
 test = \w . \pids .
   let u = getSessionUser w in
   -- Leaky version:
-  -- let scoreLeq = \pid1 . \pid2 . 
-                    -- bind (getPaperScore w pid1) (\score1 .
-                      -- bind (getPaperScore w pid2) (\score2 .
-                        -- return (score1 <= score2)
-                      -- )
-                    -- ) in
   let scoreLeq = \pid1 . \pid2 . 
-                    bind (if_ (lift2 eq u (getChair w)) (getPaperScore w pid1) (return 0)) (\score1 .
-                      bind (if_ (lift2 eq u (getChair w)) (getPaperScore w pid2) (return 0)) (\score2 .
+                    bind (getPaperScore w pid1) (\score1 .
+                      bind (getPaperScore w pid2) (\score2 .
                         return (score1 <= score2)
                       )
                     ) in
+  -- let scoreLeq = \pid1 . \pid2 . 
+                    -- bind (if_ (lift2 eq u (getChair w)) (getPaperScore w pid1) defaultPaperScore) (\score1 .
+                      -- bind (if_ (lift2 eq u (getChair w)) (getPaperScore w pid2) defaultPaperScore) (\score2 .
+                        -- return (score1 <= score2)
+                      -- )
+                    -- ) in
   print w u (lift1 toString (sortBy scoreLeq pids))
