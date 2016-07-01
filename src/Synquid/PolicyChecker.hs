@@ -46,20 +46,23 @@ localize isRecheck eParams tParams goal = do
       if isRecheck
         then if Map.null reqs
               then return (deANF finalP, Map.empty)
-              else throwErrorWithDescription $ (nest 2 (text "Repair failed with violations:" $+$ vMapDoc text pretty reqs)) $+$ text "when checking" $+$ pretty p
+              else throwErrorWithDescription $ 
+                    hang 2 (text "Re-verification of inserted checks failed with violations:" $+$ vMapDoc text pretty reqs $+$
+                      text "Probable causes: missing type qualifiers or policy incorrectly depends on another sensitive value"
+                    ) $+$ text "when checking" $+$ pretty p
         else if Map.null reqs
               then return (deANF finalP, Map.empty)
               else return (finalP, reqs)        
       
-repair :: MonadHorn s => ExplorerParams -> TypingParams -> Environment -> RProgram -> Requirements -> s (Either ErrorMessage RProgram)
-repair eParams tParams env p violations = do
-    initTS <- initTypingState env
-    runExplorer eParams tParams initTS go
+repair :: MonadHorn s => ExplorerParams -> TypingParams -> Goal -> Requirements -> s (Either ErrorMessage RProgram)
+repair eParams tParams goal violations = do
+    initTS <- initTypingState $ gEnvironment goal
+    runExplorer (eParams { _sourcePos = gSourcePos goal }) tParams initTS go
   where
     go = do
-      writeLog 1 $ (nest 2 (text "Violated requirements:" $+$ vMapDoc text pretty violations)) $+$ text "when checking" $+$ pretty p
+      writeLog 1 $ (nest 2 (text "Violated requirements:" $+$ vMapDoc text pretty violations)) $+$ text "when checking" $+$ pretty (gImpl goal)
       requiredTypes .= violations
-      replaceViolations env p
+      replaceViolations (gEnvironment goal) (gImpl goal)
       
 {- Standard Tagged library -}
 
@@ -322,13 +325,18 @@ replaceViolations env (Program (PMatch scr cases) t) = do
 replaceViolations env (Program (PFix xs body) t) = do
   body' <- replaceViolations env body
   return body'
-replaceViolations env (Program (PLet x def body) t) = do
+replaceViolations env p@(Program (PLet x def body) t) = do
   reqs <- use requiredTypes
   (newDefs, def') <- case Map.lookup x reqs of
             Nothing -> do
                           def'<- replaceViolations env def
                           return ([], def')
-            Just ts -> generateRepair env (head ts) def -- ToDo: other ts
+            Just ts -> if length ts == 1
+                          then generateRepair env (head ts) def
+                          else throwErrorWithDescription $ hang 2 $ 
+                                text "Binder" <+> squotes (text x) <+> text "violates multiple requirements:" $+$ vsep (map pretty ts) $+$
+                                text "Probable causes: binder flows into multiple sinks or is itself a sink with a self-denying policy" $+$
+                                text "when checking" $+$ pretty p
   body' <- replaceViolations (addLetBound x (typeOf def') env) body
   return $ foldDefs (newDefs ++ [(x, def')]) body' t
 replaceViolations env (Program (PApp fun arg) t) = do
@@ -351,7 +359,11 @@ generateRepair env typ p = do
       let allDefs = concatMap fst condANFs
       let allConds = map snd condANFs            
       mkCheck allDefs allConds p pElse)
-    (return ([], pElse)) -- No condition found, Todo: issue a warning
+    (do
+      writeLog 0 $ hang 2 (
+        text "WARNING: cannot abduce a condition for violation" $+$ pretty p </> text "::" </> pretty typ $+$ 
+        text "Probable cause: missing condition qualifiers")
+      return ([], pElse))
   where
     targetPolicy = case typ of
       ScalarT (DatatypeT _ _ [fml]) _ -> fml
@@ -374,17 +386,21 @@ generateRepair env typ p = do
       lifted <- mapM (liftCondition env strippedEnv) conjuncts    
       let defs = concatMap fst lifted
       let conjuncts' = map snd lifted
-      let liftAndSymb = untyped (PSymbol "liftAnd")
+      let liftAndSymb = untyped (PSymbol "andM")
       let conjoin p1 p2 = untyped (PApp (untyped (PApp liftAndSymb p1)) p2)
       let pCond = foldl1 conjoin conjuncts'
       return (defs, pCond)
       (defs', xCond) <- anfE "TT" pCond False
       return (defs ++ defs', xCond)
               
-    genPureConjunct strippedEnv c = do
-      let targetType = ScalarT BoolT $ valBool |<=>| c
-      c' <- local (over (_2 . condQualsGen) (const (\_ _ -> emptyQSpace))) $ cut (reconstructE strippedEnv targetType)
-      aNormalForm "TT" c'
+    genPureConjunct strippedEnv c = let targetType = ScalarT BoolT $ valBool |<=>| c in 
+      ifte 
+        (local (over (_2 . condQualsGen) (const (\_ _ -> emptyQSpace))) $ cut (reconstructE strippedEnv targetType))
+        (\pCond -> aNormalForm "TT" pCond)
+        (throwErrorWithDescription $ hang 2 $ 
+          text "Cannot synthesize term of type" <+> pretty targetType $+$
+          text "when repairing violation" $+$ pretty p </> text "::" </> pretty typ $+$
+          text "Probable cause: missing components to implement check")
       
     updateSymbol :: Formula -> Map Id RSchema -> Id -> RSchema -> Map Id RSchema
     updateSymbol _ m name _ | -- This is a default value: remove
@@ -437,7 +453,7 @@ generateRepair env typ p = do
       cTmps <- replicateM (length conds) (freshId "TT")
       pTmp <- freshId "TT"
       let allDefs = defs ++ zip cTmps conds ++ [(pTmp, pThen)]
-      let app1 cTmp = untyped (PApp (untyped (PSymbol "if_")) (untyped (PSymbol cTmp)))
+      let app1 cTmp = untyped (PApp (untyped (PSymbol "ifM")) (untyped (PSymbol cTmp)))
       let app2 cTmp = untyped (PApp (app1 cTmp) (untyped (PSymbol pTmp)))      
       return (allDefs, foldr (\cTmp els -> untyped $ PApp (app2 cTmp) els) pElse cTmps)
 
