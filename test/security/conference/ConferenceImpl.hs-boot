@@ -38,6 +38,8 @@ return :: (Eq a, Ord a) => a -> Tagged a
 foldl1 :: (a -> a -> a) -> List a -> a
 foldl :: (a -> b -> a) -> a -> List b -> a
 
+sameElem :: List a -> List a -> Bool
+
 forM_ ::
         (Eq a, Ord a) =>
         World -> Tagged (List (Tagged a)) -> (World -> Tagged a -> World) -> World

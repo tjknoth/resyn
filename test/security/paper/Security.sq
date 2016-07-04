@@ -24,6 +24,7 @@ elem = \x . \xs .
   match xs with
     Nil -> (0 != 0)   -- hack so I don't have to put 'false' in env
     Cons y ys -> eq x y || elem x ys
+sameElems :: x: List a -> y: List a -> {Bool | _v == (elems x == elems y)}
 
 {- Strings -}
 

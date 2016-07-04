@@ -22,6 +22,14 @@ test1 = \w . \pid .
 	let out = foldl1 (liftM2 strcat) [title, return s_colon, liftM show st] in 
   printAll w authors out
 
+{-
+test1ref :: {World|currentPhase _v == Done} -> PaperId -> World
+test1ref = \w . \pid .
+  let title = getPaperTitle w pid in
+  let authors = getPaperAuthors w pid in
+  printAll w authors title
+ -}
+
 -- Print paper title to session user
 {-
 silly :: World -> PaperId -> World
@@ -194,15 +202,75 @@ test10 = \w.
 test11 :: World -> PaperId -> World
 test11 = \w. \pid.
   let u = getSessionUser w in
-  -- let authors = getPaperAuthors w pid in
+  let pc = getPC w in
   let conflicts = getPaperConflicts w pid in
-  let tok = ifM (liftM not (liftM2 elem u conflicts))
+  let tok = ifM (andM (liftM2 elem u pc) (liftM not (liftM2 elem u conflicts)))
                 (getPaperBidToken w pid) (return Nothing) in
   -- NOTE: This is *not* equivalent:
-  -- let tok = ifM (liftM2 elem u conflicts) (return Nothing) (getPaperBidToken w pid) in
+  -- let tok = ifM (orM (liftM not (liftM2 elem u pc)) (liftM2 elem u conflicts)) (return Nothing) (getPaperBidToken w pid) in
   let out = [return s_paperNo, return (show pid), return s_colon, liftM show tok] in
   print w u (foldl1 (liftM2 strcat) out)
 
--- TODO Policy that does not allow authors to bid
+-- TODO Policy that does not allow authors to bid even if they are on the PC?
 --let tok = ifM (andM (liftM not (liftM2 elem u conflicts))
 --                    (liftM not (liftM2 elem u authors))) (getPaperBidToken w pid) (return Nothing) in
+
+printManyMaybe :: <pmp :: User -> Bool> . w: World -> 
+   viewers: Tagged (List {User | pmp _v}) <pmp> ->
+    x: Tagged (Maybe a) <pmp> -> {World | currentPhase w == currentPhase _v}
+
+swallowTruth :: (Tagged a <{True}>) -> a
+
+-- Print paper status to all its authors
+{-
+test1maybe :: w:{World|currentPhase _v == Done} -> pid:PaperId -> {World|currentPhase _v == Done}
+test1maybe = \w . \pid .
+  let title = getPaperTitle w pid in
+  let authors = getPaperAuthors w pid in
+  let st = ifM (liftM2 eq (getCurrentPhase w) (return Done))
+              (getPaperStatus w pid)
+              (return NoDecision) in
+	let out = liftM Just (foldl1 (liftM2 strcat) [title, return s_colon, liftM show st]) in 
+  printManyMaybe w authors out
+
+
+auxNotifyIter :: w:{World|currentPhase _v == Done} -> pid:PaperId -> {World|currentPhase _v == Done}
+auxNotifyIter = \w. \pid.
+  let fmtMsg = \st.
+      if st == Accepted then (Just s_delighted) 
+      else if st == Rejected then (Just s_regret)
+      else Nothing in
+  let title = getPaperTitle w pid in
+  let authors = getPaperAuthors w pid in
+  let msg = liftM fmtMsg (getPaperStatus w pid)  in
+  let out = bind msg (\mmsg. 
+      match mmsg with
+        Just msg' -> return (Just (foldl1 (liftM2 strcat) [title, return s_colon, return msg']))
+        Nothing -> return Nothing) in
+  printManyMaybe w authors out
+-}
+
+-- Reviewing phase is done!
+-- Send notices to all authors about how well they did
+test12 :: World -> World
+test12 = \w.
+  let pids = getAllPapers w in
+  let u = getChair w in
+  let fmtMsg = \st.
+      if st == Accepted then (Just s_delighted) 
+      else if st == Rejected then (Just s_regret)
+      else Nothing in
+  --bind (getCurrentPhase w) (\phase. 
+  --  if phase == Done then return (
+  foldl (\w. \pid.
+    let title = getPaperTitle w pid in
+    let authors = getPaperAuthors w pid in
+    let st' = ifM (bind (getCurrentPhase w) (\phase. return (phase == Done))) 
+                  (getPaperStatus w pid) (return NoDecision) in
+    let msg = liftM fmtMsg st'  in
+    let out = bind msg (\mmsg. 
+        match mmsg with
+          Just msg' -> return (Just (foldl1 (liftM2 strcat) [title, return s_colon, return msg']))
+          Nothing -> return Nothing) in
+    printManyMaybe w authors out) w pids --)
+    --else return w)

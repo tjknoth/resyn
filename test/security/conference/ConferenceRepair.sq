@@ -87,7 +87,7 @@ selectFrom :: <sp :: User -> Bool> . World -> u: Tagged {User | sp _v} <sp> ->
                  pids: List PaperId ->  List (Tagged String <{_0 == content u}>)
 selectFrom = \w. \u. \pids .
   map (\pid.
-      let title = return (show pid) in -- getPaperTitle w pid in
+      let title = getPaperTitle w pid in
       let authors = getPaperAuthors w pid in
       foldl1 (liftM2 strcat) (Cons title (Cons (return s_comma) (Cons (return s_authors) (Cons (liftM show authors) Nil))))) pids
       --                     ^ [title, ", ", "authors: ", show authors']
@@ -145,5 +145,25 @@ test11 = \w. \pid.
   let out = [return s_paperNo, return (show pid), return s_colon, liftM show tok] in
   print w u (foldl1 (liftM2 strcat) out)
 
+printMaybe :: <pmp :: User -> Bool> . w: World -> viewer: Tagged {User | pmp _v} <pmp> -> x: Tagged (Maybe a) <pmp> -> World
+printManyMaybe :: <pmp :: User -> Bool> . w: World -> viewers: Tagged (List {User | pmp _v}) <pmp> -> x: Tagged (Maybe a) <pmp> -> World
+
 -- Reviewing phase is done!
 -- Send notices to all authors about how well they did
+test12 :: World -> World
+test12 = \w.
+  let pids = getAllPapers w in
+  let u = getChair w in
+  let fmtMsg = \st.
+      if st == Accepted then (Just s_delighted) 
+      else if st == Rejected then (Just s_regret)
+      else Nothing in
+  foldl (\w. \pid.
+    let title = getPaperTitle w pid in
+    let authors = getPaperAuthors w pid in
+    let msg = liftM fmtMsg (getPaperStatus w pid)  in
+    let out = bind msg (\mmsg. 
+        match mmsg with
+          Just msg' -> return (Just (foldl1 (liftM2 strcat) [title, return s_colon, return msg']))
+          Nothing -> return Nothing) in
+    printManyMaybe w authors out) w pids 

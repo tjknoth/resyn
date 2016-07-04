@@ -54,6 +54,11 @@ getPaperBidToken :: w: World -> pid: PaperId -> Tagged (Maybe Token) <{ {- !(_0 
 qualifier {x == w, x in y, !(x in y)}
 qualifier {_v == (x in y), _v == !(x in y)}
 
+{- Some Strings -}
+
+s_delighted :: String
+s_regret :: String
+
 
 -- TODO currently there has to be something here, otherwise nothing gets emitted
 
