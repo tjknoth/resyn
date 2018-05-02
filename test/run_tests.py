@@ -143,6 +143,7 @@ DEMO_BENCHMARKS = [
     ('Sort-Fold',           ['-m 1', '-a 2', '-e']),
 ]
 
+
 class SynthesisResult:
     def __init__(self, name, time):
         self.name = name
@@ -160,6 +161,7 @@ def cmdline():
     a.add_argument('--synt', action='store_true', help='run synthesis tests')
     a.add_argument('--sections', nargs="*", choices=SECTIONS + ['all'], default=['all'], help=('which synthesis tests to run'))
     a.add_argument('--demo', action='store_true', help='run demo tests')
+    a.add_argument('--res', action='store_true', help='run resource-aware synthesis tests')
     return a.parse_args()
 
 def printerr(str):
@@ -235,6 +237,10 @@ def check_diff ():
             print
             return False
 
+def clear_log():
+    if os.path.isfile(LOGFILE_NAME):
+        os.remove(LOGFILE_NAME)
+
 
 if __name__ == '__main__':
     init()
@@ -252,7 +258,7 @@ if __name__ == '__main__':
         synquid_path = SYNQUID_PATH_WINDOWS
 
     # By default enable all tests:
-    if not (a.unit or a.check or a.synt or a.demo):
+    if not (a.unit or a.check or a.synt or a.demo or a.res):
       a.unit = True
       a.check = True
       a.synt = True
@@ -263,9 +269,7 @@ if __name__ == '__main__':
     if a.unit:
         # Run unit tests
         os.chdir('unit')
-        if os.path.isfile(LOGFILE_NAME):
-            os.remove(LOGFILE_NAME)
-
+        clear_log() 
         for name in os.listdir('.'):
             filename, file_extension = os.path.splitext(name)
             if file_extension == '.sq':
@@ -276,8 +280,7 @@ if __name__ == '__main__':
     if not fail and a.check:
         # Run type checking benchmarks
         os.chdir('checking')
-        if os.path.isfile(LOGFILE_NAME):
-            os.remove(LOGFILE_NAME)
+        clear_log() 
         for (name, args) in CHECKING_BENCHMARKS:
             run_benchmark(name, args)
         fail = check_diff()
@@ -286,9 +289,17 @@ if __name__ == '__main__':
     if not fail and a.demo:
         # Test online demos
         os.chdir('demo') 
-        if os.path.isfile(LOGFILE_NAME):
-            os.remove(LOGFILE_NAME)
+        clear_log() 
         for (name, args) in DEMO_BENCHMARKS:
+            run_benchmark(name, args)
+        fail = check_diff()
+        os.chdir('..')
+
+    if not fail and a.res:
+        # Run resource-aware synthesis benchmarks
+        os.chdir('resources')
+        clear_log() 
+        for (name, args) in RESOURCE_BENCHMARKS:
             run_benchmark(name, args)
         fail = check_diff()
         os.chdir('..')
@@ -296,9 +307,7 @@ if __name__ == '__main__':
     if not fail and a.synt:
         # Run synthesis benchmarks in 'current' directory
         os.chdir('current')
-        if os.path.isfile(LOGFILE_NAME):
-            os.remove(LOGFILE_NAME)
-
+        clear_log() 
         for sec in SECTIONS:
             if sec in sections or 'all' in sections:
                 for (name, args) in BENCHMARKS[sec]:
