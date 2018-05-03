@@ -28,3 +28,4 @@ test/difflib
 os.path
 platform
 sys
+test/test.sq

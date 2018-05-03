@@ -87,7 +87,7 @@ dot = Token.dot lexer
 {- Declarations -}
 
 parseDeclaration :: Parser Declaration
-parseDeclaration = attachPosBefore $
+parseDeclaration = attachPosBefore 
   (choice [ parseTypeDecl
          , parseDataDecl
          , parseMeasureDecl
@@ -299,7 +299,7 @@ exprTable mkUnary mkBinary withGhost = [
  - (ie literals).
  -}
 parseFormula :: Parser Formula
-parseFormula = withPos $ (buildExpressionParser (exprTable Unary Binary True) parseTerm <?> "refinement term")
+parseFormula = withPos (buildExpressionParser (exprTable Unary Binary True) parseTerm <?> "refinement term")
 
 parseTerm :: Parser Formula
 parseTerm = parseIte <|> try parseAppTerm <|> parseAtomTerm
@@ -398,9 +398,9 @@ parseETerm = buildExpressionParser (exprTable mkUnary mkBinary False) parseAppTe
       , parseList
       ]
     parseBoolLit = (reserved "False" >> return (untyped $ PSymbol "False")) <|> (reserved "True" >> return (untyped $ PSymbol "True"))
-    parseIntLit = natural >>= return . untyped . PSymbol . show
+    parseIntLit = fmap (untyped . PSymbol . show) natural
     parseHole = reserved "??" >> return (untyped PHole)
-    parseSymbol = (parseIdentifier <|> parseTypeName) >>= (return . untyped . PSymbol)
+    parseSymbol = fmap (untyped . PSymbol) (parseIdentifier <|> parseTypeName) 
 
 parseList = do
   elems <- brackets (commaSep parseImpl)

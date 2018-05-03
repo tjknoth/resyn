@@ -8,12 +8,12 @@ import Synquid.Program
 import Synquid.Error
 import Synquid.Pretty
 import Synquid.Parser
-import Synquid.Resolver (resolveDecls)
+--import Synquid.Resolver (resolveDecls)
 import Synquid.SolverMonad
 import Synquid.HornSolver
 import Synquid.TypeConstraintSolver
 import Synquid.Explorer
-import Synquid.Synthesizer
+--import Synquid.Synthesizer
 import Synquid.HtmlOutput
 import Synquid.Codegen
 import Synquid.Stats
@@ -47,7 +47,7 @@ main = do
     (Synthesis file libs onlyGoals
                appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency memoize symmetry
                lfp bfs
-               out_file out_module outFormat resolve
+               out_file out_module outFormat resolve 
                print_spec print_stats log_) -> do
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
@@ -271,6 +271,8 @@ runOnFile :: SynquidParams -> ExplorerParams -> HornSolverParams -> CodegenParam
 runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
   declsByFile <- parseFromFiles (libs ++ [file])
   let decls = concat $ map snd declsByFile
+  putStrLn $ show decls
+  {-
   case resolveDecls decls of
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure
     Right (goals, cquals, tquals) -> when (not $ resolveOnly synquidParams) $ do
@@ -279,6 +281,7 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
       -- Generate output if requested
       let libsWithDecls = collectLibDecls libs declsByFile
       codegen (fillinCodegenParams file libsWithDecls codegenParams) (map fst results)
+  -}
   where
     parseFromFiles [] = return []
     parseFromFiles (file:rest) = do
@@ -292,6 +295,7 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
       Just filt -> filter (\goal -> gName goal `elem` filt) goals
       _ -> goals
     pdoc = printDoc (outputFormat synquidParams)
+    {-
     synthesizeGoal cquals tquals goal = do
       when ((gSynthesize goal) && (showSpec synquidParams)) $ pdoc (prettySpec goal)
       -- print empty
@@ -337,3 +341,4 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
                   parens (text "Solution size:" <+> pretty solutionSize)
                 ] ++
               [empty]
+    -}

@@ -28,6 +28,7 @@ data TypeSkeleton r =
   AnyT
   deriving (Show, Eq, Ord)
 
+{-
 contextual x tDef (FunctionT y tArg tRes) = FunctionT y (contextual x tDef tArg) (contextual x tDef tRes)
 contextual _ _ AnyT = AnyT
 contextual x tDef t = LetT x tDef t
@@ -79,12 +80,12 @@ refineSort AnyS f = AnyT
 typeIsData :: TypeSkeleton r -> Bool
 typeIsData (ScalarT DatatypeT{} _) = True
 typeIsData _ = False
-
+-}
 arity :: TypeSkeleton r -> Int
 arity (FunctionT _ _ t) = 1 + arity t
 arity (LetT _ _ t) = arity t
 arity _ = 0
-
+{-
 -- TODO: make sure the AnyT case is OK
 hasSet :: TypeSkeleton r -> Bool
 hasSet (ScalarT (DatatypeT name _ _) _) = name == setTypeName
@@ -129,12 +130,16 @@ varRefinement x s = Var s valueVarName |=| Var s x
 isVarRefinemnt (Binary Eq (Var _ v) (Var _ _)) = v == valueVarName
 isVarRefinemnt _ = False
 
+--}
+
 -- | Polymorphic type skeletons (parametrized by refinements)
 data SchemaSkeleton r =
   Monotype (TypeSkeleton r) |
   ForallT Id (SchemaSkeleton r) |       -- Type-polymorphic
   ForallP PredSig (SchemaSkeleton r)    -- Predicate-polymorphic
   deriving (Show, Eq, Ord)
+
+{-
 
 toMonotype :: SchemaSkeleton r -> TypeSkeleton r
 toMonotype (Monotype t) = t
@@ -164,10 +169,10 @@ set n = ScalarT (DatatypeT setTypeName [tvar] [])
   where
     tvar = ScalarT (TypeVarT Map.empty n) ftrue
 setAll n = (set n) ftrue
-
+-}
 -- | Mapping from type variables to types
 type TypeSubstitution = Map Id RType
-
+{-
 asSortSubst :: TypeSubstitution -> SortSubstitution
 asSortSubst = Map.map (toSort . baseTypeOf)
 
@@ -218,6 +223,8 @@ typeVarsOf (FunctionT _ tArg tRes) = typeVarsOf tArg `Set.union` typeVarsOf tRes
 typeVarsOf (LetT _ tDef tBody) = typeVarsOf tDef `Set.union` typeVarsOf tBody
 typeVarsOf _ = Set.empty
 
+-}
+
 {- Refinement types -}
 
 -- | Unrefined typed
@@ -232,6 +239,7 @@ type SSchema = SchemaSkeleton ()
 -- | Refined schemas
 type RSchema = SchemaSkeleton Formula
 
+{-
 -- | Forget refinements of a type
 shape :: RType -> SType
 shape (ScalarT (DatatypeT name tArgs pArgs) _) = ScalarT (DatatypeT name (map shape tArgs) (replicate (length pArgs) ())) ()
@@ -313,3 +321,4 @@ singletonCtor = "Singleton"
 insertSetCtor = "Insert"
 setTypeName = "DSet"
 setTypeVar = "setTypeVar"
+-}

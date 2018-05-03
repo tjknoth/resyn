@@ -59,11 +59,13 @@ type UProgram = Program RType
 -- | Refinement-typed programs
 type RProgram = Program RType
 
+
+
 untyped c = Program c AnyT
 uHole = untyped PHole
 isHole (Program PHole _) = True
 isHole _ = False
-
+{-
 eraseTypes :: RProgram -> UProgram
 eraseTypes = fmap (const AnyT)
 
@@ -182,6 +184,8 @@ renameAsImpl isBound = renameAsImpl' Map.empty
       _ -> FunctionT y (substituteInType isBound subst tArg) (renameAsImpl' subst pRes tRes)
     renameAsImpl' subst  _ t = substituteInType isBound subst t
 
+-}
+
 {- Top-level definitions -}
 
 -- | User-defined datatype representation
@@ -257,12 +261,16 @@ emptyEnv = Environment {
   _unresolvedConstants = Map.empty
 }
 
+
+
 -- | 'symbolsOfArity' @n env@: all symbols of arity @n@ in @env@
 symbolsOfArity n env = Map.findWithDefault Map.empty n (env ^. symbols)
 
 -- | All symbols in an environment
 allSymbols :: Environment -> Map Id RSchema
 allSymbols env = Map.unions $ Map.elems (env ^. symbols)
+
+{-
 
 -- | 'lookupSymbol' @name env@ : type of symbol @name@ in @env@, including built-in constants
 lookupSymbol :: Id -> Int -> Bool -> Environment -> Maybe RSchema
@@ -468,6 +476,8 @@ refineBot _ (ScalarT BoolT _) = ScalarT BoolT ffalse
 refineBot _ (ScalarT (TypeVarT vSubst a) _) = ScalarT (TypeVarT vSubst a) ffalse
 refineBot env (FunctionT x tArg tFun) = FunctionT x (refineTop env tArg) (refineBot env tFun)
 
+-}
+
 {- Input language declarations -}
 
 -- | Constructor signature: name and type
@@ -488,7 +498,7 @@ data BareDeclaration =
   SynthesisGoal Id UProgram                                 -- ^ Name and template for the function to reconstruct
   deriving (Show, Eq)
 
-type Declaration = Pos BareDeclaration
+type Declaration = Pos BareDeclaration 
 
 isSynthesisGoal (Pos _ (SynthesisGoal _ _)) = True
 isSynthesisGoal _ = False
@@ -515,9 +525,10 @@ data Goal = Goal {
 } deriving (Show, Eq, Ord)
 
 
+
 unresolvedType env ident = (env ^. unresolvedConstants) Map.! ident
 unresolvedSpec goal = unresolvedType (gEnvironment goal) (gName goal)
-
+{-
 -- Remove measure being typechecked from environment
 filterEnv :: Environment -> Id -> Environment
 filterEnv e m = Lens.set measures (Map.filterWithKey (\k _ -> k == m) (e ^. measures)) e
@@ -588,3 +599,5 @@ defaultSetType = DataDecl name typeVars preds cons
     empty = ConstructorSig emptySetCtor (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a") (BoolLit True)] []) (BoolLit True))
     single = ConstructorSig singletonCtor (FunctionT "x" (ScalarT (TypeVarT Map.empty "a") (BoolLit True)) (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a") (BoolLit True)] []) (BoolLit True)))
     insert = ConstructorSig insertSetCtor (FunctionT "x" (ScalarT (TypeVarT Map.empty "a") (BoolLit True)) (FunctionT "xs" (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a") (BoolLit True)] []) (BoolLit True)) (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a") (BoolLit True)] []) (BoolLit True))))
+
+    -}

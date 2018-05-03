@@ -8,8 +8,8 @@ import Synquid.Type hiding (set)
 import Synquid.Program
 import Synquid.Error
 import Synquid.SolverMonad
-import Synquid.TypeConstraintSolver hiding (freshId, freshVar)
-import qualified Synquid.TypeConstraintSolver as TCSolver (freshId, freshVar)
+import Synquid.TypeConstraintSolver --hiding (freshId, freshVar)
+--import qualified Synquid.TypeConstraintSolver as TCSolver (freshId, freshVar)
 import Synquid.Util
 import Synquid.Pretty
 import Synquid.Tokens
@@ -78,6 +78,7 @@ data ExplorerState = ExplorerState {
 
 makeLenses ''ExplorerState
 
+{-
 -- | Key in the memoization store
 data MemoKey = MemoKey {
   keyTypeArity :: Int,
@@ -114,6 +115,8 @@ type Explorer s = StateT ExplorerState (
 -- | This type encapsulates the 'reconstructTopLevel' function of the type checker,
 -- which the explorer calls for auxiliary goals
 data Reconstructor s = Reconstructor (Goal -> Explorer s RProgram)
+
+
 
 -- | 'runExplorer' @eParams tParams initTS go@ : execute exploration @go@ with explorer parameters @eParams@, typing parameters @tParams@ in typing state @initTS@
 runExplorer :: MonadHorn s => ExplorerParams -> TypingParams -> Reconstructor s -> TypingState -> Explorer s a -> s (Either ErrorMessage a)
@@ -685,6 +688,8 @@ generateAuxGoals = do
     etaContract' (x:binders) (PApp pFun (Program (PSymbol y) _)) | x == y    =  etaContract' binders (content pFun)
     etaContract' [] f@(PSymbol _)                                            = Just f
     etaContract' binders p                                                   = Nothing
+
+-}
 
 writeLog level msg = do
   maxLevel <- asks . view $ _1 . explorerLogLevel

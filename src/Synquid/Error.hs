@@ -16,7 +16,7 @@ import Text.Parsec.Pos
 data Pos a = Pos {
   position :: SourcePos,
   node :: a
-}
+} deriving (Show)
 
 instance (Eq a) => Eq (Pos a) where
   (==) p1 p2 = node p1 == node p2

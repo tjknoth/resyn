@@ -4,15 +4,15 @@
 module Synquid.TypeConstraintSolver (
   ErrorMessage,
   TypingParams (..),
-  TypingState,
+  TypingState, {-
   typingConstraints,
   typeAssignment,
   qualifierMap,
   hornClauses,
   candidates,
   errorContext,
-  isFinal,
-  TCSolver,
+  isFinal, -}
+  TCSolver{-,
   runTCSolver,
   initTypingState,
   addTypingConstraint,
@@ -31,7 +31,7 @@ module Synquid.TypeConstraintSolver (
   finalizeProgram,
   initEnv,
   allScalars,
-  condQualsGen
+  condQualsGen -}
 ) where
 
 import Synquid.Logic
@@ -41,7 +41,7 @@ import Synquid.Error
 import Synquid.Pretty
 import Synquid.SolverMonad
 import Synquid.Util
-import Synquid.Resolver (addAllVariables)
+--import Synquid.Resolver (addAllVariables)
 
 import Data.Maybe
 import Data.List
@@ -93,6 +93,7 @@ makeLenses ''TypingState
 -- | Computations that solve type constraints, parametrized by the the horn solver @s@
 type TCSolver s = StateT TypingState (ReaderT TypingParams (ExceptT ErrorMessage s))
 
+{-
 -- | 'runTCSolver' @params st go@ : execute a typing computation @go@ with typing parameters @params@ in a typing state @st@
 runTCSolver :: TypingParams -> TypingState -> TCSolver s a -> s (Either ErrorMessage (a, TypingState))
 runTCSolver params st go = runExceptT $ runReaderT (runStateT go st) params
@@ -680,6 +681,7 @@ finalizeProgram p = do
   sol <- uses candidates (solution . head)
   return $ fmap (typeApplySolution sol . typeSubstitutePred pass . typeSubstitute tass) p
 
+-}
 instance Eq TypingState where
   (==) st1 st2 = (restrictDomain (Set.fromList ["a", "u"]) (_idCount st1) == restrictDomain (Set.fromList ["a", "u"]) (_idCount st2)) &&
                   _typeAssignment st1 == _typeAssignment st2 &&
@@ -693,3 +695,4 @@ instance Ord TypingState where
 writeLog level msg = do
   maxLevel <- asks _tcSolverLogLevel
   if level <= maxLevel then traceShow (plain msg) $ return () else return ()
+
