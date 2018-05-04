@@ -218,7 +218,6 @@ prettyBase :: Pretty r => (TypeSkeleton r -> Doc) -> BaseType r -> Doc
 prettyBase prettyType base = case base of
   IntT -> text "Int"
   BoolT -> text "Bool"
-  -- TODO: print multiplicity
   TypeVarT s name m -> mult <> subs <> text name
     where 
       subs = if Map.null s 
@@ -226,7 +225,7 @@ prettyBase prettyType base = case base of
                else hMapDoc pretty pretty s
       mult = case m of 
         (IntLit 1) -> empty
-        m'         -> pretty m'
+        m'         -> pretty m' <> operator "**"
   DatatypeT name tArgs pArgs -> text name <+> hsep (map prettyType tArgs) <+> hsep (map (hlAngles . pretty) pArgs)
 
 instance Pretty (BaseType ()) where

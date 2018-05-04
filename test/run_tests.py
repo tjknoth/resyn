@@ -143,6 +143,15 @@ DEMO_BENCHMARKS = [
     ('Sort-Fold',           ['-m 1', '-a 2', '-e']),
 ]
 
+RESOURCE_BENCHMARKS = [
+    ('List-Append',         ['--resources']),
+    ('List-Compress',       ['--resources']),
+    ('List-Delete',         ['--resources']),
+    ('List-Double',         ['--resources']),
+    ('List-Replicate',      ['--resources']),
+    ('List-Reverse',        ['--resources']),
+]
+
 
 class SynthesisResult:
     def __init__(self, name, time):
