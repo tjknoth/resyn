@@ -219,7 +219,14 @@ prettyBase prettyType base = case base of
   IntT -> text "Int"
   BoolT -> text "Bool"
   -- TODO: print multiplicity
-  TypeVarT s name m -> if Map.null s then text name else hMapDoc pretty pretty s <> text name
+  TypeVarT s name m -> mult <> subs <> text name
+    where 
+      subs = if Map.null s 
+               then empty 
+               else hMapDoc pretty pretty s
+      mult = case m of 
+        (IntLit 1) -> empty
+        m'         -> pretty m'
   DatatypeT name tArgs pArgs -> text name <+> hsep (map prettyType tArgs) <+> hsep (map (hlAngles . pretty) pArgs)
 
 instance Pretty (BaseType ()) where

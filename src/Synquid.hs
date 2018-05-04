@@ -276,7 +276,7 @@ runOnFile :: SynquidParams -> ExplorerParams -> HornSolverParams -> CodegenParam
 runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
   declsByFile <- parseFromFiles (libs ++ [file])
   let decls = concat $ map snd declsByFile
-  putStrLn $ show decls
+  putStrLn $ unlines $ fmap (show . pretty) decls
   {-
   case resolveDecls decls of
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure

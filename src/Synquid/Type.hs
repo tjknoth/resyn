@@ -17,7 +17,7 @@ import Control.Lens hiding (set)
 
 {- Type skeletons -}
 
-data BaseType r = BoolT | IntT | DatatypeT Id [TypeSkeleton r] [r] | TypeVarT Substitution Id r
+data BaseType r = BoolT | IntT | DatatypeT Id [TypeSkeleton r] [r] | TypeVarT Substitution Id Formula 
   deriving (Show, Eq, Ord)
 
 -- | Type skeletons (parametrized by refinements)
