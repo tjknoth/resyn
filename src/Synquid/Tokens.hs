@@ -44,7 +44,7 @@ binOpTokens = fromList [ (Times,     "*")
                         
 -- | Other operators         
 otherOps :: [String]
-otherOps = ["::", ":", "->", "|", "=", "??", ",", ".", "\\"] 
+otherOps = ["::", ":", "->", "|", "=", "??", ",", ".", "\\", "**"] 
 
 -- | Characters allowed in identifiers (in addition to letters and digits)
 identifierChars = "_'"

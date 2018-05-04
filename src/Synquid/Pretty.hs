@@ -218,7 +218,8 @@ prettyBase :: Pretty r => (TypeSkeleton r -> Doc) -> BaseType r -> Doc
 prettyBase prettyType base = case base of
   IntT -> text "Int"
   BoolT -> text "Bool"
-  TypeVarT s name -> if Map.null s then text name else hMapDoc pretty pretty s <> text name
+  -- TODO: print multiplicity
+  TypeVarT s name m -> if Map.null s then text name else hMapDoc pretty pretty s <> text name
   DatatypeT name tArgs pArgs -> text name <+> hsep (map prettyType tArgs) <+> hsep (map (hlAngles . pretty) pArgs)
 
 instance Pretty (BaseType ()) where
@@ -229,7 +230,7 @@ instance Pretty (BaseType Formula) where
 
 
 prettySType :: SType -> Doc
-prettySType (ScalarT base _) = pretty base
+prettySType (ScalarT base _ _) = pretty base
 prettySType (FunctionT _ t1 t2) = hlParens (pretty t1 <+> operator "->" <+> pretty t2)
 prettySType AnyT = text "_"
 
@@ -243,15 +244,18 @@ prettyType t = prettyTypeAt 0 t
 -- | Binding power of a type
 typePower :: RType -> Int
 typePower FunctionT {} = 1
-typePower (ScalarT (DatatypeT _ tArgs pArgs) r)
+-- TODO: what's binding power?
+typePower (ScalarT (DatatypeT _ tArgs pArgs) r _)
   | ((not (null tArgs) || not (null pArgs)) && (r == ftrue)) = 2
 typePower _ = 3
 
 prettyTypeAt :: Int -> RType -> Doc
 prettyTypeAt n t = condHlParens (n' <= n) (
   case t of
-    ScalarT base (BoolLit True) -> pretty base
-    ScalarT base fml -> hlBraces (pretty base <> operator "|" <> pretty fml)
+    ScalarT base (BoolLit True) (IntLit 0) -> pretty base
+    ScalarT base (BoolLit True) pot        -> hlBraces (pretty base <> operator "|" <> operator "|" <> pretty pot)
+    ScalarT base fml (IntLit 0)-> hlBraces (pretty base <> operator "|" <> pretty fml)
+    ScalarT base fml pot -> hlBraces (pretty base <> operator "|" <> pretty fml <> operator "|" <> pretty pot)
     AnyT -> text "_"
     FunctionT x t1 t2 -> text x <> operator ":" <> prettyTypeAt n' t1 <+> operator "->" <+> prettyTypeAt 0 t2
     LetT x t1 t2 -> text "LET" <+> text x <> operator ":" <> prettyTypeAt n' t1 <+> operator "IN" <+> prettyTypeAt 0 t2
@@ -425,10 +429,11 @@ fmlNodeCount' :: Formula -> Int
 fmlNodeCount' (BoolLit _) = 0
 fmlNodeCount' f = fmlNodeCount f
 
+-- TODO: should this include size of potential formulas?
 -- | 'typeNodeCount' @t@ : cumulative size of all refinements in @t@
 typeNodeCount :: RType -> Int
-typeNodeCount (ScalarT (DatatypeT _ tArgs pArgs) fml) = fmlNodeCount' fml + sum (map typeNodeCount tArgs) + sum (map fmlNodeCount' pArgs)
-typeNodeCount (ScalarT _ fml) = fmlNodeCount' fml
+typeNodeCount (ScalarT (DatatypeT _ tArgs pArgs) fml _) = fmlNodeCount' fml + sum (map typeNodeCount tArgs) + sum (map fmlNodeCount' pArgs)
+typeNodeCount (ScalarT _ fml _) = fmlNodeCount' fml
 typeNodeCount (FunctionT _ tArg tRes) = typeNodeCount tArg + typeNodeCount tRes
 
 -- | 'programNodeCount' @p@ : size of @p@ (in AST nodes)

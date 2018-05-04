@@ -17,17 +17,20 @@ import Control.Lens hiding (set)
 
 {- Type skeletons -}
 
-data BaseType r = BoolT | IntT | DatatypeT Id [TypeSkeleton r] [r] | TypeVarT Substitution Id
+data BaseType r = BoolT | IntT | DatatypeT Id [TypeSkeleton r] [r] | TypeVarT Substitution Id r
   deriving (Show, Eq, Ord)
 
 -- | Type skeletons (parametrized by refinements)
 data TypeSkeleton r =
-  ScalarT (BaseType r) r |
+  ScalarT (BaseType r) r r |
   FunctionT Id (TypeSkeleton r) (TypeSkeleton r) |
   LetT Id (TypeSkeleton r) (TypeSkeleton r) |
   AnyT
   deriving (Show, Eq, Ord)
 
+
+defPotential = IntLit 0
+defMultiplicity = IntLit 1
 {-
 contextual x tDef (FunctionT y tArg tRes) = FunctionT y (contextual x tDef tArg) (contextual x tDef tRes)
 contextual _ _ AnyT = AnyT

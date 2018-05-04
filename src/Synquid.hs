@@ -48,7 +48,7 @@ main = do
                appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency memoize symmetry
                lfp bfs
                out_file out_module outFormat resolve 
-               print_spec print_stats log_) -> do
+               print_spec print_stats log_ resources) -> do
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
                     _scrutineeDepth = scrutineeMax,
@@ -75,7 +75,8 @@ main = do
                     outputFormat = outFormat,
                     resolveOnly = resolve,
                     showSpec = print_spec,
-                    showStats = print_stats
+                    showStats = print_stats,
+                    checkResources = resources
                   }
                   let codegenParams = defaultCodegenParams {
                     filename = out_file,
@@ -124,7 +125,8 @@ data CommandLineArgs
         resolve :: Bool,
         print_spec :: Bool,
         print_stats :: Bool,
-        log_ :: Int
+        log_ :: Int,
+        resources :: Bool
       }
   deriving (Data, Typeable, Show, Eq)
 
@@ -153,7 +155,8 @@ synt = Synthesis {
   output              = defaultFormat   &= help ("Output format: Plain, Ansi or Html (default: " ++ show defaultFormat ++ ")") &= typ "FORMAT",
   print_spec          = True            &= help ("Show specification of each synthesis goal (default: True)"),
   print_stats         = False           &= help ("Show specification and solution size (default: False)"),
-  log_                = 0               &= help ("Logger verboseness level (default: 0)") &= name "l"
+  log_                = 0               &= help ("Logger verboseness level (default: 0)") &= name "l",
+  resources           = True           &= help ("Verify resource usage")
   } &= auto &= help "Synthesize goals specified in the input file"
     where
       defaultFormat = outputFormat defaultSynquidParams
@@ -218,7 +221,8 @@ data SynquidParams = SynquidParams {
   repairPolicies :: Bool,
   verifyOnly :: Bool,
   showSpec :: Bool,                            -- ^ Print specification for every synthesis goal
-  showStats :: Bool                            -- ^ Print specification and solution size
+  showStats :: Bool,                            -- ^ Print specification and solution size
+  checkResources :: Bool
 }
 
 defaultSynquidParams = SynquidParams {
@@ -228,7 +232,8 @@ defaultSynquidParams = SynquidParams {
   repairPolicies = False,
   verifyOnly = False,
   showSpec = True,
-  showStats = False
+  showStats = False,
+  checkResources = True
 }
 
 -- | Parameters for code extraction and Haskell output

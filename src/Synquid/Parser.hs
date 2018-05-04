@@ -1,7 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 
 -- | The parser for Synquid's program specification DSL.
-module Synquid.Parser (parseFromFile, parseProgram, toErrorMessage) where
+module Synquid.Parser (parseFromFile, parseProgram, toErrorMessage, parseType, parseDataDecl) where
 
 import Synquid.Logic
 import Synquid.Type
@@ -13,6 +13,7 @@ import Synquid.Util
 import Data.List
 import qualified Data.Map as Map
 import Data.Map (Map)
+import Data.Maybe (fromMaybe)
 
 import Control.Monad.State
 import Control.Applicative hiding ((<|>), many)
@@ -216,40 +217,59 @@ parseFunctionTypeMb = do
 parseTypeAtom :: Parser RType
 parseTypeAtom = choice [
   parens parseType,
-  parseScalarRefType,
+  try parseScalarRefType,
+  parseScalarRefPotType,
   parseUnrefTypeNoArgs,
   parseListType
   ]
 
 parseUnrefTypeNoArgs = do
+  m <- optionMaybe $ try parseMultiplicity
   baseType <- parseBaseType
-  return $ ScalarT baseType ftrue
+  return $ ScalarT (setMult m baseType) ftrue defPotential
   where
     parseBaseType = choice [
       BoolT <$ reserved "Bool",
       IntT <$ reserved "Int",
       (\name -> DatatypeT name [][]) <$> parseTypeName,
-      TypeVarT Map.empty <$> parseIdentifier]
+      (\name -> TypeVarT Map.empty name defMultiplicity) <$> parseIdentifier]
+    setMult Nothing (TypeVarT s name m)     = TypeVarT s name m
+    setMult (Just mult) (TypeVarT s name m) = TypeVarT s name mult
+    setMult mult t                          = t
+
+parseMultiplicity = do
+  formula <- parseFormula
+  reservedOp "**"
+  return formula
 
 parseUnrefTypeWithArgs = do
   name <- parseTypeName
   typeArgs <- many (sameOrIndented >> parseTypeAtom)
   predArgs <- many (sameOrIndented >> angles parsePredArg)
-  return $ ScalarT (DatatypeT name typeArgs predArgs) ftrue
+  return $ ScalarT (DatatypeT name typeArgs predArgs) ftrue defPotential
 
 parsePredArg = braces parseFormula <|> (flip (Pred AnyS) [] <$> parseIdentifier)
 
 parseScalarUnrefType = parseUnrefTypeWithArgs <|> parseUnrefTypeNoArgs
 
+parseScalarRefPotType = braces $ do 
+  ScalarT baseType _ _ <- parseScalarUnrefType 
+  reservedOp "|"
+  refinement <- optionMaybe parseFormula 
+  reservedOp "|"
+  potential <- parseFormula
+  let refinement' = fromMaybe ftrue refinement
+  return $ ScalarT baseType refinement' potential
+
 parseScalarRefType = braces $ do
-  ScalarT baseType _ <- parseScalarUnrefType
+  ScalarT baseType _ _ <- parseScalarUnrefType
   reservedOp "|"
   refinement <- parseFormula
-  return $ ScalarT baseType refinement
+  return $ ScalarT baseType refinement defPotential
 
 parseListType = do
   elemType <- brackets parseType
-  return $ ScalarT (DatatypeT "List" [elemType] []) ftrue
+  return $ ScalarT (DatatypeT "List" [elemType] []) ftrue defPotential
 
 parseSort :: Parser Sort
 parseSort = withPos (parseSortWithArgs <|> parseSortAtom <?> "sort")

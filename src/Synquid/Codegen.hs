@@ -173,7 +173,7 @@ instance AsHaskellType (SchemaSkeleton r) where
   toHsQualType env typ = {- HsQualType [] $ -} toHsType env typ
 
 instance AsHaskellType (TypeSkeleton r) where
-  toHsType env (ScalarT base _) = toHsType env base
+  toHsType env (ScalarT base _ _) = toHsType env base
   toHsType env (FunctionT _ argType resultType) =
     TyFun (toHsType env argType) (toHsType env resultType)
   toHsType env AnyT = TyCon $ UnQual $ Ident "Any"
@@ -185,7 +185,7 @@ instance AsHaskellType (BaseType r) where
     foldl TyApp typeCtor $ map (toHsType env) tArgs
     where
       typeCtor = TyCon $ UnQual $ Ident name
-  toHsType env (TypeVarT _ name) = TyVar $ Ident name
+  toHsType env (TypeVarT _ name _) = TyVar $ Ident name
 
 instance AsHaskellExp (Program r) where
   toHsExp env (Program term _) = toHsExp env term
