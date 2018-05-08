@@ -132,6 +132,7 @@ fmlToProgram fml@(Pred s x (f:fs)) = Program (PApp fn (curriedApp (fmlToProgram 
     curriedApp :: RProgram -> [Formula] -> RProgram
     curriedApp p [] = p
     curriedApp p (f:fs) = curriedApp (Program (PApp p (fmlToProgram f)) AnyT {-fromSort s -}) fs
+-}
 
 -- | Convert an executable formula into an untyped program
 fmlToUProgram :: Formula -> RProgram
@@ -174,7 +175,7 @@ fmlToUProgram (SetLit _ (f:fs)) = Program (PApp ins (curriedApp (fmlToUProgram f
     curriedApp :: RProgram -> [Formula] -> RProgram
     curriedApp p [] = Program (PApp p emp) AnyT
     curriedApp p (f:fs) = curriedApp (Program (PApp p (fmlToUProgram f)) AnyT) fs
-
+{-
 -- | 'renameAsImpl' @p t@: change argument names in function type @t@ to be the same as in the abstraction @p@
 renameAsImpl :: (Id -> Bool) -> UProgram -> RType -> RType
 renameAsImpl isBound = renameAsImpl' Map.empty
@@ -183,7 +184,6 @@ renameAsImpl isBound = renameAsImpl' Map.empty
       ScalarT baseT fml -> FunctionT y (substituteInType isBound subst tArg) (renameAsImpl' (Map.insert x (Var (toSort baseT) y) subst) pRes tRes)
       _ -> FunctionT y (substituteInType isBound subst tArg) (renameAsImpl' subst pRes tRes)
     renameAsImpl' subst  _ t = substituteInType isBound subst t
-
 -}
 
 {- Top-level definitions -}
@@ -270,14 +270,14 @@ symbolsOfArity n env = Map.findWithDefault Map.empty n (env ^. symbols)
 allSymbols :: Environment -> Map Id RSchema
 allSymbols env = Map.unions $ Map.elems (env ^. symbols)
 
-{-
+
 
 -- | 'lookupSymbol' @name env@ : type of symbol @name@ in @env@, including built-in constants
 lookupSymbol :: Id -> Int -> Bool -> Environment -> Maybe RSchema
 lookupSymbol name a hasSet env
-  | a == 0 && name == "True"                          = Just $ Monotype $ ScalarT BoolT valBool
-  | a == 0 && name == "False"                         = Just $ Monotype $ ScalarT BoolT (fnot valBool)
-  | a == 0 && isJust asInt                            = Just $ Monotype $ ScalarT IntT (valInt |=| IntLit (fromJust asInt))
+  | a == 0 && name == "True"                          = Just $ Monotype $ ScalarT BoolT valBool defPotential
+  | a == 0 && name == "False"                         = Just $ Monotype $ ScalarT BoolT (fnot valBool) defPotential
+  | a == 0 && isJust asInt                            = Just $ Monotype $ ScalarT IntT (valInt |=| IntLit (fromJust asInt)) defPotential
   | a == 1 && (name `elem` Map.elems unOpTokens)      = let op = head $ Map.keys $ Map.filter (== name) unOpTokens in Just $ unOpType op
   | isBinary && hasSet                                = let ops = Map.keys $ Map.filter (== name) binOpTokens
     in Just $ binOpType $ case tail ops of
@@ -429,19 +429,19 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
       if fml == ftrue
         then Nothing
         else Just $ substitute (Map.singleton valueVarName (Pred outSort mName [Var (toSort baseT) valueVarName])) fml
-
+    -- TODO: should potentials transfer as well?
     contentProperties (mName, MeasureDef (DataS _ vars) a _ _) = case elemIndex a vars of
       Nothing -> Nothing
-      Just i -> let (ScalarT elemT fml) = tArgs !! i -- @mName@ "returns" one of datatype's parameters: transfer the refinement onto the value of the measure
+      Just i -> let (ScalarT elemT fml pot) = tArgs !! i -- @mName@ "returns" one of datatype's parameters: transfer the refinement onto the value of the measure
                 in let
                     elemSort = toSort elemT
                     measureApp = Pred elemSort mName [Var (toSort baseT) valueVarName]
                    in Just $ substitute (Map.singleton valueVarName measureApp) fml
     contentProperties (mName, MeasureDef {}) = Nothing
-
+    -- TODO: is potential relevant?
     elemProperties (mName, MeasureDef (DataS _ vars) (SetS a) _ _) = case elemIndex a vars of
       Nothing -> Nothing
-      Just i -> let (ScalarT elemT fml) = tArgs !! i -- @mName@ is a set of datatype "elements": add an axiom that every element of the set has that property
+      Just i -> let (ScalarT elemT fml pot) = tArgs !! i -- @mName@ is a set of datatype "elements": add an axiom that every element of the set has that property
                 in if fml == ftrue || fml == ffalse || not (Set.null $ unknownsOf fml)
                     then Nothing
                     else  let
@@ -452,7 +452,7 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
     elemProperties (mName, MeasureDef {}) = Nothing
 
 allMeasurePostconditions _ _ _ = []
-
+{-
 typeSubstituteEnv :: TypeSubstitution -> Environment -> Environment
 typeSubstituteEnv tass = over symbols (Map.map (Map.map (schemaSubstitute tass)))
 
@@ -528,7 +528,7 @@ data Goal = Goal {
 
 unresolvedType env ident = (env ^. unresolvedConstants) Map.! ident
 unresolvedSpec goal = unresolvedType (gEnvironment goal) (gName goal)
-{-
+
 -- Remove measure being typechecked from environment
 filterEnv :: Environment -> Id -> Environment
 filterEnv e m = Lens.set measures (Map.filterWithKey (\k _ -> k == m) (e ^. measures)) e
@@ -579,8 +579,8 @@ predPolymorphic (x:xs) ps name inSorts outSort f = ForallP x (predPolymorphic xs
 genSkeleton :: Id -> [Id] -> [Sort] -> Sort -> Formula -> SchemaSkeleton Formula
 genSkeleton name preds inSorts outSort post = Monotype $ uncurry 0 inSorts 
   where
-    uncurry n (x:xs) = FunctionT ("arg" ++ show n) (ScalarT (toType x) ftrue) (uncurry (n + 1) xs)
-    uncurry _ [] = ScalarT outType post
+    uncurry n (x:xs) = FunctionT ("arg" ++ show n) (ScalarT (toType x) ftrue defPotential) (uncurry (n + 1) xs)
+    uncurry _ [] = ScalarT outType post defPotential
     toType s = case s of
       (DataS name args) -> DatatypeT name (map fromSort args) pforms
       _ -> (baseTypeOf . fromSort) s 
@@ -596,8 +596,6 @@ defaultSetType = DataDecl name typeVars preds cons
     typeVars = ["a"]
     preds = []
     cons = [empty,single,insert]
-    empty = ConstructorSig emptySetCtor (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a") (BoolLit True)] []) (BoolLit True))
-    single = ConstructorSig singletonCtor (FunctionT "x" (ScalarT (TypeVarT Map.empty "a") (BoolLit True)) (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a") (BoolLit True)] []) (BoolLit True)))
-    insert = ConstructorSig insertSetCtor (FunctionT "x" (ScalarT (TypeVarT Map.empty "a") (BoolLit True)) (FunctionT "xs" (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a") (BoolLit True)] []) (BoolLit True)) (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a") (BoolLit True)] []) (BoolLit True))))
-
-    -}
+    empty = ConstructorSig emptySetCtor (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential)
+    single = ConstructorSig singletonCtor (FunctionT "x" (ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential) (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential))
+    insert = ConstructorSig insertSetCtor (FunctionT "x" (ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential) (FunctionT "xs" (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential) (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential)))

@@ -192,7 +192,7 @@ resolveSignatures (DataDecl dtName tParams pParams ctors) = mapM_ resolveConstru
     resolveConstructorSignature (ConstructorSig name _) = do
       sch <- uses environment ((Map.! name) . allSymbols)
       sch' <- resolveSchema sch
-      let nominalType = ScalarT (DatatypeT dtName (map vartAll tParams) (map (nominalPredApp  . fst) pParams)) ftrue
+      let nominalType = ScalarT (DatatypeT dtName (map vartAll tParams) (map (nominalPredApp  . fst) pParams)) ftrue defPotential
       let returnType = lastType (toMonotype sch')
       if nominalType == returnType
         then do
@@ -287,7 +287,7 @@ resolveSchema sch = do
     resolveSchema' (Monotype t) = Monotype <$> resolveType t
 
 resolveType :: RType -> Resolver RType
-resolveType s@(ScalarT (DatatypeT name tArgs pArgs) fml) = do
+resolveType s@(ScalarT (DatatypeT name tArgs pArgs) fml pot) = do
   ds <- use $ environment . datatypes
   case Map.lookup name ds of
     Nothing -> do
@@ -307,7 +307,8 @@ resolveType s@(ScalarT (DatatypeT name tArgs pArgs) fml) = do
       let baseT' = DatatypeT name tArgs' pArgs'
       -- Resolve refinementL
       fml' <- resolveTypeRefinement (toSort baseT') fml
-      return $ ScalarT baseT' fml'
+      pot' <- resolveTypePotential (toSort baseT') pot
+      return $ ScalarT baseT' fml' pot'
   where
     resolvePredArg :: (Sort -> Sort) -> PredSig -> Formula -> Resolver Formula
     resolvePredArg subst (PredSig _ argSorts BoolS) fml = withLocalEnv $ do
@@ -318,7 +319,7 @@ resolveType s@(ScalarT (DatatypeT name tArgs pArgs) fml) = do
         Pred _ p [] -> resolveTypeRefinement AnyS (Pred BoolS p vars)
         _ -> resolveTypeRefinement AnyS fml
 
-resolveType (ScalarT baseT fml) = ScalarT baseT <$> resolveTypeRefinement (toSort baseT) fml
+resolveType (ScalarT baseT fml pot) = ScalarT baseT <$> resolveTypeRefinement (toSort baseT) fml <*> resolveTypePotential (toSort baseT) pot 
 
 resolveType (FunctionT x tArg tRes) =
   if x == valueVarName
@@ -349,22 +350,21 @@ resolveSort s = return ()
 
 {- Formulas -}
 
--- | 'resolveTypeRefinement' @valueSort fml@ : resolve @fml@ as a refinement with _v of sort @valueSort@;
+-- | 'resolveTypeAnnotation' @valueSort fml@ : resolve @fml@ as a refinement with _v of sort @valueSort@;
 -- when @valueSort@ is @AnyS@, _v must not occur
-resolveTypeRefinement :: Sort -> Formula -> Resolver Formula
-resolveTypeRefinement _ (BoolLit True) = return $ BoolLit True -- Special case to allow undefined value sort for function types
-resolveTypeRefinement valueSort fml = do
+resolveTypeAnnotation :: Sort -> Sort -> Formula -> Resolver Formula
+resolveTypeAnnotation _ _ (BoolLit True) = return $ BoolLit True -- Special case to allow undefined value sort for function types
+resolveTypeAnnotation targetSort valueSort fml = do
   fml' <- withLocalEnv $ do -- Resolve fml with _v : valueSort
     case valueSort of
       AnyS -> return ()
       _ -> environment %= addVariable valueVarName (fromSort valueSort)
     resolveFormula fml
-  enforceSame (sortOf fml') BoolS -- Refinements must have Boolean sort
+  enforceSame (sortOf fml') targetSort  -- Check sort of refinements 
   sortAssignment <- solveSortConstraints -- Solve sort constraints and substitute
   let fml'' = sortSubstituteFml sortAssignment fml'
-
   boundTvs <- use $ environment . boundTypeVars
-  let freeTvs = typeVarsOfSort (sortOf fml'') Set.\\ (Set.fromList boundTvs) -- Remaining free type variables
+  let freeTvs = typeVarsOfSort (sortOf fml'') Set.\\ Set.fromList boundTvs -- Remaining free type variables
   let resolvedFml = if Set.null freeTvs then fml'' else sortSubstituteFml (constMap freeTvs IntS) fml''
 
   -- boundPreds <- uses (environment . boundPredicates) (Set.fromList . map predSigName)
@@ -372,6 +372,9 @@ resolveTypeRefinement valueSort fml = do
   -- when (not $ Set.null invalidPreds) $
     -- throwResError $ text "Bound predicate(s)" <+> commaSep (map text $ Set.toList invalidPreds)<+> text "occur negatively in a refinement" <+> pretty resolvedFml
   return resolvedFml
+
+resolveTypeRefinement = resolveTypeAnnotation BoolS 
+resolveTypePotential = resolveTypeAnnotation IntS
 
 -- Partially resolve formula describing measure case (just replace inline predicates)
 resolveMeasureFormula :: Formula -> Resolver Formula
@@ -413,7 +416,7 @@ resolveFormula (Var _ x) = do
   case Map.lookup x (symbolsOfArity 0 env) of
     Just sch ->
       case sch of
-        Monotype (ScalarT baseType _) -> do
+        Monotype (ScalarT baseType _ _) -> do
           let s' = toSort baseType
           return $ Var s' x
         _ -> error $ unwords ["resolveFormula: encountered non-scalar variable", x, "in a formula"]

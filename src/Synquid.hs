@@ -8,7 +8,7 @@ import Synquid.Program
 import Synquid.Error
 import Synquid.Pretty
 import Synquid.Parser
---import Synquid.Resolver (resolveDecls)
+import Synquid.Resolver (resolveDecls)
 import Synquid.SolverMonad
 import Synquid.HornSolver
 import Synquid.TypeConstraintSolver
@@ -277,16 +277,16 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
   declsByFile <- parseFromFiles (libs ++ [file])
   let decls = concat $ map snd declsByFile
   putStrLn $ unlines $ fmap (show . pretty) decls
-  {-
   case resolveDecls decls of
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure
     Right (goals, cquals, tquals) -> when (not $ resolveOnly synquidParams) $ do
-      results <- mapM (synthesizeGoal cquals tquals) (requested goals)
-      when (not (null results) && showStats synquidParams) $ printStats results declsByFile
+      putStrLn $ show $ pretty goals
+      --results <- mapM (synthesizeGoal cquals tquals) (requested goals)
+      --when (not (null results) && showStats synquidParams) $ printStats results declsByFile
       -- Generate output if requested
-      let libsWithDecls = collectLibDecls libs declsByFile
-      codegen (fillinCodegenParams file libsWithDecls codegenParams) (map fst results)
-  -}
+      --let libsWithDecls = collectLibDecls libs declsByFile
+      --codegen (fillinCodegenParams file libsWithDecls codegenParams) (map fst results)
+  
   where
     parseFromFiles [] = return []
     parseFromFiles (file:rest) = do
