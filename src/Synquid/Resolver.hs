@@ -319,21 +319,28 @@ resolveType s@(ScalarT (DatatypeT name tArgs pArgs) fml pot) = do
         Pred _ p [] -> resolveTypeRefinement AnyS (Pred BoolS p vars)
         _ -> resolveTypeRefinement AnyS fml
 
-resolveType (ScalarT baseT fml pot) = ScalarT baseT <$> resolveTypeRefinement (toSort baseT) fml <*> resolveTypePotential (toSort baseT) pot 
+resolveType (ScalarT baseT fml pot) = ScalarT <$> resolveBaseType baseT <*> resolveTypeRefinement (toSort baseT) fml <*> resolveTypePotential (toSort baseT) pot 
 
-resolveType (FunctionT x tArg tRes) =
-  if x == valueVarName
-    then throwResError $ text valueVarName <+> text "is a reserved variable name"
-    else if x == dontCare
-      then error $ unwords ["resolveType: blank in function type", show (FunctionT x tArg tRes)] -- Should never happen
-      else do
-        tArg' <- resolveType tArg
-        tRes' <- withLocalEnv $ do
-          when (not $ isFunctionType tArg') (environment %= addVariable x tArg')
-          resolveType tRes
-        return $ FunctionT x tArg' tRes'
-
+resolveType (FunctionT x tArg tRes)
+  | x == valueVarName =
+    throwResError $ text valueVarName <+> text "is a reserved variable name"
+  | x == dontCare =
+    error $ unwords ["resolveType: blank in function type", show (FunctionT x tArg tRes)] -- Should never happen
+  | otherwise = do 
+      tArg' <- resolveType tArg
+      tRes' <- withLocalEnv $ do
+        unless (isFunctionType tArg') (environment %= addVariable x tArg')
+        resolveType tRes
+      return $ FunctionT x tArg' tRes'
 resolveType AnyT = return AnyT
+
+
+resolveBaseType :: BaseType Formula -> Resolver (BaseType Formula)
+resolveBaseType (TypeVarT subs name mult) = do
+  mult' <- resolveTypePotential (VarS name) mult
+  return $ TypeVarT subs name mult'
+resolveBaseType t = return t
+
 
 -- | Check that sort has no unknown datatypes
 resolveSort :: Sort -> Resolver ()

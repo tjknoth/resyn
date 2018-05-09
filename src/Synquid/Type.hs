@@ -80,6 +80,16 @@ refineSort (SetS s) f = ScalarT dt f defPotential
     tvar = ScalarT (TypeVarT Map.empty setTypeVar defMultiplicity) f defPotential
 refineSort AnyS f = AnyT
 
+typeMultiply :: Formula -> RType -> RType
+typeMultiply fml (ScalarT t ref pot) = ScalarT (baseTypeMultiply fml t) ref (fml |*| pot) 
+typeMultiply fml t = t
+
+baseTypeMultiply :: Formula -> BaseType Formula -> BaseType Formula
+baseTypeMultiply fml (TypeVarT subs name mul) = TypeVarT subs name (fml |*| mul)
+baseTypeMultiply fml (DatatypeT name tArgs pArgs) = DatatypeT name (fmap (typeMultiply fml) tArgs) pArgs
+baseTypeMultiply fml t = t
+
+
 typeIsData :: TypeSkeleton r -> Bool
 typeIsData (ScalarT DatatypeT{} _ _) = True
 typeIsData _ = False
@@ -188,7 +198,6 @@ typeSubstitute subst (ScalarT baseT r p) = addRefinement substituteBase (sortSub
       -- TODO: type multiplication!
       TypeVarT varSubst a m -> case Map.lookup a subst of
         Just t -> substituteInType (not . (`Map.member` subst)) varSubst $ typeSubstitute subst t
-        -- TODO: is this a bug? we've weakened the refinement. It's not because of the sortSubstituteFml part
         Nothing -> ScalarT (TypeVarT varSubst a m) ftrue defPotential
       DatatypeT name tArgs pArgs ->
         let
@@ -245,17 +254,17 @@ type SSchema = SchemaSkeleton ()
 -- | Refined schemas
 type RSchema = SchemaSkeleton Formula
 
-{-
+
 -- | Forget refinements of a type
 shape :: RType -> SType
-shape (ScalarT (DatatypeT name tArgs pArgs) _) = ScalarT (DatatypeT name (map shape tArgs) (replicate (length pArgs) ())) ()
-shape (ScalarT IntT _) = ScalarT IntT ()
-shape (ScalarT BoolT _) = ScalarT BoolT ()
-shape (ScalarT (TypeVarT _ a) _) = ScalarT (TypeVarT Map.empty a) ()
+shape (ScalarT (DatatypeT name tArgs pArgs) _ _) = ScalarT (DatatypeT name (map shape tArgs) (replicate (length pArgs) ())) () defPotential
+shape (ScalarT IntT _ _) = ScalarT IntT () defPotential
+shape (ScalarT BoolT _ _) = ScalarT BoolT () defPotential
+shape (ScalarT (TypeVarT _ a _) _ _) = ScalarT (TypeVarT Map.empty a defMultiplicity) () defPotential
 shape (FunctionT x tArg tFun) = FunctionT x (shape tArg) (shape tFun)
 shape (LetT _ _ t) = shape t
 shape AnyT = AnyT
--}
+
 -- | Conjoin refinement to a type
 addRefinement :: TypeSkeleton Formula -> Formula -> TypeSkeleton Formula
 addRefinement (ScalarT base fml pot) fml' = if isVarRefinemnt fml'

@@ -250,7 +250,6 @@ prettyType t = prettyTypeAt 0 t
 -- | Binding power of a type
 typePower :: RType -> Int
 typePower FunctionT {} = 1
--- TODO: what's binding power?
 typePower (ScalarT (DatatypeT _ tArgs pArgs) r _)
   | ((not (null tArgs) || not (null pArgs)) && (r == ftrue)) = 2
 typePower _ = 3
