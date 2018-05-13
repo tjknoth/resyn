@@ -13,7 +13,7 @@ import Synquid.SolverMonad
 import Synquid.HornSolver
 import Synquid.TypeConstraintSolver
 import Synquid.Explorer
---import Synquid.Synthesizer
+import Synquid.Synthesizer
 import Synquid.HtmlOutput
 import Synquid.Codegen
 import Synquid.Stats
@@ -281,6 +281,9 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure
     Right (goals, cquals, tquals) -> when (not $ resolveOnly synquidParams) $ do
       putStrLn $ show $ pretty goals
+      --mapM (typecheckGoal cquals tquals) (requested goals)
+      mapM (synthesizeGoal cquals tquals) (requested goals)
+      return ()
       --results <- mapM (synthesizeGoal cquals tquals) (requested goals)
       --when (not (null results) && showStats synquidParams) $ printStats results declsByFile
       -- Generate output if requested
@@ -300,7 +303,6 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
       Just filt -> filter (\goal -> gName goal `elem` filt) goals
       _ -> goals
     pdoc = printDoc (outputFormat synquidParams)
-    {-
     synthesizeGoal cquals tquals goal = do
       when ((gSynthesize goal) && (showSpec synquidParams)) $ pdoc (prettySpec goal)
       -- print empty
@@ -314,6 +316,16 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
           when (gSynthesize goal) $ pdoc (prettySolution goal prog)
           pdoc empty
           return ((goal, prog), stats)
+    typecheckGoal cquals tquals goal = do 
+      when ((gSynthesize goal) && (showSpec synquidParams)) $ pdoc (prettySpec goal)
+      (mProg, stats) <- typeCheck explorerParams solverParams goal cquals tquals 
+      case mProg of 
+        Left typeErr -> pdoc (pretty typeErr) >> pdoc empty >> exitFailure
+        Right prog -> do 
+          when (gSynthesize goal) $ pdoc (prettySolution goal prog)
+          pdoc empty
+          return ((goal, prog), stats)
+    {-
     printStats results declsByFile = do
       let env = gEnvironment (fst $ fst $ head results)
       let measureCount = Map.size $ _measures $ env

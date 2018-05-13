@@ -218,7 +218,8 @@ prettyBase :: Pretty r => (TypeSkeleton r -> Doc) -> BaseType r -> Doc
 prettyBase prettyType base = case base of
   IntT -> text "Int"
   BoolT -> text "Bool"
-  TypeVarT s name m -> mult <> subs <> text name
+  TypeVarT s name m -> pretty m <> operator "**" <> subs <> text name
+  --TypeVarT s name m -> mult <> subs <> text name
     where 
       subs = if Map.null s 
                then empty 
@@ -257,9 +258,9 @@ typePower _ = 3
 prettyTypeAt :: Int -> RType -> Doc
 prettyTypeAt n t = condHlParens (n' <= n) (
   case t of
-    ScalarT base (BoolLit True) (IntLit 0) -> pretty base
+    --ScalarT base (BoolLit True) (IntLit 0) -> pretty base
     ScalarT base (BoolLit True) pot        -> hlBraces (pretty base <> operator "|" <> operator "|" <> pretty pot)
-    ScalarT base fml (IntLit 0)-> hlBraces (pretty base <> operator "|" <> pretty fml)
+    --ScalarT base fml (IntLit 0)-> hlBraces (pretty base <> operator "|" <> pretty fml)
     ScalarT base fml pot -> hlBraces (pretty base <> operator "|" <> pretty fml <> operator "|" <> pretty pot)
     AnyT -> text "_"
     FunctionT x t1 t2 -> text x <> operator ":" <> prettyTypeAt n' t1 <+> operator "->" <+> prettyTypeAt 0 t2

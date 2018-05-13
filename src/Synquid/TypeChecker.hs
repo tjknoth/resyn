@@ -25,6 +25,7 @@ import Control.Lens
 import qualified Text.PrettyPrint.ANSI.Leijen as L
 import Debug.Trace
 
+
 -- | 'reconstruct' @eParams tParams goal@ : reconstruct missing types and terms in the body of @goal@ so that it represents a valid type judgment;
 -- return a type error if that is impossible
 reconstruct :: MonadHorn s => ExplorerParams -> TypingParams -> Goal -> s (Either ErrorMessage RProgram)
@@ -36,7 +37,6 @@ reconstruct eParams tParams goal = do
       pMain <- reconstructTopLevel goal { gDepth = _auxDepth eParams }     -- Reconstruct the program
       p <- flip insertAuxSolutions pMain <$> use solvedAuxGoals            -- Insert solutions for auxiliary goals stored in @solvedAuxGoals@
       runInSolver $ finalizeProgram p                                      -- Substitute all type/predicates variables and unknowns
-
 
 
 reconstructTopLevel :: MonadHorn s => Goal -> Explorer s RProgram
@@ -71,7 +71,7 @@ reconstructTopLevel (Goal funName env (Monotype typ@(FunctionT _ _ _)) impl dept
     -- | 'recursiveTypeTuple' @t fml@: type of the recursive call to a function of type @t@ when a lexicographic tuple of all recursible arguments decreases;
     -- @fml@ denotes the disjunction @x1' < x1 || ... || xk' < xk@ of strict termination conditions on all previously seen recursible arguments to be added to the type of the last recursible argument;
     -- the function returns a tuple of the weakend type @t@ and a flag that indicates if the last recursible argument has already been encountered and modified
-    recursiveTypeTuple (FunctionT x tArg tRes) fml = do
+    recursiveTypeTuple (FunctionT x tArg tRes) fml = 
       case terminationRefinement x tArg of
         Nothing -> do
           (tRes', seenLast) <- recursiveTypeTuple tRes fml
@@ -89,7 +89,7 @@ reconstructTopLevel (Goal funName env (Monotype typ@(FunctionT _ _ _)) impl dept
     recursiveTypeTuple t _ = return (t, False)
 
     -- | 'recursiveTypeFirst' @t fml@: type of the recursive call to a function of type @t@ when only the first recursible argument decreases
-    recursiveTypeFirst (FunctionT x tArg tRes) = do
+    recursiveTypeFirst (FunctionT x tArg tRes) = 
       case terminationRefinement x tArg of
         Nothing -> FunctionT x tArg <$> recursiveTypeFirst tRes
         Just (argLt, _) -> do
@@ -98,9 +98,9 @@ reconstructTopLevel (Goal funName env (Monotype typ@(FunctionT _ _ _)) impl dept
     recursiveTypeFirst t = return t
 
     -- | If argument is recursible, return its strict and non-strict termination refinements, otherwise @Nothing@
-    terminationRefinement argName (ScalarT IntT fml) = Just ( valInt |>=| IntLit 0  |&|  valInt |<| intVar argName,
+    terminationRefinement argName (ScalarT IntT fml _) = Just ( valInt |>=| IntLit 0  |&|  valInt |<| intVar argName,
                                                               valInt |>=| IntLit 0  |&|  valInt |<=| intVar argName)
-    terminationRefinement argName (ScalarT dt@(DatatypeT name _ _) fml) = case env ^. datatypes . to (Map.! name) . wfMetric of
+    terminationRefinement argName (ScalarT dt@(DatatypeT name _ _) fml _) = case env ^. datatypes . to (Map.! name) . wfMetric of
       Nothing -> Nothing
       Just mName -> let
                       metric x = Pred IntS mName [x]
@@ -120,7 +120,7 @@ reconstructI env t (Program p t') = do
   reconstructI' env t'' p
 
 reconstructI' env t PErr = generateError env
-reconstructI' env t PHole = generateError env `mplus` generateI env t
+--reconstructI' env t PHole = generateError env `mplus` generateI env t
 reconstructI' env t (PLet x iDef@(Program (PFun _ _) _) iBody) = do -- lambda-let: remember and type-check on use
   lambdaLets %= Map.insert x (env, iDef)
   let ctx = \p -> Program (PLet x uHole p) t
@@ -129,23 +129,24 @@ reconstructI' env t (PLet x iDef@(Program (PFun _ _) _) iBody) = do -- lambda-le
 reconstructI' env t@(FunctionT _ tArg tRes) impl = case impl of
   PFun y impl -> do
     let ctx = \p -> Program (PFun y p) t
-    pBody <- inContext ctx $ reconstructI (unfoldAllVariables $ addVariable y tArg $ env) tRes impl
+    pBody <- inContext ctx $ reconstructI (unfoldAllVariables $ addVariable y tArg env) tRes impl
     return $ ctx pBody
   PSymbol f -> do
     fun <- etaExpand t f
     reconstructI' env t $ content fun
   _ -> throwErrorWithDescription $ text "Cannot assign function type" </> squotes (pretty t) </>
                     text "to non-lambda term" </> squotes (pretty $ untyped impl)
-reconstructI' env t@(ScalarT _ _) impl = case impl of
+reconstructI' env t@ScalarT{} impl = case impl of
   PFun _ _ -> throwErrorWithDescription $ text "Cannot assign non-function type" </> squotes (pretty t) </>
                            text "to lambda term" </> squotes (pretty $ untyped impl)
-
+  {-
   PLet x iDef iBody -> do -- E-term let (since lambda-let was considered before)
     pDef <- inContext (\p -> Program (PLet x p (Program PHole t)) t) $ reconstructETopLevel env AnyT iDef
     let (env', tDef) = embedContext env (typeOf pDef)
     pBody <- inContext (\p -> Program (PLet x pDef p) t) $ reconstructI (addVariable x tDef env') t iBody
     return $ Program (PLet x pDef pBody) t
-
+  -}   
+  {- 
   PIf (Program PHole AnyT) iThen iElse -> do
     cUnknown <- Unknown Map.empty <$> freshId "C"
     addConstraint $ WellFormedCond env cUnknown
@@ -154,10 +155,10 @@ reconstructI' env t@(ScalarT _ _) impl = case impl of
     pCond <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateCondition env cond
     pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (fnot cond) env) t iElse
     return $ Program (PIf pCond pThen pElse) t
-
+  -}
   PIf iCond iThen iElse -> do
-    pCond <- inContext (\p -> Program (PIf p (Program PHole t) (Program PHole t)) t) $ reconstructETopLevel env (ScalarT BoolT ftrue) iCond
-    let (env', ScalarT BoolT cond) = embedContext env $ typeOf pCond
+    pCond <- inContext (\p -> Program (PIf p (Program PHole t) (Program PHole t)) t) $ reconstructETopLevel env (ScalarT BoolT ftrue defPotential) iCond
+    let (env', ScalarT BoolT cond pot) = embedContext env $ typeOf pCond
     pThen <- inContext (\p -> Program (PIf pCond p (Program PHole t)) t) $ reconstructI (addAssumption (substitute (Map.singleton valueVarName ftrue) cond) $ env') t iThen
     pElse <- inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (substitute (Map.singleton valueVarName ffalse) cond) $ env') t iElse
     return $ Program (PIf pCond pThen pElse) t
@@ -185,7 +186,7 @@ reconstructI' env t@(ScalarT _ _) impl = case impl of
       Just consSch -> do
                         consT <- instantiate env consSch True args -- Set argument names in constructor type to user-provided binders
                         case lastType consT of
-                          (ScalarT (DatatypeT dtName _ _) _) -> do
+                          (ScalarT (DatatypeT dtName _ _) _ _) -> do
                             case mName of
                               Nothing -> return ()
                               Just name -> if dtName == name
@@ -224,10 +225,11 @@ reconstructE env t (Program p AnyT) = reconstructE' env t p
 reconstructE env t (Program p t') = do
   t'' <- checkAnnotation env t t' p
   reconstructE' env t'' p
-
+{-
 reconstructE' env typ PHole = do
   d <- asks . view $ _1 . eGuessDepth
   generateEUpTo env typ d
+-}
 reconstructE' env typ (PSymbol name) =
   case lookupSymbol name (arity typ) (hasSet typ) env of
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
@@ -269,7 +271,7 @@ reconstructE' env typ (PApp iFun iArg) = do
         return iArg
       _ -> enqueueGoal env tArg iArg d -- HO argument is an abstraction: enqueue a fresh goal
 
-reconstructE' env typ impl = do
+reconstructE' env typ impl = 
   throwErrorWithDescription $ text "Expected application term of type" </> squotes (pretty typ) </>
                                           text "and got" </> squotes (pretty $ untyped impl)
 
@@ -311,7 +313,7 @@ insertAuxSolutions pAuxs (Program body t) = flip Program t $
                       Just pAux -> PLet y pAux (insertAuxSolutions (Map.delete y pAuxs) p)
     PSymbol y -> case Map.lookup y pAuxs of
                     Nothing -> body
-                    Just pAux -> content $ pAux
+                    Just pAux -> content pAux
     PApp p1 p2 -> PApp (ins p1) (ins p2)
     PFun y p -> PFun y (ins p)
     PIf c p1 p2 -> PIf (ins c) (ins p1) (ins p2)

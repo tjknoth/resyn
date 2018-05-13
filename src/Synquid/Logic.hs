@@ -182,6 +182,9 @@ infixl 6 |&|, |||
 infixr 5 |=>|
 infix 4 |<=>|
 
+fmax f g = Ite (f |>=| g) f g
+fmin f g = Ite (f |<=| g) f g
+
 -- | 'varsOf' @fml@ : set of all input variables of @fml@
 varsOf :: Formula -> Set Formula
 varsOf (SetLit _ elems) = Set.unions $ map varsOf elems

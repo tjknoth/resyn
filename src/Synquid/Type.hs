@@ -28,6 +28,10 @@ data TypeSkeleton r =
   AnyT
   deriving (Show, Eq, Ord)
 
+-- Ignore multiplicity when comparing baseTypes
+equalShape :: BaseType Formula -> BaseType Formula -> Bool
+equalShape (TypeVarT s name m) (TypeVarT s' name' m') = (TypeVarT s name defMultiplicity :: BaseType Formula) == (TypeVarT s' name' defMultiplicity :: BaseType Formula)
+equalShape t t' = t == t'
 
 defPotential = IntLit 0
 defMultiplicity = IntLit 1
@@ -132,7 +136,7 @@ allArgs (LetT _ _ t) = allArgs t
 
 -- | Free variables of a type
 varsOfType :: RType -> Set Id
-varsOfType (ScalarT baseT fml pot) = varsOfBase baseT `Set.union` Set.map varName (varsOf fml) `Set.union` Set.map varName (varsOf pot)
+varsOfType (ScalarT baseT fml pot) = varsOfBase baseT `Set.union` Set.map varName (varsOf fml) --`Set.union` Set.map varName (varsOf pot)
   where
     varsOfBase (DatatypeT name tArgs pArgs) = Set.unions (map varsOfType tArgs) `Set.union` Set.map varName (Set.unions (map varsOf pArgs))
     varsOfBase _ = Set.empty
@@ -142,7 +146,7 @@ varsOfType AnyT = Set.empty
 
 -- | Free variables of a type
 predsOfType :: RType -> Set Id
-predsOfType (ScalarT baseT fml pot) = predsOfBase baseT `Set.union` predsOf fml `Set.union` predsOf pot
+predsOfType (ScalarT baseT fml pot) = predsOfBase baseT `Set.union` predsOf fml --`Set.union` predsOf pot
   where
     predsOfBase (DatatypeT name tArgs pArgs) = Set.unions (map predsOfType tArgs) `Set.union` Set.unions (map predsOf pArgs)
     predsOfBase _ = Set.empty
@@ -189,10 +193,10 @@ vart n f = ScalarT (TypeVarT Map.empty n defMultiplicity) f defPotential
 vart_ n = vart n () 
 vartAll n = vart n ftrue 
 
-set n = ScalarT (DatatypeT setTypeName [tvar] []) defPotential
+set n f = ScalarT (DatatypeT setTypeName [tvar] []) f defPotential
   where
     tvar = ScalarT (TypeVarT Map.empty n defMultiplicity) ftrue defPotential
-setAll n = (set n) ftrue
+setAll n = set n ftrue
 
 -- | Mapping from type variables to types
 type TypeSubstitution = Map Id RType
@@ -207,7 +211,7 @@ typeSubstitute subst (ScalarT baseT r p) = addRefinement substituteBase (sortSub
     substituteBase = case baseT of
       -- TODO: type multiplication!
       TypeVarT varSubst a m -> case Map.lookup a subst of
-        Just t -> substituteInType (not . (`Map.member` subst)) varSubst $ typeSubstitute subst (typeMultiply m t)
+        Just t -> substituteInType (not . (`Map.member` subst)) varSubst $ typeSubstitute subst t --(typeMultiply m t)
         Nothing -> ScalarT (TypeVarT varSubst a m) ftrue defPotential
       DatatypeT name tArgs pArgs ->
         let
@@ -232,7 +236,7 @@ schemaSubstitute tass (ForallP sig sch) = ForallP sig $ schemaSubstitute tass sc
 typeSubstitutePred :: Substitution -> RType -> RType
 typeSubstitutePred pSubst t = let tsp = typeSubstitutePred pSubst
   in case t of
-    ScalarT (DatatypeT name tArgs pArgs) fml pot -> ScalarT (DatatypeT name (map tsp tArgs) (map (substitutePredicate pSubst) pArgs)) (substitutePredicate pSubst fml) (substitutePredicate pSubst fml)
+    ScalarT (DatatypeT name tArgs pArgs) fml pot -> ScalarT (DatatypeT name (map tsp tArgs) (map (substitutePredicate pSubst) pArgs)) (substitutePredicate pSubst fml) (substitutePredicate pSubst pot)
     ScalarT baseT fml pot -> ScalarT baseT (substitutePredicate pSubst fml) (substitutePredicate pSubst pot)
     FunctionT x tArg tRes -> FunctionT x (tsp tArg) (tsp tRes)
     LetT x tDef tBody -> FunctionT x (tsp tDef) (tsp tBody)
@@ -316,30 +320,34 @@ substituteInType isBound subst (LetT x tDef tBody) =
     then error $ unwords ["Attempt to substitute variable", x, "bound in a contextual type"]
     else LetT x (substituteInType isBound subst tDef) (substituteInType isBound subst tBody)
 substituteInType isBound subst AnyT = AnyT
-{-
+
 -- | 'renameVar' @old new t typ@: rename all occurrences of @old@ in @typ@ into @new@ of type @t@
 renameVar :: (Id -> Bool) -> Id -> Id -> RType -> RType -> RType
-renameVar isBound old new (ScalarT b _)     t = substituteInType isBound (Map.singleton old (Var (toSort b) new)) t
+renameVar isBound old new (ScalarT b _ _)     t = substituteInType isBound (Map.singleton old (Var (toSort b) new)) t
 renameVar isBound old new (LetT _ _ tBody)  t = renameVar isBound old new tBody t
 renameVar _ _ _ _                           t = t -- function arguments cannot occur in types (and AnyT is assumed to be function)
 
--- | Intersection of two types (assuming the types were already checked for consistency)
+
+-- | Intersection of two types (assuming the types were already checked for consistency) 
 intersection _ t AnyT = t
 intersection _ AnyT t = t
-intersection isBound (ScalarT baseT fml) (ScalarT baseT' fml') = case baseT of
+-- TODO: should this be max or min?
+intersection isBound (ScalarT baseT fml pot) (ScalarT baseT' fml' pot') = case baseT of
   DatatypeT name tArgs pArgs -> let DatatypeT _ tArgs' pArgs' = baseT' in
-                                  ScalarT (DatatypeT name (zipWith (intersection isBound) tArgs tArgs') (zipWith andClean pArgs pArgs')) (fml `andClean` fml')
-  _ -> ScalarT baseT (fml `andClean` fml')
+                                  ScalarT (DatatypeT name (zipWith (intersection isBound) tArgs tArgs') (zipWith andClean pArgs pArgs')) (fml `andClean` fml') (fmax pot pot') 
+  _ -> ScalarT baseT (fml `andClean` fml') (fmax pot pot')
 intersection isBound (FunctionT x tArg tRes) (FunctionT y tArg' tRes') = FunctionT x tArg (intersection isBound tRes (renameVar isBound y x tArg tRes'))
 
+
 -- | Instantiate unknowns in a type
+-- TODO: eventually will need to instantiate potential variables as well
 typeApplySolution :: Solution -> RType -> RType
-typeApplySolution sol (ScalarT (DatatypeT name tArgs pArgs) fml) = ScalarT (DatatypeT name (map (typeApplySolution sol) tArgs) (map (applySolution sol) pArgs)) (applySolution sol fml)
-typeApplySolution sol (ScalarT base fml) = ScalarT base (applySolution sol fml)
+typeApplySolution sol (ScalarT (DatatypeT name tArgs pArgs) fml pot) = ScalarT (DatatypeT name (map (typeApplySolution sol) tArgs) (map (applySolution sol) pArgs)) (applySolution sol fml) pot
+typeApplySolution sol (ScalarT base fml pot) = ScalarT base (applySolution sol fml) pot
 typeApplySolution sol (FunctionT x tArg tRes) = FunctionT x (typeApplySolution sol tArg) (typeApplySolution sol tRes)
 typeApplySolution sol (LetT x tDef tBody) = LetT x (typeApplySolution sol tDef) (typeApplySolution sol tBody)
 typeApplySolution _ AnyT = AnyT
--}
+
 
 -- Set strings: used for "fake" set type for typechecking measures
 emptySetCtor = "Emptyset"

@@ -65,7 +65,7 @@ untyped c = Program c AnyT
 uHole = untyped PHole
 isHole (Program PHole _) = True
 isHole _ = False
-{-
+
 eraseTypes :: RProgram -> UProgram
 eraseTypes = fmap (const AnyT)
 
@@ -101,10 +101,11 @@ programSubstituteSymbol name subterm (Program p t) = Program (programSubstituteS
     programSubstituteSymbol' (PFix args pBody) = PFix args (pss pBody)
     programSubstituteSymbol' (PLet x pDef pBody) = PLet x (pss pDef) (pss pBody)
 
+
 -- | Convert an executable formula into a program
 fmlToProgram :: Formula -> RProgram
-fmlToProgram (BoolLit b) = Program (PSymbol $ show b) (ScalarT BoolT $ valBool |=| BoolLit b)
-fmlToProgram (IntLit i) = Program (PSymbol $ show i) (ScalarT IntT $ valInt |=| IntLit i)
+fmlToProgram (BoolLit b) = Program (PSymbol $ show b) (ScalarT BoolT (valBool |=| BoolLit b) defPotential)
+fmlToProgram (IntLit i) = Program (PSymbol $ show i) (ScalarT IntT (valInt |=| IntLit i) defPotential)
 fmlToProgram (Var s x) = Program (PSymbol x) (addRefinement (fromSort s) (varRefinement x s))
 fmlToProgram fml@(Unary op e) = let
     s = sortOf fml
@@ -132,7 +133,7 @@ fmlToProgram fml@(Pred s x (f:fs)) = Program (PApp fn (curriedApp (fmlToProgram 
     curriedApp :: RProgram -> [Formula] -> RProgram
     curriedApp p [] = p
     curriedApp p (f:fs) = curriedApp (Program (PApp p (fmlToProgram f)) AnyT {-fromSort s -}) fs
--}
+
 
 -- | Convert an executable formula into an untyped program
 fmlToUProgram :: Formula -> RProgram
@@ -175,16 +176,16 @@ fmlToUProgram (SetLit _ (f:fs)) = Program (PApp ins (curriedApp (fmlToUProgram f
     curriedApp :: RProgram -> [Formula] -> RProgram
     curriedApp p [] = Program (PApp p emp) AnyT
     curriedApp p (f:fs) = curriedApp (Program (PApp p (fmlToUProgram f)) AnyT) fs
-{-
+
 -- | 'renameAsImpl' @p t@: change argument names in function type @t@ to be the same as in the abstraction @p@
 renameAsImpl :: (Id -> Bool) -> UProgram -> RType -> RType
 renameAsImpl isBound = renameAsImpl' Map.empty
   where
     renameAsImpl' subst (Program (PFun y pRes) _) (FunctionT x tArg tRes) = case tArg of
-      ScalarT baseT fml -> FunctionT y (substituteInType isBound subst tArg) (renameAsImpl' (Map.insert x (Var (toSort baseT) y) subst) pRes tRes)
+      ScalarT baseT _ _ -> FunctionT y (substituteInType isBound subst tArg) (renameAsImpl' (Map.insert x (Var (toSort baseT) y) subst) pRes tRes)
       _ -> FunctionT y (substituteInType isBound subst tArg) (renameAsImpl' subst pRes tRes)
     renameAsImpl' subst  _ t = substituteInType isBound subst t
--}
+
 
 {- Top-level definitions -}
 
@@ -452,31 +453,32 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
     elemProperties (mName, MeasureDef {}) = Nothing
 
 allMeasurePostconditions _ _ _ = []
-{-
+
 typeSubstituteEnv :: TypeSubstitution -> Environment -> Environment
 typeSubstituteEnv tass = over symbols (Map.map (Map.map (schemaSubstitute tass)))
 
 -- | Insert weakest refinement
 refineTop :: Environment -> SType -> RType
-refineTop env (ScalarT (DatatypeT name tArgs pArgs) _) =
+refineTop env (ScalarT (DatatypeT name tArgs pArgs) _ _) =
   let variances = env ^. (datatypes . to (Map.! name) . predVariances) in
-  ScalarT (DatatypeT name (map (refineTop env) tArgs) (map (BoolLit . not) variances)) ftrue
-refineTop _ (ScalarT IntT _) = ScalarT IntT ftrue
-refineTop _ (ScalarT BoolT _) = ScalarT BoolT ftrue
-refineTop _ (ScalarT (TypeVarT vSubst a) _) = ScalarT (TypeVarT vSubst a) ftrue
+  ScalarT (DatatypeT name (map (refineTop env) tArgs) (map (BoolLit . not) variances)) ftrue defPotential
+refineTop _ (ScalarT IntT _ _) = ScalarT IntT ftrue defPotential
+refineTop _ (ScalarT BoolT _ _) = ScalarT BoolT ftrue defPotential
+refineTop _ (ScalarT (TypeVarT vSubst a _) _ _) = ScalarT (TypeVarT vSubst a defMultiplicity) ftrue defPotential
 refineTop env (FunctionT x tArg tFun) = FunctionT x (refineBot env tArg) (refineTop env tFun)
 
 -- | Insert strongest refinement
+-- TODO: maybe shouldn't use default potentials and multiplicities?
 refineBot :: Environment -> SType -> RType
-refineBot env (ScalarT (DatatypeT name tArgs pArgs) _) =
+refineBot env (ScalarT (DatatypeT name tArgs pArgs) _ _) =
   let variances = env ^. (datatypes . to (Map.! name) . predVariances) in
-  ScalarT (DatatypeT name (map (refineBot env) tArgs) (map BoolLit variances)) ffalse
-refineBot _ (ScalarT IntT _) = ScalarT IntT ffalse
-refineBot _ (ScalarT BoolT _) = ScalarT BoolT ffalse
-refineBot _ (ScalarT (TypeVarT vSubst a) _) = ScalarT (TypeVarT vSubst a) ffalse
+  ScalarT (DatatypeT name (map (refineBot env) tArgs) (map BoolLit variances)) ffalse defPotential
+refineBot _ (ScalarT IntT _ _) = ScalarT IntT ffalse defPotential
+refineBot _ (ScalarT BoolT _ _) = ScalarT BoolT ffalse defPotential
+refineBot _ (ScalarT (TypeVarT vSubst a _) _ _) = ScalarT (TypeVarT vSubst a defMultiplicity) ffalse defPotential
 refineBot env (FunctionT x tArg tFun) = FunctionT x (refineTop env tArg) (refineBot env tFun)
 
--}
+
 
 {- Input language declarations -}
 

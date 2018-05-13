@@ -8,8 +8,8 @@ import Synquid.Type hiding (set)
 import Synquid.Program
 import Synquid.Error
 import Synquid.SolverMonad
-import Synquid.TypeConstraintSolver --hiding (freshId, freshVar)
---import qualified Synquid.TypeConstraintSolver as TCSolver (freshId, freshVar)
+import Synquid.TypeConstraintSolver hiding (freshId, freshVar)
+import qualified Synquid.TypeConstraintSolver as TCSolver (freshId, freshVar)
 import Synquid.Util
 import Synquid.Pretty
 import Synquid.Tokens
@@ -78,7 +78,7 @@ data ExplorerState = ExplorerState {
 
 makeLenses ''ExplorerState
 
-{-
+
 -- | Key in the memoization store
 data MemoKey = MemoKey {
   keyTypeArity :: Int,
@@ -135,7 +135,7 @@ generateI env t@(FunctionT x tArg tRes) = do
   let ctx = \p -> Program (PFun x p) t
   pBody <- inContext ctx $ generateI (unfoldAllVariables $ addVariable x tArg $ env) tRes
   return $ ctx pBody
-generateI env t@(ScalarT _ _) = do
+generateI env t@(ScalarT _ _ _) = do
   maEnabled <- asks . view $ _1 . abduceScrutinees -- Is match abduction enabled?
   d <- asks . view $ _1 . matchDepth
   maPossible <- runInSolver $ hasPotentialScrutinees env -- Are there any potential scrutinees in scope?
@@ -179,9 +179,10 @@ generateCondition env fml = do
   return $ fmap (flip addRefinement $ valBool |=| fml) (foldl1 conjoin conjuncts)
   where
     allConjuncts = Set.toList $ conjunctsOf fml
+    --TODO: potential!
     genConjunct c = if isExecutable c
                               then return $ fmlToProgram c
-                              else cut (generateE env (ScalarT BoolT $ valBool |=| c))
+                              else cut (generateE env (ScalarT BoolT (valBool |=| c) defPotential))
     andSymb = Program (PSymbol $ binOpTokens Map.! And) (toMonotype $ binOpType And)
     conjoin p1 p2 = Program (PApp (Program (PApp andSymb p1) boolAll) p2) boolAll
 
@@ -202,7 +203,7 @@ generateMatch env t = do
       let pScrutinee = Program p tScr'
 
       case tScr of
-        (ScalarT (DatatypeT scrDT _ _) _) -> do -- Type of the scrutinee is a datatype
+        (ScalarT (DatatypeT scrDT _ _) _ _) -> do -- Type of the scrutinee is a datatype
           let ctors = ((env ^. datatypes) Map.! scrDT) ^. constructors
 
           let scrutineeSymbols = symbolList pScrutinee
@@ -274,7 +275,7 @@ generateCase env scrVar pScrutinee t consName = do
 
 -- | 'caseSymbols' @scrutinee binders consT@: a pair that contains (1) a list of bindings of @binders@ to argument types of @consT@
 -- and (2) a formula that is the return type of @consT@ applied to @scrutinee@
-caseSymbols env x [] (ScalarT _ fml) = let subst = substitute (Map.singleton valueVarName x) in
+caseSymbols env x [] (ScalarT _ fml _) = let subst = substitute (Map.singleton valueVarName x) in
   return ([], subst fml)
 caseSymbols env x (name : names) (FunctionT y tArg tRes) = do
   (syms, ass) <- caseSymbols env x names (renameVar (isBound env) y name tArg tRes)
@@ -313,7 +314,7 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
     generateMatchesFor env [] pBaseCase t = return pBaseCase
     generateMatchesFor env (matchCond : rest) pBaseCase t = do
       let (Binary Eq matchVar@(Var _ x) (Cons _ c _)) = matchCond
-      scrT@(ScalarT (DatatypeT scrDT _ _) _) <- runInSolver $ currentAssignment (toMonotype $ symbolsOfArity 0 env Map.! x)
+      scrT@(ScalarT (DatatypeT scrDT _ _) _ _) <- runInSolver $ currentAssignment (toMonotype $ symbolsOfArity 0 env Map.! x)
       let pScrutinee = Program (PSymbol x) scrT
       let ctors = ((env ^. datatypes) Map.! scrDT) ^. constructors
       let env' = addScrutinee pScrutinee env
@@ -651,10 +652,10 @@ instantiate env sch top argNames = do
 -- if @x@ is a scalar variable, use "_v == x" as refinement;
 -- if @sch@ is a polytype, return a fresh instance
 symbolType :: MonadHorn s => Environment -> Id -> RSchema -> Explorer s RType
-symbolType env x (Monotype t@(ScalarT b _))
+symbolType env x (Monotype t@(ScalarT b _ _))
     | isLiteral x = return t -- x is a literal of a primitive type, it's type is precise
     | isJust (lookupConstructor x env) = return t -- x is a constructor, it's type is precise
-    | otherwise = return $ ScalarT b (varRefinement x (toSort b)) -- x is a scalar variable or monomorphic scalar constant, use _v = x
+    | otherwise = return $ ScalarT b (varRefinement x (toSort b)) defPotential -- x is a scalar variable or monomorphic scalar constant, use _v = x
 symbolType env _ sch = freshInstance sch
   where
     freshInstance sch = if arity (toMonotype sch) == 0
@@ -689,7 +690,7 @@ generateAuxGoals = do
     etaContract' [] f@(PSymbol _)                                            = Just f
     etaContract' binders p                                                   = Nothing
 
--}
+
 
 writeLog level msg = do
   maxLevel <- asks . view $ _1 . explorerLogLevel

@@ -5,14 +5,16 @@ data List a where
 termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs  
-  
-reverse :: xs: List {1**a| |1} -> List a
-reverse = \xs. 
-  reverse' xs Nil
 
 reverse' :: xs: List {1**a| |1} -> acc: List a -> List a
 reverse' = \xs. \acc.
   match xs with
     Nil -> acc
     Cons y ys -> reverse' ys (Cons y acc)
+   
+reverse :: xs: List {1**a| |1} -> List a
+reverse = \xs. 
+  reverse' xs Nil
+
+
 
