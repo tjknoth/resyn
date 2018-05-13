@@ -281,8 +281,8 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure
     Right (goals, cquals, tquals) -> when (not $ resolveOnly synquidParams) $ do
       putStrLn $ show $ pretty goals
-      --mapM (typecheckGoal cquals tquals) (requested goals)
-      mapM (synthesizeGoal cquals tquals) (requested goals)
+      mapM (typecheckGoal cquals tquals) (requested goals)
+      --mapM (synthesizeGoal cquals tquals) (requested goals)
       return ()
       --results <- mapM (synthesizeGoal cquals tquals) (requested goals)
       --when (not (null results) && showStats synquidParams) $ printStats results declsByFile
