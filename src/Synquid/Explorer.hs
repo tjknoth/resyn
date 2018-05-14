@@ -182,7 +182,7 @@ generateCondition env fml = do
     --TODO: potential!
     genConjunct c = if isExecutable c
                               then return $ fmlToProgram c
-                              else cut (generateE env (ScalarT BoolT (valBool |=| c) defPotential))
+                              else cut $ generateE env (ScalarT BoolT (valBool |=| c) defPotential)
     andSymb = Program (PSymbol $ binOpTokens Map.! And) (toMonotype $ binOpType And)
     conjoin p1 p2 = Program (PApp (Program (PApp andSymb p1) boolAll) p2) boolAll
 
@@ -196,7 +196,7 @@ generateMatch env t = do
   if d == 0
     then mzero
     else do
-      (Program p tScr) <- local (over _1 (\params -> set eGuessDepth (view scrutineeDepth params) params))
+      Program p tScr <- local (over _1 (\params -> set eGuessDepth (view scrutineeDepth params) params))
                       $ inContext (\p -> Program (PMatch p []) t)
                       $ generateE env anyDatatype -- Generate a scrutinee of an arbitrary type
       let (env', tScr') = embedContext env tScr

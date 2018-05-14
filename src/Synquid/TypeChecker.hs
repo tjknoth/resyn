@@ -157,7 +157,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
     return $ Program (PIf pCond pThen pElse) t
   -}
   PIf iCond iThen iElse -> do
-    pCond <- inContext (\p -> Program (PIf p (Program PHole t) (Program PHole t)) t) $ reconstructETopLevel env (ScalarT BoolT ftrue defPotential) iCond
+    (pCond, _) <- inContext (\p -> Program (PIf p (Program PHole t) (Program PHole t)) t) $ reconstructETopLevel env (ScalarT BoolT ftrue defPotential) iCond
     let (env', ScalarT BoolT cond pot) = embedContext env $ typeOf pCond
     pThen <- inContext (\p -> Program (PIf pCond p (Program PHole t)) t) $ reconstructI (addAssumption (substitute (Map.singleton valueVarName ftrue) cond) $ env') t iThen
     pElse <- inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (substitute (Map.singleton valueVarName ffalse) cond) $ env') t iElse
@@ -166,7 +166,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
   PMatch iScr iCases -> do
     (consNames, consTypes) <- unzip <$> checkCases Nothing iCases
     let scrT = refineTop env $ shape $ lastType $ head consTypes
-    pScrutinee <- inContext (\p -> Program (PMatch p []) t) $ reconstructETopLevel env scrT iScr
+    (pScrutinee, _) <- inContext (\p -> Program (PMatch p []) t) $ reconstructETopLevel env scrT iScr
     let (env', tScr) = embedContext env (typeOf pScrutinee)
     let scrutineeSymbols = symbolList pScrutinee
     let isGoodScrutinee = (not $ head scrutineeSymbols `elem` consNames) &&                 -- Is not a value
@@ -177,7 +177,8 @@ reconstructI' env t@ScalarT{} impl = case impl of
     pCases <- zipWithM (reconstructCase env'' x pScrutinee t) iCases consTypes
     return $ Program (PMatch pScrutinee pCases) t
 
-  _ -> reconstructETopLevel env t (untyped impl)
+  _ -> do (p, _) <- reconstructETopLevel env t (untyped impl)
+          return p
 
   where
     -- Check that all constructors are known and belong to the same datatype
@@ -213,14 +214,14 @@ reconstructCase env scrVar pScrutinee t (Case consName args iBody) consT = cut $
 
 -- | 'reconstructE' @env t impl@ :: reconstruct unknown types and terms in a judgment @env@ |- @impl@ :: @t@ where @impl@ is an elimination term
 -- (bottom-up phase of bidirectional reconstruction)
-reconstructETopLevel :: MonadHorn s => Environment -> RType -> UProgram -> Explorer s RProgram
+reconstructETopLevel :: MonadHorn s => Environment -> RType -> UProgram -> Explorer s (RProgram, Environment)
 reconstructETopLevel env t impl = do
-  (Program pTerm pTyp) <- reconstructE env t impl
+  (Program pTerm pTyp, env') <- reconstructE env t impl
   generateAuxGoals
   pTyp' <- runInSolver $ currentAssignment pTyp
-  return $ Program pTerm pTyp'
+  return (Program pTerm pTyp', env')
 
-reconstructE :: MonadHorn s => Environment -> RType -> UProgram -> Explorer s RProgram
+reconstructE :: MonadHorn s => Environment -> RType -> UProgram -> Explorer s (RProgram, Environment)
 reconstructE env t (Program p AnyT) = reconstructE' env t p
 reconstructE env t (Program p t') = do
   t'' <- checkAnnotation env t t' p
@@ -241,10 +242,10 @@ reconstructE' env typ (PSymbol name) =
         Nothing -> return ()
         Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False ""
       checkE env typ p
-      return p
+      return (p, env)
 reconstructE' env typ (PApp iFun iArg) = do
   x <- freshVar env "x"
-  pFun <- inContext (\p -> Program (PApp p uHole) typ) $ reconstructE env (FunctionT x AnyT typ) iFun
+  (pFun, _) <- inContext (\p -> Program (PApp p uHole) typ) $ reconstructE env (FunctionT x AnyT typ) iFun
   let FunctionT x tArg tRes = typeOf pFun
 
   pApp <- if isFunctionType tArg
@@ -253,11 +254,11 @@ reconstructE' env typ (PApp iFun iArg) = do
       pArg <- generateHOArg env (d - 1) tArg iArg
       return $ Program (PApp pFun pArg) tRes
     else do -- First-order argument: generate now
-      pArg <- inContext (\p -> Program (PApp pFun p) typ) $ reconstructE env tArg iArg
+      (pArg, _) <- inContext (\p -> Program (PApp pFun p) typ) $ reconstructE env tArg iArg
       let tRes' = appType env pArg x tRes
       return $ Program (PApp pFun pArg) tRes'
   checkE env typ pApp
-  return pApp
+  return (pApp, env)
   where
     generateHOArg env d tArg iArg = case content iArg of
       PSymbol f -> do
