@@ -59,7 +59,8 @@ data ExplorerParams = ExplorerParams {
   _useMemoization :: Bool,                -- ^ Should enumerated terms be memoized?
   _symmetryReduction :: Bool,             -- ^ Should partial applications be memoized to check for redundancy?
   _sourcePos :: SourcePos,                -- ^ Source position of the current goal
-  _explorerLogLevel :: Int                -- ^ How verbose logging is
+  _explorerLogLevel :: Int,               -- ^ How verbose logging is
+  _polynomialDegree :: Int                -- ^ Maximum degree of resource polynomial
 }
 
 makeLenses ''ExplorerParams

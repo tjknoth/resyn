@@ -272,7 +272,6 @@ allSymbols :: Environment -> Map Id RSchema
 allSymbols env = Map.unions $ Map.elems (env ^. symbols)
 
 
-
 -- | 'lookupSymbol' @name env@ : type of symbol @name@ in @env@, including built-in constants
 lookupSymbol :: Id -> Int -> Bool -> Environment -> Maybe RSchema
 lookupSymbol name a hasSet env
@@ -289,6 +288,12 @@ lookupSymbol name a hasSet env
   where
     isBinary = a == 2 && (name `elem` Map.elems binOpTokens)
     asInt = asInteger name
+
+removeSymbol :: Id -> Int -> Environment -> (Bool, Environment)
+removeSymbol name a env = (Map.member name syms, env') where 
+    syms = allSymbols env
+    env' = removeVariable name env 
+
 
 symbolAsFormula :: Environment -> Id -> RType -> Formula
 symbolAsFormula _ name t | arity t > 0
@@ -513,6 +518,7 @@ data Constraint = Subtype Environment RType RType Bool Id
   | WellFormedCond Environment Formula
   | WellFormedMatchCond Environment Formula
   | WellFormedPredicate Environment [Sort] Id
+  | SplitType Environment RType RType RType
   deriving (Show, Eq, Ord)
 
 -- | Synthesis goal

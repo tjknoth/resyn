@@ -624,7 +624,7 @@ substituteTypeSynonym name tArgs = do
       when (length tArgs /= length tVars) $ throwResError $ text "Type synonym" <+> text name <+> text "expected" <+> pretty (length tVars) <+> text "type arguments and got" <+> pretty (length tArgs)
       return $ noncaptureTypeSubst tVars tArgs t
 
--- | 'freshId' @prefix@ : fresh identifier starting with @prefix@
+-- | 'freshSort' : fresh variable sort 
 freshSort :: Resolver Sort
 freshSort = do
   i <- use idCount

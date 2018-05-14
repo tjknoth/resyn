@@ -48,7 +48,7 @@ main = do
                appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency memoize symmetry
                lfp bfs
                out_file out_module outFormat resolve 
-               print_spec print_stats log_ resources) -> do
+               print_spec print_stats log_ resources polynomial_deg) -> do
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
                     _scrutineeDepth = scrutineeMax,
@@ -63,7 +63,8 @@ main = do
                     _consistencyChecking = consistency,
                     _useMemoization = memoize,
                     _symmetryReduction = symmetry,
-                    _explorerLogLevel = log_
+                    _explorerLogLevel = log_,
+                    _polynomialDegree = polynomial_deg
                     }
                   let solverParams = defaultHornSolverParams {
                     isLeastFixpoint = lfp,
@@ -126,7 +127,9 @@ data CommandLineArgs
         print_spec :: Bool,
         print_stats :: Bool,
         log_ :: Int,
-        resources :: Bool
+        -- | Resource params
+        resources :: Bool,
+        max_polynomial :: Int
       }
   deriving (Data, Typeable, Show, Eq)
 
@@ -156,7 +159,8 @@ synt = Synthesis {
   print_spec          = True            &= help ("Show specification of each synthesis goal (default: True)"),
   print_stats         = False           &= help ("Show specification and solution size (default: False)"),
   log_                = 0               &= help ("Logger verboseness level (default: 0)") &= name "l",
-  resources           = True           &= help ("Verify resource usage")
+  resources           = True            &= help ("Verify resource usage"),
+  max_polynomial      = 1               &= help ("Maximum degree of resource polynomial")
   } &= auto &= help "Synthesize goals specified in the input file"
     where
       defaultFormat = outputFormat defaultSynquidParams
@@ -186,7 +190,8 @@ defaultExplorerParams = ExplorerParams {
   _symmetryReduction = False,
   _context = id,
   _sourcePos = noPos,
-  _explorerLogLevel = 0
+  _explorerLogLevel = 0,
+  _polynomialDegree = 1
 }
 
 -- | Parameters for constraint solving

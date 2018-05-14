@@ -235,6 +235,8 @@ reconstructE' env typ (PSymbol name) =
   case lookupSymbol name (arity typ) (hasSet typ) env of
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
     Just sch -> do
+      (schl, schr) <- splitType sch
+      --traceM $ "Split " ++ show (pretty sch) ++ " into " ++ show (pretty schl) ++ " and " ++ show (pretty schr)
       t <- symbolType env name sch
       let p = Program (PSymbol name) t
       symbolUseCount %= Map.insertWith (+) name 1
@@ -323,3 +325,44 @@ insertAuxSolutions pAuxs (Program body t) = flip Program t $
     _ -> body
   where
     ins = insertAuxSolutions pAuxs
+
+-- | 'splitType' @sch@: split type inside schema @sch@ by replacing its potential and multiplicity annotations with fresh variables.
+splitType :: MonadHorn s => RSchema -> Explorer s (RSchema, RSchema)
+splitType sch = do
+  schl <- freshPotentials sch 
+  schr <- freshPotentials sch
+  return (schl, schr)
+    where
+      potentialPrefix = "pot"
+      multiplicityPrefix = "mul"
+      -- Variable formula with fresh variable id
+      freshPot = do 
+        id <- freshId potentialPrefix
+        return $ Var IntS id 
+      freshMul = do
+        id <- freshId multiplicityPrefix
+        return $ Var IntS id
+      -- Replace potentials in a schema by unwrapping the foralls
+      freshPotentials (Monotype t)  = do 
+        t' <- freshPotentials' t
+        return $ Monotype t'
+      freshPotentials (ForallT x t) = do 
+        t' <- freshPotentials t
+        return $ ForallT x t'
+      freshPotentials (ForallP x t) = do
+        t' <- freshPotentials t
+        return $ ForallP x t'
+      -- Replace potentials in a TypeSkeleton
+      freshPotentials' (ScalarT base fml pot) = do 
+        pot' <- freshPot
+        base' <- freshMultiplicities base
+        return $ ScalarT base' fml pot'
+      freshPotentials' t = return t
+      -- Replace potentials in a BaseType
+      freshMultiplicities (TypeVarT s name m) = do 
+        m' <- freshMul
+        return $ TypeVarT s name m'
+      freshMultiplicities (DatatypeT name ts ps) = do
+        ts' <- mapM freshPotentials' ts
+        return $ DatatypeT name ts' ps
+      freshMultiplicities t = return t

@@ -148,6 +148,7 @@ RESOURCE_BENCHMARKS = [
     ('List-Compress',       ['--resources']),
     ('List-Delete',         ['--resources']),
     ('List-Double',         ['--resources']),
+    ('List-Fold',           ['--resources']),
     ('List-Replicate',      ['--resources']),
     ('List-Reverse',        ['--resources']),
 ]
