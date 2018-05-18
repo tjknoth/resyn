@@ -28,10 +28,12 @@ data TypeSkeleton r =
   AnyT
   deriving (Show, Eq, Ord)
 
--- Ignore multiplicity when comparing baseTypes
+-- Ignore multiplicity and potential when comparing baseTypes
 equalShape :: BaseType Formula -> BaseType Formula -> Bool
 equalShape (TypeVarT s name m) (TypeVarT s' name' m') = (TypeVarT s name defMultiplicity :: BaseType Formula) == (TypeVarT s' name' defMultiplicity :: BaseType Formula)
+equalShape (DatatypeT name ts ps) (DatatypeT name' ts' ps') = (name == name') && (fmap shape ts == fmap shape ts') && (ps == ps')
 equalShape t t' = t == t'
+
 
 defPotential = IntLit 0
 defMultiplicity = IntLit 1
@@ -337,6 +339,11 @@ intersection isBound (ScalarT baseT fml pot) (ScalarT baseT' fml' pot') = case b
                                   ScalarT (DatatypeT name (zipWith (intersection isBound) tArgs tArgs') (zipWith andClean pArgs pArgs')) (fml `andClean` fml') (fmax pot pot') 
   _ -> ScalarT baseT (fml `andClean` fml') (fmax pot pot')
 intersection isBound (FunctionT x tArg tRes) (FunctionT y tArg' tRes') = FunctionT x tArg (intersection isBound tRes (renameVar isBound y x tArg tRes'))
+
+typeFromSchema :: RSchema -> RType
+typeFromSchema (Monotype t) = t
+typeFromSchema (ForallT _ t) = typeFromSchema t
+typeFromSchema (ForallP _ t) = typeFromSchema t
 
 
 -- | Instantiate unknowns in a type

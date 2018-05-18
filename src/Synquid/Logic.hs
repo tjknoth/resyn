@@ -150,6 +150,7 @@ setVar s = Var (SetS (VarS s))
 valSet s = setVar s valueVarName
 fneg = Unary Neg
 fnot = Unary Not
+fzero = IntLit 0
 (|*|) = Binary Times
 (|+|) = Binary Plus
 (|-|) = Binary Minus

@@ -28,7 +28,7 @@ import Debug.Trace
 
 -- | 'reconstruct' @eParams tParams goal@ : reconstruct missing types and terms in the body of @goal@ so that it represents a valid type judgment;
 -- return a type error if that is impossible
-reconstruct :: MonadHorn s => ExplorerParams -> TypingParams -> Goal -> s (Either ErrorMessage RProgram)
+reconstruct :: (MonadSMT s, MonadHorn s) => ExplorerParams -> TypingParams -> Goal -> s (Either ErrorMessage RProgram)
 reconstruct eParams tParams goal = do
     initTS <- initTypingState $ gEnvironment goal
     runExplorer (eParams { _sourcePos = gSourcePos goal }) tParams (Reconstructor reconstructTopLevel) initTS go
@@ -39,7 +39,7 @@ reconstruct eParams tParams goal = do
       runInSolver $ finalizeProgram p                                      -- Substitute all type/predicates variables and unknowns
 
 
-reconstructTopLevel :: MonadHorn s => Goal -> Explorer s RProgram
+reconstructTopLevel :: (MonadSMT s, MonadHorn s) => Goal -> Explorer s RProgram
 reconstructTopLevel (Goal funName env (ForallT a sch) impl depth pos s) = reconstructTopLevel (Goal funName (addTypeVar a env) sch impl depth pos s)
 reconstructTopLevel (Goal funName env (ForallP sig sch) impl depth pos s) = reconstructTopLevel (Goal funName (addBoundPredicate sig env) sch impl depth pos s)
 reconstructTopLevel (Goal funName env (Monotype typ@(FunctionT _ _ _)) impl depth _ synth) = local (set (_1 . auxDepth) depth) $ reconstructFix
@@ -113,7 +113,7 @@ reconstructTopLevel (Goal _ env (Monotype t) impl depth _ _) = local (set (_1 . 
 
 -- | 'reconstructI' @env t impl@ :: reconstruct unknown types and terms in a judgment @env@ |- @impl@ :: @t@ where @impl@ is a (possibly) introduction term
 -- (top-down phase of bidirectional reconstruction)
-reconstructI :: MonadHorn s => Environment -> RType -> UProgram -> Explorer s RProgram
+reconstructI :: (MonadSMT s, MonadHorn s) => Environment -> RType -> UProgram -> Explorer s RProgram
 reconstructI env t (Program p AnyT) = reconstructI' env t p
 reconstructI env t (Program p t') = do
   t'' <- checkAnnotation env t t' p
@@ -214,14 +214,14 @@ reconstructCase env scrVar pScrutinee t (Case consName args iBody) consT = cut $
 
 -- | 'reconstructE' @env t impl@ :: reconstruct unknown types and terms in a judgment @env@ |- @impl@ :: @t@ where @impl@ is an elimination term
 -- (bottom-up phase of bidirectional reconstruction)
-reconstructETopLevel :: MonadHorn s => Environment -> RType -> UProgram -> Explorer s (RProgram, Environment)
+reconstructETopLevel :: (MonadSMT s, MonadHorn s) => Environment -> RType -> UProgram -> Explorer s (RProgram, Environment)
 reconstructETopLevel env t impl = do
   (Program pTerm pTyp, env') <- reconstructE env t impl
   generateAuxGoals
   pTyp' <- runInSolver $ currentAssignment pTyp
   return (Program pTerm pTyp', env')
 
-reconstructE :: MonadHorn s => Environment -> RType -> UProgram -> Explorer s (RProgram, Environment)
+reconstructE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> UProgram -> Explorer s (RProgram, Environment)
 reconstructE env t (Program p AnyT) = reconstructE' env t p
 reconstructE env t (Program p t') = do
   t'' <- checkAnnotation env t t' p
@@ -237,6 +237,11 @@ reconstructE' env typ (PSymbol name) =
     Just sch -> do
       (schl, schr) <- splitType sch
       --traceM $ "Split " ++ show (pretty sch) ++ " into " ++ show (pretty schl) ++ " and " ++ show (pretty schr)
+      let (isVariable, newEnv) = removeSymbol name (arity typ) env
+      let env' = if isVariable 
+          then addPolyVariable name schl newEnv
+          else env
+      addConstraint $ SplitType env (typeFromSchema sch) (typeFromSchema schl) (typeFromSchema schr)
       t <- symbolType env name sch
       let p = Program (PSymbol name) t
       symbolUseCount %= Map.insertWith (+) name 1
@@ -280,7 +285,7 @@ reconstructE' env typ impl =
 
 -- | 'checkAnnotation' @env t t' p@ : if user annotation @t'@ for program @p@ is a subtype of the goal type @t@,
 -- return resolved @t'@, otherwise fail
-checkAnnotation :: MonadHorn s => Environment -> RType -> RType -> BareProgram RType -> Explorer s RType
+checkAnnotation :: (MonadSMT s, MonadHorn s) => Environment -> RType -> RType -> BareProgram RType -> Explorer s RType
 checkAnnotation env t t' p = do
   tass <- use (typingState . typeAssignment)
   case resolveRefinedType (typeSubstituteEnv tass env) t' of
@@ -327,7 +332,7 @@ insertAuxSolutions pAuxs (Program body t) = flip Program t $
     ins = insertAuxSolutions pAuxs
 
 -- | 'splitType' @sch@: split type inside schema @sch@ by replacing its potential and multiplicity annotations with fresh variables.
-splitType :: MonadHorn s => RSchema -> Explorer s (RSchema, RSchema)
+splitType :: (MonadSMT s, MonadHorn s) => RSchema -> Explorer s (RSchema, RSchema)
 splitType sch = do
   schl <- freshPotentials sch 
   schr <- freshPotentials sch

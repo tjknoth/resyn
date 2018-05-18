@@ -71,7 +71,12 @@ instance MonadSMT s => MonadHorn (FixPointSolver s) where
     
   refineCandidates = refine
   
-  pruneQualifiers quals = ifM (asks pruneQuals) (pruneQSpace quals) (return quals)  
+  pruneQualifiers quals = ifM (asks pruneQuals) (pruneQSpace quals) (return quals) 
+  
+instance (Monad s, Applicative s, MonadSMT s) => MonadSMT (FixPointSolver s) where 
+  initSolver = lift . initSolver
+  isSat = lift . isSat 
+  allUnsatCores = allUnsatCores
   
  
 {- Implementation -}

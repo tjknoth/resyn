@@ -120,7 +120,7 @@ data Reconstructor s = Reconstructor (Goal -> Explorer s RProgram)
 
 
 -- | 'runExplorer' @eParams tParams initTS go@ : execute exploration @go@ with explorer parameters @eParams@, typing parameters @tParams@ in typing state @initTS@
-runExplorer :: MonadHorn s => ExplorerParams -> TypingParams -> Reconstructor s -> TypingState -> Explorer s a -> s (Either ErrorMessage a)
+runExplorer :: (MonadSMT s, MonadHorn s) => ExplorerParams -> TypingParams -> Reconstructor s -> TypingState -> Explorer s a -> s (Either ErrorMessage a)
 runExplorer eParams tParams topLevel initTS go = do
   (ress, (PersistentState _ _ errs)) <- runStateT (observeManyT 1 $ runReaderT (evalStateT go initExplorerState) (eParams, tParams, topLevel)) (PersistentState Map.empty Map.empty [])
   case ress of
@@ -131,7 +131,7 @@ runExplorer eParams tParams topLevel initTS go = do
 
 -- | 'generateI' @env t@ : explore all terms that have refined type @t@ in environment @env@
 -- (top-down phase of bidirectional typechecking)
-generateI :: MonadHorn s => Environment -> RType -> Explorer s RProgram
+generateI :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
 generateI env t@(FunctionT x tArg tRes) = do
   let ctx = \p -> Program (PFun x p) t
   pBody <- inContext ctx $ generateI (unfoldAllVariables $ addVariable x tArg $ env) tRes
@@ -143,7 +143,7 @@ generateI env t@(ScalarT _ _ _) = do
   if maEnabled && d > 0 && maPossible then generateMaybeMatchIf env t else generateMaybeIf env t
 
 -- | Generate a possibly conditional term type @t@, depending on whether a condition is abduced
-generateMaybeIf :: MonadHorn s => Environment -> RType -> Explorer s RProgram
+generateMaybeIf :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
 generateMaybeIf env t = ifte generateThen (uncurry3 $ generateElse env t) (generateMatch env t) -- If at least one solution without a match exists, go with it and continue with the else branch; otherwise try to match
   where
     -- | Guess an E-term and abduce a condition for it
@@ -155,6 +155,7 @@ generateMaybeIf env t = ifte generateThen (uncurry3 $ generateElse env t) (gener
       return (cond, unknownName cUnknown, pThen)
 
 -- | Proceed after solution @pThen@ has been found under assumption @cond@
+generateElse :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Formula -> Id -> RProgram -> Explorer s RProgram
 generateElse env t cond condUnknown pThen = if cond == ftrue
   then return pThen -- @pThen@ is valid under no assumptions: return it
   else do -- @pThen@ is valid under a nontrivial assumption, proceed to look for the solution for the rest of the inputs
@@ -188,7 +189,7 @@ generateCondition env fml = do
     conjoin p1 p2 = Program (PApp (Program (PApp andSymb p1) boolAll) p2) boolAll
 
 -- | If partial solutions are accepted, try @gen@, and if it fails, just leave a hole of type @t@; otherwise @gen@
-optionalInPartial :: MonadHorn s => RType -> Explorer s RProgram -> Explorer s RProgram
+optionalInPartial :: (MonadSMT s, MonadHorn s) => RType -> Explorer s RProgram -> Explorer s RProgram
 optionalInPartial t gen = ifM (asks . view $ _1 . partialSolution) (ifte gen return (return $ Program PHole t)) gen
 
 -- | Generate a match term of type @t@
@@ -248,7 +249,7 @@ generateFirstCase env scrVar pScrutinee t consName = do
               return $ (Case consName binders pCaseExpr, ftrue, dontCare))
 
 -- | Generate the @consName@ case of a match term with scrutinee variable @scrName@ and scrutinee type @scrType@
-generateCase :: MonadHorn s => Environment -> Formula -> RProgram -> RType -> Id -> Explorer s (Case RType, Explorer s ())
+generateCase :: (MonadSMT s, MonadHorn s) => Environment -> Formula -> RProgram -> RType -> Id -> Explorer s (Case RType, Explorer s ())
 generateCase env scrVar pScrutinee t consName = do
   case Map.lookup consName (allSymbols env) of
     Nothing -> error $ show $ text "Datatype constructor" <+> text consName <+> text "not found in the environment" <+> pretty env
@@ -283,7 +284,7 @@ caseSymbols env x (name : names) (FunctionT y tArg tRes) = do
   return ((name, tArg) : syms, ass)
 
 -- | Generate a possibly conditional possibly match term, depending on which conditions are abduced
-generateMaybeMatchIf :: MonadHorn s => Environment -> RType -> Explorer s RProgram
+generateMaybeMatchIf :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
 generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplus` (generateMatch env t) -- might need to backtrack a successful match due to match depth limitation
   where
     -- | Guess an E-term and abduce a condition and a match-condition for it
@@ -335,7 +336,7 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
 
 -- | 'generateE' @env typ@ : explore all elimination terms of type @typ@ in environment @env@
 -- (bottom-up phase of bidirectional typechecking)
-generateE :: MonadHorn s => Environment -> RType -> Explorer s RProgram
+generateE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
 generateE env typ = do
   putMemo Map.empty                                     -- Starting E-term enumeration in a new environment: clear memoization store
 
@@ -355,11 +356,11 @@ generateE env typ = do
         else addLambdaLets t body gs
 
 -- | 'generateEUpTo' @env typ d@ : explore all applications of type shape @shape typ@ in environment @env@ of depth up to @d@
-generateEUpTo :: MonadHorn s => Environment -> RType -> Int -> Explorer s RProgram
+generateEUpTo :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Int -> Explorer s RProgram
 generateEUpTo env typ d = msum $ map (generateEAt env typ) [0..d]
 
 -- | 'generateEAt' @env typ d@ : explore all applications of type shape @shape typ@ in environment @env@ of depth exactly to @d@
-generateEAt :: MonadHorn s => Environment -> RType -> Int -> Explorer s RProgram
+generateEAt :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Int -> Explorer s RProgram
 generateEAt _ _ d | d < 0 = mzero
 generateEAt env typ d = do
   useMem <- asks . view $ _1 . useMemoization
@@ -400,7 +401,7 @@ generateEAt env typ d = do
 -- | Perform a gradual check that @p@ has type @typ@ in @env@:
 -- if @p@ is a scalar, perform a full subtyping check;
 -- if @p@ is a (partially applied) function, check as much as possible with unknown arguments
-checkE :: MonadHorn s => Environment -> RType -> RProgram -> Explorer s ()
+checkE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> RProgram -> Explorer s ()
 checkE env typ p@(Program pTerm pTyp) = do
   ctx <- asks . view $ _1 . context
   writeLog 2 $ text "Checking" <+> pretty p <+> text "::" <+> pretty typ <+> text "in" $+$ pretty (ctx (untyped PHole))
@@ -466,7 +467,7 @@ checkE env typ p@(Program pTerm pTyp) = do
       -- combineEnv env oldEnv =
         -- env {_ghosts = Map.union (_ghosts env) (_ghosts oldEnv)}
 
-enumerateAt :: MonadHorn s => Environment -> RType -> Int -> Explorer s RProgram
+enumerateAt :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Int -> Explorer s RProgram
 enumerateAt env typ 0 = do
     let symbols = Map.toList $ symbolsOfArity (arity typ) env
     useCounts <- use symbolUseCount
@@ -518,7 +519,7 @@ enumerateAt env typ d = do
       return pApp
 
 -- | Make environment inconsistent (if possible with current unknown assumptions)
-generateError :: MonadHorn s => Environment -> Explorer s RProgram
+generateError :: (MonadSMT s, MonadHorn s) => Environment -> Explorer s RProgram
 generateError env = do
   ctx <- asks . view $ _1. context
   writeLog 2 $ text "Checking" <+> pretty (show errorProgram) <+> text "in" $+$ pretty (ctx errorProgram)
@@ -534,7 +535,7 @@ generateError env = do
     trivial var = var |=| var
 
 -- | 'toVar' @p env@: a variable representing @p@ (can be @p@ itself or a fresh ghost)
-toVar :: MonadHorn s => Environment -> RProgram -> Explorer s (Environment, Formula)
+toVar :: (MonadSMT s, MonadHorn s) => Environment -> RProgram -> Explorer s (Environment, Formula)
 toVar env (Program (PSymbol name) t) = return (env, symbolAsFormula env name t)
 toVar env (Program _ t) = do
   g <- freshId "G"

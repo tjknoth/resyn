@@ -42,6 +42,7 @@ import Synquid.Pretty
 import Synquid.SolverMonad
 import Synquid.Util
 import Synquid.Resolver (addAllVariables)
+import Synquid.NumericSolver
 
 import Data.Maybe
 import Data.List
@@ -65,6 +66,7 @@ data TypingParams = TypingParams {
   _typeQualsGen :: Environment -> Formula -> [Formula] -> QSpace,   -- ^ Qualifier generator for types
   _predQualsGen :: Environment -> [Formula] -> [Formula] -> QSpace, -- ^ Qualifier generator for bound predicates
   _tcSolverSplitMeasures :: Bool,
+  _resPolynomialDegree :: Int, -- ^ Maximum degree of resource polynomials
   _tcSolverLogLevel :: Int    -- ^ How verbose logging is
 }
 
@@ -121,7 +123,7 @@ initTypingState env = do
 addTypingConstraint c = over typingConstraints (nub . (c :))
 
 -- | Solve @typingConstraints@: either strengthen the current candidates and return shapeless type constraints or fail
-solveTypeConstraints :: MonadHorn s => TCSolver s ()
+solveTypeConstraints :: (MonadSMT s, MonadHorn s) => TCSolver s ()
 solveTypeConstraints = do
   simplifyAllConstraints
 
@@ -134,6 +136,10 @@ solveTypeConstraints = do
 
   solveHornClauses
   checkTypeConsistency
+
+  tcParams <- ask
+  let nSolverParams = initNSolverParams tcParams
+  lift . lift . lift . runNumSolver nSolverParams $ solveResourceConstraints scs
 
   hornClauses .= []
   consistencyChecks .= []
@@ -350,6 +356,8 @@ simplifyConstraint' _ _ c@(WellFormedMatchCond _ _) = simpleConstraints %= (c :)
 -- Otherwise (shape mismatch): fail
 simplifyConstraint' _ _ (Subtype _ t t' _ _) = 
   throwError $ text  "Cannot match shape" <+> squotes (pretty $ shape t) $+$ text "with shape" <+> squotes (pretty $ shape t')
+-- TODO: actually simplify! -- need to check that shapes are equal and drop any splitting constraints from non-scalar types.
+simplifyConstraint' _ _ c@SplitType{} = simpleConstraints %= (c :)
 
 -- | Unify type variable @a@ with type @t@ or fail if @a@ occurs in @t@
 unify env a t = if a `Set.member` typeVarsOf t
@@ -384,38 +392,36 @@ processPredicate c = modify $ addTypingConstraint c
 -- | Eliminate type and predicate variables from simple constraints, create qualifier maps, split measure-based subtyping constraints
 processConstraint :: MonadHorn s => Constraint -> TCSolver s ()
 processConstraint c@(Subtype env (ScalarT baseTL l potl) (ScalarT baseTR r potr) False label) | equalShape baseTL baseTR
-  = if l == ffalse || r == ftrue
-      then return ()
-      else do
-        tass <- use typeAssignment
-        pass <- use predAssignment
-        let subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass
-        let l' = subst l
-        let r' = subst r
-        let potl' = subst potl
-        let potr' = subst potr
-        let c' = Subtype env (ScalarT baseTL l' potl') (ScalarT baseTR r' potr') False label
-        if Set.null $ (predsOf l' `Set.union` predsOf r') Set.\\ (Map.keysSet $ allPredicates env)
-            then case baseTL of -- Subtyping of datatypes: try splitting into individual constraints between measures
-                  DatatypeT dtName _ _ -> do
-                    let measures = Map.keysSet $ allMeasuresOf dtName env
-                    let isAbstract = null $ ((env ^. datatypes) Map.! dtName) ^. constructors
-                    let vals = filter (\v -> varName v == valueVarName) . Set.toList . varsOf $ r'
-                    let rConjuncts = conjunctsOf r'
-                    doSplit <- asks _tcSolverSplitMeasures
-                    if not doSplit || isAbstract || null vals || (not . Set.null . unknownsOf) (l' |&| r') -- TODO: unknowns can be split if we know their potential valuations
-                      then simpleConstraints %= (c' :) -- Constraint has unknowns (or RHS doesn't contain _v)
-                      else case splitByPredicate measures (head vals) (Set.toList rConjuncts) of
-                            Nothing -> simpleConstraints %= (c' :) -- RHS cannot be split, add whole thing
-                            Just mr -> if rConjuncts `Set.isSubsetOf` (Set.unions $ Map.elems mr)
-                                        then do
-                                          let lConjuncts = conjunctsOf $ instantiateCons (head vals) l'
-                                          case splitByPredicate measures (head vals) (Set.toList lConjuncts) of -- Every conjunct of RHS is about some `m _v` (where m in measures)
-                                              Nothing -> simpleConstraints %= (c' :) -- LHS cannot be split, add whole thing for now
-                                              Just ml -> mapM_ (addSplitConstraint ml) (toDisjointGroups mr)
-                                        else simpleConstraints %= (c' :) -- Some conjuncts of RHS are no covered (that is, do not contains _v), add whole thing
-                  _ -> simpleConstraints %= (c' :)
-          else modify $ addTypingConstraint c -- Constraint contains free predicate: add back and wait until more type variables get unified, so predicate variables can be instantiated
+  = unless (l == ffalse || r == ftrue) $ do
+      tass <- use typeAssignment
+      pass <- use predAssignment
+      let subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass
+      let l' = subst l
+      let r' = subst r
+      let potl' = subst potl
+      let potr' = subst potr
+      let c' = Subtype env (ScalarT baseTL l' potl') (ScalarT baseTR r' potr') False label
+      if Set.null $ (predsOf l' `Set.union` predsOf r') Set.\\ Map.keysSet (allPredicates env)
+          then case baseTL of -- Subtyping of datatypes: try splitting into individual constraints between measures
+                DatatypeT dtName _ _ -> do
+                  let measures = Map.keysSet $ allMeasuresOf dtName env
+                  let isAbstract = null $ ((env ^. datatypes) Map.! dtName) ^. constructors
+                  let vals = filter (\v -> varName v == valueVarName) . Set.toList . varsOf $ r'
+                  let rConjuncts = conjunctsOf r'
+                  doSplit <- asks _tcSolverSplitMeasures
+                  if not doSplit || isAbstract || null vals || (not . Set.null . unknownsOf) (l' |&| r') -- TODO: unknowns can be split if we know their potential valuations
+                    then simpleConstraints %= (c' :) -- Constraint has unknowns (or RHS doesn't contain _v)
+                    else case splitByPredicate measures (head vals) (Set.toList rConjuncts) of
+                          Nothing -> simpleConstraints %= (c' :) -- RHS cannot be split, add whole thing
+                          Just mr -> if rConjuncts `Set.isSubsetOf` Set.unions (Map.elems mr)
+                                      then do
+                                        let lConjuncts = conjunctsOf $ instantiateCons (head vals) l'
+                                        case splitByPredicate measures (head vals) (Set.toList lConjuncts) of -- Every conjunct of RHS is about some `m _v` (where m in measures)
+                                            Nothing -> simpleConstraints %= (c' :) -- LHS cannot be split, add whole thing for now
+                                            Just ml -> mapM_ (addSplitConstraint ml) (toDisjointGroups mr)
+                                      else simpleConstraints %= (c' :) -- Some conjuncts of RHS are no covered (that is, do not contains _v), add whole thing
+                _ -> simpleConstraints %= (c' :)
+        else modify $ addTypingConstraint c -- Constraint contains free predicate: add back and wait until more type variables get unified, so predicate variables can be instantiated
   where
     instantiateCons val fml@(Binary Eq v (Cons _ _ _)) | v == val = conjunction $ instantiateConsAxioms env (Just val) fml
     instantiateCons _ fml = fml
@@ -463,6 +469,20 @@ processConstraint (WellFormedMatchCond env (Unknown _ u))
       mq <- asks _matchQualsGen
       let env' = typeSubstituteEnv tass env
       addQuals u (mq env' (allPotentialScrutinees env'))
+processConstraint (SplitType env (ScalarT base fml pot) (ScalarT baseL fmlL potL) (ScalarT baseR fmlR potR)) 
+  | equalShape base baseL && equalShape baseL baseR = do 
+  tass <- use typeAssignment
+  pass <- use predAssignment
+  let env' = typeSubstituteEnv tass env
+      subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass
+      fml' = subst fml
+      fmlL' = subst fmlL
+      fmlR' = subst fmlR
+      pot' = subst pot
+      potL' = subst potL
+      potR' = subst potR
+  simpleConstraints %= (SplitType env (ScalarT base fml' pot') (ScalarT baseL fmlL' potL') (ScalarT baseR fmlR' potR') :)
+processConstraint SplitType{} = return ()
 processConstraint c = error $ show $ text "processConstraint: not a simple constraint" <+> pretty c
 
 generateHornClauses :: MonadHorn s => Constraint -> TCSolver s ()
@@ -480,6 +500,8 @@ generateHornClauses (Subtype env (ScalarT baseTL l potl) (ScalarT baseTR r potr)
       emb <- embedding env relevantVars False
       let clause = conjunction (Set.insert l $ Set.insert r emb)
       consistencyChecks %= (clause :)
+generateHornClauses c@(SplitType env (ScalarT base fml pot) (ScalarT baseL fmlL potL) (ScalarT baseR fmlR potR)) = return ()
+  -- error $ show $ text "generateHornClauses: nothing to do for type splitting constraint" <+> pretty c
 generateHornClauses c = error $ show $ text "generateHornClauses: not a simple subtyping constraint" <+> pretty c
 
 -- | 'allScalars' @env@ : logic terms for all scalar symbols in @env@
@@ -697,6 +719,12 @@ instance Ord TypingState where
   (<=) st1 st2 = (restrictDomain (Set.fromList ["a", "u"]) (_idCount st1) <= restrictDomain (Set.fromList ["a", "u"]) (_idCount st2)) &&
                 _typeAssignment st1 <= _typeAssignment st2 &&
                 _candidates st1 <= _candidates st2
+
+initNSolverParams :: TypingParams -> NumericSolverParams
+initNSolverParams tparams = NumericSolverParams {
+  _maxPolynomialDegree = _resPolynomialDegree tparams,
+  _solverLogLevel = _tcSolverLogLevel tparams
+}
 
 writeLog level msg = do
   maxLevel <- asks _tcSolverLogLevel
