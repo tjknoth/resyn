@@ -241,31 +241,35 @@ reconstructE' env typ (PSymbol name) =
       let env' = if isVariable 
           then addPolyVariable name schl newEnv
           else env
-      addConstraint $ SplitType env (typeFromSchema sch) (typeFromSchema schl) (typeFromSchema schr)
-      t <- symbolType env name sch
+      let tl = typeFromSchema schl
+      let tr = typeFromSchema schr
+      addConstraint $ SplitType env name (typeFromSchema sch) tl tr 
+      addConstraint $ WellFormed env tl
+      addConstraint $ WellFormed env tr
+      t <- symbolType env name schr
       let p = Program (PSymbol name) t
       symbolUseCount %= Map.insertWith (+) name 1
       case Map.lookup name (env ^. shapeConstraints) of
         Nothing -> return ()
         Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False ""
       checkE env typ p
-      return (p, env)
+      return (p, env')
 reconstructE' env typ (PApp iFun iArg) = do
   x <- freshVar env "x"
-  (pFun, _) <- inContext (\p -> Program (PApp p uHole) typ) $ reconstructE env (FunctionT x AnyT typ) iFun
+  (pFun, env') <- inContext (\p -> Program (PApp p uHole) typ) $ reconstructE env (FunctionT x AnyT typ) iFun
   let FunctionT x tArg tRes = typeOf pFun
 
-  pApp <- if isFunctionType tArg
+  (pApp, env'') <- if isFunctionType tArg
     then do -- Higher-order argument: its value is not required for the function type, enqueue an auxiliary goal
       d <- asks . view $ _1 . auxDepth
       pArg <- generateHOArg env (d - 1) tArg iArg
-      return $ Program (PApp pFun pArg) tRes
+      return (Program (PApp pFun pArg) tRes, env')
     else do -- First-order argument: generate now
-      (pArg, _) <- inContext (\p -> Program (PApp pFun p) typ) $ reconstructE env tArg iArg
+      (pArg, envnew) <- inContext (\p -> Program (PApp pFun p) typ) $ reconstructE env' tArg iArg
       let tRes' = appType env pArg x tRes
-      return $ Program (PApp pFun pArg) tRes'
-  checkE env typ pApp
-  return (pApp, env)
+      return (Program (PApp pFun pArg) tRes', envnew)
+  checkE env'' typ pApp
+  return (pApp, env'')
   where
     generateHOArg env d tArg iArg = case content iArg of
       PSymbol f -> do
@@ -332,14 +336,14 @@ insertAuxSolutions pAuxs (Program body t) = flip Program t $
     ins = insertAuxSolutions pAuxs
 
 -- | 'splitType' @sch@: split type inside schema @sch@ by replacing its potential and multiplicity annotations with fresh variables.
-splitType :: (MonadSMT s, MonadHorn s) => RSchema -> Explorer s (RSchema, RSchema)
+splitType :: MonadHorn s => RSchema -> Explorer s (RSchema, RSchema)
 splitType sch = do
   schl <- freshPotentials sch 
   schr <- freshPotentials sch
   return (schl, schr)
     where
-      potentialPrefix = "pot"
-      multiplicityPrefix = "mul"
+      potentialPrefix = "p"
+      multiplicityPrefix = "m"
       -- Variable formula with fresh variable id
       freshPot = do 
         id <- freshId potentialPrefix

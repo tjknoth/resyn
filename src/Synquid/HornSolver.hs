@@ -72,12 +72,14 @@ instance MonadSMT s => MonadHorn (FixPointSolver s) where
   refineCandidates = refine
   
   pruneQualifiers quals = ifM (asks pruneQuals) (pruneQSpace quals) (return quals) 
-  
+
+-- Can probably derive this automatically somehow?
 instance (Monad s, Applicative s, MonadSMT s) => MonadSMT (FixPointSolver s) where 
   initSolver = lift . initSolver
   isSat = lift . isSat 
+  -- idk why I don't have to lift this
   allUnsatCores = allUnsatCores
-  
+
  
 {- Implementation -}
 

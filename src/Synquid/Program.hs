@@ -518,7 +518,7 @@ data Constraint = Subtype Environment RType RType Bool Id
   | WellFormedCond Environment Formula
   | WellFormedMatchCond Environment Formula
   | WellFormedPredicate Environment [Sort] Id
-  | SplitType Environment RType RType RType
+  | SplitType Environment Id RType RType RType
   deriving (Show, Eq, Ord)
 
 -- | Synthesis goal

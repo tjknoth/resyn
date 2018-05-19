@@ -4,7 +4,7 @@ data List a where
   
 termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
-  Cons x xs -> 1 + len xs  
+  Cons x xs -> 1 + len xs 
 
 double :: xs: List {2 ** a| |2} -> {List a | len _v == 2 * len xs}
 double = \xs.

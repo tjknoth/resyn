@@ -83,6 +83,7 @@ data TypingState = TypingState {
   _initEnv :: Environment,                      -- ^ Initial environment
   _idCount :: Map String Int,                   -- ^ Number of unique identifiers issued so far
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
+  _resourceConstraints :: Formula,         -- ^ Constraints relevant to resource analysis
   -- Temporary state:
   _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
   _hornClauses :: [(Formula, Id)],              -- ^ Horn clauses generated from subtyping constraints
@@ -113,6 +114,7 @@ initTypingState env = do
     _initEnv = env,
     _idCount = Map.empty,
     _isFinal = False,
+    _resourceConstraints = ftrue,
     _simpleConstraints = [],
     _hornClauses = [],
     _consistencyChecks = [],
@@ -128,8 +130,7 @@ solveTypeConstraints = do
   simplifyAllConstraints
 
   scs <- use simpleConstraints
-  writeLog 3 (text "Simple Constraints" $+$ (vsep $ map pretty scs))
-
+  writeLog 3 (text "Simple Constraints" $+$ vsep (map pretty scs))
   processAllPredicates
   processAllConstraints
   generateAllHornClauses
@@ -137,9 +138,7 @@ solveTypeConstraints = do
   solveHornClauses
   checkTypeConsistency
 
-  tcParams <- ask
-  let nSolverParams = initNSolverParams tcParams
-  lift . lift . lift . runNumSolver nSolverParams $ solveResourceConstraints scs
+  checkResources scs 
 
   hornClauses .= []
   consistencyChecks .= []
@@ -226,6 +225,19 @@ throwError :: MonadHorn s => Doc -> TCSolver s ()
 throwError msg = do
   (pos, ec) <- use errorContext
   lift $ lift $ throwE $ ErrorMessage TypeError pos (msg $+$ ec)
+
+checkResources :: (MonadSMT s, MonadHorn s) => [Constraint] -> TCSolver s ()
+checkResources constraints = do 
+  tcParams <- ask 
+  tcState <- get 
+  oldConstraints <- use resourceConstraints 
+  let nSolverParams = initNSolverParams tcParams tcState 
+  newC <- lift . lift . lift . runNumSolver nSolverParams $ solveResourceConstraints oldConstraints constraints
+  case newC of 
+    Nothing -> throwError $ text "Insufficient resources"
+    Just f -> resourceConstraints %= (f |&|) 
+  --when (newC == ffalse) $ throwError $ text "Insufficient resources to check program"
+  --resourceConstraints %= f |&|
 
 -- | Refine the current liquid assignments using the horn clauses
 solveHornClauses :: MonadHorn s => TCSolver s ()
@@ -469,7 +481,7 @@ processConstraint (WellFormedMatchCond env (Unknown _ u))
       mq <- asks _matchQualsGen
       let env' = typeSubstituteEnv tass env
       addQuals u (mq env' (allPotentialScrutinees env'))
-processConstraint (SplitType env (ScalarT base fml pot) (ScalarT baseL fmlL potL) (ScalarT baseR fmlR potR)) 
+processConstraint (SplitType env var (ScalarT base fml pot) (ScalarT baseL fmlL potL) (ScalarT baseR fmlR potR)) 
   | equalShape base baseL && equalShape baseL baseR = do 
   tass <- use typeAssignment
   pass <- use predAssignment
@@ -481,7 +493,7 @@ processConstraint (SplitType env (ScalarT base fml pot) (ScalarT baseL fmlL potL
       pot' = subst pot
       potL' = subst potL
       potR' = subst potR
-  simpleConstraints %= (SplitType env (ScalarT base fml' pot') (ScalarT baseL fmlL' potL') (ScalarT baseR fmlR' potR') :)
+  simpleConstraints %= (SplitType env var (ScalarT base fml' pot') (ScalarT baseL fmlL' potL') (ScalarT baseR fmlR' potR') :)
 processConstraint SplitType{} = return ()
 processConstraint c = error $ show $ text "processConstraint: not a simple constraint" <+> pretty c
 
@@ -500,7 +512,7 @@ generateHornClauses (Subtype env (ScalarT baseTL l potl) (ScalarT baseTR r potr)
       emb <- embedding env relevantVars False
       let clause = conjunction (Set.insert l $ Set.insert r emb)
       consistencyChecks %= (clause :)
-generateHornClauses c@(SplitType env (ScalarT base fml pot) (ScalarT baseL fmlL potL) (ScalarT baseR fmlR potR)) = return ()
+generateHornClauses c@(SplitType var env (ScalarT base fml pot) (ScalarT baseL fmlL potL) (ScalarT baseR fmlR potR)) = return ()
   -- error $ show $ text "generateHornClauses: nothing to do for type splitting constraint" <+> pretty c
 generateHornClauses c = error $ show $ text "generateHornClauses: not a simple subtyping constraint" <+> pretty c
 
@@ -720,8 +732,8 @@ instance Ord TypingState where
                 _typeAssignment st1 <= _typeAssignment st2 &&
                 _candidates st1 <= _candidates st2
 
-initNSolverParams :: TypingParams -> NumericSolverParams
-initNSolverParams tparams = NumericSolverParams {
+initNSolverParams :: TypingParams -> TypingState -> NumericSolverParams
+initNSolverParams tparams tstate = NumericSolverParams {
   _maxPolynomialDegree = _resPolynomialDegree tparams,
   _solverLogLevel = _tcSolverLogLevel tparams
 }

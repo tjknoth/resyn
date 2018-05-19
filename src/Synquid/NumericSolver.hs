@@ -4,7 +4,8 @@ module Synquid.NumericSolver (
     NumericSolverParams (..),
     NumericSolver,
     runNumSolver,
-    solveResourceConstraints
+    solveResourceConstraints,
+    isResourceConstraint
 ) where
 
 import Synquid.Logic
@@ -26,36 +27,46 @@ import Control.Lens
 import Debug.Trace
 
 data NumericSolverParams = NumericSolverParams {
-    _maxPolynomialDegree :: Int, -- ^ Maximum degree of resource polynomials
-    _solverLogLevel :: Int       -- ^ How verbose logging is
+    _maxPolynomialDegree :: Int,   -- ^ Maximum degree of resource polynomials
+    _solverLogLevel :: Int         -- ^ How verbose logging is
 } deriving (Show, Eq)
 
 makeLenses ''NumericSolverParams
 
-type NumericSolver s = ReaderT NumericSolverParams (ExceptT ErrorMessage s)
+type NumericSolver s = ReaderT NumericSolverParams s
 
-runNumSolver :: NumericSolverParams -> NumericSolver s a -> s (Either ErrorMessage a)
-runNumSolver params go = runExceptT $ runReaderT go params 
+runNumSolver :: NumericSolverParams -> NumericSolver s a -> s a 
+runNumSolver params go = runReaderT go params 
 
-solveResourceConstraints :: MonadSMT s => [Constraint] -> NumericSolver s ()
-solveResourceConstraints constraints = do 
-    let fmls = Set.fromList $ fmap generateFormula constraints 
+solveResourceConstraints :: MonadSMT s => Formula -> [Constraint] -> NumericSolver s (Maybe Formula) 
+solveResourceConstraints oldConstraints constraints = do
+    fmlList <- mapM generateFormula constraints 
+    let fmls = Set.fromList fmlList
     let query = conjunction fmls
-    b <- isSatFml query
+    b <- isSatFml (oldConstraints |&| query)
     let result = if b then "SAT" else "UNSAT"
-    writeLog 2 $ text "Solving resource constraint:" <+> pretty query <+> text "--" <+> text result 
-    return ()
+    writeLog 2 $ text "Solving resource constraint:" <+> pretty (oldConstraints |&| query) <+> text "--" <+> text result 
+    if b then return $ Just query 
+         else return Nothing 
 
 isSatFml :: MonadSMT s => Formula -> NumericSolver s Bool
-isSatFml fml = lift . lift . isSat $ fml
+isSatFml fml = lift . isSat $ fml
 
 -- Placeholder formulas!
 -- For now not computing \Phi! (or even using the conjunction of everything in the environment!)
-generateFormula :: Constraint -> Formula 
-generateFormula (Subtype env tl tr _ name) = conjunction fmls
-  where fmls = joinAssertions (|<=|) tl tr 
-generateFormula (WellFormed env t)         = conjunction $ Set.map (|>=| fzero) $ allFormulas t
-generateFormula (SplitType e t tl tr)      = conjunction $ partition t tl tr
+generateFormula :: MonadSMT s => Constraint -> NumericSolver s Formula 
+generateFormula c@(Subtype env tl tr _ name) = do 
+    let fmls = conjunction $ joinAssertions (|=|) tl tr
+    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives" <+> pretty fmls)
+    return fmls  
+generateFormula c@(WellFormed env t)         = do
+    let fmls = conjunction $ Set.map (|>=| fzero) $ allFormulas t
+    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives" <+> pretty fmls)
+    return fmls
+generateFormula c@(SplitType e v t tl tr)      = do 
+    let fmls = conjunction $ partition t tl tr
+    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives" <+> pretty fmls)
+    return fmls
 generateFormula c                          = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
 
 allFormulas :: RType -> Set Formula 
@@ -86,10 +97,10 @@ joinAssertionsBase op (TypeVarT _ _ ml) (TypeVarT _ _ mr) = Set.singleton $ ml `
 joinAssertionsBase _ _ _ = Set.empty 
 
 
-relevantConstraint :: Constraint -> Bool
-relevantConstraint Subtype{} = True
-relevantConstraint WellFormed{} = True
-relevantConstraint SplitType{} = True
+isResourceConstraint :: Constraint -> Bool
+isResourceConstraint Subtype{} = True
+isResourceConstraint WellFormed{} = True
+isResourceConstraint SplitType{} = True
 
 writeLog level msg = do 
     maxLevel <- asks _solverLogLevel
