@@ -17,7 +17,7 @@ import Synquid.SolverMonad
 import Synquid.Z3
 
 import Data.Maybe 
-import Data.Map hiding (partition)
+import Data.Map hiding (partition, filter)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import Control.Monad.State 
@@ -40,12 +40,14 @@ runNumSolver params go = runReaderT go params
 
 solveResourceConstraints :: MonadSMT s => Formula -> [Constraint] -> NumericSolver s (Maybe Formula) 
 solveResourceConstraints oldConstraints constraints = do
-    fmlList <- mapM generateFormula constraints 
-    let fmls = Set.fromList fmlList
+    fmlList <- mapM generateFormula constraints
+    -- Filter out trivial constraints, mostly for readability
+    let fmls = Set.fromList (filter (not . isTrivial) fmlList)
     let query = conjunction fmls
     b <- isSatFml (oldConstraints |&| query)
     let result = if b then "SAT" else "UNSAT"
-    writeLog 2 $ text "Solving resource constraint:" <+> pretty (oldConstraints |&| query) <+> text "--" <+> text result 
+    writeLog 4 $ text "Old constraints" <+> pretty oldConstraints
+    writeLog 3 $ text "Solving resource constraint:" <+> pretty query <+> text "--" <+> text result 
     if b then return $ Just query 
          else return Nothing 
 
@@ -93,7 +95,11 @@ joinAssertions op _ _ = Set.empty
 
 joinAssertionsBase :: (Formula -> Formula -> Formula) -> BaseType Formula -> BaseType Formula -> Set Formula
 joinAssertionsBase op (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Set.unions $ zipWith (joinAssertions op) tsl tsr
-joinAssertionsBase op (TypeVarT _ _ ml) (TypeVarT _ _ mr) = Set.singleton $ ml `op` mr
+joinAssertionsBase op (TypeVarT _ _ ml) (TypeVarT _ _ mr) = 
+    if isTrivial fml 
+        then Set.empty 
+        else Set.singleton $ ml `op` mr
+    where fml = ml `op` mr
 joinAssertionsBase _ _ _ = Set.empty 
 
 
@@ -101,6 +107,13 @@ isResourceConstraint :: Constraint -> Bool
 isResourceConstraint Subtype{} = True
 isResourceConstraint WellFormed{} = True
 isResourceConstraint SplitType{} = True
+
+-- Remove some trivial resources constraints (ie 0 == 0...)
+isTrivial :: Formula -> Bool
+isTrivial (BoolLit True)    = True 
+isTrivial (Binary Eq f1 f2) = f1 == f2
+isTrivial _                 = False 
+
 
 writeLog level msg = do 
     maxLevel <- asks _solverLogLevel

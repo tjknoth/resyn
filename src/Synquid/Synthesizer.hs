@@ -52,7 +52,8 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _predQualsGen = predQuals,
                         _tcSolverSplitMeasures = _splitMeasures explorerParams,
                         _resPolynomialDegree = _polynomialDegree explorerParams,
-                        _tcSolverLogLevel = _explorerLogLevel explorerParams
+                        _tcSolverLogLevel = _explorerLogLevel explorerParams,
+                        _checkResourceBounds = _checkResources explorerParams
                       }
       in do cp0 <- lift $ lift startTiming  -- TODO time stats for this one as well?
             x <- reconstruct explorerParams typingParams goal
@@ -100,7 +101,8 @@ typeCheck explorerParams solverParams goal cquals tquals = evalZ3State $ evalFix
                         _predQualsGen = predQuals,
                         _tcSolverSplitMeasures = _splitMeasures explorerParams,
                         _tcSolverLogLevel = _explorerLogLevel explorerParams,
-                        _resPolynomialDegree = _polynomialDegree explorerParams
+                        _resPolynomialDegree = _polynomialDegree explorerParams,
+                        _checkResourceBounds = _checkResources explorerParams
                       }
       in do cp0 <- lift $ lift startTiming
             x <- reconstruct explorerParams typingParams goal

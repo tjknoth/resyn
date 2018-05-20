@@ -66,8 +66,9 @@ data TypingParams = TypingParams {
   _typeQualsGen :: Environment -> Formula -> [Formula] -> QSpace,   -- ^ Qualifier generator for types
   _predQualsGen :: Environment -> [Formula] -> [Formula] -> QSpace, -- ^ Qualifier generator for bound predicates
   _tcSolverSplitMeasures :: Bool,
-  _resPolynomialDegree :: Int, -- ^ Maximum degree of resource polynomials
-  _tcSolverLogLevel :: Int    -- ^ How verbose logging is
+  _resPolynomialDegree :: Int,                                      -- ^ Maximum degree of resource polynomials
+  _tcSolverLogLevel :: Int,                                         -- ^ How verbose logging is
+  _checkResourceBounds :: Bool                                     -- ^ Is resource checking enabled
 }
 
 makeLenses ''TypingParams
@@ -138,7 +139,8 @@ solveTypeConstraints = do
   solveHornClauses
   checkTypeConsistency
 
-  checkResources scs 
+  res <- asks _checkResourceBounds
+  when res $ checkResources scs 
 
   hornClauses .= []
   consistencyChecks .= []
@@ -177,7 +179,6 @@ getViolatingLabels = do
     isInvalid cand extractAssumptions (fml,_) = do
       cands' <- lift . lift . lift $ checkCandidates False [fml] extractAssumptions [cand]
       return $ null cands'
-
 {- Implementation -}
 
 -- | Decompose and unify typing constraints;

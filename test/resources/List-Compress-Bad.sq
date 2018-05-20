@@ -15,5 +15,5 @@ compress = \xs.
         Nil -> Cons y Nil 
         Cons z zs -> 
           if y == z
-            then Cons z zs
+            then compress ys
             else Cons y (Cons z zs)

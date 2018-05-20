@@ -64,7 +64,8 @@ main = do
                     _useMemoization = memoize,
                     _symmetryReduction = symmetry,
                     _explorerLogLevel = log_,
-                    _polynomialDegree = polynomial_deg
+                    _polynomialDegree = polynomial_deg,
+                    _checkResources = resources
                     }
                   let solverParams = defaultHornSolverParams {
                     isLeastFixpoint = lfp,
@@ -76,8 +77,7 @@ main = do
                     outputFormat = outFormat,
                     resolveOnly = resolve,
                     showSpec = print_spec,
-                    showStats = print_stats,
-                    checkResources = resources
+                    showStats = print_stats
                   }
                   let codegenParams = defaultCodegenParams {
                     filename = out_file,
@@ -191,7 +191,8 @@ defaultExplorerParams = ExplorerParams {
   _context = id,
   _sourcePos = noPos,
   _explorerLogLevel = 0,
-  _polynomialDegree = 1
+  _polynomialDegree = 1,
+  _checkResources = True
 }
 
 -- | Parameters for constraint solving
@@ -226,8 +227,7 @@ data SynquidParams = SynquidParams {
   repairPolicies :: Bool,
   verifyOnly :: Bool,
   showSpec :: Bool,                            -- ^ Print specification for every synthesis goal
-  showStats :: Bool,                            -- ^ Print specification and solution size
-  checkResources :: Bool
+  showStats :: Bool                            -- ^ Print specification and solution size
 }
 
 defaultSynquidParams = SynquidParams {
@@ -237,8 +237,7 @@ defaultSynquidParams = SynquidParams {
   repairPolicies = False,
   verifyOnly = False,
   showSpec = True,
-  showStats = False,
-  checkResources = True
+  showStats = False
 }
 
 -- | Parameters for code extraction and Haskell output
@@ -281,11 +280,9 @@ runOnFile :: SynquidParams -> ExplorerParams -> HornSolverParams -> CodegenParam
 runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
   declsByFile <- parseFromFiles (libs ++ [file])
   let decls = concat $ map snd declsByFile
-  putStrLn $ unlines $ fmap (show . pretty) decls
   case resolveDecls decls of
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure
     Right (goals, cquals, tquals) -> when (not $ resolveOnly synquidParams) $ do
-      putStrLn $ show $ pretty goals
       mapM (typecheckGoal cquals tquals) (requested goals)
       --mapM (synthesizeGoal cquals tquals) (requested goals)
       return ()

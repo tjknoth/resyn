@@ -157,8 +157,8 @@ reconstructI' env t@ScalarT{} impl = case impl of
     return $ Program (PIf pCond pThen pElse) t
   -}
   PIf iCond iThen iElse -> do
-    (pCond, _) <- inContext (\p -> Program (PIf p (Program PHole t) (Program PHole t)) t) $ reconstructETopLevel env (ScalarT BoolT ftrue defPotential) iCond
-    let (env', ScalarT BoolT cond pot) = embedContext env $ typeOf pCond
+    (pCond, envnew) <- inContext (\p -> Program (PIf p (Program PHole t) (Program PHole t)) t) $ reconstructETopLevel env (ScalarT BoolT ftrue defPotential) iCond
+    let (env', ScalarT BoolT cond pot) = embedContext envnew $ typeOf pCond
     pThen <- inContext (\p -> Program (PIf pCond p (Program PHole t)) t) $ reconstructI (addAssumption (substitute (Map.singleton valueVarName ftrue) cond) $ env') t iThen
     pElse <- inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (substitute (Map.singleton valueVarName ffalse) cond) $ env') t iElse
     return $ Program (PIf pCond pThen pElse) t
@@ -166,8 +166,8 @@ reconstructI' env t@ScalarT{} impl = case impl of
   PMatch iScr iCases -> do
     (consNames, consTypes) <- unzip <$> checkCases Nothing iCases
     let scrT = refineTop env $ shape $ lastType $ head consTypes
-    (pScrutinee, _) <- inContext (\p -> Program (PMatch p []) t) $ reconstructETopLevel env scrT iScr
-    let (env', tScr) = embedContext env (typeOf pScrutinee)
+    (pScrutinee, envnew) <- inContext (\p -> Program (PMatch p []) t) $ reconstructETopLevel env scrT iScr
+    let (env', tScr) = embedContext envnew (typeOf pScrutinee)
     let scrutineeSymbols = symbolList pScrutinee
     let isGoodScrutinee = (not $ head scrutineeSymbols `elem` consNames) &&                 -- Is not a value
                           (any (not . flip Set.member (env ^. constants)) scrutineeSymbols) -- Has variables (not just constants)

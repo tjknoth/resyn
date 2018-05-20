@@ -1,0 +1,13 @@
+data List a where
+	Nil :: List a
+	Cons :: x: {1**a| |1} -> xs: List a -> List a
+  
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs 
+
+double :: xs: List {1 ** a| |1} -> {List a | len _v == 2 * len xs}
+double = \xs.
+  match xs with
+    Nil -> Nil
+    Cons y ys -> Cons y (Cons y (double ys))

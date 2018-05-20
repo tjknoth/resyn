@@ -1,0 +1,7 @@
+data List a where
+	Nil :: List a
+	Cons :: x: {1**a| |1} -> xs: List a -> List a
+  
+cons2 :: x: {1 ** a | | 1} -> List a
+cons2 = \x. 
+  Cons x (Cons x Nil)

@@ -326,7 +326,7 @@ resolveType (FunctionT x tArg tRes)
     throwResError $ text valueVarName <+> text "is a reserved variable name"
   | x == dontCare =
     error $ unwords ["resolveType: blank in function type", show (FunctionT x tArg tRes)] -- Should never happen
-  | otherwise = do 
+  | otherwise = do
       tArg' <- resolveType tArg
       tRes' <- withLocalEnv $ do
         unless (isFunctionType tArg') (environment %= addVariable x tArg')

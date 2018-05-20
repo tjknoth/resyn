@@ -301,6 +301,7 @@ addRefinementToLastSch (Monotype t) fml = Monotype $ addRefinementToLast t fml
 addRefinementToLastSch (ForallT a sch) fml = ForallT a $ addRefinementToLastSch sch fml
 addRefinementToLastSch (ForallP sig sch) fml = ForallP sig $ addRefinementToLastSch sch fml
 
+
 -- | Apply variable substitution in all formulas inside a type
 substituteInType :: (Id -> Bool) -> Substitution -> RType -> RType
 substituteInType isBound subst (ScalarT baseT fml pot) = ScalarT (substituteBase baseT) (substitute subst fml) (substitute subst pot)
