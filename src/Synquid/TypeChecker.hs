@@ -159,8 +159,8 @@ reconstructI' env t@ScalarT{} impl = case impl of
   PIf iCond iThen iElse -> do
     (pCond, envnew) <- inContext (\p -> Program (PIf p (Program PHole t) (Program PHole t)) t) $ reconstructETopLevel env (ScalarT BoolT ftrue defPotential) iCond
     let (env', ScalarT BoolT cond pot) = embedContext envnew $ typeOf pCond
-    pThen <- inContext (\p -> Program (PIf pCond p (Program PHole t)) t) $ reconstructI (addAssumption (substitute (Map.singleton valueVarName ftrue) cond) $ env') t iThen
-    pElse <- inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (substitute (Map.singleton valueVarName ffalse) cond) $ env') t iElse
+    pThen <- inContext (\p -> Program (PIf pCond p (Program PHole t)) t) $ reconstructI (addAssumption (substitute (Map.singleton valueVarName ftrue) cond) env') t iThen
+    pElse <- inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (substitute (Map.singleton valueVarName ffalse) cond) env') t iElse
     return $ Program (PIf pCond pThen pElse) t
 
   PMatch iScr iCases -> do
@@ -169,9 +169,9 @@ reconstructI' env t@ScalarT{} impl = case impl of
     (pScrutinee, envnew) <- inContext (\p -> Program (PMatch p []) t) $ reconstructETopLevel env scrT iScr
     let (env', tScr) = embedContext envnew (typeOf pScrutinee)
     let scrutineeSymbols = symbolList pScrutinee
-    let isGoodScrutinee = (not $ head scrutineeSymbols `elem` consNames) &&                 -- Is not a value
-                          (any (not . flip Set.member (env ^. constants)) scrutineeSymbols) -- Has variables (not just constants)
-    when (not isGoodScrutinee) $ throwErrorWithDescription $ text "Match scrutinee" </> squotes (pretty pScrutinee) </> text "is constant"
+    let isGoodScrutinee = not (head scrutineeSymbols `elem` consNames) &&                 -- Is not a value
+                          any (not . flip Set.member (env ^. constants)) scrutineeSymbols -- Has variables (not just constants)
+    unless isGoodScrutinee $ throwErrorWithDescription $ text "Match scrutinee" </> squotes (pretty pScrutinee) </> text "is constant"
 
     (env'', x) <- toVar (addScrutinee pScrutinee env') pScrutinee
     pCases <- zipWithM (reconstructCase env'' x pScrutinee t) iCases consTypes
@@ -186,7 +186,8 @@ reconstructI' env t@ScalarT{} impl = case impl of
       Nothing -> throwErrorWithDescription $ text "Not in scope: data constructor" </> squotes (text consName)
       Just consSch -> do
                         consT <- instantiate env consSch True args -- Set argument names in constructor type to user-provided binders
-                        case lastType consT of
+                        let consT' = typeMultiply fzero consT
+                        case lastType consT' of
                           (ScalarT (DatatypeT dtName _ _) _ _) -> do
                             case mName of
                               Nothing -> return ()
@@ -198,7 +199,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
                             if arity (toMonotype consSch) /= length args
                               then throwErrorWithDescription $ text "Constructor" </> squotes (text consName)
                                             </> text "expected" </> pretty (arity (toMonotype consSch)) </> text "binder(s) and got" <+> pretty (length args)
-                              else ((consName, consT) :) <$> checkCases (Just dtName) cs
+                              else ((consName, consT') :) <$> checkCases (Just dtName) cs
                           _ -> throwErrorWithDescription $ text "Not in scope: data constructor" </> squotes (text consName)
     checkCases _ [] = return []
 

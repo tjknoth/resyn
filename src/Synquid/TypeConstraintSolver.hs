@@ -1,10 +1,9 @@
-{-# LANGUAGE TemplateHaskell, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 -- | Incremental solving of subtyping and well-formedness constraints
 module Synquid.TypeConstraintSolver (
   ErrorMessage,
-  TypingParams (..),
-  TypingState, 
+  solveTypeConstraints,
   typingConstraints,
   typeAssignment,
   qualifierMap,
@@ -12,15 +11,10 @@ module Synquid.TypeConstraintSolver (
   candidates,
   errorContext,
   isFinal, 
-  TCSolver,
-  runTCSolver,
-  initTypingState,
   addTypingConstraint,
   addFixedUnknown,
   setUnknownRecheck,
-  solveTypeConstraints,
   simplifyAllConstraints,
-  getViolatingLabels,
   solveAllCandidates,
   matchConsType,
   hasPotentialScrutinees,
@@ -42,10 +36,9 @@ import Synquid.Pretty
 import Synquid.SolverMonad
 import Synquid.Util
 import Synquid.Resolver (addAllVariables)
-import Synquid.NumericSolver
 
 import Data.Maybe
-import Data.List
+import Data.List hiding (partition)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
@@ -58,72 +51,6 @@ import Control.Lens hiding (both)
 import Debug.Trace
 
 {- Interface -}
-
--- | Parameters of type constraint solving
-data TypingParams = TypingParams {
-  _condQualsGen :: Environment -> [Formula] -> QSpace,              -- ^ Qualifier generator for conditionals
-  _matchQualsGen :: Environment -> [Formula] -> QSpace,             -- ^ Qualifier generator for match scrutinees
-  _typeQualsGen :: Environment -> Formula -> [Formula] -> QSpace,   -- ^ Qualifier generator for types
-  _predQualsGen :: Environment -> [Formula] -> [Formula] -> QSpace, -- ^ Qualifier generator for bound predicates
-  _tcSolverSplitMeasures :: Bool,
-  _resPolynomialDegree :: Int,                                      -- ^ Maximum degree of resource polynomials
-  _tcSolverLogLevel :: Int,                                         -- ^ How verbose logging is
-  _checkResourceBounds :: Bool                                     -- ^ Is resource checking enabled
-}
-
-makeLenses ''TypingParams
-
--- | State of type constraint solving
-data TypingState = TypingState {
-  -- Persistent state:
-  _typingConstraints :: [Constraint],           -- ^ Typing constraints yet to be converted to horn clauses
-  _typeAssignment :: TypeSubstitution,          -- ^ Current assignment to free type variables
-  _predAssignment :: Substitution,              -- ^ Current assignment to free predicate variables  _qualifierMap :: QMap,
-  _qualifierMap :: QMap,                        -- ^ Current state space for predicate unknowns
-  _candidates :: [Candidate],                   -- ^ Current set of candidate liquid assignments to unknowns
-  _initEnv :: Environment,                      -- ^ Initial environment
-  _idCount :: Map String Int,                   -- ^ Number of unique identifiers issued so far
-  _isFinal :: Bool,                             -- ^ Has the entire program been seen?
-  _resourceConstraints :: Formula,         -- ^ Constraints relevant to resource analysis
-  -- Temporary state:
-  _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
-  _hornClauses :: [(Formula, Id)],              -- ^ Horn clauses generated from subtyping constraints
-  _consistencyChecks :: [Formula],              -- ^ Formulas generated from type consistency constraints
-  _errorContext :: (SourcePos, Doc)             -- ^ Information to be added to all type errors
-}
-
-makeLenses ''TypingState
-
--- | Computations that solve type constraints, parametrized by the the horn solver @s@
-type TCSolver s = StateT TypingState (ReaderT TypingParams (ExceptT ErrorMessage s))
-
-
--- | 'runTCSolver' @params st go@ : execute a typing computation @go@ with typing parameters @params@ in a typing state @st@
-runTCSolver :: TypingParams -> TypingState -> TCSolver s a -> s (Either ErrorMessage (a, TypingState))
-runTCSolver params st go = runExceptT $ runReaderT (runStateT go st) params
-
--- | Initial typing state in the initial environment @env@
-initTypingState :: MonadHorn s => Environment -> s TypingState
-initTypingState env = do
-  initCand <- initHornSolver env
-  return TypingState {
-    _typingConstraints = [],
-    _typeAssignment = Map.empty,
-    _predAssignment = Map.empty,
-    _qualifierMap = Map.empty,
-    _candidates = [initCand],
-    _initEnv = env,
-    _idCount = Map.empty,
-    _isFinal = False,
-    _resourceConstraints = ftrue,
-    _simpleConstraints = [],
-    _hornClauses = [],
-    _consistencyChecks = [],
-    _errorContext = (noPos, empty)
-  }
-
--- | Impose typing constraint @c@ on the programs
-addTypingConstraint c = over typingConstraints (nub . (c :))
 
 -- | Solve @typingConstraints@: either strengthen the current candidates and return shapeless type constraints or fail
 solveTypeConstraints :: (MonadSMT s, MonadHorn s) => TCSolver s ()
@@ -145,40 +72,21 @@ solveTypeConstraints = do
   hornClauses .= []
   consistencyChecks .= []
 
-{- Repair-specific interface -}
+checkResources :: (MonadSMT s, MonadHorn s) => [Constraint] -> TCSolver s ()
+checkResources constraints = do 
+  tcParams <- ask 
+  tcState <- get 
+  oldConstraints <- use resourceConstraints 
+  newC <- solveResourceConstraints oldConstraints constraints
+  case newC of 
+    Nothing -> throwError $ text "Insufficient resources"
+    Just f -> resourceConstraints %= (f |&|) 
+  --when (newC == ffalse) $ throwError $ text "Insufficient resources to check program"
+  --resourceConstraints %= f |&|
 
-getViolatingLabels :: MonadHorn s => TCSolver s (Set Id)
-getViolatingLabels = do
-  scs <- use simpleConstraints
-  writeLog 2 (text "Simple Constraints" $+$ (vsep $ map pretty scs))
+-- | Impose typing constraint @c@ on the programs
+addTypingConstraint c = over typingConstraints (nub . (c :))
 
-  processAllPredicates
-  processAllConstraints
-  generateAllHornClauses
-
-  clauses <- use hornClauses
-  -- TODO: this should probably be moved to Horn solver
-  let (nontermClauses, termClauses) = partition isNonTerminal clauses
-  qmap <- use qualifierMap
-  cands <- use candidates
-  env <- use initEnv
-
-  writeLog 2 (vsep [
-    nest 2 $ text "Terminal Horn clauses" $+$ vsep (map (\(fml, l) -> text l <> text ":" <+> pretty fml) termClauses),
-    nest 2 $ text "Nonterminal Horn clauses" $+$ vsep (map (\(fml, l) -> text l <> text ":" <+> pretty fml) nontermClauses),
-    nest 2 $ text "QMap" $+$ pretty qmap])
-
-  (newCand:[]) <- lift . lift . lift $ refineCandidates (map fst nontermClauses) qmap (instantiateConsAxioms env Nothing) cands
-  candidates .= [newCand]
-  invalidTerminals <- filterM (isInvalid newCand (instantiateConsAxioms env Nothing)) termClauses
-  return $ Set.fromList $ map snd invalidTerminals
-  where
-    isNonTerminal (Binary Implies _ (Unknown _ _), _) = True
-    isNonTerminal _ = False
-
-    isInvalid cand extractAssumptions (fml,_) = do
-      cands' <- lift . lift . lift $ checkCandidates False [fml] extractAssumptions [cand]
-      return $ null cands'
 {- Implementation -}
 
 -- | Decompose and unify typing constraints;
@@ -215,7 +123,7 @@ processAllConstraints = do
   mapM_ processConstraint tcs
 
 -- | Convert simple subtyping constraints into horn clauses
-generateAllHornClauses :: MonadHorn s => TCSolver s ()
+generateAllHornClauses :: (MonadHorn s, MonadSMT s) => TCSolver s ()
 generateAllHornClauses = do
   tcs <- use simpleConstraints
   simpleConstraints .= []
@@ -227,18 +135,6 @@ throwError msg = do
   (pos, ec) <- use errorContext
   lift $ lift $ throwE $ ErrorMessage TypeError pos (msg $+$ ec)
 
-checkResources :: (MonadSMT s, MonadHorn s) => [Constraint] -> TCSolver s ()
-checkResources constraints = do 
-  tcParams <- ask 
-  tcState <- get 
-  oldConstraints <- use resourceConstraints 
-  let nSolverParams = initNSolverParams tcParams tcState 
-  newC <- lift . lift . lift . runNumSolver nSolverParams $ solveResourceConstraints oldConstraints constraints
-  case newC of 
-    Nothing -> throwError $ text "Insufficient resources"
-    Just f -> resourceConstraints %= (f |&|) 
-  --when (newC == ffalse) $ throwError $ text "Insufficient resources to check program"
-  --resourceConstraints %= f |&|
 
 -- | Refine the current liquid assignments using the horn clauses
 solveHornClauses :: MonadHorn s => TCSolver s ()
@@ -498,19 +394,15 @@ processConstraint (SplitType env var (ScalarT base fml pot) (ScalarT baseL fmlL 
 processConstraint SplitType{} = return ()
 processConstraint c = error $ show $ text "processConstraint: not a simple constraint" <+> pretty c
 
-generateHornClauses :: MonadHorn s => Constraint -> TCSolver s ()
+generateHornClauses :: (MonadHorn s, MonadSMT s) => Constraint -> TCSolver s ()
 generateHornClauses c@(Subtype env (ScalarT baseTL l potl) (ScalarT baseTR r potr) False label) | equalShape baseTL baseTR
   = do
-      qmap <- use qualifierMap
-      let relevantVars = potentialVars qmap (l |&| r)
-      emb <- embedding env relevantVars True
+      emb <- embedEnv env (l |&| r) True
       clauses <- lift . lift . lift $ preprocessConstraint (conjunction (Set.insert l emb) |=>| r)
       hornClauses %= (zip clauses (repeat label) ++)
 generateHornClauses (Subtype env (ScalarT baseTL l potl) (ScalarT baseTR r potr) True _) | equalShape baseTL baseTR
   = do
-      qmap <- use qualifierMap
-      let relevantVars = potentialVars qmap (l |&| r)
-      emb <- embedding env relevantVars False
+      emb <- embedEnv env (l |&| r) False
       let clause = conjunction (Set.insert l $ Set.insert r emb)
       consistencyChecks %= (clause :)
 generateHornClauses c@(SplitType var env (ScalarT base fml pot) (ScalarT baseL fmlL potL) (ScalarT baseR fmlR potR)) = return ()
@@ -722,22 +614,133 @@ finalizeProgram p = do
   sol <- uses candidates (solution . head)
   return $ fmap (typeApplySolution sol . typeSubstitutePred pass . typeSubstitute tass) p
 
+embedEnv :: (MonadHorn s, MonadSMT s) => Environment -> Formula -> Bool -> TCSolver s (Set Formula)
+embedEnv env fml consistency = do 
+  qmap <- use qualifierMap
+  let relevantVars = potentialVars qmap fml
+  embedding env relevantVars consistency
 
-instance Eq TypingState where
-  (==) st1 st2 = (restrictDomain (Set.fromList ["a", "u"]) (_idCount st1) == restrictDomain (Set.fromList ["a", "u"]) (_idCount st2)) &&
-                  _typeAssignment st1 == _typeAssignment st2 &&
-                  _candidates st1 == _candidates st2
 
-instance Ord TypingState where
-  (<=) st1 st2 = (restrictDomain (Set.fromList ["a", "u"]) (_idCount st1) <= restrictDomain (Set.fromList ["a", "u"]) (_idCount st2)) &&
-                _typeAssignment st1 <= _typeAssignment st2 &&
-                _candidates st1 <= _candidates st2
 
-initNSolverParams :: TypingParams -> TypingState -> NumericSolverParams
-initNSolverParams tparams tstate = NumericSolverParams {
-  _maxPolynomialDegree = _resPolynomialDegree tparams,
-  _solverLogLevel = _tcSolverLogLevel tparams
-}
+----------------------------------------
+-- Resource constraint-related functions
+----------------------------------------
+
+solveResourceConstraints :: (MonadHorn s, MonadSMT s) => Formula -> [Constraint] -> TCSolver s (Maybe Formula) 
+solveResourceConstraints oldConstraints constraints = do
+    fmlList <- mapM generateFormula constraints
+    -- Filter out trivial constraints, mostly for readability
+    let fmls = Set.fromList (filter (not . isTrivial) fmlList)
+    let query = conjunction fmls
+    b <- isSatFml (oldConstraints |&| query)
+    let result = if b then "SAT" else "UNSAT"
+    writeLog 4 $ text "Old constraints" <+> pretty oldConstraints
+    writeLog 3 $ text "Solving resource constraint:" <+> pretty query <+> text "--" <+> text result 
+    if b then return $ Just query 
+         else return Nothing 
+
+isSatFml :: MonadSMT s => Formula -> TCSolver s Bool
+isSatFml = lift . lift . lift . isSat
+
+-- Placeholder formulas!
+-- For now not computing \Phi! (or even using the conjunction of everything in the environment!)
+generateFormula :: (MonadHorn s, MonadSMT s) => Constraint -> TCSolver s Formula 
+generateFormula c@(Subtype env tl tr _ name) = do
+    let syms = Map.elems $ Map.filterWithKey (\k a -> k /= name) (allSymbols env) 
+    let fmls = conjunction $ joinAssertions syms (|=|) tl tr
+    --emb <- embedEnv env (refinementOf tl |&| refinementOf tr) True
+    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives" <+> pretty fmls)
+    return fmls  
+generateFormula c@(WellFormed env t)         = do
+    let fmls = conjunction $ Set.map (|>=| fzero) $ allFormulas t
+    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives" <+> pretty fmls)
+    return fmls
+generateFormula c@(SplitType e v t tl tr)    = do 
+    let fmls = conjunction $ partition t tl tr
+    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives" <+> pretty fmls)
+    return fmls
+generateFormula c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
+
+allFormulas :: RType -> Set Formula 
+allFormulas (ScalarT base _ p) = Set.insert p (allFormulasBase base)
+allFormulas _                  = Set.empty
+
+allFormulasBase :: BaseType Formula -> Set Formula
+allFormulasBase (DatatypeT _ ts _) = Set.unions $ fmap allFormulas ts
+allFormulasBase (TypeVarT _ _ m)   = Set.singleton m
+allFormulasBase _                  = Set.empty
+
+partition :: RType -> RType -> RType -> Set Formula 
+partition (ScalarT b _ f) (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (f |=| (fl |+| fr)) $ partitionBase b bl br
+partition _ _ _ = Set.empty
+
+partitionBase :: BaseType Formula -> BaseType Formula -> BaseType Formula -> Set Formula
+partitionBase (DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Set.unions $ zipWith3 partition ts tsl tsr
+partitionBase (TypeVarT _ _ m) (TypeVarT _ _ ml) (TypeVarT _ _ mr) = Set.singleton $ m |=| (ml |+| mr)
+partitionBase _ _ _ = Set.empty
+
+joinAssertions :: [RSchema] -> (Formula -> Formula -> Formula) -> RType -> RType -> Set Formula
+joinAssertions allsyms op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (fl `op` fr) $ joinAssertionsBase allsyms op bl br
+{-
+joinAssertions allsyms op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (( leftTotal |+| fl) `op` (rightTotal |+| fr)) $ joinAssertionsBase allsyms op bl br
+  where 
+    leftTotal = totalMultiplicity allsyms
+    rightTotal = totalMultiplicity allsyms
+-}
+joinAssertions allsyms op _ _ = Set.empty 
+
+joinAssertionsBase :: [RSchema] -> (Formula -> Formula -> Formula) -> BaseType Formula -> BaseType Formula -> Set Formula
+joinAssertionsBase allsyms op (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Set.unions $ zipWith (joinAssertions allsyms op) tsl tsr
+joinAssertionsBase allsyms op (TypeVarT _ _ ml) (TypeVarT _ _ mr) = 
+    if isTrivial fml 
+        then Set.empty 
+        else Set.singleton $ ml `op` mr
+    where fml = ml `op` mr
+joinAssertionsBase _ _ _ _ = Set.empty 
+
+
+isResourceConstraint :: Constraint -> Bool
+isResourceConstraint (Subtype e ScalarT{} ScalarT{}  _ _) = True
+isResourceConstraint WellFormed{} = True
+isResourceConstraint SplitType{}  = True
+isResourceConstraint _            = False
+
+-- Remove some trivial resources constraints (ie 0 == 0...)
+isTrivial :: Formula -> Bool
+isTrivial (BoolLit True)    = True 
+isTrivial (Binary Eq f1 f2) = f1 == f2
+isTrivial _                 = False 
+
+-- Returns a formula computing the total potential in the environment (\Phi) 
+totalPotential :: [RSchema] -> Formula
+totalPotential schs = foldl (|+|) (IntLit 0) $ catMaybes $ fmap (potentialOf . typeFromSchema) schs
+
+totalMultiplicity :: [RSchema] -> Formula
+totalMultiplicity schs = foldl (|+|) (IntLit 0) $ catMaybes $ fmap (multiplicityOfType . typeFromSchema) schs
+
+potentialOf :: RType -> Maybe Formula
+potentialOf (ScalarT (DatatypeT _ ts _) _ _) = case foldl (|+|) (IntLit 0) (catMaybes (fmap potentialOf ts)) of 
+    (IntLit 0) -> Nothing
+    f          -> Just f
+potentialOf (ScalarT _ _ p) = Just p  
+potentialOf _               = Nothing 
+
+-- Total multiplicity in a refinement type
+multiplicityOfType :: RType -> Maybe Formula 
+multiplicityOfType (ScalarT base f p) = multiplicityOfBase base 
+multiplicityOfType _                  = Nothing
+
+-- Total multiplicity in a basetype
+multiplicityOfBase :: BaseType Formula -> Maybe Formula
+multiplicityOfBase (TypeVarT _ _ m)      = Just m
+multiplicityOfBase (DatatypeT name ts _) = case foldl (|+|) (IntLit 0) (catMaybes (fmap multiplicityOfType ts)) of 
+    (IntLit 0) -> Nothing -- No multiplicities in constructors 
+    f          -> Just f
+multiplicityOfBase _                = Nothing
+
+refinementOf :: RType -> Formula 
+refinementOf (ScalarT _ fml _) = fml
+refinementOf _                 = error "error: Encountered non-scalar type when generating resource constraints"
 
 writeLog level msg = do
   maxLevel <- asks _tcSolverLogLevel
