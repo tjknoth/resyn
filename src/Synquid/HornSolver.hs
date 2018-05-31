@@ -79,6 +79,7 @@ instance (Monad s, Applicative s, MonadSMT s) => MonadSMT (FixPointSolver s) whe
   isSat = lift . isSat 
   -- idk why I don't have to lift this
   allUnsatCores = allUnsatCores
+  solveWithModel = lift . solveWithModel
 
  
 {- Implementation -}

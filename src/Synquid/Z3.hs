@@ -87,6 +87,18 @@ instance MonadSMT Z3State where
 
   allUnsatCores = getAllMUSs
 
+  solveWithModel fml = do 
+    (r, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
+    let r' = case r of 
+              Unsat -> False 
+              Sat -> True
+    case m of 
+      Nothing -> return (r', "")
+      Just mod -> do 
+        str <- modelToString mod 
+        return (r', str)
+
+
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
 convertDatatypes _ [] = return ()
 convertDatatypes symbols ((dtName, DatatypeDef [] _ _ ctors@(_:_) _):rest) = do

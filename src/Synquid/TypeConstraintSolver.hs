@@ -639,18 +639,19 @@ solveResourceConstraints oldConstraints constraints = do
     -- Filter out trivial constraints, mostly for readability
     let fmls = Set.fromList (filter (not . isTrivial) fmlList)
     let query = conjunction fmls
-    b <- isSatFml (oldConstraints |&| query)
+    (b, s) <- isSatWithModel (oldConstraints |&| query)
     let result = if b then "SAT" else "UNSAT"
-    writeLog 4 $ text "Old constraints" <+> pretty oldConstraints
+    writeLog 5 $ text "Old constraints" <+> pretty oldConstraints
     writeLog 3 $ text "Solving resource constraint:" <+> pretty query <+> text "--" <+> text result 
-    if b then return $ Just query 
+    if b then do
+           writeLog 4 $ nest 2 $ text "SAT with model" <+> text s
+           return $ Just query 
          else return Nothing 
 
-isSatFml :: MonadSMT s => Formula -> TCSolver s Bool
-isSatFml = lift . lift . lift . isSat
+isSatWithModel :: MonadSMT s => Formula -> TCSolver s (Bool, String)
+isSatWithModel = lift . lift . lift . solveWithModel
 
--- Placeholder formulas!
--- For now not computing \Phi! (or even using the conjunction of everything in the environment!)
+
 -- Converts abstract constraint into relevant numerical constraints
 generateFormula :: (MonadHorn s, MonadSMT s) => Constraint -> TCSolver s Formula 
 generateFormula c@(Subtype env tl tr _ name) = do
@@ -659,15 +660,15 @@ generateFormula c@(Subtype env tl tr _ name) = do
     emb <- embedEnv env (refinementOf tl |&| refinementOf tr) True
     let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf tl) emb
     writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty emb')
-    --return $ conjunction emb' |=>| fmls
-    return fmls
+    return $ conjunction emb' |=>| fmls
+    --return fmls
 generateFormula c@(WellFormed env t)         = do
     let fmls = conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allFormulas t
     emb <- embedEnv env (refinementOf t) True  
     let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf t) emb
     writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty emb')
-    --return $ conjunction emb' |=>| fmls
-    return fmls
+    return $ conjunction emb' |=>| fmls
+    --return fmls
 generateFormula c@(SplitType e v t tl tr)    = do 
     let fmls = conjunction $ partition t tl tr
     writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)
