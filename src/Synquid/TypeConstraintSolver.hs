@@ -80,7 +80,7 @@ checkResources constraints = do
   newC <- solveResourceConstraints oldConstraints constraints
   case newC of 
     Nothing -> throwError $ text "Insufficient resources"
-    Just f -> resourceConstraints %= (f |&|) 
+    Just f -> resourceConstraints %= (f `andClean`) 
   --when (newC == ffalse) $ throwError $ text "Insufficient resources to check program"
   --resourceConstraints %= f |&|
 
@@ -113,7 +113,7 @@ processAllPredicates = do
   mapM_ processPredicate tcs
 
   pass <- use predAssignment
-  writeLog 3 (text "Pred assignment" $+$ vMapDoc text pretty pass)
+  writeLog 3 (nest 2 $ text "Pred assignment" $+$ vMapDoc text pretty pass)
 
 -- | Eliminate type and predicate variables, generate qualifier maps
 processAllConstraints :: MonadHorn s => TCSolver s ()
@@ -184,6 +184,7 @@ simplifyConstraint c = do
 simplifyConstraint' _ _ (Subtype _ _ AnyT _ _) = return ()
 simplifyConstraint' _ _ c@(Subtype _ AnyT _ _ _) = return ()
 simplifyConstraint' _ _ c@(WellFormed _ AnyT) = return ()
+simplifyConstraint' _ _ (SplitType _ _ AnyT _ _) = return ()
 -- Any datatype: drop only if lhs is a datatype
 simplifyConstraint' _ _ (Subtype _ (ScalarT (DatatypeT _ _ _) _ _) t _ _) | t == anyDatatype = return ()
 -- Well-formedness of a known predicate drop
@@ -196,6 +197,12 @@ simplifyConstraint' tass _ (Subtype env t tv@(ScalarT (TypeVarT _ a _) _ _) cons
   = simplifyConstraint (Subtype env t (typeSubstitute tass tv) consistent label)
 simplifyConstraint' tass _ (WellFormed env tv@(ScalarT (TypeVarT _ a _) _ _)) | a `Map.member` tass
   = simplifyConstraint (WellFormed env (typeSubstitute tass tv))
+simplifyConstraint' tass _ (SplitType env name tv@(ScalarT (TypeVarT _ a _) _ _) t2 t3) | a `Map.member` tass 
+  = simplifyConstraint (SplitType env name (typeSubstitute tass tv) t2 t3)
+simplifyConstraint' tass _ (SplitType env name t1 tv@(ScalarT (TypeVarT _ a _) _ _) t3) | a `Map.member` tass 
+  = simplifyConstraint (SplitType env name t1 (typeSubstitute tass tv) t3)
+simplifyConstraint' tass _ (SplitType env name t1 t2 tv@(ScalarT (TypeVarT _ a _) _ _)) | a `Map.member` tass 
+  = simplifyConstraint (SplitType env name t1 t2 (typeSubstitute tass tv))
 
 -- Two unknown free variables: nothing can be done for now
 simplifyConstraint' _ _ c@(Subtype env (ScalarT (TypeVarT _ a _) _ _) (ScalarT (TypeVarT _ b _) _ _) _ _) | not (isBound env a) && not (isBound env b)
@@ -223,7 +230,7 @@ simplifyConstraint' _ _ c@(Subtype env t (ScalarT (TypeVarT _ a _) _ _) _ _) | n
   = unify env a t >> simplifyConstraint c
 
 -- Compound types: decompose
--- TODO: do something with potential
+-- TODO: do something with potential?
 simplifyConstraint' _ _ (Subtype env (ScalarT (DatatypeT name (tArg:tArgs) pArgs) fml pot) (ScalarT (DatatypeT name' (tArg':tArgs') pArgs') fml' pot') consistent label)
   = do
       simplifyConstraint (Subtype env tArg tArg' consistent label)
@@ -340,7 +347,6 @@ processConstraint c@(Subtype env (ScalarT baseTL l potl) (ScalarT baseTR r potr)
       let rhs = conjunction rConjuncts
       let lhs = conjunction $ setConcatMap (\measure -> Map.findWithDefault Set.empty measure ml) measures
       let c' = Subtype env (ScalarT baseTL lhs potl) (ScalarT baseTR rhs potr) False label
-      writeLog 3 $ text "addSplitConstraint" <+> pretty c'
       simpleConstraints %= (c' :)
 
 processConstraint (Subtype env (ScalarT baseTL l potl) (ScalarT baseTR r potr) True label) | equalShape baseTL baseTR
@@ -626,6 +632,7 @@ embedEnv env fml consistency = do
 -- Resource constraint-related functions
 ----------------------------------------
 
+-- Top-level interface for solving resource constraints
 solveResourceConstraints :: (MonadHorn s, MonadSMT s) => Formula -> [Constraint] -> TCSolver s (Maybe Formula) 
 solveResourceConstraints oldConstraints constraints = do
     fmlList <- mapM generateFormula constraints
@@ -644,23 +651,25 @@ isSatFml = lift . lift . lift . isSat
 
 -- Placeholder formulas!
 -- For now not computing \Phi! (or even using the conjunction of everything in the environment!)
+-- Converts abstract constraint into relevant numerical constraints
 generateFormula :: (MonadHorn s, MonadSMT s) => Constraint -> TCSolver s Formula 
 generateFormula c@(Subtype env tl tr _ name) = do
-    let syms = Map.elems $ Map.filterWithKey (\k a -> k /= name) (allSymbols env) 
-    let fmls = conjunction $ joinAssertions syms (|=|) tl tr
+    --let syms = Map.elems $ Map.filterWithKey (\k a -> k /= name) (allSymbols env) 
+    let fmls = conjunction $ Set.filter (not . isTrivial) $ joinAssertions (|=|) tl tr
     --emb <- embedEnv env (refinementOf tl |&| refinementOf tr) True
-    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives" <+> pretty fmls)
+    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
     return fmls  
 generateFormula c@(WellFormed env t)         = do
-    let fmls = conjunction $ Set.map (|>=| fzero) $ allFormulas t
-    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives" <+> pretty fmls)
+    let fmls = conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allFormulas t
+    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
     return fmls
 generateFormula c@(SplitType e v t tl tr)    = do 
     let fmls = conjunction $ partition t tl tr
-    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives" <+> pretty fmls)
+    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)
     return fmls
 generateFormula c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
 
+-- Set of all resource-related formulas (potentials and multiplicities) from a refinement type
 allFormulas :: RType -> Set Formula 
 allFormulas (ScalarT base _ p) = Set.insert p (allFormulasBase base)
 allFormulas _                  = Set.empty
@@ -670,6 +679,7 @@ allFormulasBase (DatatypeT _ ts _) = Set.unions $ fmap allFormulas ts
 allFormulasBase (TypeVarT _ _ m)   = Set.singleton m
 allFormulasBase _                  = Set.empty
 
+-- Generate numerical constraints referring to a partition of resources from type-splitting constraint
 partition :: RType -> RType -> RType -> Set Formula 
 partition (ScalarT b _ f) (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (f |=| (fl |+| fr)) $ partitionBase b bl br
 partition _ _ _ = Set.empty
@@ -679,25 +689,26 @@ partitionBase (DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Set.u
 partitionBase (TypeVarT _ _ m) (TypeVarT _ _ ml) (TypeVarT _ _ mr) = Set.singleton $ m |=| (ml |+| mr)
 partitionBase _ _ _ = Set.empty
 
-joinAssertions :: [RSchema] -> (Formula -> Formula -> Formula) -> RType -> RType -> Set Formula
-joinAssertions allsyms op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (fl `op` fr) $ joinAssertionsBase allsyms op bl br
+-- Essentially folds all resource formulas in a schema by `op` -- some binary operation on formulas
+joinAssertions :: (Formula -> Formula -> Formula) -> RType -> RType -> Set Formula
+joinAssertions op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (fl `op` fr) $ joinAssertionsBase op bl br
+-- TODO: add total potential from input and output environment to left and right sides
 {-
-joinAssertions allsyms op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (( leftTotal |+| fl) `op` (rightTotal |+| fr)) $ joinAssertionsBase allsyms op bl br
+joinAssertions op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (( leftTotal |+| fl) `op` (rightTotal |+| fr)) $ joinAssertionsBase allsyms op bl br
   where 
     leftTotal = totalMultiplicity allsyms
     rightTotal = totalMultiplicity allsyms
 -}
-joinAssertions allsyms op _ _ = Set.empty 
+joinAssertions op _ _ = Set.empty 
 
-joinAssertionsBase :: [RSchema] -> (Formula -> Formula -> Formula) -> BaseType Formula -> BaseType Formula -> Set Formula
-joinAssertionsBase allsyms op (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Set.unions $ zipWith (joinAssertions allsyms op) tsl tsr
-joinAssertionsBase allsyms op (TypeVarT _ _ ml) (TypeVarT _ _ mr) = 
+joinAssertionsBase :: (Formula -> Formula -> Formula) -> BaseType Formula -> BaseType Formula -> Set Formula
+joinAssertionsBase op (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Set.unions $ zipWith (joinAssertions op) tsl tsr
+joinAssertionsBase op (TypeVarT _ _ ml) (TypeVarT _ _ mr) = 
     if isTrivial fml 
         then Set.empty 
         else Set.singleton $ ml `op` mr
     where fml = ml `op` mr
-joinAssertionsBase _ _ _ _ = Set.empty 
-
+joinAssertionsBase _ _ _ = Set.empty 
 
 isResourceConstraint :: Constraint -> Bool
 isResourceConstraint (Subtype e ScalarT{} ScalarT{}  _ _) = True
@@ -705,19 +716,15 @@ isResourceConstraint WellFormed{} = True
 isResourceConstraint SplitType{}  = True
 isResourceConstraint _            = False
 
--- Remove some trivial resources constraints (ie 0 == 0...)
-isTrivial :: Formula -> Bool
-isTrivial (BoolLit True)    = True 
-isTrivial (Binary Eq f1 f2) = f1 == f2
-isTrivial _                 = False 
-
 -- Returns a formula computing the total potential in the environment (\Phi) 
 totalPotential :: [RSchema] -> Formula
 totalPotential schs = foldl (|+|) (IntLit 0) $ catMaybes $ fmap (potentialOf . typeFromSchema) schs
 
+-- Returns a formula computing the total potential in an environment
 totalMultiplicity :: [RSchema] -> Formula
 totalMultiplicity schs = foldl (|+|) (IntLit 0) $ catMaybes $ fmap (multiplicityOfType . typeFromSchema) schs
 
+-- Extract potential from refinement type
 potentialOf :: RType -> Maybe Formula
 potentialOf (ScalarT (DatatypeT _ ts _) _ _) = case foldl (|+|) (IntLit 0) (catMaybes (fmap potentialOf ts)) of 
     (IntLit 0) -> Nothing

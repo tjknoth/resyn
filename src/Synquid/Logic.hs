@@ -167,8 +167,8 @@ fzero = IntLit 0
 
 andClean l r = if l == ftrue then r else (if r == ftrue then l else (if l == ffalse || r == ffalse then ffalse else l |&| r))
 orClean l r = if l == ffalse then r else (if r == ffalse then l else (if l == ftrue || r == ftrue then ftrue else l ||| r))
-conjunction fmls = foldr andClean ftrue (Set.toList fmls)
-disjunction fmls = foldr orClean ffalse (Set.toList fmls)
+conjunction fmls = foldl andClean ftrue (Set.toList fmls)
+disjunction fmls = foldl orClean ffalse (Set.toList fmls)
 
 (/+/) = Binary Union
 (/*/) = Binary Intersect
@@ -493,3 +493,14 @@ instance Ord Candidate where
   (<=) c1 c2 = Map.filter (not . Set.null) (solution c1) <= Map.filter (not . Set.null) (solution c2) &&
                validConstraints c1 <= validConstraints c2 &&
                invalidConstraints c1 <= invalidConstraints c2
+
+
+-----------------------
+-- Debugging utilities
+-----------------------
+
+isTrivial :: Formula -> Bool
+isTrivial (BoolLit True)    = True 
+isTrivial (Binary Eq f1 f2) = f1 == f2
+isTrivial (Binary Ge (IntLit x) (IntLit 0)) = x >= 0
+isTrivial _                 = False 
