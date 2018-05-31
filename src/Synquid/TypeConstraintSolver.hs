@@ -656,12 +656,17 @@ generateFormula :: (MonadHorn s, MonadSMT s) => Constraint -> TCSolver s Formula
 generateFormula c@(Subtype env tl tr _ name) = do
     --let syms = Map.elems $ Map.filterWithKey (\k a -> k /= name) (allSymbols env) 
     let fmls = conjunction $ Set.filter (not . isTrivial) $ joinAssertions (|=|) tl tr
-    --emb <- embedEnv env (refinementOf tl |&| refinementOf tr) True
-    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
-    return fmls  
+    emb <- embedEnv env (refinementOf tl |&| refinementOf tr) True
+    let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf tl) emb
+    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty emb')
+    --return $ conjunction emb' |=>| fmls
+    return fmls
 generateFormula c@(WellFormed env t)         = do
     let fmls = conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allFormulas t
-    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
+    emb <- embedEnv env (refinementOf t) True  
+    let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf t) emb
+    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty emb')
+    --return $ conjunction emb' |=>| fmls
     return fmls
 generateFormula c@(SplitType e v t tl tr)    = do 
     let fmls = conjunction $ partition t tl tr
@@ -748,6 +753,22 @@ multiplicityOfBase _                = Nothing
 refinementOf :: RType -> Formula 
 refinementOf (ScalarT _ fml _) = fml
 refinementOf _                 = error "error: Encountered non-scalar type when generating resource constraints"
+
+preprocessNumericalConstraint :: Set Formula -> Set Formula 
+preprocessNumericalConstraint fs = Set.map assumeUnknowns $ Set.filter (not . isUnknownForm) fs
+
+-- TODO: probably don't need as many cases
+assumeUnknowns :: Formula -> Formula
+assumeUnknowns (Unknown s id) = BoolLit True
+assumeUnknowns (SetLit s fs) = SetLit s (fmap assumeUnknowns fs)
+assumeUnknowns (Unary op f) = Unary op (assumeUnknowns f)
+assumeUnknowns (Binary op fl fr) = Binary op (assumeUnknowns fl) (assumeUnknowns fr)
+assumeUnknowns (Ite g t f) = Ite (assumeUnknowns g) (assumeUnknowns t) (assumeUnknowns f)
+assumeUnknowns (Pred s x fs) = Pred s x (fmap assumeUnknowns fs)
+assumeUnknowns (Cons s x fs) = Cons s x (fmap assumeUnknowns fs)
+assumeUnknowns (All f g) = All (assumeUnknowns f) (assumeUnknowns g)
+assumeUnknowns f = f
+
 
 writeLog level msg = do
   maxLevel <- asks _tcSolverLogLevel

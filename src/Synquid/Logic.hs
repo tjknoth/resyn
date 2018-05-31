@@ -496,7 +496,7 @@ instance Ord Candidate where
 
 
 -----------------------
--- Debugging utilities
+-- Utilities
 -----------------------
 
 isTrivial :: Formula -> Bool
@@ -504,3 +504,9 @@ isTrivial (BoolLit True)    = True
 isTrivial (Binary Eq f1 f2) = f1 == f2
 isTrivial (Binary Ge (IntLit x) (IntLit 0)) = x >= 0
 isTrivial _                 = False 
+
+
+isUnknownForm :: Formula -> Bool
+isUnknownForm (Unknown _ _) = True
+isUnknownForm _             = False
+
