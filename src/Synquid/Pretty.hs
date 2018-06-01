@@ -50,7 +50,8 @@ module Synquid.Pretty (
   errorDoc,
   -- * Counting
   typeNodeCount,
-  programNodeCount
+  programNodeCount,
+  prettyConjuncts 
 ) where
 
 import Synquid.Logic
@@ -183,7 +184,7 @@ fmlDocAt n fml = condHlParens (n' <= n) (
   case fml of
     BoolLit b -> pretty b
     IntLit i -> intLiteral i
-    SetLit s elems -> (hlBrackets $ commaSep $ map fmlDoc elems)
+    SetLit s elems -> hlBrackets $ commaSep $ map fmlDoc elems
     Var s name -> if name == valueVarName then special name else text name
     Unknown s name -> if Map.null s then text name else hMapDoc pretty pretty s <> text name
     Unary op e -> pretty op <> fmlDocAt n' e
@@ -483,3 +484,26 @@ lfill w d        = case renderCompact d of
  where
   spaces n | n <= 0    = empty
            | otherwise = text $ replicate n ' '
+
+-- Helper for printing conjunctions line-by-line for readability
+prettyConjuncts :: Formula -> Doc
+prettyConjuncts = conjDocAt 0
+
+-- | 'conjDocAt' @n fml@ : print @expr@ in a context with binding power @n@
+conjDocAt :: Int -> Formula -> Doc
+conjDocAt n fml = case fml of
+    BoolLit b -> pretty b
+    IntLit i -> intLiteral i
+    SetLit s elems -> hlBrackets $ commaSep $ map prettyConjuncts elems
+    Var s name -> if name == valueVarName then special name else text name
+    Unknown s name -> if Map.null s then text name else hMapDoc pretty pretty s <> text name
+    Unary op e -> pretty op <> conjDocAt n' e
+    Binary And e1 e2 -> conjDocAt n' e1 <+> text "\n" <+> conjDocAt n' e2 
+    Binary op e1 e2 -> conjDocAt n' e1 <+> pretty op <+> conjDocAt n' e2
+    Ite e0 e1 e2 -> keyword "if" <+> prettyConjuncts e0 <+> keyword "then" <+> prettyConjuncts e1 <+> keyword "else" <+> prettyConjuncts e2
+    Pred b name args -> text name <+> hsep (map (conjDocAt n') args)
+    Cons b name args -> hlParens (text name <+> hsep (map (conjDocAt n') args))
+    All x e -> keyword "forall" <+> pretty x <+> operator "." <+> prettyConjuncts e
+  where
+    n' = power fml
+    withSort s doc = doc <> text ":" <> pretty s

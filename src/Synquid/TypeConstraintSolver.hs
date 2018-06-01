@@ -641,8 +641,8 @@ solveResourceConstraints oldConstraints constraints = do
     let query = conjunction fmls
     (b, s) <- isSatWithModel (oldConstraints |&| query)
     let result = if b then "SAT" else "UNSAT"
-    writeLog 5 $ text "Old constraints" <+> pretty oldConstraints
-    writeLog 3 $ text "Solving resource constraint:" <+> pretty query <+> text "--" <+> text result 
+    writeLog 5 $ text "Old constraints" <+> prettyConjuncts oldConstraints
+    writeLog 3 $ text "Solving resource constraint:" <+> text result <+> linebreak <+> prettyConjuncts query 
     if b then do
            writeLog 4 $ nest 2 $ text "SAT with model" <+> text s
            return $ Just query 
@@ -660,15 +660,15 @@ generateFormula c@(Subtype env tl tr _ name) = do
     emb <- embedEnv env (refinementOf tl |&| refinementOf tr) True
     let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf tl) emb
     writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty emb')
-    return $ conjunction emb' |=>| fmls
-    --return fmls
+    --return $ conjunction emb' |=>| fmls
+    return fmls
 generateFormula c@(WellFormed env t)         = do
     let fmls = conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allFormulas t
     emb <- embedEnv env (refinementOf t) True  
     let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf t) emb
     writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty emb')
-    return $ conjunction emb' |=>| fmls
-    --return fmls
+    --return $ conjunction emb' |=>| fmls
+    return fmls
 generateFormula c@(SplitType e v t tl tr)    = do 
     let fmls = conjunction $ partition t tl tr
     writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)

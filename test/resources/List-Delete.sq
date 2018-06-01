@@ -15,7 +15,7 @@ measure elems :: List a -> Set a where
 delete :: x: a -> xs: List {1**a| |1} -> {List a | elems _v == elems xs - [x]}
 delete = \x. \xs.
   match xs with
-    Nil -> Nil
+    Nil -> xs
     Cons y ys -> 
       if y == x
         then delete x ys 
