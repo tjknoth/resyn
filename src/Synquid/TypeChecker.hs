@@ -343,8 +343,6 @@ splitType sch = do
   schr <- freshPotentials sch
   return (schl, schr)
     where
-      potentialPrefix = "p"
-      multiplicityPrefix = "m"
       -- Variable formula with fresh variable id
       freshPot = do 
         id <- freshId potentialPrefix

@@ -224,9 +224,9 @@ simplifyConstraint' _ _ (Subtype env t (LetT x tDef tBody) consistent label)
   = simplifyConstraint (Subtype (addVariable x tDef env) t tBody consistent label) -- ToDo: make x unique?
 
 -- Unknown free variable and a type: extend type assignment
-simplifyConstraint' _ _ c@(Subtype env (ScalarT (TypeVarT _ a _) _ _) t _ _) | not (isBound env a)
+simplifyConstraint' _ _ c@(Subtype env (ScalarT (TypeVarT _ a m) _ _) t _ _) | not (isBound env a)
   = unify env a t >> simplifyConstraint c
-simplifyConstraint' _ _ c@(Subtype env t (ScalarT (TypeVarT _ a _) _ _) _ _) | not (isBound env a)
+simplifyConstraint' _ _ c@(Subtype env t (ScalarT (TypeVarT _ a m) _ _) _ _) | not (isBound env a)
   = unify env a t >> simplifyConstraint c
 
 -- Compound types: decompose
@@ -504,7 +504,7 @@ fresh :: Monad s => Environment -> RType -> TCSolver s RType
 fresh env (ScalarT (TypeVarT vSubst a m) _ _) | not (isBound env a) = do
   -- Free type variable: replace with fresh free type variable
   a' <- freshId "A"
-  return $ ScalarT (TypeVarT vSubst a' m) ftrue defPotential
+  return $ ScalarT (TypeVarT vSubst a' m) ftrue defPotential 
 fresh env (ScalarT baseT _ p) = do
   baseT' <- freshBase baseT
   -- Replace refinement with fresh predicate unknown:
@@ -518,6 +518,8 @@ fresh env (ScalarT baseT _ p) = do
       let (DatatypeDef tParams pParams _ _ _) = (env ^. datatypes) Map.! name
       pArgs' <- mapM (\sig -> freshPred env . map (noncaptureSortSubst tParams (map (toSort . baseTypeOf) tArgs')) . predSigArgSorts $ sig) pParams
       return $ DatatypeT name tArgs' pArgs'
+    -- Ensure fresh base type has multiplicity 1 to avoid zeroing other formulas during unification
+    --freshBase (TypeVarT subs a m) = return $ TypeVarT subs a defMultiplicity
     freshBase baseT = return baseT
 fresh env (FunctionT x tArg tFun) = do
   liftM2 (FunctionT x) (fresh env tArg) (fresh env tFun)
@@ -644,7 +646,7 @@ solveResourceConstraints oldConstraints constraints = do
     writeLog 5 $ text "Old constraints" <+> prettyConjuncts oldConstraints
     writeLog 3 $ text "Solving resource constraint:" <+> text result <+> linebreak <+> prettyConjuncts query 
     if b then do
-           writeLog 4 $ nest 2 $ text "SAT with model" <+> text s
+           writeLog 4 $ nest 2 $ text "SAT with model" -- <+> text s
            return $ Just query 
          else return Nothing 
 
@@ -659,14 +661,14 @@ generateFormula c@(Subtype env tl tr _ name) = do
     let fmls = conjunction $ Set.filter (not . isTrivial) $ joinAssertions (|=|) tl tr
     emb <- embedEnv env (refinementOf tl |&| refinementOf tr) True
     let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf tl) emb
-    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty emb')
+    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
     --return $ conjunction emb' |=>| fmls
     return fmls
 generateFormula c@(WellFormed env t)         = do
     let fmls = conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allFormulas t
     emb <- embedEnv env (refinementOf t) True  
     let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf t) emb
-    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty emb')
+    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
     --return $ conjunction emb' |=>| fmls
     return fmls
 generateFormula c@(SplitType e v t tl tr)    = do 

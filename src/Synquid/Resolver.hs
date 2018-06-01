@@ -194,7 +194,7 @@ resolveSignatures (DataDecl dtName tParams pParams ctors) = mapM_ resolveConstru
       sch' <- resolveSchema sch
       let nominalType = ScalarT (DatatypeT dtName (map vartAll tParams) (map (nominalPredApp  . fst) pParams)) ftrue defPotential
       let returnType = lastType (toMonotype sch')
-      if nominalType == returnType
+      if shape nominalType == shape returnType
         then do
           let nominalSort = toSort $ baseTypeOf nominalType
           let sch'' = addRefinementToLastSch sch' (Var nominalSort valueVarName |=| Cons nominalSort name (allArgs (toMonotype sch')))

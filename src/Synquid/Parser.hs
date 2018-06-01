@@ -232,7 +232,7 @@ parseUnrefTypeNoArgs = do
       BoolT <$ reserved "Bool",
       IntT <$ reserved "Int",
       (\name -> DatatypeT name [][]) <$> parseTypeName,
-      (\name -> TypeVarT Map.empty name defMultiplicity) <$> parseIdentifier]
+      (\name -> TypeVarT Map.empty name defParsedMultiplicity) <$> parseIdentifier]
     setMult Nothing (TypeVarT s name m)     = TypeVarT s name m
     setMult (Just mult) (TypeVarT s name m) = TypeVarT s name mult
     setMult mult t                          = t

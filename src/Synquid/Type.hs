@@ -28,6 +28,8 @@ data TypeSkeleton r =
   AnyT
   deriving (Show, Eq, Ord)
 
+
+
 -- Ignore multiplicity and potential when comparing baseTypes
 equalShape :: BaseType Formula -> BaseType Formula -> Bool
 equalShape (TypeVarT s name m) (TypeVarT s' name' m') = (TypeVarT s name defMultiplicity :: BaseType Formula) == (TypeVarT s' name' defMultiplicity :: BaseType Formula)
@@ -37,6 +39,11 @@ equalShape t t' = t == t'
 
 defPotential = IntLit 0
 defMultiplicity = IntLit 1
+defParsedMultiplicity = IntLit 1
+
+
+potentialPrefix = "p"
+multiplicityPrefix = "m"
 
 contextual x tDef (FunctionT y tArg tRes) = FunctionT y (contextual x tDef tArg) (contextual x tDef tRes)
 contextual _ _ AnyT = AnyT
@@ -213,7 +220,7 @@ typeSubstitute subst (ScalarT baseT r p) = addRefinement substituteBase (sortSub
     substituteBase = case baseT of
       -- TODO: type multiplication!
       TypeVarT varSubst a m -> case Map.lookup a subst of
-        Just t -> substituteInType (not . (`Map.member` subst)) varSubst $ typeSubstitute subst t --(typeMultiply m t)
+        Just t -> substituteInType (not . (`Map.member` subst)) varSubst $ typeSubstitute subst (typeMultiply m t)
         Nothing -> ScalarT (TypeVarT varSubst a m) ftrue defPotential
       DatatypeT name tArgs pArgs ->
         let
