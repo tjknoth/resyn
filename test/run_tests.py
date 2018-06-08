@@ -145,7 +145,7 @@ DEMO_BENCHMARKS = [
 
 RESOURCE_BENCHMARKS = [
     ('List-Append',         ['--resources']),
-    ('List-Compress-Bad'    ['--resources']),
+    ('List-Compress-Bad',   ['--resources']),
     ('List-Compress',       ['--resources']),
     ('List-Cons2',          ['--resources']),
     ('List-Delete',         ['--resources']),

@@ -1,10 +1,103 @@
-[Pos {position = "./List-Append.sq" (line 1, column 1), node = DataDecl "List" ["a"] [] [ConstructorSig "Nil" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0)),ConstructorSig "Cons" (FunctionT "x" (ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 1)) (FunctionT "xs" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0)) (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0))))]},Pos {position = "./List-Append.sq" (line 5, column 1), node = MeasureDecl "len" (DataS "List" [VarS "a"]) IntS (Binary Ge (Var AnyS "_v") (IntLit 0)) [MeasureCase "Nil" [] (IntLit 0),MeasureCase "Cons" ["x","xs"] (Binary Plus (IntLit 1) (Pred AnyS "len" [Var AnyS "xs"]))] True},Pos {position = "./List-Append.sq" (line 9, column 1), node = MeasureDecl "elems" (DataS "List" [VarS "a"]) (SetS (VarS "a")) (BoolLit True) [MeasureCase "Nil" [] (SetLit AnyS []),MeasureCase "Cons" ["x","xs"] (Binary Plus (SetLit AnyS [Var AnyS "x"]) (Pred AnyS "elems" [Var AnyS "xs"]))] False},Pos {position = "./List-Append.sq" (line 13, column 1), node = FuncDecl "append" (Monotype (FunctionT "xs" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 1)] []) (BoolLit True) (IntLit 0)) (FunctionT "ys" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0)) (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (Binary And (Binary Eq (Pred AnyS "len" [Var AnyS "_v"]) (Binary Plus (Pred AnyS "len" [Var AnyS "xs"]) (Pred AnyS "len" [Var AnyS "ys"]))) (Binary Eq (Pred AnyS "elems" [Var AnyS "_v"]) (Binary Plus (Pred AnyS "elems" [Var AnyS "xs"]) (Pred AnyS "elems" [Var AnyS "ys"])))) (IntLit 0)))))},Pos {position = "./List-Append.sq" (line 14, column 1), node = SynthesisGoal "append" (Program {content = PFun "xs" (Program {content = PFun "ys" (Program {content = PMatch (Program {content = PSymbol "xs", typeOf = AnyT}) [Case {constructor = "Nil", argNames = [], expr = Program {content = PSymbol "ys", typeOf = AnyT}},Case {constructor = "Cons", argNames = ["z","zs"], expr = Program {content = PApp (Program {content = PApp (Program {content = PSymbol "Cons", typeOf = AnyT}) (Program {content = PSymbol "z", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PApp (Program {content = PApp (Program {content = PSymbol "append", typeOf = AnyT}) (Program {content = PSymbol "zs", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PSymbol "ys", typeOf = AnyT}), typeOf = AnyT}), typeOf = AnyT}}], typeOf = AnyT}), typeOf = AnyT}), typeOf = AnyT})}]
-[Pos {position = "./List-Compress.sq" (line 1, column 1), node = DataDecl "List" ["a"] [] [ConstructorSig "Nil" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0)),ConstructorSig "Cons" (FunctionT "x" (ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 1)) (FunctionT "xs" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0)) (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0))))]},Pos {position = "./List-Compress.sq" (line 5, column 1), node = MeasureDecl "len" (DataS "List" [VarS "a"]) IntS (Binary Ge (Var AnyS "_v") (IntLit 0)) [MeasureCase "Nil" [] (IntLit 0),MeasureCase "Cons" ["x","xs"] (Binary Plus (IntLit 1) (Pred AnyS "len" [Var AnyS "xs"]))] True},Pos {position = "./List-Compress.sq" (line 9, column 1), node = FuncDecl "compress" (Monotype (FunctionT "xs" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 1)] []) (BoolLit True) (IntLit 0)) (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0))))},Pos {position = "./List-Compress.sq" (line 10, column 1), node = SynthesisGoal "compress" (Program {content = PFun "xs" (Program {content = PMatch (Program {content = PSymbol "xs", typeOf = AnyT}) [Case {constructor = "Nil", argNames = [], expr = Program {content = PSymbol "Nil", typeOf = AnyT}},Case {constructor = "Cons", argNames = ["y","ys"], expr = Program {content = PMatch (Program {content = PApp (Program {content = PSymbol "compress", typeOf = AnyT}) (Program {content = PSymbol "ys", typeOf = AnyT}), typeOf = AnyT}) [Case {constructor = "Nil", argNames = [], expr = Program {content = PApp (Program {content = PApp (Program {content = PSymbol "Cons", typeOf = AnyT}) (Program {content = PSymbol "y", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PSymbol "Nil", typeOf = AnyT}), typeOf = AnyT}},Case {constructor = "Cons", argNames = ["z","zs"], expr = Program {content = PIf (Program {content = PApp (Program {content = PApp (Program {content = PSymbol "==", typeOf = AnyT}) (Program {content = PSymbol "y", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PSymbol "z", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PApp (Program {content = PSymbol "compress", typeOf = AnyT}) (Program {content = PSymbol "ys", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PApp (Program {content = PApp (Program {content = PSymbol "Cons", typeOf = AnyT}) (Program {content = PSymbol "y", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PApp (Program {content = PApp (Program {content = PSymbol "Cons", typeOf = AnyT}) (Program {content = PSymbol "z", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PSymbol "zs", typeOf = AnyT}), typeOf = AnyT}), typeOf = AnyT}), typeOf = AnyT}}], typeOf = AnyT}}], typeOf = AnyT}), typeOf = AnyT})}]
-[Pos {position = "./List-Delete.sq" (line 1, column 1), node = QualifierDecl [Binary Eq (Var AnyS "x") (Var AnyS "y"),Binary Neq (Var AnyS "x") (Var AnyS "y")]},Pos {position = "./List-Delete.sq" (line 3, column 1), node = DataDecl "List" ["a"] [] [ConstructorSig "Nil" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0)),ConstructorSig "Cons" (FunctionT "x" (ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 1)) (FunctionT "xs" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0)) (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0))))]},Pos {position = "./List-Delete.sq" (line 7, column 1), node = MeasureDecl "len" (DataS "List" [VarS "a"]) IntS (Binary Ge (Var AnyS "_v") (IntLit 0)) [MeasureCase "Nil" [] (IntLit 0),MeasureCase "Cons" ["x","xs"] (Binary Plus (IntLit 1) (Pred AnyS "len" [Var AnyS "xs"]))] True},Pos {position = "./List-Delete.sq" (line 11, column 1), node = MeasureDecl "elems" (DataS "List" [VarS "a"]) (SetS (VarS "a")) (BoolLit True) [MeasureCase "Nil" [] (SetLit AnyS []),MeasureCase "Cons" ["x","xs"] (Binary Plus (SetLit AnyS [Var AnyS "x"]) (Pred AnyS "elems" [Var AnyS "xs"]))] False},Pos {position = "./List-Delete.sq" (line 15, column 1), node = FuncDecl "delete" (Monotype (FunctionT "x" (ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)) (FunctionT "xs" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 1)] []) (BoolLit True) (IntLit 0)) (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (Binary Eq (Pred AnyS "elems" [Var AnyS "_v"]) (Binary Minus (Pred AnyS "elems" [Var AnyS "xs"]) (SetLit AnyS [Var AnyS "x"]))) (IntLit 0)))))},Pos {position = "./List-Delete.sq" (line 16, column 1), node = SynthesisGoal "delete" (Program {content = PFun "x" (Program {content = PFun "xs" (Program {content = PMatch (Program {content = PSymbol "xs", typeOf = AnyT}) [Case {constructor = "Nil", argNames = [], expr = Program {content = PSymbol "xs", typeOf = AnyT}},Case {constructor = "Cons", argNames = ["y","ys"], expr = Program {content = PIf (Program {content = PApp (Program {content = PApp (Program {content = PSymbol "==", typeOf = AnyT}) (Program {content = PSymbol "y", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PSymbol "x", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PApp (Program {content = PApp (Program {content = PSymbol "delete", typeOf = AnyT}) (Program {content = PSymbol "x", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PSymbol "ys", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PApp (Program {content = PApp (Program {content = PSymbol "Cons", typeOf = AnyT}) (Program {content = PSymbol "y", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PApp (Program {content = PApp (Program {content = PSymbol "delete", typeOf = AnyT}) (Program {content = PSymbol "x", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PSymbol "ys", typeOf = AnyT}), typeOf = AnyT}), typeOf = AnyT}), typeOf = AnyT}}], typeOf = AnyT}), typeOf = AnyT}), typeOf = AnyT})}]
-[Pos {position = "./List-Double.sq" (line 1, column 1), node = DataDecl "List" ["a"] [] [ConstructorSig "Nil" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0)),ConstructorSig "Cons" (FunctionT "x" (ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 1)) (FunctionT "xs" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0)) (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0))))]},Pos {position = "./List-Double.sq" (line 5, column 1), node = MeasureDecl "len" (DataS "List" [VarS "a"]) IntS (Binary Ge (Var AnyS "_v") (IntLit 0)) [MeasureCase "Nil" [] (IntLit 0),MeasureCase "Cons" ["x","xs"] (Binary Plus (IntLit 1) (Pred AnyS "len" [Var AnyS "xs"]))] True},Pos {position = "./List-Double.sq" (line 9, column 1), node = FuncDecl "double" (Monotype (FunctionT "xs" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 2)) (BoolLit True) (IntLit 2)] []) (BoolLit True) (IntLit 0)) (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (Binary Eq (Pred AnyS "len" [Var AnyS "_v"]) (Binary Times (IntLit 2) (Pred AnyS "len" [Var AnyS "xs"]))) (IntLit 0))))},Pos {position = "./List-Double.sq" (line 10, column 1), node = SynthesisGoal "double" (Program {content = PFun "xs" (Program {content = PMatch (Program {content = PSymbol "xs", typeOf = AnyT}) [Case {constructor = "Nil", argNames = [], expr = Program {content = PSymbol "Nil", typeOf = AnyT}},Case {constructor = "Cons", argNames = ["y","ys"], expr = Program {content = PApp (Program {content = PApp (Program {content = PSymbol "Cons", typeOf = AnyT}) (Program {content = PSymbol "y", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PApp (Program {content = PApp (Program {content = PSymbol "Cons", typeOf = AnyT}) (Program {content = PSymbol "y", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PApp (Program {content = PSymbol "double", typeOf = AnyT}) (Program {content = PSymbol "ys", typeOf = AnyT}), typeOf = AnyT}), typeOf = AnyT}), typeOf = AnyT}}], typeOf = AnyT}), typeOf = AnyT})}]
-./List-Replicate.sq:11:18: Parse Error:
-  Unexpected ':'
+
+
+append :: xs:{List {1**a||1}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+append = \xs . \ys . 
+    match xs with
+      Nil -> ys
+      Cons z zs -> Cons z (append zs
+                             ys)
+
+
+compress :: xs:{List {1**a||1}||0} -> {List {1**a||0}||0}
+./List-Compress-Bad.sq:10: Error:
+  Insufficient resources
+  when checking ys ::
+  {List {1**a||0}|len _v >= 0 && len _v < len xs|0}
+  in
+  \xs . 
+    match xs with
+      Cons y ys -> 
+        match compress ys with
+          Cons z zs -> 
+            if y == z
+              then compress ys
+              else (?? :: {List {1**a||0}||0})
+
+
+compress :: xs:{List {1**a||1}||0} -> {List {1**a||0}||0}
+compress = \xs . 
+  match xs with
+    Nil -> Nil
+    Cons y ys -> 
+      match compress ys with
+        Nil -> Cons y Nil
+        Cons z zs -> 
+          if y == z
+            then Cons z zs
+            else Cons y (Cons z zs)
+
+cons2 :: x:{1**a||1} -> {List {1**a||0}||0}
+./List-Cons2.sq:6: Error:
+  Insufficient resources
+  when checking x :: {1**a||0} in
+  \x . Cons x (Cons x ??)
+
+./List-Delete.sq:19:5: Parse Error:
+  Unexpected 'C'
   expecting end of input
   indentation doesn't match
 
-[Pos {position = "./List-Reverse.sq" (line 1, column 1), node = DataDecl "List" ["a"] [] [ConstructorSig "Nil" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0)),ConstructorSig "Cons" (FunctionT "x" (ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 1)) (FunctionT "xs" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0)) (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0))))]},Pos {position = "./List-Reverse.sq" (line 5, column 1), node = MeasureDecl "len" (DataS "List" [VarS "a"]) IntS (Binary Ge (Var AnyS "_v") (IntLit 0)) [MeasureCase "Nil" [] (IntLit 0),MeasureCase "Cons" ["x","xs"] (Binary Plus (IntLit 1) (Pred AnyS "len" [Var AnyS "xs"]))] True},Pos {position = "./List-Reverse.sq" (line 9, column 1), node = FuncDecl "reverse" (Monotype (FunctionT "xs" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 1)] []) (BoolLit True) (IntLit 0)) (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0))))},Pos {position = "./List-Reverse.sq" (line 10, column 1), node = SynthesisGoal "reverse" (Program {content = PFun "xs" (Program {content = PApp (Program {content = PApp (Program {content = PSymbol "reverse'", typeOf = AnyT}) (Program {content = PSymbol "xs", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PSymbol "Nil", typeOf = AnyT}), typeOf = AnyT}), typeOf = AnyT})},Pos {position = "./List-Reverse.sq" (line 13, column 1), node = FuncDecl "reverse'" (Monotype (FunctionT "xs" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 1)] []) (BoolLit True) (IntLit 0)) (FunctionT "acc" (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0)) (ScalarT (DatatypeT "List" [ScalarT (TypeVarT (fromList []) "a" (IntLit 1)) (BoolLit True) (IntLit 0)] []) (BoolLit True) (IntLit 0)))))},Pos {position = "./List-Reverse.sq" (line 14, column 1), node = SynthesisGoal "reverse'" (Program {content = PFun "xs" (Program {content = PFun "acc" (Program {content = PMatch (Program {content = PSymbol "xs", typeOf = AnyT}) [Case {constructor = "Nil", argNames = [], expr = Program {content = PSymbol "acc", typeOf = AnyT}},Case {constructor = "Cons", argNames = ["y","ys"], expr = Program {content = PApp (Program {content = PApp (Program {content = PSymbol "reverse'", typeOf = AnyT}) (Program {content = PSymbol "ys", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PApp (Program {content = PApp (Program {content = PSymbol "Cons", typeOf = AnyT}) (Program {content = PSymbol "y", typeOf = AnyT}), typeOf = AnyT}) (Program {content = PSymbol "acc", typeOf = AnyT}), typeOf = AnyT}), typeOf = AnyT}}], typeOf = AnyT}), typeOf = AnyT}), typeOf = AnyT})}]
+
+double :: xs:{List {1**a||1}||0} -> {List {1**a||0}|len _v == 2 * len xs|0}
+./List-Double-Bad.sq:10: Error:
+  Insufficient resources
+  when checking y :: {1**a||0} in
+  \xs . 
+    match xs with
+      Cons y ys -> Cons y (Cons y ??)
+
+
+double :: xs:{List {2**a||2}||0} -> {List {1**a||0}|len _v == 2 * len xs|0}
+double = \xs . 
+  match xs with
+    Nil -> Nil
+    Cons y ys -> Cons y (Cons y
+                           (double ys))
+
+
+
+foldr :: <p :: List (a) -> b -> Bool> . f:(xs:{List {1**a||0}||0} -> x:{1**a||0} -> acc:{1**b|p xs _v|0} -> {1**b|p ((Cons x xs)) _v|0}) -> seed:{1**b|p (Nil) _v|0} -> ys:{List {1**a||0}||0} -> {1**b|p ys _v|0}
+./List-Fold.sq:18: Error:
+  Insufficient resources
+  when checking xs ::
+  {List {1**a||0}|len _v >= 0 && len _v < len ys|0}
+  in
+  \f . \seed . \ys . 
+        match ys with
+          Cons x xs -> f xs x (foldr f
+                                 seed xs)
+
+
+replicate :: n:{Nat||0} -> x:{n**a||n} -> {List {1**a||0}|len _v == n|0}
+./List-Replicate.sq:18: Error:
+  Insufficient resources
+  when checking x ::
+  x11:{Int|_v == n - 1|0} -> {n**a||0}
+  in
+  \n . \x . 
+      if n <= 0
+        then Nil
+        else Cons x (replicate (dec n)
+                       x)
+
+
+reverse' :: xs:{List {1**a||1}||0} -> acc:{List {1**a||0}||0} -> {List {1**a||0}||0}
+reverse' = \xs . \acc . 
+    match xs with
+      Nil -> acc
+      Cons y ys -> reverse' ys (Cons y
+                                  acc)
+
+reverse :: xs:{List {1**a||1}||0} -> {List {1**a||0}||0}
+reverse = \xs . reverse' xs Nil
+

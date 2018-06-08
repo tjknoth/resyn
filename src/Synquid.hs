@@ -327,7 +327,7 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
           when (gSynthesize goal) $ pdoc (prettySolution goal prog)
           pdoc empty
           return ((goal, prog), stats)
-    updateExplorerParams eParams goal = eParams { _checkResources = (gSynthesize goal)}
+    updateExplorerParams eParams goal = eParams { _checkResources = (gSynthesize goal) && (_checkResources eParams)}
     {-
     printStats results declsByFile = do
       let env = gEnvironment (fst $ fst $ head results)

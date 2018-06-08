@@ -14,6 +14,7 @@ import qualified Data.Map as Map
 import Data.Map (Map)
 import Control.Monad
 import Control.Lens hiding (set)
+import Debug.Trace
 
 {- Type skeletons -}
 
@@ -311,16 +312,16 @@ addRefinementToLastSch (ForallP sig sch) fml = ForallP sig $ addRefinementToLast
 
 -- | Apply variable substitution in all formulas inside a type
 substituteInType :: (Id -> Bool) -> Substitution -> RType -> RType
-substituteInType isBound subst (ScalarT baseT fml pot) = ScalarT (substituteBase baseT) (substitute subst fml) (substitute subst pot)
+substituteInType isBound subst (ScalarT baseT fml pot) = ScalarT (substituteBase subst baseT) (substitute subst fml) (substitute subst pot)
   where
     -- TODO: does this make sense?
-    substituteBase (TypeVarT oldSubst a m) = TypeVarT oldSubst a m
+    substituteBase subst (TypeVarT oldSubst a m) = TypeVarT oldSubst a (substitute subst m)
       -- Looks like pending substitutions on types are not actually needed, since renamed variables are always out of scope
        -- if isBound a
           -- then TypeVarT oldSubst a
           -- else TypeVarT (oldSubst `composeSubstitutions` subst) a
-    substituteBase (DatatypeT name tArgs pArgs) = DatatypeT name (map (substituteInType isBound subst) tArgs) (map (substitute subst) pArgs)
-    substituteBase baseT = baseT
+    substituteBase subst (DatatypeT name tArgs pArgs) = DatatypeT name (map (substituteInType isBound subst) tArgs) (map (substitute subst) pArgs)
+    substituteBase _ baseT = baseT
 substituteInType isBound subst (FunctionT x tArg tRes) =
   if Map.member x subst
     then error $ unwords ["Attempt to substitute variable", x, "bound in a function type"]
@@ -333,9 +334,9 @@ substituteInType isBound subst AnyT = AnyT
 
 -- | 'renameVar' @old new t typ@: rename all occurrences of @old@ in @typ@ into @new@ of type @t@
 renameVar :: (Id -> Bool) -> Id -> Id -> RType -> RType -> RType
-renameVar isBound old new (ScalarT b _ _)     t = substituteInType isBound (Map.singleton old (Var (toSort b) new)) t
-renameVar isBound old new (LetT _ _ tBody)  t = renameVar isBound old new tBody t
-renameVar _ _ _ _                           t = t -- function arguments cannot occur in types (and AnyT is assumed to be function)
+renameVar isBound old new (ScalarT b _ _) t            = substituteInType isBound (Map.singleton old (Var (toSort b) new)) t
+renameVar isBound old new (LetT _ _ tBody) t           = renameVar isBound old new tBody t
+renameVar _ _ _ _ t = t -- function arguments cannot occur in types (and AnyT is assumed to be function)
 
 
 -- | Intersection of two types (assuming the types were already checked for consistency) 

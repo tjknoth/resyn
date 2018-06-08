@@ -234,7 +234,7 @@ resolveSignatures (MeasureDecl measureName _ _ post defCases _) = do
               let subst = Map.fromList $ zip binders ctorParams
               let fml = Pred AnyS measureName [Var AnyS valueVarName] |=| substitute subst body
               fml' <- withLocalEnv $ do
-                environment  . boundTypeVars .= boundVarsOf consSch
+                environment . boundTypeVars .= boundVarsOf consSch
                 environment %= addAllVariables ctorParams
                 resolveTypeRefinement (toSort $ baseTypeOf $ lastType consT) fml
               return $ MeasureCase ctorName (map varName ctorParams) fml'
