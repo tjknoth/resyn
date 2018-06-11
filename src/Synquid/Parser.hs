@@ -129,9 +129,7 @@ parseConstructorSig = do
   return $ ConstructorSig ctorName ctorType
 
 parseMeasureConstantArgs :: Parser MeasureDefaults
-parseMeasureConstantArgs = do 
-  args <- many argWithName
-  return $ Map.fromList args
+parseMeasureConstantArgs = many argWithName
   where 
     argWithName = do 
       name <- parseIdentifier

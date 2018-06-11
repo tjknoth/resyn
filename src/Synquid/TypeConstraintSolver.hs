@@ -579,7 +579,7 @@ instantiateConsAxioms env mVal fml = let inst = instantiateConsAxioms env mVal i
     Pred _ p args -> Set.unions $ map inst args
     _ -> Set.empty
   where
-    measureAxiom resS ctor args (MeasureDef inSort _ defs _) =
+    measureAxiom resS ctor args (MeasureDef inSort _ defs constantArgs _) =
       let
         MeasureCase _ vars body = head $ filter (\(MeasureCase c _ _) -> c == ctor) defs
         sParams = map varSortName (sortArgsOf inSort) -- sort parameters in the datatype declaration

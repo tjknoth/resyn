@@ -124,10 +124,12 @@ resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
   environment %= addDatatype dtName datatype
   let addPreds typ = foldl (flip ForallP) (Monotype typ) pParams
   mapM_ (\(ConstructorSig name typ) -> addNewSignature name $ addPreds typ) ctors
-resolveDeclaration (MeasureDecl measureName inSort outSort post defCases _ isTermination) = do
+resolveDeclaration (MeasureDecl measureName inSort outSort post defCases args isTermination) = do
   env <- use environment
-  addNewSignature measureName (generateSchema env measureName [inSort] outSort post)
+  let allInSorts = fmap snd args ++ [inSort]
+  addNewSignature measureName (generateSchema env measureName allInSorts outSort post)
   -- Resolve measure signature:
+  mapM_ (resolveSort . snd) args 
   resolveSort inSort
   resolveSort outSort
   case inSort of
@@ -139,15 +141,14 @@ resolveDeclaration (MeasureDecl measureName inSort outSort post defCases _ isTer
       if inSort /= declDtSort
         then throwResError (text "Type parameters of measure" <+> text measureName <+> text "must be the same as in the datatype declaration")
         else do
-          environment %= addGlobalPredicate measureName outSort [inSort]
+          environment %= addGlobalPredicate measureName outSort allInSorts 
           -- Possibly add as termination metric:
-          if isTermination
-            then if (isJust $ datatype ^. wfMetric)
-                  then throwResError (text "Multiple termination metrics defined for datatype" <+> text dtName)
-                  else if outSort == IntS
-                        then environment %= addDatatype dtName datatype { _wfMetric = Just measureName }
-                        else throwResError (text "Output sort of termination measure" <+> text measureName <+> text "must be Int")
-            else return ()
+          when isTermination $ 
+            if isJust $ datatype ^. wfMetric
+              then throwResError (text "Multiple termination metrics defined for datatype" <+> text dtName)
+              else if outSort == IntS
+                   then environment %= addDatatype dtName datatype { _wfMetric = Just measureName }
+                   else throwResError (text "Output sort of termination measure" <+> text measureName <+> text "must be Int")
     _ -> throwResError (text "Input sort of measure" <+> text measureName <+> text "must be a datatype")
 resolveDeclaration (PredDecl (PredSig name argSorts resSort)) = do
   ifM (Map.member name <$> use (environment . globalPredicates)) (throwResError (text "Duplicate declaration of predicate" <+> text name)) (return ())
@@ -200,27 +201,31 @@ resolveSignatures (DataDecl dtName tParams pParams ctors) = mapM_ resolveConstru
           let sch'' = addRefinementToLastSch sch' (Var nominalSort valueVarName |=| Cons nominalSort name (allArgs (toMonotype sch')))
           environment %= addPolyConstant name sch''
         else throwResError (commaSep [text "Constructor" <+> text name <+> text "must return type" <+> pretty nominalType, text "got" <+> pretty returnType])
-resolveSignatures (MeasureDecl measureName _ _ post defCases _ _) = do
-  (outSort : (inSort@(DataS dtName sArgs) : _)) <- uses (environment . globalPredicates) (Map.! measureName)
-  datatype <- uses (environment . datatypes) (Map.! dtName)
-  post' <- resolveTypeRefinement outSort post
-  pos <- use currentPosition
-  let ctors = datatype ^. constructors
-  if length defCases /= length ctors
-    then throwResError $ text "Definition of measure" <+> text measureName <+> text "must include one case per constructor of" <+> text dtName
-    else do
-      defs' <- mapM (resolveMeasureDef ctors) defCases
-      sch <- uses environment ((Map.! measureName) . allSymbols)
-      sch' <- resolveSchema sch
-      environment %= addPolyConstant measureName sch'
-      defCases' <- mapM (\(MeasureCase n args body) -> do
-        body' <- resolveMeasureFormula body
-        return (MeasureCase n args body')) defCases
-      environment %= addMeasure measureName (MeasureDef inSort outSort defs' post')
-      checkingGoals %= (++ [(measureName, (impl (MeasureDef inSort outSort defCases' post'), pos))])
+resolveSignatures (MeasureDecl measureName _ _ post defCases args _) = do
+  (outSort : mArgs) <- uses (environment . globalPredicates) (Map.! measureName)
+  case last mArgs of 
+    inSort@(DataS dtName sArgs) -> do
+      datatype <- uses (environment . datatypes) (Map.! dtName)
+      post' <- resolveTypeRefinement outSort post
+      pos <- use currentPosition
+      let ctors = datatype ^. constructors
+      let constantArgs = fmap (\(n, s) -> Var s n) args
+      if length defCases /= length ctors
+        then throwResError $ text "Definition of measure" <+> text measureName <+> text "must include one case per constructor of" <+> text dtName
+        else do
+          defs' <- mapM (resolveMeasureDef ctors constantArgs) defCases
+          sch <- uses environment ((Map.! measureName) . allSymbols)
+          sch' <- resolveSchema sch
+          environment %= addPolyConstant measureName sch'
+          defCases' <- mapM (\(MeasureCase n args body) -> do
+            body' <- resolveMeasureFormula body
+            return (MeasureCase n args body')) defCases
+          environment %= addMeasure measureName (MeasureDef inSort outSort defs' args post')
+          checkingGoals %= (++ [(measureName, (impl (MeasureDef inSort outSort defCases' args post'), pos))])
+    _ -> throwResError $ text "Last input of measure" <+> text measureName <+> text "must be a datatype"
   where
     impl def = normalizeProgram $ measureProg measureName def
-    resolveMeasureDef allCtors (MeasureCase ctorName binders body) =
+    resolveMeasureDef allCtors constantArgs (MeasureCase ctorName binders body) =
       if ctorName `notElem` allCtors
         then throwResError $ text "Not in scope: data constructor" <+> text ctorName <+> text "used in definition of measure" <+> text measureName
         else do
@@ -232,10 +237,11 @@ resolveSignatures (MeasureDecl measureName _ _ post defCases _ _) = do
             else do
               let ctorParams = allArgs consT
               let subst = Map.fromList $ zip binders ctorParams
-              let fml = Pred AnyS measureName [Var AnyS valueVarName] |=| substitute subst body
+              let fml = Pred AnyS measureName (fmap (Var AnyS . fst) args ++ [Var AnyS valueVarName]) |=| substitute subst body
               fml' <- withLocalEnv $ do
                 environment . boundTypeVars .= boundVarsOf consSch
                 environment %= addAllVariables ctorParams
+                environment %= addAllVariables constantArgs
                 resolveTypeRefinement (toSort $ baseTypeOf $ lastType consT) fml
               return $ MeasureCase ctorName (map varName ctorParams) fml'
 resolveSignatures (SynthesisGoal name impl) = do

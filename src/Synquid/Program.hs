@@ -204,13 +204,14 @@ makeLenses ''DatatypeDef
 data MeasureCase = MeasureCase Id [Id] Formula
   deriving (Show, Eq, Ord)
 
-type MeasureDefaults = Map Id Sort
+type MeasureDefaults = [(Id, Sort)] 
 
 -- | User-defined measure function representation
 data MeasureDef = MeasureDef {
   _inSort :: Sort,
   _outSort :: Sort,
   _definitions :: [MeasureCase],
+  _constantArgs :: [(Id, Sort)],
   _postcondition :: Formula
 } deriving (Show, Eq, Ord)
 
@@ -422,7 +423,7 @@ addScrutinee p = usedScrutinees %~ (p :)
 allPredicates env = Map.fromList (map (\(PredSig pName argSorts resSort) -> (pName, resSort:argSorts)) (env ^. boundPredicates)) `Map.union` (env ^. globalPredicates)
 
 -- | 'allMeasuresOf' @dtName env@ : all measure of datatype with name @dtName@ in @env@
-allMeasuresOf dtName env = Map.filter (\(MeasureDef (DataS sName _) _ _ _) -> dtName == sName) $ env ^. measures
+allMeasuresOf dtName env = Map.filter (\(MeasureDef (DataS sName _) _ _ _ _) -> dtName == sName) $ env ^. measures
 
 -- | 'allMeasurePostconditions' @baseT env@ : all nontrivial postconditions of measures of @baseT@ in case it is a datatype
 allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env =
@@ -433,12 +434,12 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
                    if isAbstract then map contentProperties allMeasures else [] ++
                    if includeQuanitifed then map elemProperties allMeasures else []
   where
-    extractPost (mName, MeasureDef _ outSort _ fml) =
+    extractPost (mName, MeasureDef _ outSort _ _ fml) =
       if fml == ftrue
         then Nothing
         else Just $ substitute (Map.singleton valueVarName (Pred outSort mName [Var (toSort baseT) valueVarName])) fml
     -- TODO: should potentials transfer as well?
-    contentProperties (mName, MeasureDef (DataS _ vars) a _ _) = case elemIndex a vars of
+    contentProperties (mName, MeasureDef (DataS _ vars) a _ _ _) = case elemIndex a vars of
       Nothing -> Nothing
       Just i -> let (ScalarT elemT fml pot) = tArgs !! i -- @mName@ "returns" one of datatype's parameters: transfer the refinement onto the value of the measure
                 in let
@@ -447,7 +448,7 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
                    in Just $ substitute (Map.singleton valueVarName measureApp) fml
     contentProperties (mName, MeasureDef {}) = Nothing
     -- TODO: is potential relevant?
-    elemProperties (mName, MeasureDef (DataS _ vars) (SetS a) _ _) = case elemIndex a vars of
+    elemProperties (mName, MeasureDef (DataS _ vars) (SetS a) _ _ _) = case elemIndex a vars of
       Nothing -> Nothing
       Just i -> let (ScalarT elemT fml pot) = tArgs !! i -- @mName@ is a set of datatype "elements": add an axiom that every element of the set has that property
                 in if fml == ftrue || fml == ffalse || not (Set.null $ unknownsOf fml)
@@ -545,7 +546,7 @@ filterEnv e m = Lens.set measures (Map.filterWithKey (\k _ -> k == m) (e ^. meas
 
 -- Transform a resolved measure into a program
 measureProg :: Id -> MeasureDef -> UProgram
-measureProg name (MeasureDef inSort outSort defs post) = Program {
+measureProg name (MeasureDef inSort outSort defs _ post) = Program {
   typeOf = t, content = PFun "arg0" Program{ content = PMatch Program{ content = PSymbol "arg0", typeOf = t } (map mCase defs), typeOf = t} }
   where
     t   = AnyT
