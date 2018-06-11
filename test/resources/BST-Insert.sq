@@ -1,0 +1,53 @@
+--------------------------------------------------------------------------------
+-- Prelude
+
+eq :: x: a -> y: a -> {Bool | _v == (x == y)}
+neq :: x: a -> y: a -> {Bool | _v == (x != y)}
+le :: x: a -> y: a -> {Bool | _v == (x < y)}
+leq :: x: a -> y: a -> {Bool | _v == (x <= y)}
+
+or :: x: Bool -> y: Bool -> {Bool | _v == (x || y)}
+and :: x: Bool -> y: Bool -> {Bool | _v == (x && y)}
+not :: x: Bool -> {Bool | _v == !x}
+
+zero :: {Int | _v == 0}
+one :: {Int | _v == 1}
+plus :: x: Int -> y: Int -> {Int | _v == (x + y)}
+minus :: x: Int -> y: Int -> {Int | _v == (x - y)}
+-- times :: x: Int -> y: Int -> {Int | _v == (x * y)}
+-- div :: x: Int -> y: Int -> {Int | _v == (x / y)}
+
+-- end Prelude
+--------------------------------------------------------------------------------
+
+data BST a where
+  Empty :: BST a
+  Node :: x: {1**a| |2} -> l: BST {a | _v < x} -> r: BST {a | x < _v} -> BST a
+
+termination measure size :: BST a -> {Int | _v >= 0} where
+  Empty -> 0
+  Node _ l r -> 1 + size l + size r
+
+measure elems :: BST a -> Set a where
+  Empty -> []
+  Node x l r -> [x] + elems l + elems r
+
+measure depth :: BST a -> {Int | _v >= 0} where
+  Empty -> 0
+  Node _ l r -> 1 + (if depth l > depth r -- TODO is there a way to avoid recomputing depth?
+                      then depth l
+                      else depth r)
+
+-- test :: x: a -> {BST a | elems _v == [x] && depth _v == 2}
+test :: x: {1**a| |2} -> {BST a | elems _v == [x]}
+test = \x . Node x Empty Empty
+
+-- insert :: x: {1**a| |2} -> t: BST a -> {BST a | elems _v == elems t + [x]}
+-- insert = \x . \t .
+--   match t with
+--     Empty -> Node x Empty Empty
+--     Node y l r -> if x < y
+--                   then Node y (insert x l) r
+--                   else if x == y
+--                        then Node y l r
+--                        else Node y l (insert x r)

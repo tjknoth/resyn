@@ -1,0 +1,31 @@
+data Tuple a b where
+  Tuple :: a -> b -> Tuple a b
+
+data BST a where
+  Empty :: BST a
+  Node :: x: {1**a| |2} -> l: BST {a | _v < x} -> r: BST {a | x < _v} -> BST a
+
+termination measure size :: BST a -> {Int | _v >= 0} where
+  Empty -> 0
+  Node _ l r -> 1 + size l + size r
+
+measure elems :: BST a -> Set a where
+  Empty -> []
+  Node x l r -> [x] + elems l + elems r
+
+delete :: x: {0**a| |0}
+       -> t: {BST a | x in elems _v}
+       -- -> ({BST a | !(x in elems _v) && size _v == size t - 1}
+       --    , {1**a| |2}
+       -- -> Tuple {BST a | !(x in elems _v) && size _v == size t - 1} {1**a| |2}
+       -> {BST a | !(x in elems _v) && size _v == size t - 1 |2}
+delete = \x. \t.
+  match t with
+    Empty -> error -- Should be impossible given refinements
+    Node y l r -> if y < x
+                  then Node y l (delete x r)
+                  else if x < y
+                       then Node y (delete x l) r
+                       else match l with
+                              Empty -> r
+                              Node z zl zr -> Node z zl (delete x (Node y zr r))
