@@ -13,5 +13,5 @@ measure count2 :: x: Int -> y: Int -> IList -> {Int | _v >= 0} where
   Nil -> 0 
   Cons z zs -> 
     if (z == x || z == y)
-      then 1 + count2 x y zs 
+      then 1 + (count2 x y zs) 
       else count2 x y zs

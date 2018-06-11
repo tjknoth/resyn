@@ -21,6 +21,7 @@ import Data.Either
 import Data.List
 import qualified Data.Foldable as Foldable
 import qualified Data.Traversable as Traversable
+import Control.Arrow (first)
 
 import Debug.Trace
 
@@ -127,7 +128,8 @@ resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
 resolveDeclaration (MeasureDecl measureName inSort outSort post defCases args isTermination) = do
   env <- use environment
   let allInSorts = fmap snd args ++ [inSort]
-  addNewSignature measureName (generateSchema env measureName allInSorts outSort post)
+  let varSortPairs = fmap (first Just) args ++ [(Nothing, inSort)]
+  addNewSignature measureName (generateSchema env measureName varSortPairs outSort post)
   -- Resolve measure signature:
   mapM_ (resolveSort . snd) args 
   resolveSort inSort
@@ -154,7 +156,8 @@ resolveDeclaration (PredDecl (PredSig name argSorts resSort)) = do
   ifM (Map.member name <$> use (environment . globalPredicates)) (throwResError (text "Duplicate declaration of predicate" <+> text name)) (return ())
   mapM_ resolveSort (resSort : argSorts)
   env <- use environment
-  addNewSignature name (generateSchema env name argSorts resSort ftrue) 
+  let argSorts' = fmap (\x -> (Nothing, x)) argSorts
+  addNewSignature name (generateSchema env name argSorts' resSort ftrue) 
   environment %= addGlobalPredicate name resSort argSorts
 resolveDeclaration (SynthesisGoal name impl) = do
   syms <- uses environment allSymbols
