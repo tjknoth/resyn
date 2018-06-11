@@ -1,0 +1,23 @@
+data BST a where
+  Empty :: BST a
+  Node :: x: {1**a| |2} -> l: BST {a | _v <= x} -> r: BST {a | x < _v} -> BST a
+
+termination measure size :: BST a -> {Int | _v >= 0} where
+  Empty -> 0
+  Node _ l r -> 1 + size l + size r
+
+measure elems :: BST a -> Set a where
+  Empty -> []
+  Node x l r -> [x] + elems l + elems r
+
+measure depth :: BST a -> {Int | _v >= 0} where
+  Empty -> 0
+  Node _ l r -> 1 + (if depth l > depth r -- TODO is there a way to avoid recomputing depth?
+                      then depth l
+                      else depth r)
+
+replicate :: t: BST {2**a| |2} -> {BST a | elems _v == elems t && size _v == 2 * size t}
+replicate = \t.
+  match t with
+    Empty -> Empty
+    Node x l r -> Node x (Node x (replicate l) Empty) (replicate r)
