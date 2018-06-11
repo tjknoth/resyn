@@ -217,6 +217,7 @@ resolveSignatures (MeasureDecl measureName _ _ post defCases args _) = do
         then throwResError $ text "Definition of measure" <+> text measureName <+> text "must include one case per constructor of" <+> text dtName
         else do
           defs' <- mapM (resolveMeasureDef ctors constantArgs) defCases
+          mapM_ (\(MeasureCase _ _ impl) -> checkMeasureCase measureName args impl) defCases
           sch <- uses environment ((Map.! measureName) . allSymbols)
           sch' <- resolveSchema sch
           environment %= addPolyConstant measureName sch'
@@ -251,6 +252,31 @@ resolveSignatures (SynthesisGoal name impl) = do
   resolveHole impl
   return ()
 resolveSignatures _ = return ()
+
+-- 'resolveMeasureCase' @measure constArgs mCase@ : ensure that measure @name@ is called recursively with the same argumenst @constArgs@
+checkMeasureCase :: Id -> [(Id, Sort)] -> Formula -> Resolver () 
+checkMeasureCase measure [] _ = return () 
+checkMeasureCase measure constArgs (Unary _ f) = checkMeasureCase measure constArgs f
+checkMeasureCase measure constArgs (Binary _ f g) = do 
+  checkMeasureCase measure constArgs f 
+  checkMeasureCase measure constArgs g
+checkMeasureCase measure constArgs (Ite f g h) = do 
+  checkMeasureCase measure constArgs f 
+  checkMeasureCase measure constArgs g
+  checkMeasureCase measure constArgs h
+checkMeasureCase measure constArgs (Cons _ _ fs) = 
+  mapM_ (checkMeasureCase measure constArgs) fs
+checkMeasureCase measure constArgs p@(Pred s x args) =
+  if x == measure
+    then do 
+      let args' = take numArgs args
+      let cArgs' = fmap (\(x, _) -> Var AnyS x) constArgs
+      when (args' /= cArgs') $ throwResError $ text "Constant arguments to measure" <+> text measure <+> text "must not change in recursive call" <+> pretty p 
+    else mapM_ (checkMeasureCase measure constArgs) args 
+  where
+    numArgs = length constArgs
+checkMeasureCase _ _ _ = return ()
+
 
 resolveHole :: Program RType -> Resolver RType
 resolveHole Program{content = (PApp p1 p2)} = do
