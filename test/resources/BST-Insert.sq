@@ -38,16 +38,12 @@ measure depth :: BST a -> {Int | _v >= 0} where
                       then depth l
                       else depth r)
 
--- test :: x: a -> {BST a | elems _v == [x] && depth _v == 2}
-test :: x: {1**a| |2} -> {BST a | elems _v == [x]}
-test = \x . Node x Empty Empty
-
--- insert :: x: {1**a| |2} -> t: BST a -> {BST a | elems _v == elems t + [x]}
--- insert = \x . \t .
---   match t with
---     Empty -> Node x Empty Empty
---     Node y l r -> if x < y
---                   then Node y (insert x l) r
---                   else if x == y
---                        then Node y l r
---                        else Node y l (insert x r)
+insert :: x: {1**a| |2} -> t: BST a -> {BST a | elems _v == elems t + [x]}
+insert = \x . \t .
+  match t with
+    Empty -> Node x Empty Empty
+    Node y l r -> if x < y
+                  then Node y (insert x l) r
+                  else if x == y
+                       then Node y l r
+                       else Node y l (insert x r)
