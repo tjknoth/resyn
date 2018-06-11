@@ -1,25 +1,3 @@
---------------------------------------------------------------------------------
--- Prelude
-
-eq :: x: a -> y: a -> {Bool | _v == (x == y)}
-neq :: x: a -> y: a -> {Bool | _v == (x != y)}
-le :: x: a -> y: a -> {Bool | _v == (x < y)}
-leq :: x: a -> y: a -> {Bool | _v == (x <= y)}
-
-or :: x: Bool -> y: Bool -> {Bool | _v == (x || y)}
-and :: x: Bool -> y: Bool -> {Bool | _v == (x && y)}
-not :: x: Bool -> {Bool | _v == !x}
-
-zero :: {Int | _v == 0}
-one :: {Int | _v == 1}
-plus :: x: Int -> y: Int -> {Int | _v == (x + y)}
-minus :: x: Int -> y: Int -> {Int | _v == (x - y)}
--- times :: x: Int -> y: Int -> {Int | _v == (x * y)}
--- div :: x: Int -> y: Int -> {Int | _v == (x / y)}
-
--- end Prelude
---------------------------------------------------------------------------------
-
 data BST a where
   Empty :: BST a
   Node :: x: {1**a| |2} -> l: BST {a | _v < x} -> r: BST {a | x < _v} -> BST a
