@@ -124,7 +124,7 @@ resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
   environment %= addDatatype dtName datatype
   let addPreds typ = foldl (flip ForallP) (Monotype typ) pParams
   mapM_ (\(ConstructorSig name typ) -> addNewSignature name $ addPreds typ) ctors
-resolveDeclaration (MeasureDecl measureName inSort outSort post defCases isTermination) = do
+resolveDeclaration (MeasureDecl measureName inSort outSort post defCases _ isTermination) = do
   env <- use environment
   addNewSignature measureName (generateSchema env measureName [inSort] outSort post)
   -- Resolve measure signature:
@@ -200,7 +200,7 @@ resolveSignatures (DataDecl dtName tParams pParams ctors) = mapM_ resolveConstru
           let sch'' = addRefinementToLastSch sch' (Var nominalSort valueVarName |=| Cons nominalSort name (allArgs (toMonotype sch')))
           environment %= addPolyConstant name sch''
         else throwResError (commaSep [text "Constructor" <+> text name <+> text "must return type" <+> pretty nominalType, text "got" <+> pretty returnType])
-resolveSignatures (MeasureDecl measureName _ _ post defCases _) = do
+resolveSignatures (MeasureDecl measureName _ _ post defCases _ _) = do
   (outSort : (inSort@(DataS dtName sArgs) : _)) <- uses (environment . globalPredicates) (Map.! measureName)
   datatype <- uses (environment . datatypes) (Map.! dtName)
   post' <- resolveTypeRefinement outSort post

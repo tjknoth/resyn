@@ -204,6 +204,8 @@ makeLenses ''DatatypeDef
 data MeasureCase = MeasureCase Id [Id] Formula
   deriving (Show, Eq, Ord)
 
+type MeasureDefaults = Map Id Sort
+
 -- | User-defined measure function representation
 data MeasureDef = MeasureDef {
   _inSort :: Sort,
@@ -497,7 +499,7 @@ data BareDeclaration =
   TypeDecl Id [Id] RType |                                  -- ^ Type name, variables, and definition
   FuncDecl Id RSchema |                                     -- ^ Function name and signature
   DataDecl Id [Id] [(PredSig, Bool)] [ConstructorSig] |     -- ^ Datatype name, type parameters, predicate parameters, and constructor definitions
-  MeasureDecl Id Sort Sort Formula [MeasureCase] Bool |     -- ^ Measure name, input sort, output sort, postcondition, definition cases, and whether this is a termination metric
+  MeasureDecl Id Sort Sort Formula [MeasureCase] MeasureDefaults Bool |     -- ^ Measure name, input sort, output sort, postcondition, definition cases, constant arguments, and whether this is a termination metric
   PredDecl PredSig |                                        -- ^ Module-level predicate
   QualifierDecl [Formula] |                                 -- ^ Qualifiers
   MutualDecl [Id] |                                         -- ^ Mutual recursion group

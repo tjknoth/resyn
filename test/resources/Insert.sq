@@ -1,0 +1,11 @@
+data IList where
+  Nil :: IList 
+  Cons :: x: {Int| |2} -> xs: IList -> IList
+
+measure numgt :: x: Int -> IList -> {Int| _v >= 0} where 
+  Nil -> 0 
+  Cons y ys -> 
+    if y >= x 
+      then 1 + (numgt x ys)
+      else numgt x ys
+              

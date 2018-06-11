@@ -1,0 +1,16 @@
+data IList where
+  Nil :: IList 
+  Cons :: x: {Int| |2} -> xs: IList -> IList 
+
+measure aboveAll :: x: Int -> IList -> Bool where 
+  Nil -> True 
+  Cons y ys -> (x >= y) && (aboveAll x ys)
+
+filterAbove :: x: Int -> xs: IList -> {IList | aboveAll x _v}
+filterAbove = \x . \xs . 
+  match xs with 
+    Nil -> Nil 
+    Cons y ys -> 
+      if (y >= x)
+        then Cons y (filterAbove x ys)
+        else filterAbove x ys

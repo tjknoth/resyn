@@ -385,6 +385,14 @@ instance Pretty ConstructorSig where
 
 prettyVarianceParam (predSig, contra) = pretty predSig <> (if contra then pretty Not else empty)
 
+instance Pretty MeasureDefaults where 
+  pretty args = punctuateEnd (operator "->") $ fmap formatPair (Map.assocs args)
+    where 
+      formatPair (v, s) = text v <+> operator ":" <+> pretty s 
+      punctuateEnd op [] = empty 
+      punctuateEnd op [d] = d <+> op 
+      punctuateEnd op (d:ds) = d <+> op <+> punctuateEnd op ds
+
 instance Pretty BareDeclaration where
   pretty (TypeDecl name tvs t) = keyword "type" <+> text name <+> hsep (map text tvs) <+> operator "=" <+> pretty t
   pretty (QualifierDecl fmls) = keyword "qualifier" <+> hlBraces (commaSep $ map pretty fmls)
@@ -392,9 +400,9 @@ instance Pretty BareDeclaration where
   pretty (DataDecl name tParams pParams ctors) = hang tab $
     keyword "data" <+> text name <+> hsep (map text tParams) <+> hsep (map prettyVarianceParam pParams) <+> keyword "where"
     $+$ vsep (map pretty ctors)
-  pretty (MeasureDecl name inSort outSort post cases isTermination) = hang tab $
+  pretty (MeasureDecl name inSort outSort post cases args isTermination) = hang tab $
     if isTermination then keyword "termination" else empty
-    <+> keyword "measure" <+> text name <+> operator "::" <+> pretty inSort <+> operator "->"
+    <+> keyword "measure" <+> text name <+> operator "::" <+> pretty args <+> pretty inSort <+> operator "->"
     <+> if post == ftrue then pretty outSort else hlBraces (pretty outSort <+> operator "|" <+> pretty post) <+> keyword "where"
     $+$ vsep (map pretty cases)
   pretty (SynthesisGoal name impl) = text name <+> operator "=" <+> pretty impl
