@@ -1,12 +1,12 @@
 --------------------------------------------------------------------------------
--- Insert into a queue. In this test, potential will represent the cost of
--- operations, rather than overhead space usage.
+-- Insert to the end of a functional queue. In this test, potential will
+-- represent the cost of operations, rather than overhead space usage.
 --------------------------------------------------------------------------------
 
 -- A list, nothing fancy here.
 data List a where
   Nil :: List a
-  Cons :: x: {1**a| |1} -> xs: List a -> List a
+  Cons :: x: a -> xs: List a -> List a
 
 -- Measure the length of a list
 termination measure llen :: List a -> {Int | _v >= 0} where
@@ -19,9 +19,9 @@ measure lelems :: List a -> Set a where
   Cons x xs -> [x] + lelems xs
 
 -- A queue implemented as a pair of lists, one as the front and the other as the
--- reverse of the rear.
+-- reverse of the rear. The queue's potential is 2 * the length of the rear.
 data Queue a where
-  Queue :: f: {List a| |1} -> b: List a -> Queue a
+  Queue :: f: List a -> b: {List a| |2 * llen _v} -> Queue a
 
 -- Measure the length of a queue
 termination measure qlen :: Queue a -> {Int | _v >= 0} where
@@ -41,14 +41,9 @@ measure frontLen :: Queue a -> {Int | _v >= 0} where
 measure rearLen :: Queue a -> {Int | _v >= 0} where
   Queue f b -> llen b
 
--- The number of steps needed to dequeue one element from the queue.
-measure deqCost :: Queue a -> {Int | _v >= 0} where
-  Queue f b -> if llen f > 0
-               then 0
-               else llen b
-
--- Add an element to the back of the queue. This operation takes 1 step.
-enqueue :: x: {1**a| |1} -> q: Queue a -> {Queue a | qelems _v == qelems q + [x] && rearLen _v == rearLen q + 1}
+-- Add an element to the back of the queue. This operation takes 1 step and adds
+-- 2 potential to the queue.
+enqueue :: x: {1**a| |3} -> q: Queue a -> {Queue a | qelems _v == qelems q + [x] && qlen _v == qlen q + 1}
 enqueue = \x. \q.
   match q with
     Queue f b -> Queue f (Cons x b)

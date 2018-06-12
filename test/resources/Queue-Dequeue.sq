@@ -1,12 +1,12 @@
 --------------------------------------------------------------------------------
--- Remove the front of a queue. In this test, potential will represent the cost
--- of operations, rather than overhead space usage.
+-- Remove the front of a functional queue. In this test, potential will
+-- represent the cost of operations, rather than overhead space usage.
 --------------------------------------------------------------------------------
 
 -- A list, nothing fancy here.
 data List a where
   Nil :: List a
-  Cons :: x: {1**a| |1} -> xs: List a -> List a
+  Cons :: x: a -> xs: List a -> List a
 
 -- Measure the length of a list
 termination measure llen :: List a -> {Int | _v >= 0} where
@@ -19,9 +19,9 @@ measure lelems :: List a -> Set a where
   Cons x xs -> [x] + lelems xs
 
 -- A queue implemented as a pair of lists, one as the front and the other as the
--- reverse of the rear.
+-- reverse of the rear. The queue's potential is 2 * the length of the rear.
 data Queue a where
-  Queue :: f: {List a| |1} -> b: List a -> Queue a
+  Queue :: f: List a -> b: {List a| |2 * llen _v} -> Queue a
 
 -- Measure the length of a queue
 termination measure qlen :: Queue a -> {Int | _v >= 0} where
@@ -41,41 +41,15 @@ measure frontLen :: Queue a -> {Int | _v >= 0} where
 measure rearLen :: Queue a -> {Int | _v >= 0} where
   Queue f b -> llen b
 
--- The number of steps needed to dequeue one element from the queue.
-measure deqCost :: Queue a -> {Int | _v >= 0} where
-  Queue f b -> if llen f > 0
-               then 0
-               else llen b
-
 -- Helper function to reverse a list. Takes n steps.
 reverse :: xs: {List a| |llen _v} -> {List a | llen _v == llen xs && lelems _v == lelems xs}
 
--- Dequeue from the front of a queue, given that the queue has been reversed
--- already.
-dequeue :: q: {Queue a | frontLen _v > 0 | 1} -> {Queue a | frontLen _v == frontLen q - 1}
+-- Dequeue from the front of the queue. Takes 1 step in amortized time.
+dequeue :: q: {Queue a | qlen _v > 0 | 1} -> {Queue a | qlen _v == qlen q - 1}
 dequeue = \q.
   match q with
     Queue f b -> match f with
-                   Nil -> error -- Impossible given refinements
                    Cons x fs -> Queue fs b -- We would return x as the front of the queue
-
--- Dequeue from the front of a queue which must be reversed. Costs a number of
--- steps corresponding to the length of the rear of the queue.
-dequeue' :: q: {Queue a | frontLen _v == 0 && rearLen _v > 0 | rearLen _v}
-         -> {Queue a | frontLen _v == rearLen q - 1 && rearLen _v == 0}
-dequeue' = \q.
-  match q with
-    Queue f b -> match reverse b with
-                   Nil -> error -- Impossible given refinements
-                   Cons x fs -> Queue fs Nil -- We would return x as the front of the queue
-
-
--- -- Dequeue from the front of a queue. This operation takes steps based on the
--- -- length of the rear of the queue. Furthermore, it returns a queue where the
--- -- rear is empty.
--- dequeue :: q: {Queue a | qlen _v > 0 | deqCost _v} -> {Queue a | qlen _v == qlen q - 1}
--- dequeue = \q.
---   match q with
---     Queue f b -> match f with
---                    Cons x fs -> Queue fs b -- We would return x as the front of the queue
---                    Nil -> Queue (reverse b) Nil
+                   Nil -> match reverse b with -- If front is empty, reverse the rear
+                            Nil -> error -- Unreachable given the refinements
+                            Cons x fs -> Queue fs Nil
