@@ -60,7 +60,7 @@ data TypingState = TypingState {
   _initEnv :: Environment,                      -- ^ Initial environment
   _idCount :: Map String Int,                   -- ^ Number of unique identifiers issued so far
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
-  _resourceConstraints :: Formula,         -- ^ Constraints relevant to resource analysis
+  _resourceConstraints :: [Constraint],         -- ^ Constraints relevant to resource analysis
   -- Temporary state:
   _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
   _hornClauses :: [(Formula, Id)],              -- ^ Horn clauses generated from subtyping constraints
@@ -90,7 +90,7 @@ initTypingState env = do
     _initEnv = env,
     _idCount = Map.empty,
     _isFinal = False,
-    _resourceConstraints = ftrue,
+    _resourceConstraints = [],
     _simpleConstraints = [],
     _hornClauses = [],
     _consistencyChecks = [],

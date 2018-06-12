@@ -2,13 +2,16 @@ data IList where
   Nil :: IList 
   Cons :: x: {Int| |2} -> xs: IList -> IList
 
+-- Multi-argument measure returning the number of elements 
+--   in the IList _v that x is greater than
 measure numgt :: x: Int -> IList -> {Int| _v >= 0} where 
   Nil -> 0 
   Cons y ys -> 
     if y >= x 
       then 1 + (numgt x ys)
       else numgt x ys
-             
+            
+-- Counts the number of copies of two specific values x and y 
 measure count2 :: x: Int -> y: Int -> IList -> {Int | _v >= 0} where 
   Nil -> 0 
   Cons z zs -> 

@@ -1,3 +1,7 @@
+-- Simple model of list memory semantics:
+--   Constructing an element of a list requires enough heap space 
+--   for the polymorphic type and a pointer to the next one.
+--   We assume Nil requires no memory
 data List a where
   Nil :: List a
   Cons :: x: {1 ** a| |1} -> xs: List a -> List a
@@ -6,6 +10,8 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs 
 
+-- Runs in exponential time (and uses memory accordingly)
+--   , should fail to check against the provided linear-memory resources
 compress :: xs: List {1 ** a| |1} -> List a
 compress = \xs.
   match xs with

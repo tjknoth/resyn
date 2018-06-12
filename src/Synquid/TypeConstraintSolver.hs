@@ -58,7 +58,7 @@ solveTypeConstraints = do
   simplifyAllConstraints
 
   scs <- use simpleConstraints
-  writeLog 3 (text "Simple Constraints" $+$ vsep (map pretty scs))
+  writeLog 3 (text "Simple Constraints" $+$ nest 2 (vsep (map pretty scs)))
   processAllPredicates
   processAllConstraints
   generateAllHornClauses
@@ -80,7 +80,7 @@ checkResources constraints = do
   newC <- solveResourceConstraints oldConstraints constraints
   case newC of 
     Nothing -> throwError $ text "Insufficient resources"
-    Just f -> resourceConstraints %= (f `andClean`) 
+    Just f -> resourceConstraints %= (f ++) 
   --when (newC == ffalse) $ throwError $ text "Insufficient resources to check program"
   --resourceConstraints %= f |&|
 
@@ -94,14 +94,14 @@ addTypingConstraint c = over typingConstraints (nub . (c :))
 simplifyAllConstraints :: MonadHorn s => TCSolver s ()
 simplifyAllConstraints = do
   tcs <- use typingConstraints
-  writeLog 3 (text "Typing Constraints" $+$ (vsep $ map pretty tcs))
+  writeLog 3 (text "Typing Constraints" $+$ nest 2 (vsep $ map pretty tcs))
   typingConstraints .= []
   tass <- use typeAssignment
   mapM_ simplifyConstraint tcs
 
   -- If type assignment has changed, we might be able to process more shapeless constraints:
   tass' <- use typeAssignment
-  writeLog 3 (text "Type assignment" $+$ vMapDoc text pretty tass')
+  writeLog 3 (text "Type assignment" $+$ nest 2 (vMapDoc text pretty tass'))
 
   when (Map.size tass' > Map.size tass) simplifyAllConstraints
 
@@ -635,47 +635,53 @@ embedEnv env fml consistency = do
 ----------------------------------------
 
 -- Top-level interface for solving resource constraints
-solveResourceConstraints :: (MonadHorn s, MonadSMT s) => Formula -> [Constraint] -> TCSolver s (Maybe Formula) 
+solveResourceConstraints :: (MonadHorn s, MonadSMT s) => [Constraint] -> [Constraint] -> TCSolver s (Maybe [Constraint]) 
 solveResourceConstraints oldConstraints constraints = do
-    fmlList <- mapM generateFormula constraints
+    writeLog 4 $ linebreak <+> text "Generating resource constraints:"
+    fmlList <- mapM (generateFormula True) constraints
+    accFmlList <- mapM (generateFormula False) oldConstraints
     -- Filter out trivial constraints, mostly for readability
     let fmls = Set.fromList (filter (not . isTrivial) fmlList)
     let query = conjunction fmls
-    (b, s) <- isSatWithModel (oldConstraints |&| query)
+    let accumlatedQuery = conjunction (Set.fromList accFmlList)
+    (b, s) <- isSatWithModel (accumlatedQuery |&| query)
     let result = if b then "SAT" else "UNSAT"
-    writeLog 5 $ text "Old constraints" <+> prettyConjuncts oldConstraints
-    writeLog 3 $ text "Solving resource constraint:" <+> text result <+> linebreak <+> prettyConjuncts query 
-    if b then do
-           writeLog 4 $ nest 2 $ text "SAT with model" -- <+> text s
-           return $ Just query 
-         else return Nothing 
+    writeLog 5 $ text "Accumulated resource constraints" $+$ nest 5 (prettyConjuncts (filter isInteresting accFmlList))
+    writeLog 3 $ text "Solved resource constraint after conjoining formulas:" <+> text result $+$ nest 4 (prettyConjuncts (filter isInteresting fmlList))
+    if b 
+      then do
+        writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text s) 
+        return $ Just constraints 
+      else return Nothing
+    
+            
 
 isSatWithModel :: MonadSMT s => Formula -> TCSolver s (Bool, String)
 isSatWithModel = lift . lift . lift . solveWithModel
 
 
 -- Converts abstract constraint into relevant numerical constraints
-generateFormula :: (MonadHorn s, MonadSMT s) => Constraint -> TCSolver s Formula 
-generateFormula c@(Subtype env tl tr _ name) = do
+generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Constraint -> TCSolver s Formula 
+generateFormula shouldLog c@(Subtype env tl tr _ name) = do
     --let syms = Map.elems $ Map.filterWithKey (\k a -> k /= name) (allSymbols env) 
     let fmls = conjunction $ Set.filter (not . isTrivial) $ joinAssertions (|=|) tl tr
     emb <- embedEnv env (refinementOf tl |&| refinementOf tr) True
     let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf tl) emb
-    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
+    when shouldLog $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
     --return $ conjunction emb' |=>| fmls
     return fmls
-generateFormula c@(WellFormed env t)         = do
+generateFormula shouldLog c@(WellFormed env t)         = do
     let fmls = conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allFormulas t
     emb <- embedEnv env (refinementOf t) True  
     let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf t) emb
-    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
+    when shouldLog $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
     --return $ conjunction emb' |=>| fmls
     return fmls
-generateFormula c@(SplitType e v t tl tr)    = do 
+generateFormula shouldLog c@(SplitType e v t tl tr)    = do 
     let fmls = conjunction $ partition t tl tr
-    writeLog 2 (nest 2 $ text "Resource constraint:" <+> pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)
+    when shouldLog $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)
     return fmls
-generateFormula c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
+generateFormula _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
 
 -- Set of all resource-related formulas (potentials and multiplicities) from a refinement type
 allFormulas :: RType -> Set Formula 
@@ -771,6 +777,13 @@ assumeUnknowns (Pred s x fs) = Pred s x (fmap assumeUnknowns fs)
 assumeUnknowns (Cons s x fs) = Cons s x (fmap assumeUnknowns fs)
 assumeUnknowns (All f g) = All (assumeUnknowns f) (assumeUnknowns g)
 assumeUnknowns f = f
+
+-- Filter away "uninteresting" constraints for logging. Specifically, well-formedness
+-- Definitely not complete, just "pretty good"
+isInteresting (Binary Ge _ (IntLit 0)) = False
+isInteresting (BoolLit True)           = False
+isInteresting (Binary And f g)         = isInteresting f && isInteresting g 
+isInteresting _                        = True
 
 
 writeLog level msg = do

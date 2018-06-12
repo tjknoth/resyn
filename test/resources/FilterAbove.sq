@@ -2,10 +2,14 @@ data IList where
   Nil :: IList 
   Cons :: x: {Int| |2} -> xs: IList -> IList 
 
+-- Measure with more than one argument
+-- This is possible when all but the last argument (the relevant Datatype)
+--   are constant
 measure aboveAll :: x: Int -> IList -> Bool where 
   Nil -> True 
   Cons y ys -> (x >= y) && (aboveAll x ys)
 
+-- Simple demonstration of verification using multi-argument measure
 filterAbove :: x: Int -> xs: IList -> {IList | aboveAll x _v}
 filterAbove = \x . \xs . 
   match xs with 
