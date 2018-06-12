@@ -1,5 +1,9 @@
 qualifier {x == y, x != y}
 
+-- Simple model of list memory semantics:
+--   Constructing an element of a list requires enough heap space 
+--   for the polymorphic type and a pointer to the next one.
+--   We assume Nil requires no memory
 data List a where
 	Nil :: List a
 	Cons :: x: {1**a| |1} -> xs: List a -> List a
@@ -11,7 +15,8 @@ termination measure len :: List a -> {Int | _v >= 0} where
 measure elems :: List a -> Set a where
   Nil -> []
   Cons x xs -> [x] + elems xs
-	
+
+-- Requires enough memory resources to traverse xs onces
 delete :: x: a -> xs: List {1**a| |1} -> {List a | elems _v == elems xs - [x]}
 delete = \x. \xs.
   match xs with

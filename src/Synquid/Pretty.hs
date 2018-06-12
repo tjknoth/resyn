@@ -45,13 +45,16 @@ module Synquid.Pretty (
   -- * Programs
   prettySpec,
   prettySolution,
-  -- * Highlighting
-  plain,
-  errorDoc,
   -- * Counting
   typeNodeCount,
   programNodeCount,
-  prettyConjuncts 
+  prettyConjuncts,
+  -- * Syntax Highlighting
+  plain,
+  errorDoc,
+  special,
+  operator,
+  keyword
 ) where
 
 import Synquid.Logic
@@ -365,6 +368,16 @@ prettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "
 prettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
 prettyConstraint (SplitType _ v t tl tr) = pretty v <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr)
 
+-- Do not show environment
+simplePrettyConstraint :: Constraint -> Doc
+simplePrettyConstraint (Subtype _ t1 t2 False label) = pretty t1 <+> operator "<:" <+> pretty t2 <+> parens (text label)
+simplePrettyConstraint (Subtype _ t1 t2 True label) = pretty t1 <+> operator "/\\" <+> pretty t2 <+> parens (text label)
+simplePrettyConstraint (WellFormed env t) = prettyBindings env <+> operator "|-" <+> pretty t
+simplePrettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
+simplePrettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
+simplePrettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
+simplePrettyConstraint (SplitType _ v t tl tr) = pretty v <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr)
+
 instance Pretty Constraint where
   pretty = prettyConstraint
 
@@ -493,24 +506,27 @@ lfill w d        = case renderCompact d of
            | otherwise = text $ replicate n ' '
 
 -- Helper for printing conjunctions line-by-line for readability
-prettyConjuncts :: Formula -> Doc
-prettyConjuncts = conjDocAt 0
+prettyConjuncts :: [Formula] -> Doc
+prettyConjuncts fmls = hsep $ fmap prettyCForm fmls
+
+-- Alias for pretty-printing a specific formula
+prettyCForm = conjDocAt 0
 
 -- | 'conjDocAt' @n fml@ : print @expr@ in a context with binding power @n@
 conjDocAt :: Int -> Formula -> Doc
 conjDocAt n fml = case fml of
     BoolLit b -> pretty b
     IntLit i -> intLiteral i
-    SetLit s elems -> hlBrackets $ commaSep $ map prettyConjuncts elems
+    SetLit s elems -> hlBrackets $ commaSep $ map prettyCForm elems
     Var s name -> if name == valueVarName then special name else text name
     Unknown s name -> if Map.null s then text name else hMapDoc pretty pretty s <> text name
     Unary op e -> pretty op <> conjDocAt n' e
     Binary And e1 e2 -> conjDocAt n' e1 <+> text "\n" <+> conjDocAt n' e2 
     Binary op e1 e2 -> conjDocAt n' e1 <+> pretty op <+> conjDocAt n' e2
-    Ite e0 e1 e2 -> keyword "if" <+> prettyConjuncts e0 <+> keyword "then" <+> prettyConjuncts e1 <+> keyword "else" <+> prettyConjuncts e2
+    Ite e0 e1 e2 -> keyword "if" <+> prettyCForm e0 <+> keyword "then" <+> prettyCForm e1 <+> keyword "else" <+> prettyCForm e2
     Pred b name args -> text name <+> hsep (map (conjDocAt n') args)
     Cons b name args -> hlParens (text name <+> hsep (map (conjDocAt n') args))
-    All x e -> keyword "forall" <+> pretty x <+> operator "." <+> prettyConjuncts e
+    All x e -> keyword "forall" <+> pretty x <+> operator "." <+> prettyCForm e
   where
     n' = power fml
     withSort s doc = doc <> text ":" <> pretty s

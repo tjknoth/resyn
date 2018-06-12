@@ -9,7 +9,8 @@ termination measure len :: List a -> {Int | _v >= 0} where
 measure elems :: List a -> Set a where
   Nil -> []
   Cons x xs -> [x] + elems xs
-	
+
+-- Currently: resource usage not specified. Test cases for HO Functions.
 foldr :: <p :: List a -> b -> Bool> .
 		f: (xs: List a -> x: a -> acc: {b | p xs _v} -> {b | p (Cons x xs) _v}) ->
 		seed: {b | p Nil _v} ->

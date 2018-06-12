@@ -405,7 +405,7 @@ generateEAt env typ d = do
 checkE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> RProgram -> Explorer s ()
 checkE env typ p@(Program pTerm pTyp) = do
   ctx <- asks . view $ _1 . context
-  writeLog 2 $ text "Checking" <+> pretty p <+> text "::" <+> pretty typ <+> text "in" $+$ pretty (ctx (untyped PHole))
+  writeLog 2 $ linebreak <+> linebreak <+> special "Checking" <+> pretty p <+> text "::" <+> pretty typ <+> text "in" $+$ pretty (ctx (untyped PHole))
 
   -- ifM (asks $ _symmetryReduction . fst) checkSymmetry (return ())
 
@@ -673,7 +673,7 @@ cut = once
 generateAuxGoals :: MonadHorn s => Explorer s ()
 generateAuxGoals = do
   goals <- use auxGoals
-  writeLog 3 $ text "Auxiliary goals are:" $+$ vsep (map pretty goals)
+  unless (null goals) $ writeLog 3 $ text "Auxiliary goals are:" $+$ vsep (map pretty goals)
   case goals of
     [] -> return ()
     (g : gs) -> do
