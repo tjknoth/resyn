@@ -19,16 +19,20 @@ measure elems :: BST a -> Set a where
   Empty -> []
   Node x l r -> [x] + elems l + elems r
 
--- Measure the depth of the tree
-measure depth :: BST a -> {Int | _v >= 0} where
+-- The length of the path to where this element is stored in the tree, or where
+-- it would be stored if inserted.
+measure pathTo :: x: a -> BST a -> {Int | _v >= 0} where
   Empty -> 0
-  Node _ l r -> 1 + (if depth l > depth r -- TODO is there a way to avoid recomputing depth?
-                      then depth l
-                      else depth r)
+  Node y l r -> if x < y
+                then 1 + pathTo x l
+                else if y < x
+                     then 1 + pathTo x r
+                     else 0
 
 -- Check a function to insert a new element into the tree. We consume 2
--- pontential so that we can insert a node if needed.
-insert :: x: {1**a| |2} -> t: BST a -> {BST a | elems _v == elems t + [x]}
+-- pontential so that we can insert a node if needed, plus the cost of
+-- traversing the tree.
+insert :: x: {1**a| |2} -> t: {BST a| |pathTo x _v} -> {BST a | elems _v == elems t + [x]}
 insert = \x . \t .
   match t with
     Empty -> Node x Empty Empty

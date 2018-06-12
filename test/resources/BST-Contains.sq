@@ -19,16 +19,19 @@ measure elems :: BST a -> Set a where
   Empty -> []
   Node x l r -> [x] + elems l + elems r
 
--- Measure the depth of the tree
-measure depth :: BST a -> {Int | _v >= 0} where
+-- The length of the path to where this element is stored in the tree, or where
+-- it would be stored if inserted.
+measure pathTo :: x: a -> BST a -> {Int | _v >= 0} where
   Empty -> 0
-  Node _ l r -> 1 + (if depth l > depth r -- TODO is there a way to avoid recomputing depth?
-                      then depth l
-                      else depth r)
+  Node y l r -> if x < y
+                then 1 + pathTo x l
+                else if y < x
+                     then 1 + pathTo x r
+                     else 0
 
--- A function to check whether an element is inside a BST. Because we are not
--- modifying the tree, we do not consume any multiplicity of x or potential.
-contains :: x: {0**a| |0} -> t: BST a -> {Bool | _v == (x in elems t)}
+-- A function to check whether an element is inside a BST. Since we do not
+-- modify the tree, the only cost is that of traversal.
+contains :: x: a -> t: {BST a| |pathTo x _v} -> {Bool | _v == (x in elems t)}
 contains = \x. \t.
   match t with
     Empty -> False
