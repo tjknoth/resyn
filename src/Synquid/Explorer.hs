@@ -405,7 +405,7 @@ generateEAt env typ d = do
 checkE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> RProgram -> Explorer s ()
 checkE env typ p@(Program pTerm pTyp) = do
   ctx <- asks . view $ _1 . context
-  writeLog 2 $ linebreak <+> linebreak <+> special "Checking" <+> pretty p <+> text "::" <+> pretty typ <+> text "in" $+$ pretty (ctx (untyped PHole))
+  writeLog 1 $ linebreak <+> linebreak <+> special "Checking" <+> pretty p <+> text "::" <+> pretty typ <+> text "in" $+$ pretty (ctx (untyped PHole))
 
   -- ifM (asks $ _symmetryReduction . fst) checkSymmetry (return ())
 
@@ -523,7 +523,7 @@ enumerateAt env typ d = do
 generateError :: (MonadSMT s, MonadHorn s) => Environment -> Explorer s RProgram
 generateError env = do
   ctx <- asks . view $ _1. context
-  writeLog 2 $ text "Checking" <+> pretty (show errorProgram) <+> text "in" $+$ pretty (ctx errorProgram)
+  writeLog 1 $ text "Checking" <+> pretty (show errorProgram) <+> text "in" $+$ pretty (ctx errorProgram)
   tass <- use (typingState . typeAssignment)
   let env' = typeSubstituteEnv tass env
   addConstraint $ Subtype env (int $ conjunction $ Set.fromList $ map trivial (allScalars env')) (int ffalse) False ""
@@ -631,8 +631,8 @@ instantiate env sch top argNames = do
   where
     instantiate' subst pSubst (ForallT a sch) = do
       a' <- freshId "A"
-      addConstraint $ WellFormed env (vart a' ftrue)
-      instantiate' (Map.insert a (vart a' (BoolLit top)) subst) pSubst sch
+      addConstraint $ WellFormed env (vartSafe a' ftrue)
+      instantiate' (Map.insert a (vartSafe a' (BoolLit top)) subst) pSubst sch
     instantiate' subst pSubst (ForallP (PredSig p argSorts _) sch) = do
       let argSorts' = map (sortSubstitute (asSortSubst subst)) argSorts
       fml <- if top
@@ -655,10 +655,10 @@ instantiate env sch top argNames = do
 -- if @x@ is a scalar variable, use "_v == x" as refinement;
 -- if @sch@ is a polytype, return a fresh instance
 symbolType :: MonadHorn s => Environment -> Id -> RSchema -> Explorer s RType
-symbolType env x (Monotype t@(ScalarT b _ _))
+symbolType env x (Monotype t@(ScalarT b _ p))
     | isLiteral x = return t -- x is a literal of a primitive type, it's type is precise
     | isJust (lookupConstructor x env) = return t -- x is a constructor, it's type is precise
-    | otherwise = return $ ScalarT b (varRefinement x (toSort b)) defPotential -- x is a scalar variable or monomorphic scalar constant, use _v = x
+    | otherwise = return $ ScalarT b (varRefinement x (toSort b)) p -- x is a scalar variable or monomorphic scalar constant, use _v = x
 symbolType env _ sch = freshInstance sch
   where
     freshInstance sch = if arity (toMonotype sch) == 0

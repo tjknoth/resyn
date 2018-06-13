@@ -172,7 +172,6 @@ reconstructI' env t@ScalarT{} impl = case impl of
     let isGoodScrutinee = not (head scrutineeSymbols `elem` consNames) &&                 -- Is not a value
                           any (not . flip Set.member (env ^. constants)) scrutineeSymbols -- Has variables (not just constants)
     unless isGoodScrutinee $ throwErrorWithDescription $ text "Match scrutinee" </> squotes (pretty pScrutinee) </> text "is constant"
-
     (env'', x) <- toVar (addScrutinee pScrutinee env') pScrutinee
     pCases <- zipWithM (reconstructCase env'' x pScrutinee t) iCases consTypes
     return $ Program (PMatch pScrutinee pCases) t
@@ -204,6 +203,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
     checkCases _ [] = return []
 
 reconstructCase env scrVar pScrutinee t (Case consName args iBody) consT = cut $ do
+  -- matchConsType simply assigns type variables appropriately
   runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
   consT' <- runInSolver $ currentAssignment consT
   (syms, ass) <- caseSymbols env scrVar args consT'
@@ -237,7 +237,6 @@ reconstructE' env typ (PSymbol name) =
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
     Just sch -> do
       (schl, schr) <- splitType sch
-      --traceM $ "Split " ++ show (pretty sch) ++ " into " ++ show (pretty schl) ++ " and " ++ show (pretty schr)
       let (isVariable, newEnv) = removeSymbol name (arity typ) env
       let env' = if isVariable 
           then addPolyVariable name schl newEnv
@@ -258,8 +257,7 @@ reconstructE' env typ (PSymbol name) =
 reconstructE' env typ (PApp iFun iArg) = do
   x <- freshVar env "x"
   (pFun, env') <- inContext (\p -> Program (PApp p uHole) typ) $ reconstructE env (FunctionT x AnyT typ) iFun
-  let FunctionT x tArg tRes = typeOf pFun
-
+  let tp@(FunctionT x tArg tRes) = typeOf pFun
   (pApp, env'') <- if isFunctionType tArg
     then do -- Higher-order argument: its value is not required for the function type, enqueue an auxiliary goal
       d <- asks . view $ _1 . auxDepth

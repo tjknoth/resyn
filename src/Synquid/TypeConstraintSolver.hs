@@ -58,7 +58,7 @@ solveTypeConstraints = do
   simplifyAllConstraints
 
   scs <- use simpleConstraints
-  writeLog 3 (text "Simple Constraints" $+$ nest 2 (vsep (map pretty scs)))
+  writeLog 2 (text "Simple Constraints" $+$ nest 2 (vsep (map pretty scs)))
   processAllPredicates
   processAllConstraints
   generateAllHornClauses
@@ -80,7 +80,7 @@ checkResources constraints = do
   newC <- solveResourceConstraints oldConstraints constraints
   case newC of 
     Nothing -> throwError $ text "Insufficient resources"
-    Just f -> resourceConstraints %= (f ++) 
+    Just f -> resourceConstraints %= (++ f) 
   --when (newC == ffalse) $ throwError $ text "Insufficient resources to check program"
   --resourceConstraints %= f |&|
 
@@ -94,14 +94,14 @@ addTypingConstraint c = over typingConstraints (nub . (c :))
 simplifyAllConstraints :: MonadHorn s => TCSolver s ()
 simplifyAllConstraints = do
   tcs <- use typingConstraints
-  writeLog 3 (text "Typing Constraints" $+$ nest 2 (vsep $ map pretty tcs))
+  writeLog 3 $ nest 2 $ text "Typing Constraints" $+$ vsep (map pretty tcs)
   typingConstraints .= []
   tass <- use typeAssignment
   mapM_ simplifyConstraint tcs
 
   -- If type assignment has changed, we might be able to process more shapeless constraints:
   tass' <- use typeAssignment
-  writeLog 3 (text "Type assignment" $+$ nest 2 (vMapDoc text pretty tass'))
+  writeLog 2 $ nest 2 $ text "Type assignment" $+$ vMapDoc text pretty tass'
 
   when (Map.size tass' > Map.size tass) simplifyAllConstraints
 
@@ -501,10 +501,10 @@ freshVar env prefix = do
 
 -- | 'fresh' @t@ : a type with the same shape as @t@ but fresh type variables, fresh predicate variables, and fresh unknowns as refinements
 fresh :: Monad s => Environment -> RType -> TCSolver s RType
-fresh env (ScalarT (TypeVarT vSubst a m) _ _) | not (isBound env a) = do
+fresh env (ScalarT (TypeVarT vSubst a m) _ p) | not (isBound env a) = do
   -- Free type variable: replace with fresh free type variable
   a' <- freshId "A"
-  return $ ScalarT (TypeVarT vSubst a' m) ftrue defPotential 
+  return $ ScalarT (TypeVarT vSubst a' m) ftrue p
 fresh env (ScalarT baseT _ p) = do
   baseT' <- freshBase baseT
   -- Replace refinement with fresh predicate unknown:
@@ -592,10 +592,10 @@ instantiateConsAxioms env mVal fml = let inst = instantiateConsAxioms env mVal i
       in substitute subst body'
 
 -- | 'matchConsType' @formal@ @actual@ : unify constructor return type @formal@ with @actual@
-matchConsType formal@(ScalarT (DatatypeT d vars pVars) _ _) actual@(ScalarT (DatatypeT d' args pArgs) _ _) | d == d'
+matchConsType formal@(ScalarT (DatatypeT d vars pVars) _ _) actual@(ScalarT (DatatypeT d' args pArgs) _ p) | d == d'
   = do
       writeLog 3 $ text "Matching constructor type" $+$ pretty formal $+$ text "with scrutinee" $+$ pretty actual
-      zipWithM_ (\(ScalarT (TypeVarT _ a defMultiplicity) ftrue defPotential) t -> addTypeAssignment a t) vars args
+      zipWithM_ (\(ScalarT (TypeVarT _ a _) ftrue _) t -> addTypeAssignment a t) vars args
       zipWithM_ (\(Pred BoolS p _) fml -> addPredAssignment p fml) pVars pArgs
 matchConsType t t' = error $ show $ text "matchConsType: cannot match" <+> pretty t <+> text "against" <+> pretty t'
 
@@ -646,8 +646,8 @@ solveResourceConstraints oldConstraints constraints = do
     let accumlatedQuery = conjunction (Set.fromList accFmlList)
     (b, s) <- isSatWithModel (accumlatedQuery |&| query)
     let result = if b then "SAT" else "UNSAT"
-    writeLog 5 $ text "Accumulated resource constraints" $+$ nest 5 (prettyConjuncts (filter isInteresting accFmlList))
-    writeLog 3 $ text "Solved resource constraint after conjoining formulas:" <+> text result $+$ nest 4 (prettyConjuncts (filter isInteresting fmlList))
+    writeLog 5 $ nest 4 $ text "Accumulated resource constraints" $+$ prettyConjuncts (filter isInteresting accFmlList)
+    writeLog 3 $ nest 4 $ text "Solved resource constraint after conjoining formulas:" <+> text result $+$ prettyConjuncts (filter isInteresting fmlList)
     if b 
       then do
         writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text s) 
@@ -667,19 +667,19 @@ generateFormula shouldLog c@(Subtype env tl tr _ name) = do
     let fmls = conjunction $ Set.filter (not . isTrivial) $ joinAssertions (|=|) tl tr
     emb <- embedEnv env (refinementOf tl |&| refinementOf tr) True
     let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf tl) emb
-    when shouldLog $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
+    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
     --return $ conjunction emb' |=>| fmls
     return fmls
 generateFormula shouldLog c@(WellFormed env t)         = do
     let fmls = conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allFormulas t
     emb <- embedEnv env (refinementOf t) True  
     let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf t) emb
-    when shouldLog $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
+    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
     --return $ conjunction emb' |=>| fmls
     return fmls
 generateFormula shouldLog c@(SplitType e v t tl tr)    = do 
     let fmls = conjunction $ partition t tl tr
-    when shouldLog $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)
+    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)
     return fmls
 generateFormula _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
 

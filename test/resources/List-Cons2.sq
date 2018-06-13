@@ -8,6 +8,6 @@ data List a where
  
 -- Requires enough heap cells for 2 list nodes, given 1
 --  Should fail
-cons2 :: x: {1 ** a | | 1} -> List a
+cons2 :: x: {2 ** a | | 2} -> List a
 cons2 = \x. 
   Cons x (Cons x Nil)

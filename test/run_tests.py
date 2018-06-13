@@ -10,8 +10,8 @@ from subprocess import call, check_output
 from colorama import init, Fore, Back, Style
 
 # Parameters
-SYNQUID_PATH_LINUX = 'synquid'
-SYNQUID_PATH_WINDOWS = 'Synquid.exe'
+SYNQUID_PATH_LINUX = ['stack', 'exec', '--', 'synquid']
+SYNQUID_PATH_WINDOWS = ['Synquid.exe']
 BENCH_PATH = '.'
 LOGFILE_NAME = 'results.log'
 ORACLE_NAME = 'oracle'
@@ -193,7 +193,7 @@ def run_benchmark(name, opts, path='.'):
     with open(LOGFILE_NAME, 'a+') as logfile:
       start = time.time()
       logfile.seek(0, os.SEEK_END)
-      return_code = call([synquid_path] + COMMON_OPTS + opts + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
+      return_code = call(synquid_path + COMMON_OPTS + opts + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
       end = time.time()
 
       t = end - start
@@ -211,7 +211,7 @@ def run_test(name, path='.'):
 
     with open(LOGFILE_NAME, 'a+') as logfile:
       logfile.seek(0, os.SEEK_END)
-      call([synquid_path] + COMMON_OPTS + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
+      call(synquid_path + COMMON_OPTS + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
 
 def write_times(benchmarks):
     with open(OUTFILE_NAME, 'w') as outfile:
@@ -277,7 +277,10 @@ if __name__ == '__main__':
       a.synt = True
 
     sections = [s.lower() for s in a.sections]
-
+    try: 
+        os.chdir('test')
+    except Exception:
+        pass
     fail = False
     if a.unit:
         # Run unit tests

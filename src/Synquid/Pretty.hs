@@ -507,26 +507,4 @@ lfill w d        = case renderCompact d of
 
 -- Helper for printing conjunctions line-by-line for readability
 prettyConjuncts :: [Formula] -> Doc
-prettyConjuncts fmls = hsep $ fmap prettyCForm fmls
-
--- Alias for pretty-printing a specific formula
-prettyCForm = conjDocAt 0
-
--- | 'conjDocAt' @n fml@ : print @expr@ in a context with binding power @n@
-conjDocAt :: Int -> Formula -> Doc
-conjDocAt n fml = case fml of
-    BoolLit b -> pretty b
-    IntLit i -> intLiteral i
-    SetLit s elems -> hlBrackets $ commaSep $ map prettyCForm elems
-    Var s name -> if name == valueVarName then special name else text name
-    Unknown s name -> if Map.null s then text name else hMapDoc pretty pretty s <> text name
-    Unary op e -> pretty op <> conjDocAt n' e
-    Binary And e1 e2 -> conjDocAt n' e1 <+> text "\n" <+> conjDocAt n' e2 
-    Binary op e1 e2 -> conjDocAt n' e1 <+> pretty op <+> conjDocAt n' e2
-    Ite e0 e1 e2 -> keyword "if" <+> prettyCForm e0 <+> keyword "then" <+> prettyCForm e1 <+> keyword "else" <+> prettyCForm e2
-    Pred b name args -> text name <+> hsep (map (conjDocAt n') args)
-    Cons b name args -> hlParens (text name <+> hsep (map (conjDocAt n') args))
-    All x e -> keyword "forall" <+> pretty x <+> operator "." <+> prettyCForm e
-  where
-    n' = power fml
-    withSort s doc = doc <> text ":" <> pretty s
+prettyConjuncts fmls = vsep $ fmap fmlDoc fmls

@@ -40,7 +40,6 @@ equalShape t t' = t == t'
 
 defPotential = IntLit 0
 defMultiplicity = IntLit 1
-defParsedMultiplicity = IntLit 1
 
 
 potentialPrefix = "p"
@@ -181,7 +180,7 @@ data SchemaSkeleton r =
 
 toMonotype :: SchemaSkeleton r -> TypeSkeleton r
 toMonotype (Monotype t) = t
-toMonotype (ForallT _ t) = toMonotype t
+toMonotype (ForallT _ t) = toMonotype t 
 toMonotype (ForallP _ t) = toMonotype t
 
 boundVarsOf :: SchemaSkeleton r -> [Id]
@@ -201,7 +200,9 @@ pos = int (valInt |>| IntLit 0)
 
 vart n f = ScalarT (TypeVarT Map.empty n defMultiplicity) f defPotential
 vart_ n = vart n () 
-vartAll n = vart n ftrue 
+vartAll n = vart n ftrue
+-- Fresh variable with potential 1 in order to ensure potentials are not zeroed when instantiating with free vars
+vartSafe n f = ScalarT (TypeVarT Map.empty n defMultiplicity) f (IntLit 1)
 
 set n f = ScalarT (DatatypeT setTypeName [tvar] []) f defPotential
   where
@@ -220,18 +221,28 @@ typeSubstitute subst (ScalarT baseT r p) = addRefinement substituteBase (sortSub
   where
     substituteBase = case baseT of
       -- TODO: type multiplication!
-      TypeVarT varSubst a m -> case Map.lookup a subst of
-        Just t -> substituteInType (not . (`Map.member` subst)) varSubst $ typeSubstitute subst (typeMultiply m t)
-        Nothing -> ScalarT (TypeVarT varSubst a m) ftrue defPotential
+      tp@(TypeVarT varSubst a m) -> case Map.lookup a subst of
+        Just assignedType -> substituteInType (not . (`Map.member` subst)) varSubst $ typeSubstitute subst (performSubstitution assignedType tp p) -- (maintainPotential p t) --(typeMultiply m t)
+        Nothing -> ScalarT (TypeVarT varSubst a m) ftrue p
       DatatypeT name tArgs pArgs ->
         let
           tArgs' = map (typeSubstitute subst) tArgs
           pArgs' = map (sortSubstituteFml (asSortSubst subst)) pArgs
-        in ScalarT (DatatypeT name tArgs' pArgs') ftrue defPotential
-      _ -> ScalarT baseT ftrue defPotential
+        in ScalarT (DatatypeT name tArgs' pArgs') ftrue p
+      _ -> ScalarT baseT ftrue p
 typeSubstitute subst (FunctionT x tArg tRes) = FunctionT x (typeSubstitute subst tArg) (typeSubstitute subst tRes)
 typeSubstitute subst (LetT x tDef tBody) = LetT x (typeSubstitute subst tDef) (typeSubstitute subst tBody)
 typeSubstitute _ AnyT = AnyT
+
+maintainPotential :: Formula -> RType -> RType
+maintainPotential f (ScalarT baseT r _) = ScalarT baseT r f
+maintainPotential _ t                   = t
+
+-- Substitute a refinement type for a type variable, ensuring potentials are transferred appropriately
+performSubstitution :: RType -> BaseType Formula -> Formula -> RType
+performSubstitution (ScalarT (TypeVarT subs s _) r _) (TypeVarT _ _ m) originalP = ScalarT (TypeVarT subs s m) r originalP
+performSubstitution t b _ = t
+
 
 noncaptureTypeSubst :: [Id] -> [RType] -> RType -> RType
 noncaptureTypeSubst tVars tArgs t =
