@@ -9,10 +9,10 @@ append = \xs . \ys .
 
 
 compress :: xs:{List {1**a||1}||0} -> {List {1**a||0}||0}
-./List-Compress-Bad.sq:10: Error:
+./List-Compress-Bad.sq:16: Error:
   Insufficient resources
   when checking ys ::
-  {List {1**a||0}|len _v >= 0 && len _v < len xs|0}
+  {List {1**a||1}|len _v >= 0 && len _v < len xs|0}
   in
   \xs . 
     match xs with
@@ -36,28 +36,31 @@ compress = \xs .
             then Cons z zs
             else Cons y (Cons z zs)
 
-cons2 :: x:{1**a||1} -> {List {1**a||0}||0}
-./List-Cons2.sq:6: Error:
-  Insufficient resources
-  when checking x :: {1**a||0} in
-  \x . Cons x (Cons x ??)
+cons2 :: x:{2**a||2} -> {List {1**a||0}||0}
+cons2 = \x . Cons x (Cons x Nil)
 
-./List-Delete.sq:19:5: Parse Error:
-  Unexpected 'C'
-  expecting end of input
-  indentation doesn't match
+
+
+delete :: x:{1**a||0} -> xs:{List {1**a||1}||0} -> {List {1**a||0}|elems _v == elems xs - [x]|0}
+delete = \x . \xs . 
+    match xs with
+      Nil -> Nil
+      Cons y ys -> 
+        if y == x
+          then delete x ys
+          else Cons y (delete x ys)
 
 
 double :: xs:{List {1**a||1}||0} -> {List {1**a||0}|len _v == 2 * len xs|0}
-./List-Double-Bad.sq:10: Error:
+./List-Double-Bad.sq:15: Error:
   Insufficient resources
-  when checking y :: {1**a||0} in
+  when checking y :: {1**a||1} in
   \xs . 
     match xs with
       Cons y ys -> Cons y (Cons y ??)
 
 
-double :: xs:{List {2**a||2}||0} -> {List {1**a||0}|len _v == 2 * len xs|0}
+double :: xs:{List {2**a||1}||0} -> {List {1**a||0}|len _v == 2 * len xs|0}
 double = \xs . 
   match xs with
     Nil -> Nil
@@ -67,7 +70,7 @@ double = \xs .
 
 
 foldr :: <p :: List (a) -> b -> Bool> . f:(xs:{List {1**a||0}||0} -> x:{1**a||0} -> acc:{1**b|p xs _v|0} -> {1**b|p ((Cons x xs)) _v|0}) -> seed:{1**b|p (Nil) _v|0} -> ys:{List {1**a||0}||0} -> {1**b|p ys _v|0}
-./List-Fold.sq:18: Error:
+./List-Fold.sq:19: Error:
   Insufficient resources
   when checking xs ::
   {List {1**a||0}|len _v >= 0 && len _v < len ys|0}
@@ -79,16 +82,11 @@ foldr :: <p :: List (a) -> b -> Bool> . f:(xs:{List {1**a||0}||0} -> x:{1**a||0}
 
 
 replicate :: n:{Nat||0} -> x:{n**a||n} -> {List {1**a||0}|len _v == n|0}
-./List-Replicate.sq:18: Error:
-  Insufficient resources
-  when checking x ::
-  x11:{Int|_v == n - 1|0} -> {n**a||0}
-  in
-  \n . \x . 
-      if n <= 0
-        then Nil
-        else Cons x (replicate (dec n)
-                       x)
+replicate = \n . \x . 
+    if n <= 0
+      then Nil
+      else Cons x (replicate (dec n)
+                     x)
 
 
 reverse' :: xs:{List {1**a||1}||0} -> acc:{List {1**a||0}||0} -> {List {1**a||0}||0}

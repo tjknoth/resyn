@@ -93,25 +93,6 @@ refineSort (SetS s) f = ScalarT dt f defPotential
     tvar = ScalarT (TypeVarT Map.empty setTypeVar defMultiplicity) f defPotential
 refineSort AnyS f = AnyT
 
-typeMultiply :: Formula -> RType -> RType
-typeMultiply fml (ScalarT t ref pot) = ScalarT (baseTypeMultiply fml t) ref (multiplyFormulas fml pot)
-typeMultiply fml t = t
-
-baseTypeMultiply :: Formula -> BaseType Formula -> BaseType Formula
-baseTypeMultiply fml (TypeVarT subs name mul) = TypeVarT subs name (multiplyFormulas mul fml)
-baseTypeMultiply fml (DatatypeT name tArgs pArgs) = DatatypeT name (fmap (typeMultiply fml) tArgs) pArgs
-baseTypeMultiply fml t = t
-
--- Simplify multiplication when one formula is the identity (mostly for readability)
-multiplyFormulas :: Formula -> Formula -> Formula
-multiplyFormulas f g = case (isMultiplicativeIdentity f, isMultiplicativeIdentity g) of
-  (True, _) -> g
-  (_, True) -> f 
-  _         -> f |*| g
-
-isMultiplicativeIdentity (IntLit 1) = True
-isMultiplicativeIdentity _          = False
-
 
 typeIsData :: TypeSkeleton r -> Bool
 typeIsData (ScalarT DatatypeT{} _ _) = True
@@ -201,8 +182,6 @@ pos = int (valInt |>| IntLit 0)
 vart n f = ScalarT (TypeVarT Map.empty n defMultiplicity) f defPotential
 vart_ n = vart n () 
 vartAll n = vart n ftrue
--- Fresh variable with potential 1 in order to ensure potentials are not zeroed when instantiating with free vars
-vartSafe n f = ScalarT (TypeVarT Map.empty n defMultiplicity) f (IntLit 1)
 
 set n f = ScalarT (DatatypeT setTypeName [tvar] []) f defPotential
   where
@@ -215,14 +194,13 @@ type TypeSubstitution = Map Id RType
 asSortSubst :: TypeSubstitution -> SortSubstitution
 asSortSubst = Map.map (toSort . baseTypeOf)
 
--- | 'typeSubstitute' @t@ : substitute all free type variables in @t@
+-- | 'typeSubstitute' @subst t@ : apply substitution @subst@ to free type variables in @t@ 
 typeSubstitute :: TypeSubstitution -> RType -> RType
 typeSubstitute subst (ScalarT baseT r p) = addRefinement substituteBase (sortSubstituteFml (asSortSubst subst) r)
   where
     substituteBase = case baseT of
-      -- TODO: type multiplication!
-      tp@(TypeVarT varSubst a m) -> case Map.lookup a subst of
-        Just assignedType -> substituteInType (not . (`Map.member` subst)) varSubst $ typeSubstitute subst (performSubstitution assignedType tp p) -- (maintainPotential p t) --(typeMultiply m t)
+      (TypeVarT varSubst a m) -> case Map.lookup a subst of
+        Just t -> substituteInType (not . (`Map.member` subst)) varSubst $ typeSubstitute subst (updateAnnotations t m p)
         Nothing -> ScalarT (TypeVarT varSubst a m) ftrue p
       DatatypeT name tArgs pArgs ->
         let
@@ -233,15 +211,6 @@ typeSubstitute subst (ScalarT baseT r p) = addRefinement substituteBase (sortSub
 typeSubstitute subst (FunctionT x tArg tRes) = FunctionT x (typeSubstitute subst tArg) (typeSubstitute subst tRes)
 typeSubstitute subst (LetT x tDef tBody) = LetT x (typeSubstitute subst tDef) (typeSubstitute subst tBody)
 typeSubstitute _ AnyT = AnyT
-
-maintainPotential :: Formula -> RType -> RType
-maintainPotential f (ScalarT baseT r _) = ScalarT baseT r f
-maintainPotential _ t                   = t
-
--- Substitute a refinement type for a type variable, ensuring potentials are transferred appropriately
-performSubstitution :: RType -> BaseType Formula -> Formula -> RType
-performSubstitution (ScalarT (TypeVarT subs s _) r _) (TypeVarT _ _ m) originalP = ScalarT (TypeVarT subs s m) r originalP
-performSubstitution t b _ = t
 
 
 noncaptureTypeSubst :: [Id] -> [RType] -> RType -> RType
@@ -272,6 +241,40 @@ typeVarsOf t@(ScalarT baseT _ _) = case baseT of
 typeVarsOf (FunctionT _ tArg tRes) = typeVarsOf tArg `Set.union` typeVarsOf tRes
 typeVarsOf (LetT _ tDef tBody) = typeVarsOf tDef `Set.union` typeVarsOf tBody
 typeVarsOf _ = Set.empty
+
+-- | 'updateAnnotations' @t m p@ : "multiply" @t@ by multiplicity @m@, then add on surplus potential @p@
+updateAnnotations :: RType -> Formula -> Formula -> RType
+updateAnnotations t@ScalarT{} mult p = addPotential mType p
+  where 
+    mType = typeMultiply mult t
+
+typeMultiply :: Formula -> RType -> RType
+typeMultiply fml (ScalarT t ref pot) = ScalarT (baseTypeMultiply fml t) ref (multiplyFormulas fml pot)
+typeMultiply fml t = t
+
+baseTypeMultiply :: Formula -> BaseType Formula -> BaseType Formula
+baseTypeMultiply fml (TypeVarT subs name mul) = TypeVarT subs name (multiplyFormulas mul fml)
+baseTypeMultiply fml (DatatypeT name tArgs pArgs) = DatatypeT name (fmap (typeMultiply fml) tArgs) pArgs
+baseTypeMultiply fml t = t
+
+addPotential :: RType -> Formula -> RType 
+addPotential t@(ScalarT base ref pot) f = ScalarT base ref (addFormulas pot f)
+
+-- | 'simpleFormulaBOp' @op isId f g@ : return @f@ `@op@` @g@, unless either @f@ or @g@ is an identity element under @op@, in which case we simplify
+simpleFormulaBOp :: (Formula -> Formula -> Formula) -> (Formula -> Bool) -> Formula -> Formula -> Formula 
+simpleFormulaBOp op isId f g = case (isId f, isId g) of 
+  (True, _) -> g
+  (_, True) -> f
+  _         -> f `op` g
+
+multiplyFormulas = simpleFormulaBOp (|*|) isMultiplicativeId
+addFormulas = simpleFormulaBOp (|+|) isAdditiveId
+
+isMultiplicativeId (IntLit 1) = True
+isMultiplicativeId _          = False
+
+isAdditiveId (IntLit 0) = True 
+isAdditiveId _          = False
 
 
 

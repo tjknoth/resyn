@@ -631,8 +631,8 @@ instantiate env sch top argNames = do
   where
     instantiate' subst pSubst (ForallT a sch) = do
       a' <- freshId "A"
-      addConstraint $ WellFormed env (vartSafe a' ftrue)
-      instantiate' (Map.insert a (vartSafe a' (BoolLit top)) subst) pSubst sch
+      addConstraint $ WellFormed env (vart a' ftrue)
+      instantiate' (Map.insert a (vart a' (BoolLit top)) subst) pSubst sch
     instantiate' subst pSubst (ForallP (PredSig p argSorts _) sch) = do
       let argSorts' = map (sortSubstitute (asSortSubst subst)) argSorts
       fml <- if top
