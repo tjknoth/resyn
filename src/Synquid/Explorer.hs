@@ -61,7 +61,8 @@ data ExplorerParams = ExplorerParams {
   _sourcePos :: SourcePos,                -- ^ Source position of the current goal
   _explorerLogLevel :: Int,               -- ^ How verbose logging is
   _polynomialDegree :: Int,               -- ^ Maximum degree of resource polynomial
-  _checkResources :: Bool                 -- ^ Should we check resources usage?
+  _checkResources :: Bool,                -- ^ Should we check resources usage?
+  _useMultiplicity :: Bool                -- ^ Should we generate constraints on multiplicities? Useful for modeling memory usage.
 }
 
 makeLenses ''ExplorerParams

@@ -638,8 +638,9 @@ embedEnv env fml consistency = do
 solveResourceConstraints :: (MonadHorn s, MonadSMT s) => [Constraint] -> [Constraint] -> TCSolver s (Maybe [Constraint]) 
 solveResourceConstraints oldConstraints constraints = do
     writeLog 4 $ linebreak <+> text "Generating resource constraints:"
-    fmlList <- mapM (generateFormula True) constraints
-    accFmlList <- mapM (generateFormula False) oldConstraints
+    checkMults <- asks _checkMultiplicities
+    fmlList <- mapM (generateFormula True checkMults) constraints
+    accFmlList <- mapM (generateFormula False checkMults) oldConstraints
     -- Filter out trivial constraints, mostly for readability
     let fmls = Set.fromList (filter (not . isTrivial) fmlList)
     let query = conjunction fmls
@@ -661,51 +662,51 @@ isSatWithModel = lift . lift . lift . solveWithModel
 
 
 -- Converts abstract constraint into relevant numerical constraints
-generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Constraint -> TCSolver s Formula 
-generateFormula shouldLog c@(Subtype env tl tr _ name) = do
+generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Bool -> Constraint -> TCSolver s Formula 
+generateFormula shouldLog checkMults c@(Subtype env tl tr _ name) = do
     --let syms = Map.elems $ Map.filterWithKey (\k a -> k /= name) (allSymbols env) 
-    let fmls = conjunction $ Set.filter (not . isTrivial) $ joinAssertions (|=|) tl tr
+    let fmls = conjunction $ Set.filter (not . isTrivial) $ joinAssertions checkMults (|=|) tl tr
     emb <- embedEnv env (refinementOf tl |&| refinementOf tr) True
     let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf tl) emb
     when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
     --return $ conjunction emb' |=>| fmls
     return fmls
-generateFormula shouldLog c@(WellFormed env t)         = do
-    let fmls = conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allFormulas t
+generateFormula shouldLog checkMults c@(WellFormed env t)         = do
+    let fmls = conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allFormulas checkMults t
     emb <- embedEnv env (refinementOf t) True  
     let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf t) emb
     when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
     --return $ conjunction emb' |=>| fmls
     return fmls
-generateFormula shouldLog c@(SplitType e v t tl tr)    = do 
-    let fmls = conjunction $ partition t tl tr
+generateFormula shouldLog checkMults c@(SplitType e v t tl tr)    = do 
+    let fmls = conjunction $ partition checkMults t tl tr
     when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)
     return fmls
-generateFormula _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
+generateFormula _ _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
 
 -- Set of all resource-related formulas (potentials and multiplicities) from a refinement type
-allFormulas :: RType -> Set Formula 
-allFormulas (ScalarT base _ p) = Set.insert p (allFormulasBase base)
-allFormulas _                  = Set.empty
+allFormulas :: Bool -> RType -> Set Formula 
+allFormulas cm (ScalarT base _ p) = Set.insert p (allFormulasBase cm base)
+allFormulas _ _                   = Set.empty
 
-allFormulasBase :: BaseType Formula -> Set Formula
-allFormulasBase (DatatypeT _ ts _) = Set.unions $ fmap allFormulas ts
-allFormulasBase (TypeVarT _ _ m)   = Set.singleton m
-allFormulasBase _                  = Set.empty
+allFormulasBase :: Bool -> BaseType Formula -> Set Formula
+allFormulasBase cm (DatatypeT _ ts _) = Set.unions $ fmap (allFormulas cm) ts
+allFormulasBase cm (TypeVarT _ _ m)   = if cm then Set.singleton m else Set.empty
+allFormulasBase _ _                   = Set.empty
 
 -- Generate numerical constraints referring to a partition of resources from type-splitting constraint
-partition :: RType -> RType -> RType -> Set Formula 
-partition (ScalarT b _ f) (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (f |=| (fl |+| fr)) $ partitionBase b bl br
-partition _ _ _ = Set.empty
+partition :: Bool -> RType -> RType -> RType -> Set Formula 
+partition cm (ScalarT b _ f) (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (f |=| (fl |+| fr)) $ partitionBase cm b bl br
+partition _ _ _ _ = Set.empty
 
-partitionBase :: BaseType Formula -> BaseType Formula -> BaseType Formula -> Set Formula
-partitionBase (DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Set.unions $ zipWith3 partition ts tsl tsr
-partitionBase (TypeVarT _ _ m) (TypeVarT _ _ ml) (TypeVarT _ _ mr) = Set.singleton $ m |=| (ml |+| mr)
-partitionBase _ _ _ = Set.empty
+partitionBase :: Bool -> BaseType Formula -> BaseType Formula -> BaseType Formula -> Set Formula
+partitionBase cm (DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Set.unions $ zipWith3 (partition cm) ts tsl tsr
+partitionBase cm (TypeVarT _ _ m) (TypeVarT _ _ ml) (TypeVarT _ _ mr) = if cm then Set.singleton $ m |=| (ml |+| mr) else Set.empty
+partitionBase _ _ _ _ = Set.empty
 
 -- Essentially folds all resource formulas in a schema by `op` -- some binary operation on formulas
-joinAssertions :: (Formula -> Formula -> Formula) -> RType -> RType -> Set Formula
-joinAssertions op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (fl `op` fr) $ joinAssertionsBase op bl br
+joinAssertions :: Bool -> (Formula -> Formula -> Formula) -> RType -> RType -> Set Formula
+joinAssertions cm op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (fl `op` fr) $ joinAssertionsBase cm op bl br
 -- TODO: add total potential from input and output environment to left and right sides
 {-
 joinAssertions op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (( leftTotal |+| fl) `op` (rightTotal |+| fr)) $ joinAssertionsBase allsyms op bl br
@@ -713,16 +714,16 @@ joinAssertions op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (( leftTotal 
     leftTotal = totalMultiplicity allsyms
     rightTotal = totalMultiplicity allsyms
 -}
-joinAssertions op _ _ = Set.empty 
+joinAssertions _ op _ _ = Set.empty 
 
-joinAssertionsBase :: (Formula -> Formula -> Formula) -> BaseType Formula -> BaseType Formula -> Set Formula
-joinAssertionsBase op (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Set.unions $ zipWith (joinAssertions op) tsl tsr
-joinAssertionsBase op (TypeVarT _ _ ml) (TypeVarT _ _ mr) = 
-    if isTrivial fml 
-        then Set.empty 
-        else Set.singleton $ ml `op` mr
+joinAssertionsBase :: Bool -> (Formula -> Formula -> Formula) -> BaseType Formula -> BaseType Formula -> Set Formula
+joinAssertionsBase cm op (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Set.unions $ zipWith (joinAssertions cm op) tsl tsr
+joinAssertionsBase cm op (TypeVarT _ _ ml) (TypeVarT _ _ mr) = 
+  if cm && not (isTrivial fml)
+    then Set.singleton fml
+    else Set.empty
     where fml = ml `op` mr
-joinAssertionsBase _ _ _ = Set.empty 
+joinAssertionsBase _ _ _ _ = Set.empty 
 
 isResourceConstraint :: Constraint -> Bool
 isResourceConstraint (Subtype e ScalarT{} ScalarT{}  _ _) = True

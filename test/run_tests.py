@@ -152,6 +152,7 @@ RESOURCE_BENCHMARKS = [
     ('List-Double-Bad',     ['--resources']),
     ('List-Double',         ['--resources']),
     ('List-Fold',           ['--resources']),
+    ('List-Replicate-Bad',  ['--resources']),
     ('List-Replicate',      ['--resources']),
     ('List-Reverse',        ['--resources']),
 ]

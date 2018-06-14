@@ -80,6 +80,9 @@ foldr :: <p :: List (a) -> b -> Bool> . f:(xs:{List {1**a||0}||0} -> x:{1**a||0}
           Cons x xs -> f xs x (foldr f
                                  seed xs)
 
+./List-Replicate-Bad.sq:30: Resolution Error:
+  Duplicate declaration of function replicate
+
 
 replicate :: n:{Nat||0} -> x:{n**a||n} -> {List {1**a||0}|len _v == n|0}
 replicate = \n . \x . 

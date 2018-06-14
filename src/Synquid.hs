@@ -48,7 +48,7 @@ main = do
                appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency memoize symmetry
                lfp bfs
                out_file out_module outFormat resolve 
-               print_spec print_stats log_ resources polynomial_deg) -> do
+               print_spec print_stats log_ resources polynomial_deg mult) -> do
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
                     _scrutineeDepth = scrutineeMax,
@@ -65,7 +65,8 @@ main = do
                     _symmetryReduction = symmetry,
                     _explorerLogLevel = log_,
                     _polynomialDegree = polynomial_deg,
-                    _checkResources = resources
+                    _checkResources = resources,
+                    _useMultiplicity = mult
                     }
                   let solverParams = defaultHornSolverParams {
                     isLeastFixpoint = lfp,
@@ -129,7 +130,8 @@ data CommandLineArgs
         log_ :: Int,
         -- | Resource params
         resources :: Bool,
-        max_polynomial :: Int
+        max_polynomial :: Int,
+        multiplicities :: Bool
       }
   deriving (Data, Typeable, Show, Eq)
 
@@ -159,8 +161,9 @@ synt = Synthesis {
   print_spec          = True            &= help ("Show specification of each synthesis goal (default: True)"),
   print_stats         = False           &= help ("Show specification and solution size (default: False)"),
   log_                = 0               &= help ("Logger verboseness level (default: 0)") &= name "l",
-  resources           = True            &= help ("Verify resource usage"),
-  max_polynomial      = 1               &= help ("Maximum degree of resource polynomial")
+  resources           = True            &= help ("Verify resource usage (default: True)") &= name "r",
+  max_polynomial      = 1               &= help ("Maximum degree of resource polynomial"),
+  multiplicities      = True            &= help ("Use multiplicities when verifying resource usage (default: True") &= name "m"
   } &= auto &= help "Synthesize goals specified in the input file"
     where
       defaultFormat = outputFormat defaultSynquidParams
@@ -192,7 +195,8 @@ defaultExplorerParams = ExplorerParams {
   _sourcePos = noPos,
   _explorerLogLevel = 0,
   _polynomialDegree = 1,
-  _checkResources = True
+  _checkResources = True,
+  _useMultiplicity = True
 }
 
 -- | Parameters for constraint solving
