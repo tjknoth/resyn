@@ -229,7 +229,8 @@ parseTypeAtom :: Parser RType
 parseTypeAtom = choice [
   parens parseType,
   try parseScalarRefType,
-  parseScalarRefPotType,
+  try parseScalarRefPotType,
+  braces parseUnrefTypeNoArgs,
   parseUnrefTypeNoArgs,
   parseListType
   ]

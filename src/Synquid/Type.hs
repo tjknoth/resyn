@@ -39,7 +39,7 @@ equalShape t t' = t == t'
 
 
 defPotential = IntLit 0
-defMultiplicity = IntLit 1
+defMultiplicity = IntLit 1 --0
 
 
 potentialPrefix = "p"
@@ -182,6 +182,8 @@ pos = int (valInt |>| IntLit 0)
 vart n f = ScalarT (TypeVarT Map.empty n defMultiplicity) f defPotential
 vart_ n = vart n () 
 vartAll n = vart n ftrue
+--vartSafe n f = ScalarT (TypeVarT Map.empty n (IntLit 1)) f defPotential
+vartSafe = vart
 
 set n f = ScalarT (DatatypeT setTypeName [tvar] []) f defPotential
   where
@@ -259,23 +261,6 @@ baseTypeMultiply fml t = t
 
 addPotential :: RType -> Formula -> RType 
 addPotential t@(ScalarT base ref pot) f = ScalarT base ref (addFormulas pot f)
-
--- | 'simpleFormulaBOp' @op isId f g@ : return @f@ `@op@` @g@, unless either @f@ or @g@ is an identity element under @op@, in which case we simplify
-simpleFormulaBOp :: (Formula -> Formula -> Formula) -> (Formula -> Bool) -> Formula -> Formula -> Formula 
-simpleFormulaBOp op isId f g = case (isId f, isId g) of 
-  (True, _) -> g
-  (_, True) -> f
-  _         -> f `op` g
-
-multiplyFormulas = simpleFormulaBOp (|*|) isMultiplicativeId
-addFormulas = simpleFormulaBOp (|+|) isAdditiveId
-
-isMultiplicativeId (IntLit 1) = True
-isMultiplicativeId _          = False
-
-isAdditiveId (IntLit 0) = True 
-isAdditiveId _          = False
-
 
 
 {- Refinement types -}

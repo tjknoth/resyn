@@ -634,7 +634,7 @@ embedEnv env fml consistency = do
 -- Resource constraint-related functions
 ----------------------------------------
 
--- Top-level interface for solving resource constraints
+-- | 'solveResourceConstraints' @oldConstraints constraints@ : Transform @constraints@ into logical constraints and attempt to solve the complete system by conjoining with @oldConstraints@
 solveResourceConstraints :: (MonadHorn s, MonadSMT s) => [Constraint] -> [Constraint] -> TCSolver s (Maybe [Constraint]) 
 solveResourceConstraints oldConstraints constraints = do
     writeLog 4 $ linebreak <+> text "Generating resource constraints:"
@@ -656,16 +656,16 @@ solveResourceConstraints oldConstraints constraints = do
       else return Nothing
     
             
-
+-- | 'isSatWithModel' : check satisfiability and return the model accordingly
 isSatWithModel :: MonadSMT s => Formula -> TCSolver s (Bool, String)
 isSatWithModel = lift . lift . lift . solveWithModel
 
 
--- Converts abstract constraint into relevant numerical constraints
+-- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Bool -> Constraint -> TCSolver s Formula 
 generateFormula shouldLog checkMults c@(Subtype env tl tr _ name) = do
     --let syms = Map.elems $ Map.filterWithKey (\k a -> k /= name) (allSymbols env) 
-    let fmls = conjunction $ Set.filter (not . isTrivial) $ joinAssertions checkMults (|=|) tl tr
+    let fmls = conjunction $ Set.filter (not . isTrivial) $ joinAssertions checkMults subtypeOp tl tr
     emb <- embedEnv env (refinementOf tl |&| refinementOf tr) True
     let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf tl) emb
     when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
@@ -684,7 +684,7 @@ generateFormula shouldLog checkMults c@(SplitType e v t tl tr)    = do
     return fmls
 generateFormula _ _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
 
--- Set of all resource-related formulas (potentials and multiplicities) from a refinement type
+-- | 'allFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
 allFormulas :: Bool -> RType -> Set Formula 
 allFormulas cm (ScalarT base _ p) = Set.insert p (allFormulasBase cm base)
 allFormulas _ _                   = Set.empty
@@ -694,7 +694,7 @@ allFormulasBase cm (DatatypeT _ ts _) = Set.unions $ fmap (allFormulas cm) ts
 allFormulasBase cm (TypeVarT _ _ m)   = if cm then Set.singleton m else Set.empty
 allFormulasBase _ _                   = Set.empty
 
--- Generate numerical constraints referring to a partition of resources from type-splitting constraint
+-- | 'partition' @t tl tr@ : Generate numerical constraints referring to a partition of the resources associated with @t@ into types @tl@ and @tr@ 
 partition :: Bool -> RType -> RType -> RType -> Set Formula 
 partition cm (ScalarT b _ f) (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (f |=| (fl |+| fr)) $ partitionBase cm b bl br
 partition _ _ _ _ = Set.empty
@@ -704,7 +704,7 @@ partitionBase cm (DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Se
 partitionBase cm (TypeVarT _ _ m) (TypeVarT _ _ ml) (TypeVarT _ _ mr) = if cm then Set.singleton $ m |=| (ml |+| mr) else Set.empty
 partitionBase _ _ _ _ = Set.empty
 
--- Essentially folds all resource formulas in a schema by `op` -- some binary operation on formulas
+-- | 'joinAssertions' @op tl tr@  : Generate the set of all formulas in types @tl@ and @tr@, zipped by a binary operation @op@ on formulas 
 joinAssertions :: Bool -> (Formula -> Formula -> Formula) -> RType -> RType -> Set Formula
 joinAssertions cm op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (fl `op` fr) $ joinAssertionsBase cm op bl br
 -- TODO: add total potential from input and output environment to left and right sides
@@ -731,11 +731,11 @@ isResourceConstraint WellFormed{} = True
 isResourceConstraint SplitType{}  = True
 isResourceConstraint _            = False
 
--- Returns a formula computing the total potential in the environment (\Phi) 
+-- | 'totalPotential' @schs@ : compute the total potential contained in a list of schemas @schs@
 totalPotential :: [RSchema] -> Formula
 totalPotential schs = foldl (|+|) (IntLit 0) $ catMaybes $ fmap (potentialOf . typeFromSchema) schs
 
--- Returns a formula computing the total potential in an environment
+-- | 'totalMultiplicity' @schs@ : compute the total of the multiplicities contained in a list of schemas @schs@
 totalMultiplicity :: [RSchema] -> Formula
 totalMultiplicity schs = foldl (|+|) (IntLit 0) $ catMaybes $ fmap (multiplicityOfType . typeFromSchema) schs
 
@@ -767,6 +767,7 @@ refinementOf _                 = error "error: Encountered non-scalar type when 
 preprocessNumericalConstraint :: Set Formula -> Set Formula 
 preprocessNumericalConstraint fs = Set.map assumeUnknowns $ Set.filter (not . isUnknownForm) fs
 
+-- Assume that unknown predicates in a formula evaluate to True
 -- TODO: probably don't need as many cases
 assumeUnknowns :: Formula -> Formula
 assumeUnknowns (Unknown s id) = BoolLit True
@@ -785,6 +786,8 @@ isInteresting (Binary Ge _ (IntLit 0)) = False
 isInteresting (BoolLit True)           = False
 isInteresting (Binary And f g)         = isInteresting f && isInteresting g 
 isInteresting _                        = True
+
+subtypeOp = (|=|)
 
 
 writeLog level msg = do

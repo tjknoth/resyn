@@ -510,3 +510,28 @@ isUnknownForm :: Formula -> Bool
 isUnknownForm (Unknown _ _) = True
 isUnknownForm _             = False
 
+-- | 'simpleFormulaBOp' @op isId f g@ : return @f@ `@op@` @g@, unless either @f@ or @g@ is an identity element under @op@, in which case we simplify
+simpleFormulaBOp :: (Formula -> Formula -> Formula) -> (Formula -> Bool) -> Formula -> Formula -> Formula 
+simpleFormulaBOp op isId f g = case (isId f, isId g) of 
+  (True, _) -> g
+  (_, True) -> f
+  _         -> f `op` g
+
+-- Simplify multiplication when multiplying by zero (again for readability)
+simpleMultiply :: Formula -> Formula -> Formula 
+simpleMultiply f g = 
+  if isZero f || isZero g 
+    then IntLit 0
+    else f |*| g
+
+isZero (IntLit 0) = True 
+isZero _          = False
+
+multiplyFormulas = simpleFormulaBOp simpleMultiply isMultiplicativeId
+addFormulas = simpleFormulaBOp (|+|) isAdditiveId
+
+isMultiplicativeId (IntLit 1) = True
+isMultiplicativeId _          = False
+
+isAdditiveId (IntLit 0) = True 
+isAdditiveId _          = False
