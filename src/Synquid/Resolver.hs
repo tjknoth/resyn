@@ -212,11 +212,12 @@ resolveSignatures (MeasureDecl measureName _ _ post defCases args _) = do
       post' <- resolveTypeRefinement outSort post
       pos <- use currentPosition
       let ctors = datatype ^. constructors
-      let constantArgs = fmap (\(n, s) -> Var s n) args
       if length defCases /= length ctors
         then throwResError $ text "Definition of measure" <+> text measureName <+> text "must include one case per constructor of" <+> text dtName
         else do
-          defs' <- mapM (resolveMeasureDef ctors constantArgs) defCases
+          freshConsts <- mapM (uncurry freshId) args
+          let constSubst = zip (fmap fst args) freshConsts
+          defs' <- mapM (resolveMeasureDef ctors constSubst) defCases
           mapM_ (\(MeasureCase _ _ impl) -> checkMeasureCase measureName args impl) defCases
           sch <- uses environment ((Map.! measureName) . allSymbols)
           sch' <- resolveSchema sch
@@ -224,15 +225,18 @@ resolveSignatures (MeasureDecl measureName _ _ post defCases args _) = do
           defCases' <- mapM (\(MeasureCase n args body) -> do
             body' <- resolveMeasureFormula body
             return (MeasureCase n args body')) defCases
-          environment %= addMeasure measureName (MeasureDef inSort outSort defs' args post')
+          --traceM $ "UPDATED" ++ show (pretty defCases')
+          let args' = fmap (\(Var s x) -> (x, s)) freshConsts
+          environment %= addMeasure measureName (MeasureDef inSort outSort defs' args' post')
           checkingGoals %= (++ [(measureName, (impl (MeasureDef inSort outSort defCases' args post'), pos))])
     _ -> throwResError $ text "Last input of measure" <+> text measureName <+> text "must be a datatype"
   where
     impl def = normalizeProgram $ measureProg measureName def
-    resolveMeasureDef allCtors constantArgs (MeasureCase ctorName binders body) =
+    resolveMeasureDef allCtors cSub (MeasureCase ctorName binders body) =
       if ctorName `notElem` allCtors
         then throwResError $ text "Not in scope: data constructor" <+> text ctorName <+> text "used in definition of measure" <+> text measureName
         else do
+          --traceM $ "Resolving " ++ show (pretty body)
           consSch <- uses environment ((Map.! ctorName) . allSymbols)
           let consT = toMonotype consSch
           let n = arity consT
@@ -240,12 +244,13 @@ resolveSignatures (MeasureDecl measureName _ _ post defCases args _) = do
             then throwResError $ text "Data constructor" <+> text ctorName <+> text "expected" <+> pretty n <+> text "binders and got" <+> pretty (length binders) <+> text "in definition of measure" <+> text measureName
             else do
               let ctorParams = allArgs consT
-              let subst = Map.fromList $ zip binders ctorParams
-              let fml = Pred AnyS measureName (fmap (Var AnyS . fst) args ++ [Var AnyS valueVarName]) |=| substitute subst body
+              let subst = Map.fromList $ cSub ++ zip binders ctorParams
+              --traceM $ "SUBST " ++ show subst
+              let fml = Pred AnyS measureName (fmap snd cSub ++ [Var AnyS valueVarName]) |=| substitute subst body
               fml' <- withLocalEnv $ do
                 environment . boundTypeVars .= boundVarsOf consSch
                 environment %= addAllVariables ctorParams
-                environment %= addAllVariables constantArgs
+                environment %= addAllVariables (fmap snd cSub) 
                 resolveTypeRefinement (toSort $ baseTypeOf $ lastType consT) fml
               return $ MeasureCase ctorName (map varName ctorParams) fml'
 resolveSignatures (SynthesisGoal name impl) = do
@@ -438,7 +443,8 @@ resolveMeasureFormula (Ite f1 f2 f3) = do
 resolveMeasureFormula (Pred s name f) = do
   inlineMb <- uses inlines (Map.lookup name)
   case inlineMb of
-    Just (args, body) -> resolveMeasureFormula (substitute (Map.fromList $ zip args f) body)
+    Just (args, body) -> do 
+      resolveMeasureFormula (substitute (Map.fromList $ zip args f) body)
     Nothing -> do
       f' <- mapM resolveMeasureFormula f
       return $ Pred s name f'
@@ -665,6 +671,13 @@ freshSort = do
   i <- use idCount
   idCount %= ( + 1)
   return $ VarS ("S" ++ show i)
+
+-- | 'freshId' @p s@ : fresh var with prefix @p@ of sort @s@
+freshId :: String -> Sort -> Resolver Formula
+freshId p s = do 
+  i <- use idCount 
+  idCount %= (+ 1)
+  return $ Var s (p ++ show i) 
 
 -- | 'instantiate' @sorts@: replace all sort variables in @sorts@ with fresh sort variables
 instantiate :: [Sort] -> Resolver [Sort]

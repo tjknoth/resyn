@@ -602,7 +602,7 @@ instantiateConsAxioms env mVal fml = let inst = instantiateConsAxioms env mVal i
         subst = Map.fromList $ (valueVarName, newValue) : zip vars args ++ zip constArgNames constVars-- substitute formals for actuals and constructor application or provided value for _v
         wrapForall xs f = foldl (flip All) f xs
         qBody = wrapForall constVars body'
-      in {-trace ("INST CONS with subs " ++ show subst ++ " IN " ++ show (pretty body')) $ -}substitute subst qBody
+      in {-trace ("INST CONS with subs " ++ show subst ++ " IN " ++ show (pretty body')) $-} substitute subst qBody
 
 -- | 'matchConsType' @formal@ @actual@ : unify constructor return type @formal@ with @actual@
 matchConsType formal@(ScalarT (DatatypeT d vars pVars) _ _) actual@(ScalarT (DatatypeT d' args pArgs) _ p) | d == d'

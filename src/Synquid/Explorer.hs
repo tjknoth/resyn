@@ -342,7 +342,7 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
 generateE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
 generateE env typ = do
   putMemo Map.empty                                     -- Starting E-term enumeration in a new environment: clear memoization store
-
+  
   d <- asks . view $ _1 . eGuessDepth
   (Program pTerm pTyp) <- generateEUpTo env typ d                            -- Generate the E-term
   runInSolver $ isFinal .= True >> solveTypeConstraints >> isFinal .= False  -- Final type checking pass that eliminates all free type variables
