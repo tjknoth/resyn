@@ -263,6 +263,19 @@ addPotential :: RType -> Formula -> RType
 addPotential t@(ScalarT base ref pot) f = ScalarT base ref (addFormulas pot f)
 
 
+-- | 'removePotential' @t@ : removes all non-default potential and multiplicity annotations, used to strip constructor annotations
+removePotential :: RType -> RType
+removePotential (ScalarT b r _) = ScalarT (removePotentialBase b) r (IntLit 0)
+removePotential (FunctionT x arg res) = FunctionT x (removePotential arg) (removePotential res)
+removePotential (LetT x t body) = LetT x (removePotential t) (removePotential body)
+removePotential t = t
+
+removePotentialBase :: BaseType Formula -> BaseType Formula
+removePotentialBase (DatatypeT x ts ps) = DatatypeT x (fmap removePotential ts) ps
+--removePotentialBase (TypeVarT subs x _) = TypeVarT subs x (IntLit 1)
+removePotentialBase b = b
+
+
 {- Refinement types -}
 
 -- | Unrefined typed

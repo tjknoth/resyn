@@ -202,10 +202,16 @@ reconstructI' env t@ScalarT{} impl = case impl of
                           _ -> throwErrorWithDescription $ text "Not in scope: data constructor" </> squotes (text consName)
     checkCases _ [] = return []
 
+reconstructCase :: (MonadSMT s, MonadHorn s) => Environment -> Formula -> UProgram -> RType -> Case RType -> RType -> Explorer s (Case RType)
 reconstructCase env scrVar pScrutinee t (Case consName args iBody) consT = cut $ do
   -- matchConsType simply assigns type variables appropriately
+  writeLog 2 $ text "Case" <+> text consName <+> text "has type" <+> pretty t
+  writeLog 2 $ text "Scrutinee" <+> pretty pScrutinee <+> text "has type" <+> pretty (typeOf pScrutinee)
   runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
-  consT' <- runInSolver $ currentAssignment consT
+  dm <- asks . view $ _1 . dMatch 
+  consT' <- runInSolver $ currentAssignment (if dm then consT else removePotential consT) -- if match is not destructive, strip constructor annotations so that binders have potential from top-level annotations
+  writeLog 2 $ text "consT" <+> pretty consT
+  writeLog 2 $ text "consT'" <+> pretty consT'
   (syms, ass) <- caseSymbols env scrVar args consT'
   let caseEnv = foldr (uncurry addVariable) (addAssumption ass env) syms
   pCaseExpr <- local (over (_1 . matchDepth) (-1 +)) $
