@@ -502,6 +502,8 @@ instance Ord Candidate where
 -- Empty datatype constructors should have "infinite" potential 
 --   and multiplicity to be a subtype of everything
 -- For now, we just use a pretty big number
+-- TODO: this will no longer work once we are correctly solving 
+--   exists-forall constraints!
 bottomPotential = IntLit 10000
 bottomMultiplicity = IntLit 10000
 
@@ -541,3 +543,6 @@ isMultiplicativeId _          = False
 
 isAdditiveId (IntLit 0) = True 
 isAdditiveId _          = False
+
+fmlGe (IntLit f) (IntLit g) = f >= g
+fmlGe _ _ = False

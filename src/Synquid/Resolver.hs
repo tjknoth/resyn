@@ -105,14 +105,18 @@ throwResError descr = do
 
 resolveDeclaration :: BareDeclaration -> Resolver ()
 resolveDeclaration (TypeDecl typeName typeVars typeBody) = do
+  checkTypePotential typeBody
   typeBody' <- resolveType typeBody
   let extraTypeVars = typeVarsOf typeBody' Set.\\ Set.fromList typeVars
   if Set.null extraTypeVars
     then environment %= addTypeSynonym typeName typeVars typeBody'
     else throwResError (text "Type variable(s)" <+> hsep (map text $ Set.toList extraTypeVars) <+>
               text "in the definition of type synonym" <+> text typeName <+> text "are undefined")
-resolveDeclaration (FuncDecl funcName typeSchema) = addNewSignature funcName typeSchema
+resolveDeclaration (FuncDecl funcName typeSchema) = do 
+  checkSchemaPotential typeSchema
+  addNewSignature funcName typeSchema
 resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
+  mapM_ (\(ConstructorSig _ t) -> checkTypePotential t) ctors
   let ctors' = fmap (\(ConstructorSig x t) -> ConstructorSig x (updateEmptyCtors t)) ctors 
   let
     (pParams, pVariances) = unzip pVarParams
@@ -429,7 +433,7 @@ resolveTypeAnnotation targetSort valueSort fml = do
   return resolvedFml
 
 resolveTypeRefinement = resolveTypeAnnotation BoolS 
-resolveTypePotential = resolveTypeAnnotation IntS
+resolveTypePotential = resolveTypeAnnotation IntS 
 
 -- Partially resolve formula describing measure case (just replace inline predicates)
 resolveMeasureFormula :: Formula -> Resolver Formula
@@ -672,6 +676,29 @@ substituteTypeSynonym name tArgs = do
     Just (tVars, t) -> do
       when (length tArgs /= length tVars) $ throwResError $ text "Type synonym" <+> text name <+> text "expected" <+> pretty (length tVars) <+> text "type arguments and got" <+> pretty (length tArgs)
       return $ noncaptureTypeSubst tVars tArgs t
+
+checkTypePotential :: RType -> Resolver ()
+checkTypePotential t@(ScalarT base _ f) = do
+  checkBaseTypePotential base
+  when (f `fmlGe` bottomPotential) $ throwResError $ text "Potential annotation on" <+> pretty t <+> text "must be less than" <+> pretty bottomPotential
+  return ()
+checkTypePotential (FunctionT _ inT outT) = do 
+  checkTypePotential inT 
+  checkTypePotential outT
+  return ()
+checkTypePotential t = return ()
+
+checkBaseTypePotential :: BaseType Formula -> Resolver ()
+checkBaseTypePotential t@(TypeVarT _ _ m) = do 
+  when (m `fmlGe` bottomMultiplicity) $ throwResError $ text "Multiplicity annotation on" <+> pretty t <+> text "must be less than" <+> pretty bottomMultiplicity
+  return ()
+checkBaseTypePotential (DatatypeT _ ts _) = mapM_ checkTypePotential ts
+checkBaseTypePotential b = return ()
+
+checkSchemaPotential :: RSchema -> Resolver ()
+checkSchemaPotential (Monotype t) = checkTypePotential t
+checkSchemaPotential (ForallT _ s) = checkSchemaPotential s
+checkSchemaPotential (ForallP _ s) = checkSchemaPotential s
 
 -- | 'freshSort' : fresh variable sort 
 freshSort :: Resolver Sort
