@@ -499,6 +499,12 @@ instance Ord Candidate where
 -- Utilities
 -----------------------
 
+-- Empty datatype constructors should have "infinite" potential 
+--   and multiplicity to be a subtype of everything
+-- For now, we just use a pretty big number
+bottomPotential = IntLit 10000
+bottomMultiplicity = IntLit 10000
+
 isTrivial :: Formula -> Bool
 isTrivial (BoolLit True)    = True 
 isTrivial (Binary Eq f1 f2) = f1 == f2

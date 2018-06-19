@@ -113,6 +113,7 @@ resolveDeclaration (TypeDecl typeName typeVars typeBody) = do
               text "in the definition of type synonym" <+> text typeName <+> text "are undefined")
 resolveDeclaration (FuncDecl funcName typeSchema) = addNewSignature funcName typeSchema
 resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
+  let ctors' = fmap (\(ConstructorSig x t) -> ConstructorSig x (updateEmptyCtors t)) ctors 
   let
     (pParams, pVariances) = unzip pVarParams
     datatype = DatatypeDef {
@@ -124,7 +125,14 @@ resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
     }
   environment %= addDatatype dtName datatype
   let addPreds typ = foldl (flip ForallP) (Monotype typ) pParams
-  mapM_ (\(ConstructorSig name typ) -> addNewSignature name $ addPreds typ) ctors
+  mapM_ (\(ConstructorSig name typ) -> addNewSignature name $ addPreds typ) ctors'
+  where 
+    -- TODO: Should potentials also become bot?
+    updateEmptyCtors t@(ScalarT base ref pot) = ScalarT (updateBase base) ref pot
+    updateEmptyCtors t = t 
+    updateBase (TypeVarT subs name mult) = TypeVarT subs name bottomMultiplicity
+    updateBase (DatatypeT name ts ps) = DatatypeT name (fmap updateEmptyCtors ts) ps
+    updateBase b = b
 resolveDeclaration (MeasureDecl measureName inSort outSort post defCases args isTermination) = do
   env <- use environment
   let allInSorts = fmap snd args ++ [inSort]

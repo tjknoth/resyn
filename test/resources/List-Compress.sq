@@ -11,7 +11,7 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Cons x xs -> 1 + len xs 
 
 -- Linear-memory implementation
-compress :: xs: List {1 ** a| |1} -> List a
+compress :: xs: List {1 ** a| |2} -> List {1 ** a| |1}
 compress = \xs.
   match xs with
     Nil -> Nil 

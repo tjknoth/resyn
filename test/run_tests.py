@@ -144,6 +144,11 @@ DEMO_BENCHMARKS = [
 ]
 
 RESOURCE_BENCHMARKS = [
+    ('BST-Contains',        ['--resources']),
+    ('BST-Delete',          ['--resources']),
+    ('BST-Insert',          ['--resources']),
+    ('BST-Replicate-Bad',   ['--resources']),
+    ('BST-Replicate',       ['--resources']),
     ('List-Append',         ['--resources']),
     ('List-Compress-Bad',   ['--resources']),
     ('List-Compress',       ['--resources']),
@@ -155,6 +160,8 @@ RESOURCE_BENCHMARKS = [
     ('List-Replicate-Bad',  ['--resources']),
     ('List-Replicate',      ['--resources']),
     ('List-Reverse',        ['--resources']),
+    ('Queue-Dequeue',       ['--resources']),
+    ('Queue-Enqueue',       ['--resources']),
 ]
 
 

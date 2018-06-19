@@ -11,8 +11,7 @@ measure aboveAll :: z: Int -> IList -> Bool where
 
 termination measure len :: IList -> {Int | _v >= 0} where 
   Nil -> 0
-  Cons x xs -> 1 + (len xs)
-
+  Cons x xs -> 1 + len xs
 
 -- Simple demonstration of verification using multi-argument measure
 filterAbove :: xs: IList -> x: Int -> {IList | aboveAll x _v}
@@ -23,3 +22,19 @@ filterAbove = \xs . \x .
       if (y >= x)
         then Cons y (filterAbove ys x)
         else filterAbove ys x
+
+-- Measure asserting that every element in a list is between
+--   @lo@ and @hi@
+measure between :: lo: Int -> hi: Int -> IList -> Bool where 
+    Nil -> True 
+    Cons x xs -> (x > lo) && (x < hi) && (between lo hi xs)
+
+-- This should fail to verify, as the filtering uses inclusive bounds
+filterBetween :: xs: IList -> lo: Int -> hi: Int -> {IList | between lo hi _v}
+filterBetween = \xs. \lo. \hi. 
+  match xs with 
+    Nil -> Nil 
+    Cons y ys -> 
+      if (y >= lo && y <= hi)
+        then Cons y (filterBetween ys lo hi)
+        else filterBetween ys lo hi

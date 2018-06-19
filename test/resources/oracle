@@ -1,6 +1,78 @@
 
 
-append :: xs:{List {1**a||0}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+
+contains :: x:{1**a||0} -> t:{BST {1**a||0}||pathTo x _v} -> {Bool|_v == (x in elems t)|0}
+contains = \x . \t . 
+    match t with
+      Empty -> False
+      Node y l r -> 
+        if x < y
+          then contains x l
+          else 
+            if y < x
+              then contains x r
+              else True
+
+
+
+
+
+delete :: x:{1**a||0} -> t:{BST {1**a||0}|x in elems _v|deleteCost x _v} -> {BST {1**a||0}|!(x in elems _v) && size _v == size t - 1|2}
+./BST-Delete.sq:51: Error:
+  Insufficient resources
+  when checking Node ::
+  x7:_ -> x6:_ -> x5:_ -> {BST {1**a||0}|!(x in elems _v) && size _v == size t - 1|2}
+  in
+  \x . \t . 
+      match t with
+        Node y l r -> 
+          if y < x
+            then Node ?? ?? ??
+            else
+              (?? :: {BST {1**a||0}|!(x in elems _v) && size _v == size t - 1|2})
+
+
+
+
+insert :: x:{1**a||2} -> t:{BST {1**a||0}||pathTo x _v} -> {BST {1**a||0}|elems _v == elems t + [x]|0}
+insert = \x . \t . 
+    match t with
+      Empty -> Node x Empty Empty
+      Node y l r -> 
+        if x < y
+          then Node y (insert x l) r
+          else 
+            if x == y
+              then Node y l r
+              else Node y l (insert x r)
+
+
+
+
+replicate :: t:{BST {2**a||1}||0} -> {BST {1**a||0}|elems _v == elems t && size _v == 2 * size t|0}
+./BST-Replicate-Bad.sq:46: Error:
+  Insufficient resources
+  when checking x ::
+  {1**a|_v <= x|2} in
+  \t . 
+    match t with
+      Node x l r -> Node x (Node x ??
+                              ??) ??
+
+
+
+
+replicate :: t:{BST {2**a||2}||0} -> {BST {1**a||0}|elems _v == elems t && size _v == 2 * size t|0}
+replicate = \t . 
+  match t with
+    Empty -> Empty
+    Node x l r -> Node x (Node x
+                            (replicate l) Empty) (replicate
+                                                    r)
+
+
+
+append :: xs:{List {1**a||1}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
 append = \xs . \ys . 
     match xs with
       Nil -> ys
@@ -24,7 +96,7 @@ compress :: xs:{List {1**a||1}||0} -> {List {1**a||0}||0}
               else (?? :: {List {1**a||0}||0})
 
 
-compress :: xs:{List {1**a||1}||0} -> {List {1**a||0}||0}
+compress :: xs:{List {1**a||2}||0} -> {List {1**a||1}||0}
 compress = \xs . 
   match xs with
     Nil -> Nil
@@ -60,7 +132,7 @@ double :: xs:{List {1**a||1}||0} -> {List {1**a||0}|len _v == 2 * len xs|0}
       Cons y ys -> Cons y (Cons y ??)
 
 
-double :: xs:{List {2**a||1}||0} -> {List {1**a||0}|len _v == 2 * len xs|0}
+double :: xs:{List {2**a||2}||0} -> {List {1**a||0}|len _v == 2 * len xs|0}
 double = \xs . 
   match xs with
     Nil -> Nil
@@ -88,13 +160,6 @@ replicate = \n . \x .
       else Cons x (replicate (dec n)
                      x)
 
-replicate' :: n:{Nat||0} -> x:{n**a||n - 2} -> {List {1**a||0}|len _v == n|0}
-replicate' = \n . \x . 
-    if n <= 0
-      then Nil
-      else Cons x (replicate (dec n)
-                     x)
-
 
 replicate :: n:{Nat||0} -> x:{n**a||n} -> {List {1**a||0}|len _v == n|0}
 replicate = \n . \x . 
@@ -113,4 +178,32 @@ reverse' = \xs . \acc .
 
 reverse :: xs:{List {1**a||1}||0} -> {List {1**a||0}||0}
 reverse = \xs . reverse' xs Nil
+
+
+
+
+
+
+
+dequeue :: q:{Queue {1**a||0}|qlen _v > 0|1} -> {Queue {1**a||0}|qlen _v == qlen q - 1|0}
+dequeue = \q . 
+  match q with
+    Queue f b -> 
+      match f with
+        Cons x fs -> Queue fs b
+        Nil -> 
+          match reverse b with
+            Nil -> error
+            Cons x fs -> Queue fs Nil
+
+
+
+
+
+
+
+enqueue :: x:{1**a||3} -> q:{Queue {1**a||0}||0} -> {Queue {1**a||0}|qelems _v == qelems q + [x] && qlen _v == qlen q + 1|0}
+enqueue = \x . \q . 
+    match q with
+      Queue f b -> Queue f (Cons x b)
 

@@ -39,8 +39,7 @@ equalShape t t' = t == t'
 
 
 defPotential = IntLit 0
-defMultiplicity = IntLit 1 --0
-
+defMultiplicity = IntLit 1 
 
 potentialPrefix = "p"
 multiplicityPrefix = "m"

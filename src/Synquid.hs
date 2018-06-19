@@ -163,7 +163,7 @@ synt = Synthesis {
   print_spec          = True            &= help ("Show specification of each synthesis goal (default: True)"),
   print_stats         = False           &= help ("Show specification and solution size (default: False)"),
   log_                = 0               &= help ("Logger verboseness level (default: 0)") &= name "l",
-  resources           = True            &= help ("Verify resource usage (default: True)") &= name "r",
+  resources           = True            &= help ("Verify resource usage (default: True)") &= name "r" &= groupname "Resource analysis parameters",
   max_polynomial      = 1               &= help ("Maximum degree of resource polynomial"),
   multiplicities      = True            &= help ("Use multiplicities when verifying resource usage (default: True") &= name "m",
   destructive_match    = True           &= help ("Use destructive pattern match (default: True)") &= name "d"
