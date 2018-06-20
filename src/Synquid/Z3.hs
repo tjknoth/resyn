@@ -91,7 +91,8 @@ instance MonadSMT Z3State where
     (r, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
     let r' = case r of 
               Unsat -> False 
-              Sat -> True
+              Sat   -> True
+              _     -> error $ "solveWithModel: Z3 returned Unknown for " ++ show (pretty fml)
     case m of 
       Nothing -> return (r', "")
       Just mod -> do 
@@ -200,6 +201,8 @@ evalZ3State :: Z3State a -> IO a
 evalZ3State f = do
   -- env <- newEnv (Just QF_AUFLIA) stdOpts
   -- env' <- newEnv (Just QF_AUFLIA) stdOpts
+  --env <- newEnv (Just AUFLIA) stdOpts
+  --env' <- newEnv (Just AUFLIA) stdOpts
   env <- newEnv Nothing stdOpts
   env' <- newEnv Nothing stdOpts
   evalStateT f $ initZ3Data env env'

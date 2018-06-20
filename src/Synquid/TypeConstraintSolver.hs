@@ -678,21 +678,25 @@ isSatWithModel = lift . lift . lift . solveWithModel
 generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Bool -> Constraint -> TCSolver s Formula 
 generateFormula shouldLog checkMults c@(Subtype env tl tr _ name) = do
     --let syms = Map.elems $ Map.filterWithKey (\k a -> k /= name) (allSymbols env) 
-    let fmls = conjunction $ Set.filter (not . isTrivial) $ joinAssertions checkMults subtypeOp tl tr
+    let fmls = quantify env $ conjunction $ Set.filter (not . isTrivial) $ joinAssertions checkMults subtypeOp tl tr
     emb <- embedEnv env (refinementOf tl |&| refinementOf tr) True
-    let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf tl) emb
+    let emb' = preprocessAssumptions $ Set.insert (refinementOf tl) emb
+    let fmls' = conjunction emb' |=>| fmls
     when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
     --return $ conjunction emb' |=>| fmls
     return fmls
+    --return fmls'
 generateFormula shouldLog checkMults c@(WellFormed env t)         = do
-    let fmls = conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allFormulas checkMults t
+    let fmls = quantify env $ conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allFormulas checkMults t
     emb <- embedEnv env (refinementOf t) True  
-    let emb' = preprocessNumericalConstraint $ Set.insert (refinementOf t) emb
+    let emb' = preprocessAssumptions $ Set.insert (refinementOf t) emb
+    let fmls' = conjunction emb' |=>| fmls
     when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
     --return $ conjunction emb' |=>| fmls
     return fmls
-generateFormula shouldLog checkMults c@(SplitType e v t tl tr)    = do 
-    let fmls = conjunction $ partition checkMults t tl tr
+    --return fmls'
+generateFormula shouldLog checkMults c@(SplitType env v t tl tr)    = do 
+    let fmls = quantify env $ conjunction $ partition checkMults t tl tr
     when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)
     return fmls
 generateFormula _ _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
@@ -739,7 +743,7 @@ joinAssertionsBase cm op (TypeVarT _ _ ml) (TypeVarT _ _ mr) =
 joinAssertionsBase _ _ _ _ = Set.empty 
 
 isResourceConstraint :: Constraint -> Bool
-isResourceConstraint (Subtype e ScalarT{} ScalarT{}  _ _) = True
+isResourceConstraint (Subtype e ScalarT{} ScalarT{} _ _) = True
 isResourceConstraint WellFormed{} = True
 isResourceConstraint SplitType{}  = True
 isResourceConstraint _            = False
@@ -765,7 +769,7 @@ multiplicityOfType :: RType -> Maybe Formula
 multiplicityOfType (ScalarT base f p) = multiplicityOfBase base 
 multiplicityOfType _                  = Nothing
 
--- Total multiplicity in a basetype
+-- Total multiplicity in a base type
 multiplicityOfBase :: BaseType Formula -> Maybe Formula
 multiplicityOfBase (TypeVarT _ _ m)      = Just m
 multiplicityOfBase (DatatypeT name ts _) = case foldl (|+|) (IntLit 0) (catMaybes (fmap multiplicityOfType ts)) of 
@@ -777,8 +781,8 @@ refinementOf :: RType -> Formula
 refinementOf (ScalarT _ fml _) = fml
 refinementOf _                 = error "error: Encountered non-scalar type when generating resource constraints"
 
-preprocessNumericalConstraint :: Set Formula -> Set Formula 
-preprocessNumericalConstraint fs = Set.map assumeUnknowns $ Set.filter (not . isUnknownForm) fs
+preprocessAssumptions :: Set Formula -> Set Formula 
+preprocessAssumptions fs = Set.map assumeUnknowns $ Set.filter (not . isUnknownForm) fs
 
 -- Assume that unknown predicates in a formula evaluate to True
 -- TODO: probably don't need as many cases
@@ -793,15 +797,39 @@ assumeUnknowns (Cons s x fs) = Cons s x (fmap assumeUnknowns fs)
 assumeUnknowns (All f g) = All (assumeUnknowns f) (assumeUnknowns g)
 assumeUnknowns f = f
 
--- Filter away "uninteresting" constraints for logging. Specifically, well-formedness
+-- 'quantify' @f@ : wrap leaves of formula that are not literals or multiplicity/potential variables in foralls
+quantify :: Environment -> Formula -> Formula
+quantify env f = mkManyForall (quantify' env f) f
+
+quantify' :: Environment -> Formula -> [Maybe Formula]
+quantify' env (SetLit s fs) = concatMap (quantify' env) fs
+quantify' env v@(Var s x) = case Map.lookup x (allSymbols env) of 
+  Nothing -> [Nothing]
+  Just _ -> [Just v] -- TODO: differentiate between program and multiplicity variables. Should take environment?
+quantify' env (Unary _ f) = quantify' env f
+quantify' env (Binary _ f g) = quantify' env f `union` quantify' env g 
+quantify' env (Ite f g h) = quantify' env f `union` quantify' env g `union` quantify' env h 
+quantify' env (Pred s x fs) = concatMap (quantify' env) fs 
+quantify' env (Cons s x fs) = concatMap (quantify' env) fs
+quantify' env (All f g) = quantify' env g 
+quantify' _ f = [Nothing] -- Literal or Unknown
+
+mkForall :: Maybe Formula -> Formula -> Formula 
+mkForall Nothing f  = f
+mkForall (Just g) f = All g f
+
+mkManyForall :: [Maybe Formula] -> Formula -> Formula
+mkManyForall xs f = foldl (flip mkForall) f xs
+
+-- Filter away "uninteresting" constraints for logging. Specifically, well-formednes
 -- Definitely not complete, just "pretty good"
 isInteresting (Binary Ge _ (IntLit 0)) = False
+isInteresting (Binary Implies _ f)     = isInteresting f 
 isInteresting (BoolLit True)           = False
 isInteresting (Binary And f g)         = isInteresting f && isInteresting g 
 isInteresting _                        = True
 
 subtypeOp = (|=|)
-
 
 writeLog level msg = do
   maxLevel <- asks _tcSolverLogLevel

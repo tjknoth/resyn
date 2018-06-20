@@ -275,6 +275,7 @@ removePotentialBase (DatatypeT x ts ps) = DatatypeT x (fmap removePotential ts) 
 removePotentialBase b = b
 
 
+
 {- Refinement types -}
 
 -- | Unrefined typed

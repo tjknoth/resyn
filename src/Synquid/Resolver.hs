@@ -677,6 +677,7 @@ substituteTypeSynonym name tArgs = do
       when (length tArgs /= length tVars) $ throwResError $ text "Type synonym" <+> text name <+> text "expected" <+> pretty (length tVars) <+> text "type arguments and got" <+> pretty (length tArgs)
       return $ noncaptureTypeSubst tVars tArgs t
 
+-- | 'checkTypePotential' @t@ : ensure that type @t@ does not have potential or multiplicity exceeding a maximum given by bottomPotential and bottomMultiplicity, respectively
 checkTypePotential :: RType -> Resolver ()
 checkTypePotential t@(ScalarT base _ f) = do
   checkBaseTypePotential base
@@ -695,6 +696,7 @@ checkBaseTypePotential t@(TypeVarT _ _ m) = do
 checkBaseTypePotential (DatatypeT _ ts _) = mapM_ checkTypePotential ts
 checkBaseTypePotential b = return ()
 
+-- | 'checkSchemaPotential' @s@ : unwrap schema @s@ to check its annotations
 checkSchemaPotential :: RSchema -> Resolver ()
 checkSchemaPotential (Monotype t) = checkTypePotential t
 checkSchemaPotential (ForallT _ s) = checkSchemaPotential s
