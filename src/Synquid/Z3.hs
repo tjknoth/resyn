@@ -89,10 +89,13 @@ instance MonadSMT Z3State where
 
   solveWithModel fml = do 
     (r, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
+    setASTPrintMode Z3_PRINT_SMTLIB_FULL
+    fmlAst <- fmlToAST fml
+    astStr <- astToString fmlAst
     let r' = case r of 
               Unsat -> False 
               Sat   -> True
-              _     -> error $ "solveWithModel: Z3 returned Unknown for " ++ show (pretty fml)
+              _     -> error $ "solveWithModel: Z3 returned Unknown for AST " ++ astStr -- show (pretty fml)
     case m of 
       Nothing -> return (r', "")
       Just mod -> do 

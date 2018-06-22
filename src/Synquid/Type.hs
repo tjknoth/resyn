@@ -258,8 +258,17 @@ baseTypeMultiply fml (TypeVarT subs name mul) = TypeVarT subs name (multiplyForm
 baseTypeMultiply fml (DatatypeT name tArgs pArgs) = DatatypeT name (fmap (typeMultiply fml) tArgs) pArgs
 baseTypeMultiply fml t = t
 
+-- Currently only used on the argument in function types, shouldn't need more cases. Also not adding potential recursively to the basetypes.
 addPotential :: RType -> Formula -> RType 
-addPotential t@(ScalarT base ref pot) f = ScalarT base ref (addFormulas pot f)
+addPotential t@(ScalarT base ref pot) f = ScalarT (addPotentialBase base f) ref (addFormulas pot f)
+--addPotential (FunctionT x argT retT) f = FunctionT x (addPotential argT f) (addPotential retT)
+-- Should we add potential in the stronger type t as well?
+--addPotential (LetT x t contT) = LetT x t (addPotential contT f)
+
+addPotentialBase :: BaseType Formula -> Formula -> BaseType Formula 
+addPotentialBase (DatatypeT x ts ps) f = DatatypeT x (fmap (`addPotential` f) ts) ps
+addPotentialBase b _ = b
+
 
 
 -- | 'removePotential' @t@ : removes all non-default potential and multiplicity annotations, used to strip constructor annotations
@@ -274,6 +283,32 @@ removePotentialBase (DatatypeT x ts ps) = DatatypeT x (fmap removePotential ts) 
 --removePotentialBase (TypeVarT subs x _) = TypeVarT subs x (IntLit 1)
 removePotentialBase b = b
 
+-- | 'increaseFunctionPotential' @t@ : if @t@, a function type, outputs a type with zero potential on its type variables, make those potentials nonzero and increment the rest of the annotations accordingly. Should never be called with a contextual type; only used on signatures 
+increaseFunctionPotential :: RType -> (Bool, RType)
+increaseFunctionPotential (ScalarT base ref pot) = 
+  let (shouldChange, base') = 
+        case base of 
+          DatatypeT{} -> increaseFunctionPotentialBase base 
+          b           -> (pot == fzero, b)  
+      pot' = if shouldChange 
+        then addFormulas pot fone 
+        else pot
+  in (shouldChange, ScalarT base' ref pot')
+increaseFunctionPotential (FunctionT x argT resT) = 
+  let (shouldChange, resT') = increaseFunctionPotential resT
+      argT' = if shouldChange
+        then addPotential argT fone
+        else argT
+  in (shouldChange, FunctionT x argT' resT')
+increaseFunctionPotentialBase :: BaseType Formula -> (Bool, BaseType Formula)
+increaseFunctionPotentialBase (DatatypeT x ts ps) = 
+  let checkTypes = map (fst . increaseFunctionPotential) ts -- check if any of the type parameters need incrementing
+      shouldChange = or checkTypes
+      ts' = if shouldChange 
+              then fmap (`addPotential` fone) ts
+              else ts 
+  in (shouldChange, DatatypeT x ts' ps)
+increaseFunctionPotentialBase b = (False, b)
 
 
 {- Refinement types -}

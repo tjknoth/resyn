@@ -678,7 +678,7 @@ isSatWithModel = lift . lift . lift . solveWithModel
 generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Bool -> Constraint -> TCSolver s Formula 
 generateFormula shouldLog checkMults c@(Subtype env tl tr _ name) = do
     --let syms = Map.elems $ Map.filterWithKey (\k a -> k /= name) (allSymbols env) 
-    let fmls = quantify env $ conjunction $ Set.filter (not . isTrivial) $ joinAssertions checkMults subtypeOp tl tr
+    let fmls = {-quantify env $-} conjunction $ Set.filter (not . isTrivial) $ joinAssertions checkMults subtypeOp tl tr
     emb <- embedEnv env (refinementOf tl |&| refinementOf tr) True
     let emb' = preprocessAssumptions $ Set.insert (refinementOf tl) emb
     let fmls' = conjunction emb' |=>| fmls
@@ -687,7 +687,7 @@ generateFormula shouldLog checkMults c@(Subtype env tl tr _ name) = do
     return fmls
     --return fmls'
 generateFormula shouldLog checkMults c@(WellFormed env t)         = do
-    let fmls = quantify env $ conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allFormulas checkMults t
+    let fmls = {-quantify env $-} conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allFormulas checkMults t
     emb <- embedEnv env (refinementOf t) True  
     let emb' = preprocessAssumptions $ Set.insert (refinementOf t) emb
     let fmls' = conjunction emb' |=>| fmls
@@ -696,7 +696,7 @@ generateFormula shouldLog checkMults c@(WellFormed env t)         = do
     return fmls
     --return fmls'
 generateFormula shouldLog checkMults c@(SplitType env v t tl tr)    = do 
-    let fmls = quantify env $ conjunction $ partition checkMults t tl tr
+    let fmls = {-quantify env $-} conjunction $ partition checkMults t tl tr
     when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)
     return fmls
 generateFormula _ _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
