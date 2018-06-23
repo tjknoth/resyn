@@ -144,25 +144,37 @@ DEMO_BENCHMARKS = [
 ]
 
 RESOURCE_BENCHMARKS = [
+    ('BST-Contains-Bad',    ['--resources']),
     ('BST-Contains',        ['--resources']),
+    ('BST-Delete-Bad',      ['--resources']),
     ('BST-Delete',          ['--resources']),
+    ('BST-Insert-Bad',      ['--resources']),
     ('BST-Insert',          ['--resources']),
     ('BST-Replicate-Bad',   ['--resources']),
     ('BST-Replicate',       ['--resources']),
+    ('List-Append-Bad',     ['--resources']),
     ('List-Append',         ['--resources']),
+    ('List-Append2-Bad',    ['--resources']),
     ('List-Append2',        ['--resources']),
     ('List-Compress-Bad',   ['--resources']),
     ('List-Compress',       ['--resources']),
+    ('List-Cons2-Bad',      ['--resources']),
     ('List-Cons2',          ['--resources']),
+    ('List-Delete-Bad',     ['--resources']),
     ('List-Delete',         ['--resources']),
     ('List-Double-Bad',     ['--resources']),
     ('List-Double',         ['--resources']),
+    ('List-Fold-Bad',       ['--resources']),
     ('List-Fold',           ['--resources']),
+    ('List-Insert-Bad',     ['--resources']),
     ('List-Insert',         ['--resources']),
     ('List-Replicate-Bad',  ['--resources']),
     ('List-Replicate',      ['--resources']),
+    ('List-Reverse-Bad',    ['--resources']),
     ('List-Reverse',        ['--resources']),
+    ('Queue-Dequeue-Bad',   ['--resources']),
     ('Queue-Dequeue',       ['--resources']),
+    ('Queue-Enqueue-Bad',   ['--resources']),
     ('Queue-Enqueue',       ['--resources']),
 ]
 
@@ -209,7 +221,9 @@ def run_benchmark(name, opts, path='.'):
       t = end - start
       print ('{0:0.2f}'.format(t)),
       total_time = total_time + t
-      if return_code:
+      bad_pattern = '.+\-Bad(?!.)' 
+      bad_flag = re.match(bad_pattern, name)
+      if (bool(return_code) ^ bool(bad_flag)):
           printerr("FAIL")
       else:
           printok("OK")

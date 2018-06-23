@@ -1,6 +1,21 @@
 
 
 
+contains :: x:{1**a||0} -> t:{BST {if x < _v then 1 else 0**a||2}||0} -> {Bool|_v == (x in elems t)|0}
+contains = \x . \t . 
+    match t with
+      Empty -> False
+      Node y l r -> 
+        if x < y
+          then contains x l
+          else 
+            if y < x
+              then contains x r
+              else True
+
+
+
+
 contains :: x:{1**a||0} -> t:{BST {1**a||0}||pathTo x _v} -> {Bool|_v == (x in elems t)|0}
 contains = \x . \t . 
     match t with
@@ -12,6 +27,24 @@ contains = \x . \t .
             if y < x
               then contains x r
               else True
+
+
+
+
+
+delete :: x:{1**a||0} -> t:{BST {1**a||0}|x in elems _v|deleteCost x _v - 1} -> {BST {1**a||0}|!(x in elems _v) && size _v == size t - 1|2}
+./BST-Delete-Bad.sq:51: Error:
+  Insufficient resources
+  when checking Node ::
+  x7:_ -> x6:_ -> x5:_ -> {BST {1**a||0}|!(x in elems _v) && size _v == size t - 1|2}
+  in
+  \x . \t . 
+      match t with
+        Node y l r -> 
+          if y < x
+            then Node ?? ?? ??
+            else
+              (?? :: {BST {1**a||0}|!(x in elems _v) && size _v == size t - 1|2})
 
 
 
@@ -30,6 +63,17 @@ delete :: x:{1**a||0} -> t:{BST {1**a||0}|x in elems _v|deleteCost x _v} -> {BST
             then Node ?? ?? ??
             else
               (?? :: {BST {1**a||0}|!(x in elems _v) && size _v == size t - 1|2})
+
+
+
+
+insert :: x:{1**a||1} -> t:{BST {1**a||0}||pathTo x _v} -> {BST {1**a||0}|elems _v == elems t + [x]|0}
+./BST-Insert-Bad.sq:36: Error:
+  Insufficient resources
+  when checking x :: {1**a||2} in
+  \x . \t . 
+      match t with
+        Empty -> Node x ?? ??
 
 
 
@@ -72,12 +116,35 @@ replicate = \t .
 
 
 
+append :: xs:{List {1**a||0}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+append = \xs . \ys . 
+    match xs with
+      Nil -> ys
+      Cons z zs -> Cons z (append zs
+                             ys)
+
+
+
 append :: xs:{List {1**a||1}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
 append = \xs . \ys . 
     match xs with
       Nil -> ys
       Cons z zs -> Cons z (append zs
                              ys)
+
+synquid: ./List-Append2-Bad.sq: openFile: does not exist (No such file or directory)
+
+
+append :: xs:{List {1**a||1}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+append = \xs . \ys . 
+    match xs with
+      Nil -> ys
+      Cons z zs -> Cons z (append zs
+                             ys)
+
+append2 :: xs:{List {2**a||2}||0} -> ys:{List {1**a||1}||0} -> zs:{List {1**a||0}||0} -> {List {1**a||0}|len _v == (len xs + len ys) + len zs && elems _v == (elems xs + elems ys) + elems zs|0}
+append2 = \xs . \ys . \zs .
+      append (append xs ys) zs
 
 
 compress :: xs:{List {1**a||1}||0} -> {List {1**a||0}||0}
@@ -108,8 +175,27 @@ compress = \xs .
             then Cons z zs
             else Cons y (Cons z zs)
 
+cons2 :: x:{2**a||1} -> {List {1**a||0}||0}
+./List-Cons2-Bad.sq:12: Error:
+  Insufficient resources
+  when checking x :: {1**a||1} in
+  \x . Cons x (Cons x ??)
+
 cons2 :: x:{2**a||2} -> {List {1**a||0}||0}
 cons2 = \x . Cons x (Cons x Nil)
+
+
+
+delete :: x:{1**a||0} -> xs:{List {0**a||0}||0} -> {List {1**a||0}|elems _v == elems xs - [x]|0}
+./List-Delete-Bad.sq:21: Error:
+  Insufficient resources
+  when checking y :: {1**a||1} in
+  \x . \xs . 
+      match xs with
+        Cons y ys -> 
+          if y == x
+            then delete x ys
+            else Cons y ??
 
 
 
@@ -142,6 +228,19 @@ double = \xs .
 
 
 foldr :: <p :: List (a) -> b -> Bool> . f:(xs:{List {1**a||0}||0} -> x:{1**a||0} -> acc:{1**b|p xs _v|0} -> {1**b|p ((Cons x xs)) _v|0}) -> seed:{1**b|p (Nil) _v|0} -> ys:{List {1**a||0}||0} -> {1**b|p ys _v|0}
+./List-Fold-Bad.sq:20: Error:
+  Insufficient resources
+  when checking xs ::
+  {List {1**a||0}|len _v >= 0 && len _v < len ys|0}
+  in
+  \f . \seed . \ys . 
+        match ys with
+          Cons x xs -> f xs x (foldr f
+                                 seed xs)
+
+
+
+foldr :: <p :: List (a) -> b -> Bool> . f:(xs:{List {1**a||0}||0} -> x:{1**a||0} -> acc:{1**b|p xs _v|0} -> {1**b|p ((Cons x xs)) _v|0}) -> seed:{1**b|p (Nil) _v|0} -> ys:{List {1**a||0}||0} -> {1**b|p ys _v|0}
 ./List-Fold.sq:19: Error:
   Insufficient resources
   when checking xs ::
@@ -151,6 +250,48 @@ foldr :: <p :: List (a) -> b -> Bool> . f:(xs:{List {1**a||0}||0} -> x:{1**a||0}
         match ys with
           Cons x xs -> f xs x (foldr f
                                  seed xs)
+
+
+
+
+insert :: x:{1**a||0} -> xs:{List {1**a||0}||numgt x _v} -> {List {1**a||0}|elems _v == elems xs + [x]|0}
+insert = \x . \xs . 
+    match xs with
+      Nil -> Cons x Nil
+      Cons y ys -> 
+        if y < x
+          then Cons y (insert x ys)
+          else Cons x (Cons y ys)
+
+insert' :: x:{1**a||0} -> xs:{List {1**a||if _v < x then 0 else 0}||0} -> {List {1**a||0}|elems _v == elems xs + [x]|0}
+insert' = \x . \xs . 
+    match xs with
+      Nil -> Cons x Nil
+      Cons y ys -> 
+        if y < x
+          then Cons y (insert x ys)
+          else Cons x (Cons y ys)
+
+
+
+
+insert :: x:{1**a||0} -> xs:{List {1**a||0}||numgt x _v} -> {List {1**a||0}|elems _v == elems xs + [x]|0}
+insert = \x . \xs . 
+    match xs with
+      Nil -> Cons x Nil
+      Cons y ys -> 
+        if y < x
+          then Cons y (insert x ys)
+          else Cons x (Cons y ys)
+
+insert' :: x:{1**a||0} -> xs:{List {1**a||if _v < x then 1 else 0}||0} -> {List {1**a||0}|elems _v == elems xs + [x]|0}
+insert' = \x . \xs . 
+    match xs with
+      Nil -> Cons x Nil
+      Cons y ys -> 
+        if y < x
+          then Cons y (insert x ys)
+          else Cons x (Cons y ys)
 
 
 replicate :: n:{Nat||0} -> x:{n - 1**a||n} -> {List {1**a||0}|len _v == n|0}
@@ -176,8 +317,40 @@ reverse' = \xs . \acc .
       Cons y ys -> reverse' ys (Cons y
                                   acc)
 
+reverse :: xs:{List {1**a||0}||0} -> {List {1**a||0}||0}
+./List-Reverse-Bad.sq:22: Error:
+  Insufficient resources
+  when checking xs ::
+  {List {1**a||1}||0} in
+  \xs . reverse' xs ??
+
+
+reverse' :: xs:{List {1**a||1}||0} -> acc:{List {1**a||0}||0} -> {List {1**a||0}||0}
+reverse' = \xs . \acc . 
+    match xs with
+      Nil -> acc
+      Cons y ys -> reverse' ys (Cons y
+                                  acc)
+
 reverse :: xs:{List {1**a||1}||0} -> {List {1**a||0}||0}
 reverse = \xs . reverse' xs Nil
+
+
+
+
+
+
+
+dequeue :: q:{Queue {1**a||0}|qlen _v > 0|0} -> {Queue {1**a||0}|qlen _v == qlen q - 1|0}
+dequeue = \q . 
+  match q with
+    Queue f b -> 
+      match f with
+        Cons x fs -> Queue fs b
+        Nil -> 
+          match reverse b with
+            Nil -> error
+            Cons x fs -> Queue fs Nil
 
 
 
@@ -195,6 +368,17 @@ dequeue = \q .
           match reverse b with
             Nil -> error
             Cons x fs -> Queue fs Nil
+
+
+
+
+
+
+
+enqueue :: x:{1**a||1} -> q:{Queue {1**a||0}||0} -> {Queue {1**a||0}|qelems _v == qelems q + [x] && qlen _v == qlen q + 1|0}
+enqueue = \x . \q . 
+    match q with
+      Queue f b -> Queue f (Cons x b)
 
 
 
