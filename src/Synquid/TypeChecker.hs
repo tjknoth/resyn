@@ -173,7 +173,10 @@ reconstructI' env t@ScalarT{} impl = case impl of
                           any (not . flip Set.member (env ^. constants)) scrutineeSymbols -- Has variables (not just constants)
     unless isGoodScrutinee $ throwErrorWithDescription $ text "Match scrutinee" </> squotes (pretty pScrutinee) </> text "is constant"
     (env'', x) <- toVar (addScrutinee pScrutinee env') pScrutinee
-    pCases <- zipWithM (reconstructCase env'' x pScrutinee t) iCases consTypes
+    varName <- freshId "x"
+    let tScr' = addPotential (typeMultiply fzero tScr) (topPotentialOf tScr)
+    let envWithLeftoverPotential = addVariable varName tScr' env''
+    pCases <- zipWithM (reconstructCase envWithLeftoverPotential x pScrutinee t) iCases consTypes
     return $ Program (PMatch pScrutinee pCases) t
 
   _ -> do (p, _) <- reconstructETopLevel env t (untyped impl)
@@ -205,13 +208,9 @@ reconstructI' env t@ScalarT{} impl = case impl of
 reconstructCase :: (MonadSMT s, MonadHorn s) => Environment -> Formula -> UProgram -> RType -> Case RType -> RType -> Explorer s (Case RType)
 reconstructCase env scrVar pScrutinee t (Case consName args iBody) consT = cut $ do
   -- matchConsType simply assigns type variables appropriately
-  --writeLog 2 $ text "Case" <+> text consName <+> text "has type" <+> pretty t
-  --writeLog 2 $ text "Scrutinee" <+> pretty pScrutinee <+> text "has type" <+> pretty (typeOf pScrutinee)
   runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
   dm <- asks . view $ _1 . dMatch 
   consT' <- runInSolver $ currentAssignment (if dm then consT else removePotential consT) -- if match is not destructive, strip constructor annotations so that binders have potential from top-level annotations
-  --writeLog 2 $ text "consT" <+> pretty consT
-  --writeLog 2 $ text "consT'" <+> pretty consT'
   (syms, ass) <- caseSymbols env scrVar args consT'
   let caseEnv = foldr (uncurry addVariable) (addAssumption ass env) syms
   pCaseExpr <- local (over (_1 . matchDepth) (-1 +)) $

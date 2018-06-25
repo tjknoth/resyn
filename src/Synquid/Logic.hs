@@ -547,3 +547,14 @@ isAdditiveId _          = False
 
 fmlGe (IntLit f) (IntLit g) = f >= g
 fmlGe _ _ = False
+
+-- Set of all symbols in a formula. Used to get set of variables in top-level resource polynomial (and thus does not recurse into the predicate arguments or sets)
+symbolsOfFml :: Formula -> Set Formula 
+--symbolsOfFml (SetLit _ fs) = unions $ fmap symbolsOfFml fs
+symbolsOfFml f@(Var _ x) = Set.singleton f
+symbolsOfFml (Unary _ f) = symbolsOfFml f
+symbolsOfFml (Binary _ f g) = symbolsOfFml f `Set.union` symbolsOfFml g
+symbolsOfFml (Ite g t f) = {-symbolsOfFml g `union`-} symbolsOfFml t `Set.union` symbolsOfFml f -- Ignore guard for now
+symbolsOfFml p@(Pred _ x fs) = Set.singleton p -- `union` $ unions $ fmap symbolsOfFml fs
+--symbolsOfFml (Cons _ x fs) = Set.singleton x -- `union` $ unions $ fmap symbolsOfFml fs
+symbolsOfFml f = Set.empty

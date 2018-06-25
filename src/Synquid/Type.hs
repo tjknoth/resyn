@@ -269,8 +269,6 @@ addPotentialBase :: BaseType Formula -> Formula -> BaseType Formula
 addPotentialBase (DatatypeT x ts ps) f = DatatypeT x (fmap (`addPotential` f) ts) ps
 addPotentialBase b _ = b
 
-
-
 -- | 'removePotential' @t@ : removes all non-default potential and multiplicity annotations, used to strip constructor annotations
 removePotential :: RType -> RType
 removePotential (ScalarT b r _) = ScalarT (removePotentialBase b) r (IntLit 0)
@@ -282,6 +280,10 @@ removePotentialBase :: BaseType Formula -> BaseType Formula
 removePotentialBase (DatatypeT x ts ps) = DatatypeT x (fmap removePotential ts) ps
 --removePotentialBase (TypeVarT subs x _) = TypeVarT subs x (IntLit 1)
 removePotentialBase b = b
+
+-- Extract top-level potential from a scalar type
+topPotentialOf :: RType -> Formula 
+topPotentialOf (ScalarT _ _ p) = p
 
 -- | 'increaseFunctionPotential' @t@ : if @t@, a function type, outputs a type with zero potential on its type variables, make those potentials nonzero and increment the rest of the annotations accordingly. Should never be called with a contextual type; only used on signatures 
 increaseFunctionPotential :: RType -> (Bool, RType)
@@ -309,6 +311,22 @@ increaseFunctionPotentialBase (DatatypeT x ts ps) =
               else ts 
   in (shouldChange, DatatypeT x ts' ps)
 increaseFunctionPotentialBase b = (False, b)
+
+-- Function for extracting all top-level symbols from a type signature. Should only be used on type-level specifications.
+allPotentialSymbols :: RSchema -> Set Formula 
+allPotentialSymbols (ForallT _ s) = allPotentialSymbols s
+allPotentialSymbols (ForallP _ s) = allPotentialSymbols s
+allPotentialSymbols (Monotype t)  = allPotentialSymbolsT t
+
+allPotentialSymbolsT :: RType -> Set Formula 
+allPotentialSymbolsT (ScalarT base _ pot) = symbolsOfFml pot `Set.union` allPotentialSymbolsB base
+allPotentialSymbolsT (FunctionT _ argT resT) = allPotentialSymbolsT argT `Set.union` allPotentialSymbolsT resT
+allPotentialSymbolsT _ = Set.empty -- Used at top level, no contextual types yet
+
+allPotentialSymbolsB :: BaseType Formula -> Set Formula 
+allPotentialSymbolsB (TypeVarT s x m) = symbolsOfFml m
+allPotentialSymbolsB (DatatypeT x ts ps) = Set.unions $ fmap allPotentialSymbolsT ts
+allPotentialSymbolsB _ = Set.empty
 
 
 {- Refinement types -}

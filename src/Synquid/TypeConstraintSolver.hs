@@ -653,6 +653,7 @@ solveResourceConstraints oldConstraints constraints = do
     writeLog 4 $ linebreak <+> text "Generating resource constraints:"
     checkMults <- asks _checkMultiplicities
     fmlList <- mapM (generateFormula True checkMults) constraints
+    -- This is repeated every iteration, could be cached:
     accFmlList <- mapM (generateFormula False checkMults) oldConstraints
     -- Filter out trivial constraints, mostly for readability
     let fmls = Set.fromList (filter (not . isTrivial) fmlList)
