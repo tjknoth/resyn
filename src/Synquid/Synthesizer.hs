@@ -54,8 +54,7 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _resPolynomialDegree = _polynomialDegree explorerParams,
                         _tcSolverLogLevel = _explorerLogLevel explorerParams,
                         _checkResourceBounds = _checkResources explorerParams,
-                        _checkMultiplicities = _useMultiplicity explorerParams,
-                        _resourcePolynomialSymbols = resVars
+                        _checkMultiplicities = _useMultiplicity explorerParams
                       }
       in do cp0 <- lift $ lift startTiming  -- TODO time stats for this one as well?
             x <- reconstruct explorerParams typingParams goal
@@ -90,7 +89,6 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
     components = componentsIn $ gEnvironment goal
     componentsIn = map toMonotype . Map.elems . allSymbols
     syntGoal = toMonotype $ gSpec goal
-    resVars = allPotentialSymbols $ gSpec goal
 
 typeCheck :: ExplorerParams -> HornSolverParams -> Goal -> [Formula] -> [Formula] -> IO (Either ErrorMessage RProgram, TimeStats)
 typeCheck explorerParams solverParams goal cquals tquals = evalZ3State $ evalFixPointSolver reconstruction solverParams
@@ -106,8 +104,7 @@ typeCheck explorerParams solverParams goal cquals tquals = evalZ3State $ evalFix
                         _tcSolverLogLevel = _explorerLogLevel explorerParams,
                         _resPolynomialDegree = _polynomialDegree explorerParams,
                         _checkResourceBounds = _checkResources explorerParams,
-                        _checkMultiplicities = _useMultiplicity explorerParams,
-                        _resourcePolynomialSymbols = resVars
+                        _checkMultiplicities = _useMultiplicity explorerParams
                       }
       in do cp0 <- lift $ lift startTiming
             x <- reconstruct explorerParams typingParams goal
@@ -142,7 +139,6 @@ typeCheck explorerParams solverParams goal cquals tquals = evalZ3State $ evalFix
     components = componentsIn $ gEnvironment goal
     componentsIn = map toMonotype . Map.elems . allSymbols
     syntGoal = toMonotype $ gSpec goal  
-    resVars = allPotentialSymbols $ gSpec goal
 
 {- Qualifier Generators -}
 

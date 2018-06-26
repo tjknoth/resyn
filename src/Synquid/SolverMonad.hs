@@ -45,8 +45,7 @@ data TypingParams = TypingParams {
   _resPolynomialDegree :: Int,                                      -- ^ Maximum degree of resource polynomials
   _tcSolverLogLevel :: Int,                                         -- ^     How verbose logging is
   _checkResourceBounds :: Bool,                                     -- ^      Is resource checking enabled
-  _checkMultiplicities :: Bool,                                     -- ^   Should multiplicities be considered when generating resource constraints
-  _resourcePolynomialSymbols :: Set Formula                         -- ^     Set of symbols defining the resource-usage polynomial
+  _checkMultiplicities :: Bool                                      -- ^   Should multiplicities be considered when generating resource constraints
 }
 
 makeLenses ''TypingParams

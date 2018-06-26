@@ -312,23 +312,6 @@ increaseFunctionPotentialBase (DatatypeT x ts ps) =
   in (shouldChange, DatatypeT x ts' ps)
 increaseFunctionPotentialBase b = (False, b)
 
--- Function for extracting all top-level symbols from a type signature. Should only be used on type-level specifications.
-allPotentialSymbols :: RSchema -> Set Formula 
-allPotentialSymbols (ForallT _ s) = allPotentialSymbols s
-allPotentialSymbols (ForallP _ s) = allPotentialSymbols s
-allPotentialSymbols (Monotype t)  = allPotentialSymbolsT t
-
-allPotentialSymbolsT :: RType -> Set Formula 
-allPotentialSymbolsT (ScalarT base _ pot) = symbolsOfFml pot `Set.union` allPotentialSymbolsB base
-allPotentialSymbolsT (FunctionT _ argT resT) = allPotentialSymbolsT argT `Set.union` allPotentialSymbolsT resT
-allPotentialSymbolsT _ = Set.empty -- Used at top level, no contextual types yet
-
-allPotentialSymbolsB :: BaseType Formula -> Set Formula 
-allPotentialSymbolsB (TypeVarT s x m) = symbolsOfFml m
-allPotentialSymbolsB (DatatypeT x ts ps) = Set.unions $ fmap allPotentialSymbolsT ts
-allPotentialSymbolsB _ = Set.empty
-
-
 {- Refinement types -}
 
 -- | Unrefined typed

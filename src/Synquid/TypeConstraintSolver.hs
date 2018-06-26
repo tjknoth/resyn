@@ -683,7 +683,7 @@ generateFormula shouldLog checkMults c@(Subtype env tl tr _ name) = do
     emb <- embedEnv env (refinementOf tl |&| refinementOf tr) True
     let emb' = preprocessAssumptions $ Set.insert (refinementOf tl) emb
     let fmls' = conjunction emb' |=>| fmls
-    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
+    when (shouldLog && isInteresting fmls) $ writeLog 1 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
     --return $ conjunction emb' |=>| fmls
     return fmls
     --return fmls'
@@ -692,13 +692,13 @@ generateFormula shouldLog checkMults c@(WellFormed env t)         = do
     emb <- embedEnv env (refinementOf t) True  
     let emb' = preprocessAssumptions $ Set.insert (refinementOf t) emb
     let fmls' = conjunction emb' |=>| fmls
-    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
+    when (shouldLog && isInteresting fmls) $ writeLog 1 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls) 
     --return $ conjunction emb' |=>| fmls
     return fmls
     --return fmls'
 generateFormula shouldLog checkMults c@(SplitType env v t tl tr)    = do 
     let fmls = {-quantify env $-} conjunction $ partition checkMults t tl tr
-    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)
+    when (shouldLog && isInteresting fmls) $ writeLog 1 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls) 
     return fmls
 generateFormula _ _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
 

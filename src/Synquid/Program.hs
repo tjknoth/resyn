@@ -19,6 +19,7 @@ import Data.Map (Map)
 import Control.Monad
 import Control.Lens as Lens
 import Debug.Trace
+import Z3.Monad (AST)
 
 {- Program terms -}
 
@@ -523,6 +524,14 @@ data Constraint = Subtype Environment RType RType Bool Id
   | WellFormedPredicate Environment [Sort] Id
   | SplitType Environment Id RType RType RType
   deriving (Show, Eq, Ord)
+
+-- | Resource constraints -- can include universally quantified expressions so we store representative examples alongside the constraint
+data RConstraint = RConstraint {
+  _constraint :: Constraint,
+  _examples :: Map Formula AST
+} deriving (Show, Eq, Ord)
+
+makeLenses ''RConstraint
 
 -- | Synthesis goal
 data Goal = Goal {
