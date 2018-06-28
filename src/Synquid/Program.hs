@@ -528,7 +528,7 @@ data Constraint = Subtype Environment RType RType Bool Id
 -- | Resource constraints -- can include universally quantified expressions so we store representative examples alongside the constraint
 data RConstraint = RConstraint {
   _constraint :: Constraint,
-  _examples :: Map Formula [AST]
+  _examples :: Map Formula [Formula]
 } deriving (Show, Eq, Ord)
 
 makeLenses ''RConstraint

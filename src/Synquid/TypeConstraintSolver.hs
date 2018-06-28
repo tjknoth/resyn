@@ -688,9 +688,8 @@ generateFormula shouldLog checkMults c@(Subtype env tl tr _ name) = do
     --let fmls' = conjunction emb' |=>| fmls
     when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls) -- $+$ text "From assumptions" <+> pretty emb')
     let universals = getUniversals env fmls -- Shouldn't matter which side of the subtyping relation we extract variable bindings from
-    exs <- concat . catMaybes <$> mapM (getExamples (length universals + 1) (conjunction emb')) universals
+    exs <- mapM (\f -> (,) f <$> getExamples (length universals + 1) (conjunction emb') f) universals
     when shouldLog $ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
-    --unless (null universals) $ writeLog 1 $ text "ENV" $+$ pretty (unlines (map show (Map.assocs (Map.map pretty (allSymbols env)))))
     --return $ conjunction emb' |=>| fmls
     return fmls
     --return fmls'
@@ -701,9 +700,8 @@ generateFormula shouldLog checkMults c@(WellFormed env t) = do
     --let fmls' = conjunction emb' |=>| fmls
     when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls) -- $+$ text "From assumptions" <+> pretty emb')
     let universals = getUniversals env fmls 
-    exs <- concat . catMaybes <$> mapM (getExamples (length universals + 1) (conjunction emb')) universals
+    exs <- mapM (\f -> (,) f <$> getExamples (length universals + 1) (conjunction emb') f) universals
     when shouldLog $ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
-    --unless (null universals) $ writeLog 1 $ text "ENV" $+$ pretty (unlines (map show (Map.assocs (Map.map pretty (allSymbols env)))))
     --return $ conjunction emb' |=>| fmls
     return fmls
     --return fmls'
@@ -713,9 +711,8 @@ generateFormula shouldLog checkMults c@(SplitType env v t tl tr) = do
     let emb' = preprocessAssumptions emb
     when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls) -- $+$ text "From assumptions" <+> pretty emb'
     let universals = getUniversals env fmls 
-    exs <- concat . catMaybes <$> mapM (getExamples (length universals + 1) (conjunction emb')) universals
-    when shouldLog $ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Gives examples" <+> pretty exs)
-    --unless (null universals) $ writeLog 1 $ text "ENV" $+$ pretty (unlines (map show (Map.assocs (Map.map pretty (allSymbols env)))))
+    exs <- mapM (\f -> (,) f <$> getExamples (length universals + 1) (conjunction emb') f) universals
+    when shouldLog $ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
     return fmls
 generateFormula _ _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
 
@@ -850,13 +847,18 @@ getUniversals _ _ = []
 
 unions = foldl union []
 
--- | 'getExamples' @n ass fml@ : returns @n@ unique instances of universally quantified formula @fml@ satisfying assumptions @ass@
-getExamples :: (MonadHorn s, MonadSMT s) => Int -> Formula -> Formula -> TCSolver s (Maybe [Formula])
+-- | 'getExamples' @n ass fml@ : returns @n@ unique instances of universally quantified formula @fml@ satisfying assumptions @ass@ paired with 
+getExamples :: (MonadHorn s, MonadSMT s) => Int -> Formula -> Formula -> TCSolver s [Formula]
 getExamples n ass fml = do 
   name <- fmlVarName fml 
   let v = Var IntS name
   let ass' = substituteForFml v fml ass
-  getExamples' n ass' name [] 
+  exs <- getExamples' n ass' name [] 
+  case exs of 
+    Nothing -> do 
+      throwError $ text "getExamples: Cannot find" <+> pretty n <+> text "unique valuations for" <+> pretty fml <+> text "satisfying assumptions:" <+> pretty ass
+      return []
+    Just exs' -> return exs'
 
 -- Version of the above with accumulator
 getExamples' :: (MonadHorn s, MonadSMT s) => Int -> Formula -> String -> [Formula] -> TCSolver s (Maybe [Formula])
