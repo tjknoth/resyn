@@ -78,7 +78,7 @@ checkResources constraints = do
   tcParams <- ask 
   tcState <- get 
   oldConstraints <- use resourceConstraints 
-  newC <- solveResourceConstraints oldConstraints constraints
+  newC <- solveResourceConstraints oldConstraints (filter isResourceConstraint constraints)
   case newC of 
     Nothing -> throwError $ text "Insufficient resources"
     Just f -> resourceConstraints %= (++ f) 
@@ -651,6 +651,8 @@ embedEnv env fml consistency = do
 -- Resource constraint-related functions
 ----------------------------------------
 
+-- TODO: module this out somehow
+
 -- | 'solveResourceConstraints' @oldConstraints constraints@ : Transform @constraints@ into logical constraints and attempt to solve the complete system by conjoining with @oldConstraints@
 solveResourceConstraints :: (MonadHorn s, MonadSMT s) => [Constraint] -> [Constraint] -> TCSolver s (Maybe [Constraint]) 
 solveResourceConstraints oldConstraints constraints = do
@@ -890,7 +892,7 @@ substituteForFml new old (All f g) = All f (substituteForFml new old g)
 substituteForFml _ _ f = f
  
 fmlVarName :: Monad s => Formula -> TCSolver s String
-fmlVarName (Var _ x)     = return x
+fmlVarName (Var s x)     = return $ x ++ show s
 fmlVarName (Pred _ x fs) = freshId "F"
 fmlVarName f             = error $ "fmlVarName: Can only substitute fresh variables for variable or predicate, given " ++ show (pretty f)
 
@@ -907,29 +909,3 @@ subtypeOp = (|=|)
 writeLog level msg = do
   maxLevel <- asks _tcSolverLogLevel
   if level <= maxLevel then traceShow (plain msg) $ return () else return ()
-
--- the below are deprecated I think but I'm keeping them for a while in case I need them again: 
-
--- 'quantify' @f@ : wrap leaves of formula that are not literals or multiplicity/potential variables in foralls
-quantify :: Environment -> Formula -> Formula
-quantify env f = mkManyForall (quantify' env f) f
-
-quantify' :: Environment -> Formula -> [Maybe Formula]
-quantify' env (SetLit s fs) = concatMap (quantify' env) fs
-quantify' env v@(Var s x) = case Map.lookup x (allSymbols env) of 
-  Nothing -> [Nothing]
-  Just _ -> [Just v] -- TODO: differentiate between program and multiplicity variables. Should take environment?
-quantify' env (Unary _ f) = quantify' env f
-quantify' env (Binary _ f g) = quantify' env f `union` quantify' env g 
-quantify' env (Ite f g h) = quantify' env f `union` quantify' env g `union` quantify' env h 
-quantify' env (Pred s x fs) = concatMap (quantify' env) fs 
-quantify' env (Cons s x fs) = concatMap (quantify' env) fs
-quantify' env (All f g) = quantify' env g 
-quantify' _ f = [Nothing] -- Literal or Unknown
-
-mkForall :: Maybe Formula -> Formula -> Formula 
-mkForall Nothing f  = f
-mkForall (Just g) f = All g f
-
-mkManyForall :: [Maybe Formula] -> Formula -> Formula
-mkManyForall xs f = foldl (flip mkForall) f xs

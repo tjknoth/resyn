@@ -291,8 +291,7 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
   case resolveDecls decls of
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure
     Right (goals, cquals, tquals) -> when (not $ resolveOnly synquidParams) $ do
-      mapM (typecheckGoal cquals tquals) (requested goals)
-      --mapM (synthesizeGoal cquals tquals) (requested goals)
+      mapM (synthesizeGoal cquals tquals) (requested goals)
       return ()
       --results <- mapM (synthesizeGoal cquals tquals) (requested goals)
       --when (not (null results) && showStats synquidParams) $ printStats results declsByFile
@@ -323,15 +322,6 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
       case mProg of
         Left typeErr -> pdoc (pretty typeErr) >> pdoc empty >> exitFailure
         Right prog -> do
-          when (gSynthesize goal) $ pdoc (prettySolution goal prog)
-          pdoc empty
-          return ((goal, prog), stats)
-    typecheckGoal cquals tquals goal = do 
-      when ((gSynthesize goal) && (showSpec synquidParams)) $ pdoc (prettySpec goal)
-      (mProg, stats) <- typeCheck (updateExplorerParams explorerParams goal) solverParams goal cquals tquals 
-      case mProg of 
-        Left typeErr -> pdoc (pretty typeErr) >> pdoc empty >> exitFailure
-        Right prog -> do 
           when (gSynthesize goal) $ pdoc (prettySolution goal prog)
           pdoc empty
           return ((goal, prog), stats)

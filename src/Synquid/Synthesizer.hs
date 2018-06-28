@@ -1,5 +1,5 @@
 -- | Top-level synthesizer interface
-module Synquid.Synthesizer (synthesize, SynthPhase(..), typeCheck) where
+module Synquid.Synthesizer (synthesize, SynthPhase(..)) where
 
 import Synquid.Util
 import Synquid.Logic
@@ -89,56 +89,6 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
     components = componentsIn $ gEnvironment goal
     componentsIn = map toMonotype . Map.elems . allSymbols
     syntGoal = toMonotype $ gSpec goal
-
-typeCheck :: ExplorerParams -> HornSolverParams -> Goal -> [Formula] -> [Formula] -> IO (Either ErrorMessage RProgram, TimeStats)
-typeCheck explorerParams solverParams goal cquals tquals = evalZ3State $ evalFixPointSolver reconstruction solverParams
-  where 
-    reconstruction :: HornSolver (Either ErrorMessage RProgram, TimeStats)
-    reconstruction = let 
-        typingParams = TypingParams {
-                        _condQualsGen = condQuals,
-                        _matchQualsGen = matchQuals,
-                        _typeQualsGen = typeQuals,
-                        _predQualsGen = predQuals,
-                        _tcSolverSplitMeasures = _splitMeasures explorerParams,
-                        _tcSolverLogLevel = _explorerLogLevel explorerParams,
-                        _resPolynomialDegree = _polynomialDegree explorerParams,
-                        _checkResourceBounds = _checkResources explorerParams,
-                        _checkMultiplicities = _useMultiplicity explorerParams
-                      }
-      in do cp0 <- lift $ lift startTiming
-            x <- reconstruct explorerParams typingParams goal
-            return (x, snd cp0)
-
-    -- | Qualifier generator for conditionals
-    condQuals :: Environment -> [Formula] -> QSpace
-    condQuals env vars = toSpace Nothing $ concat $
-      map (instantiateCondQualifier False env vars) cquals ++ map (extractCondFromType env vars) (components ++ allArgTypes syntGoal)
-
-    -- | Qualifier generator for match scrutinees
-    matchQuals :: Environment -> [Formula] -> QSpace
-    matchQuals env vars = toSpace (Just 1) $ concatMap (extractMatchQGen env vars) (Map.toList $ (gEnvironment goal) ^. datatypes)
-
-    -- | Qualifier generator for types
-    typeQuals :: Environment -> Formula -> [Formula] -> QSpace
-    typeQuals env val vars = toSpace Nothing $ concat $
-        [ extractQGenFromType False env val vars syntGoal,
-          extractQGenFromType True env val vars syntGoal] -- extract from spec: both positive and negative
-        ++ map (instantiateTypeQualifier env val vars) tquals -- extract from given qualifiers
-        ++ map (extractQGenFromType False env val vars) components -- extract from components: only negative
-        -- ++ map (extractQGenFromType True env val vars) components -- extract from components: also positive for now
-
-    -- | Qualifier generator for bound predicates
-    predQuals :: Environment -> [Formula] -> [Formula] -> QSpace
-    predQuals env params vars = toSpace Nothing $
-      concatMap (extractPredQGenFromType True env params vars) (syntGoal : components) ++
-      if null params  -- Parameter-less predicate: also include conditional qualifiers
-        then concatMap (instantiateCondQualifier False env vars) cquals ++ concatMap (extractCondFromType env vars) (components ++ allArgTypes syntGoal)
-        else []
-
-    components = componentsIn $ gEnvironment goal
-    componentsIn = map toMonotype . Map.elems . allSymbols
-    syntGoal = toMonotype $ gSpec goal  
 
 {- Qualifier Generators -}
 
