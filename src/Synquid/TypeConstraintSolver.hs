@@ -25,7 +25,7 @@ module Synquid.TypeConstraintSolver (
   finalizeProgram,
   initEnv,
   allScalars,
-  condQualsGen 
+  condQualsGen
 ) where
 
 import Synquid.Logic
@@ -690,8 +690,9 @@ generateFormula shouldLog checkMults c@(Subtype env tl tr _ name) = do
     --let fmls' = conjunction emb' |=>| fmls
     when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls) -- $+$ text "From assumptions" <+> pretty emb')
     let universals = getUniversals env fmls -- Shouldn't matter which side of the subtyping relation we extract variable bindings from
-    exs <- mapM (\f -> (,) f <$> getExamples (length universals + 1) (conjunction emb') f) universals
-    when shouldLog $ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
+    let len = length universals + 1
+    exs <- assembleExamples len universals (conjunction emb')
+    when (shouldLog && not (null exs)) $ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
     --return $ conjunction emb' |=>| fmls
     return fmls
     --return fmls'
@@ -702,8 +703,9 @@ generateFormula shouldLog checkMults c@(WellFormed env t) = do
     --let fmls' = conjunction emb' |=>| fmls
     when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls) -- $+$ text "From assumptions" <+> pretty emb')
     let universals = getUniversals env fmls 
-    exs <- mapM (\f -> (,) f <$> getExamples (length universals + 1) (conjunction emb') f) universals
-    when shouldLog $ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
+    let len = length universals + 1
+    exs <- assembleExamples len universals (conjunction emb')
+    when (shouldLog && not (null exs)) $ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
     --return $ conjunction emb' |=>| fmls
     return fmls
     --return fmls'
@@ -712,9 +714,10 @@ generateFormula shouldLog checkMults c@(SplitType env v t tl tr) = do
     emb <- embedEnv env (conjunction (allFormulasOf t)) True
     let emb' = preprocessAssumptions emb
     when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls) -- $+$ text "From assumptions" <+> pretty emb'
-    let universals = getUniversals env fmls 
-    exs <- mapM (\f -> (,) f <$> getExamples (length universals + 1) (conjunction emb') f) universals
-    when shouldLog $ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
+    let universals = getUniversals env fmls
+    let len = length universals + 1 
+    exs <- assembleExamples len universals (conjunction emb')
+    when (shouldLog && not (null exs))$ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
     return fmls
 generateFormula _ _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
 
@@ -765,6 +768,41 @@ isResourceConstraint (Subtype e ScalarT{} ScalarT{} _ _) = True
 isResourceConstraint WellFormed{} = True
 isResourceConstraint SplitType{}  = True
 isResourceConstraint _            = False
+
+assembleExamples :: (MonadHorn s, MonadSMT s) => Int -> [Formula] -> Formula -> TCSolver s [[(Formula, Formula)]]
+assembleExamples n universals ass = do 
+  exs <- mapM (\f -> (,) f <$> getExamples n ass f) universals -- List of formula + list-of-example pairs
+  return $ transform exs [] 
+  --return exs
+  where
+    pairHeads :: [(Formula, [Formula])] -> [(Formula, Formula)]
+    pairHeads []              = []
+    pairHeads ((f, []):_)     = []
+    pairHeads ((f, x:xs):exs) = (f, x) : pairHeads exs
+    removeHeads :: [(Formula, [Formula])] -> [(Formula, [Formula])]
+    removeHeads []              = []
+    removeHeads ((f, []):_)     = []
+    removeHeads ((f, x:xs):exs) = (f, xs) : removeHeads exs
+    transform :: [(Formula, [Formula])] -> [[(Formula, Formula)]] -> [[(Formula, Formula)]]
+    transform [] acc         = acc
+    transform ((_,[]):_) acc = acc
+    transform exs acc        = transform (removeHeads exs) (pairHeads exs : acc)
+
+ -- | 'instantiateUniversals @f exs@ : turn universally quantified sub-expressions of @f@ into a list of assertions that the expression holds for examples in @exs@
+--instantiateUniversals :: Formula -> [(Formula, [Formula])] -> TCSolver s [Formula]
+--instantiateUniversals f exs 
+
+generatePolynomial :: Monad s => Formula -> [Formula] -> TCSolver s Formula
+generatePolynomial annotation universalVars = liftM2 (foldl (|+|)) constVar products
+  where 
+    products = mapM (\v -> Binary Times v <$> makeVar v) universalVars
+    constVar = Var IntS <$> freshId "K"
+    makeVar (Var s x)     = do 
+      x' <- freshId x 
+      return $ Var s (x' ++ "_" ++ show annotation)
+    makeVar (Pred s x fs) = do 
+      x' <- freshId x
+      return $ Var s (x' ++ "_" ++ show annotation) 
 
 -- | 'totalPotential' @schs@ : compute the total potential contained in a list of schemas @schs@
 totalPotential :: [RSchema] -> Formula
