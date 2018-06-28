@@ -49,6 +49,7 @@ import Control.Monad.Trans.Except
 import Control.Applicative hiding (empty)
 import Control.Lens hiding (both)
 import Debug.Trace
+import Z3.Monad (AST)
 
 {- Interface -}
 
@@ -222,6 +223,9 @@ simplifyConstraint' _ _ (Subtype env (LetT x tDef tBody) t consistent label)
   = simplifyConstraint (Subtype (addVariable x tDef env) tBody t consistent label) -- ToDo: make x unique?
 simplifyConstraint' _ _ (Subtype env t (LetT x tDef tBody) consistent label)
   = simplifyConstraint (Subtype (addVariable x tDef env) t tBody consistent label) -- ToDo: make x unique?
+simplifyConstraint' _ _ (SplitType env v (LetT x tDef tBody) tl tr) =  simplifyConstraint (SplitType (addVariable x tDef env) v tBody tl tr)
+simplifyConstraint' _ _ (SplitType env v t (LetT x tDef tBody) tr) = simplifyConstraint (SplitType (addVariable x tDef env) v t tBody tr)
+simplifyConstraint' _ _ (SplitType env v t tl (LetT x tDef tBody)) = simplifyConstraint (SplitType (addVariable x tDef env) v t tl tBody)
 
 -- Unknown free variable and a type: extend type assignment
 simplifyConstraint' _ _ c@(Subtype env (ScalarT (TypeVarT _ a m) _ _) t _ _) | not (isBound env a)
@@ -674,43 +678,56 @@ solveResourceConstraints oldConstraints constraints = do
 isSatWithModel :: MonadSMT s => Formula -> TCSolver s (Bool, String)
 isSatWithModel = lift . lift . lift . solveWithModel
 
-
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Bool -> Constraint -> TCSolver s Formula 
 generateFormula shouldLog checkMults c@(Subtype env tl tr _ name) = do
     --let syms = Map.elems $ Map.filterWithKey (\k a -> k /= name) (allSymbols env) 
-    let fmls = {-quantify env $-} conjunction $ Set.filter (not . isTrivial) $ joinAssertions checkMults subtypeOp tl tr
-    emb <- embedEnv env (refinementOf tl |&| refinementOf tr) True
+    let fmls = conjunction $ Set.filter (not . isTrivial) $ joinAssertions checkMults subtypeOp tl tr
+    emb <- embedEnv env (conjunction (allFormulasOf tl `Set.union` allFormulasOf tr)) True
     let emb' = preprocessAssumptions $ Set.insert (refinementOf tl) emb
-    let fmls' = conjunction emb' |=>| fmls
-    when (shouldLog && isInteresting fmls) $ writeLog 1 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls)
+    --let fmls' = conjunction emb' |=>| fmls
+    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls) -- $+$ text "From assumptions" <+> pretty emb')
+    let universals = getUniversals env fmls -- Shouldn't matter which side of the subtyping relation we extract variable bindings from
+    exs <- concat . catMaybes <$> mapM (getExamples (length universals + 1) (conjunction emb')) universals
+    when shouldLog $ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
+    --unless (null universals) $ writeLog 1 $ text "ENV" $+$ pretty (unlines (map show (Map.assocs (Map.map pretty (allSymbols env)))))
     --return $ conjunction emb' |=>| fmls
     return fmls
     --return fmls'
-generateFormula shouldLog checkMults c@(WellFormed env t)         = do
-    let fmls = {-quantify env $-} conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allFormulas checkMults t
-    emb <- embedEnv env (refinementOf t) True  
+generateFormula shouldLog checkMults c@(WellFormed env t) = do
+    let fmls = conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allRFormulas checkMults t
+    emb <- embedEnv env (conjunction (allFormulasOf t)) True  
     let emb' = preprocessAssumptions $ Set.insert (refinementOf t) emb
-    let fmls' = conjunction emb' |=>| fmls
-    when (shouldLog && isInteresting fmls) $ writeLog 1 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls) 
+    --let fmls' = conjunction emb' |=>| fmls
+    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls) -- $+$ text "From assumptions" <+> pretty emb')
+    let universals = getUniversals env fmls 
+    exs <- concat . catMaybes <$> mapM (getExamples (length universals + 1) (conjunction emb')) universals
+    when shouldLog $ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
+    --unless (null universals) $ writeLog 1 $ text "ENV" $+$ pretty (unlines (map show (Map.assocs (Map.map pretty (allSymbols env)))))
     --return $ conjunction emb' |=>| fmls
     return fmls
     --return fmls'
-generateFormula shouldLog checkMults c@(SplitType env v t tl tr)    = do 
-    let fmls = {-quantify env $-} conjunction $ partition checkMults t tl tr
-    when (shouldLog && isInteresting fmls) $ writeLog 1 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls) 
+generateFormula shouldLog checkMults c@(SplitType env v t tl tr) = do 
+    let fmls = conjunction $ partition checkMults t tl tr
+    emb <- embedEnv env (conjunction (allFormulasOf t)) True
+    let emb' = preprocessAssumptions emb
+    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls) -- $+$ text "From assumptions" <+> pretty emb'
+    let universals = getUniversals env fmls 
+    exs <- concat . catMaybes <$> mapM (getExamples (length universals + 1) (conjunction emb')) universals
+    when shouldLog $ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Gives examples" <+> pretty exs)
+    --unless (null universals) $ writeLog 1 $ text "ENV" $+$ pretty (unlines (map show (Map.assocs (Map.map pretty (allSymbols env)))))
     return fmls
 generateFormula _ _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
 
--- | 'allFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
-allFormulas :: Bool -> RType -> Set Formula 
-allFormulas cm (ScalarT base _ p) = Set.insert p (allFormulasBase cm base)
-allFormulas _ _                   = Set.empty
+-- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
+allRFormulas :: Bool -> RType -> Set Formula 
+allRFormulas cm (ScalarT base _ p) = Set.insert p (allRFormulasBase cm base)
+allRFormulas _ _                   = Set.empty
 
-allFormulasBase :: Bool -> BaseType Formula -> Set Formula
-allFormulasBase cm (DatatypeT _ ts _) = Set.unions $ fmap (allFormulas cm) ts
-allFormulasBase cm (TypeVarT _ _ m)   = if cm then Set.singleton m else Set.empty
-allFormulasBase _ _                   = Set.empty
+allRFormulasBase :: Bool -> BaseType Formula -> Set Formula
+allRFormulasBase cm (DatatypeT _ ts _) = Set.unions $ fmap (allRFormulas cm) ts
+allRFormulasBase cm (TypeVarT _ _ m)   = if cm then Set.singleton m else Set.empty
+allRFormulasBase _ _                   = Set.empty
 
 -- | 'partition' @t tl tr@ : Generate numerical constraints referring to a partition of the resources associated with @t@ into types @tl@ and @tr@ 
 partition :: Bool -> RType -> RType -> RType -> Set Formula 
@@ -743,6 +760,7 @@ joinAssertionsBase cm op (TypeVarT _ _ ml) (TypeVarT _ _ mr) =
     where fml = ml `op` mr
 joinAssertionsBase _ _ _ _ = Set.empty 
 
+-- Is given constraint relevant for resource analysis
 isResourceConstraint :: Constraint -> Bool
 isResourceConstraint (Subtype e ScalarT{} ScalarT{} _ _) = True
 isResourceConstraint WellFormed{} = True
@@ -778,10 +796,24 @@ multiplicityOfBase (DatatypeT name ts _) = case foldl (|+|) (IntLit 0) (catMaybe
     f          -> Just f
 multiplicityOfBase _                = Nothing
 
+-- Return a set of all formulas (potential, multiplicity, refinement) of a type. Doesn't mean anything necesssarily, used to embed environment assumptions
+allFormulasOf :: RType -> Set Formula
+allFormulasOf (ScalarT b f p) = Set.singleton f `Set.union` Set.singleton p `Set.union` allFormulasOfBase b
+allFormulasOf (FunctionT _ argT resT) = allFormulasOf argT `Set.union` allFormulasOf resT
+allFormulasOf (LetT x s t) = allFormulasOf s `Set.union` allFormulasOf t
+allFormulasOf t = Set.empty
+
+allFormulasOfBase :: BaseType Formula -> Set Formula
+allFormulasOfBase (TypeVarT _ _ m) = Set.singleton m
+allFormulasOfBase (DatatypeT x ts ps) = Set.unions (map allFormulasOf ts)
+allFormulasOfBase b = Set.empty
+
+-- Return refinement of scalar type
 refinementOf :: RType -> Formula 
 refinementOf (ScalarT _ fml _) = fml
 refinementOf _                 = error "error: Encountered non-scalar type when generating resource constraints"
 
+-- | 'preprocessAssumptions' @fmls@ : eliminate assumptions that contain unknown predicates
 preprocessAssumptions :: Set Formula -> Set Formula 
 preprocessAssumptions fs = Set.map assumeUnknowns $ Set.filter (not . isUnknownForm) fs
 
@@ -797,6 +829,84 @@ assumeUnknowns (Pred s x fs) = Pred s x (fmap assumeUnknowns fs)
 assumeUnknowns (Cons s x fs) = Cons s x (fmap assumeUnknowns fs)
 assumeUnknowns (All f g) = All (assumeUnknowns f) (assumeUnknowns g)
 assumeUnknowns f = f
+
+-- | 'getUniversals' @env f@ : return the set of universally quantified terms in formula @f@ given environment @env@ 
+getUniversals :: Environment -> Formula -> [Formula] 
+getUniversals env (SetLit s fs) = unions $ map (getUniversals env) fs
+getUniversals env v@(Var s x)  = 
+  case Map.lookup x (allSymbols env) of 
+    Nothing -> [] 
+    _       -> [v]
+getUniversals env (Unary _ f) = getUniversals env f
+getUniversals env (Binary _ f g) = getUniversals env f `union` getUniversals env g
+getUniversals env (Ite f g h) = getUniversals env f `union` getUniversals env g `union` getUniversals env h
+getUniversals env p@(Pred s x fs) = 
+  case Map.lookup x (allSymbols env) of 
+    Nothing -> [] 
+    _       -> [p]
+getUniversals env (Cons _ x fs) = unions $ map (getUniversals env) fs
+getUniversals env (All f g) = getUniversals env g
+getUniversals _ _ = []
+
+unions = foldl union []
+
+-- | 'getExamples' @n ass fml@ : returns @n@ unique instances of universally quantified formula @fml@ satisfying assumptions @ass@
+getExamples :: (MonadHorn s, MonadSMT s) => Int -> Formula -> Formula -> TCSolver s (Maybe [Formula])
+getExamples n ass fml = do 
+  name <- fmlVarName fml 
+  let v = Var IntS name
+  let ass' = substituteForFml v fml ass
+  getExamples' n ass' name [] 
+
+-- Version of the above with accumulator
+getExamples' :: (MonadHorn s, MonadSMT s) => Int -> Formula -> String -> [Formula] -> TCSolver s (Maybe [Formula])
+getExamples' n ass fmlName acc = 
+  if n <= 0
+    then return (Just acc)
+    else do 
+      let fmlVar = Var IntS fmlName
+      let unique = fmap (Binary Neq fmlVar) acc
+      let query = conjunction $ Set.fromList (ass : unique)
+      --traceM $ "QUERY " ++ show (pretty query)
+      val <- lift . lift . lift $ solveAndGetAssignment query fmlName
+      case val of 
+        Just v -> getExamples' (n - 1) ass fmlName (uncurry ASTLit v : acc)
+        Nothing -> return Nothing
+
+-- Substitute variable for a formula (predicate application or variable) in given formula @fml@
+substituteForFml :: Formula -> Formula -> Formula -> Formula
+substituteForFml new old v@Var{} = if v == old then new else v
+substituteForFml new old (Unary op f) = Unary op (substituteForFml new old f)
+substituteForFml new old (Binary op f g) = Binary op (substituteForFml new old f) (substituteForFml new old g)
+substituteForFml new old (Ite f g h) = Ite (substituteForFml new old f) (substituteForFml new old g) (substituteForFml new old h)
+substituteForFml new old p@(Pred s x fs) = 
+  if p == old 
+    then new
+    else Pred s x $ map (substituteForFml new old) fs
+substituteForFml new old (Cons s x fs) = Cons s x $ map (substituteForFml new old) fs
+substituteForFml new old (All f g) = All f (substituteForFml new old g)
+substituteForFml _ _ f = f
+ 
+fmlVarName :: Monad s => Formula -> TCSolver s String
+fmlVarName (Var _ x)     = return x
+fmlVarName (Pred _ x fs) = freshId "F"
+fmlVarName f             = error $ "fmlVarName: Can only substitute fresh variables for variable or predicate, given " ++ show (pretty f)
+
+-- Filter away "uninteresting" constraints for logging. Specifically, well-formednes
+-- Definitely not complete, just "pretty good"
+isInteresting (Binary Ge _ (IntLit 0)) = False
+isInteresting (Binary Implies _ f)     = isInteresting f 
+isInteresting (BoolLit True)           = False
+isInteresting (Binary And f g)         = isInteresting f && isInteresting g 
+isInteresting _                        = True
+
+subtypeOp = (|=|)
+
+writeLog level msg = do
+  maxLevel <- asks _tcSolverLogLevel
+  if level <= maxLevel then traceShow (plain msg) $ return () else return ()
+
+-- the below are deprecated I think but I'm keeping them for a while in case I need them again: 
 
 -- 'quantify' @f@ : wrap leaves of formula that are not literals or multiplicity/potential variables in foralls
 quantify :: Environment -> Formula -> Formula
@@ -821,18 +931,3 @@ mkForall (Just g) f = All g f
 
 mkManyForall :: [Maybe Formula] -> Formula -> Formula
 mkManyForall xs f = foldl (flip mkForall) f xs
-
--- Filter away "uninteresting" constraints for logging. Specifically, well-formednes
--- Definitely not complete, just "pretty good"
-isInteresting (Binary Ge _ (IntLit 0)) = False
-isInteresting (Binary Implies _ f)     = isInteresting f 
-isInteresting (BoolLit True)           = False
-isInteresting (Binary And f g)         = isInteresting f && isInteresting g 
-isInteresting _                        = True
-
-subtypeOp = (|=|)
-
-writeLog level msg = do
-  maxLevel <- asks _tcSolverLogLevel
-  if level <= maxLevel then traceShow (plain msg) $ return () else return ()
-

@@ -196,6 +196,7 @@ fmlDocAt n fml = condHlParens (n' <= n) (
     Pred b name args -> text name <+> hsep (map (fmlDocAt n') args)
     Cons b name args -> hlParens (text name <+> hsep (map (fmlDocAt n') args))
     All x e -> keyword "forall" <+> pretty x <+> operator "." <+> fmlDoc e
+    ASTLit a s -> text s 
   )
   where
     n' = power fml

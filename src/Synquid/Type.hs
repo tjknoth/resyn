@@ -412,7 +412,6 @@ typeApplySolution sol (FunctionT x tArg tRes) = FunctionT x (typeApplySolution s
 typeApplySolution sol (LetT x tDef tBody) = LetT x (typeApplySolution sol tDef) (typeApplySolution sol tBody)
 typeApplySolution _ AnyT = AnyT
 
-
 -- Set strings: used for "fake" set type for typechecking measures
 emptySetCtor = "Emptyset"
 singletonCtor = "Singleton"

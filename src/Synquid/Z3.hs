@@ -92,6 +92,7 @@ instance MonadSMT Z3State where
     setASTPrintMode Z3_PRINT_SMTLIB_FULL
     fmlAst <- fmlToAST fml
     astStr <- astToString fmlAst
+    -- Throw error if unknown result: could probably do this a better way since r' is now unused
     let r' = case r of 
               Unsat -> False 
               Sat   -> True
@@ -102,6 +103,23 @@ instance MonadSMT Z3State where
         str <- modelToString mod 
         return (r', str)
 
+  solveAndGetAssignment fml val = do 
+    (r, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
+    case m of 
+      Nothing  -> return Nothing 
+      Just mod -> do
+        modStr <- modelToString mod
+        vFun <- varFun val
+        --traceM $ "SAT with model " ++ modStr
+        c <- modelEval mod vFun True
+        case c of 
+          Nothing -> return Nothing 
+          Just ast -> do 
+            vstr <- astToString ast
+            --traceM $ "VAR " ++ val ++ " has value " ++ vstr
+            return $ Just (ast, vstr) 
+    where 
+      varFun s = toAST (Var IntS s) 
 
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
 convertDatatypes _ [] = return ()
@@ -239,6 +257,7 @@ toAST expr = case expr of
     decl <- constructor s name tArgs
     mapM toAST args >>= mkApp decl
   All v e -> accumAll [v] e
+  ASTLit a _ -> return a
   where
     setLiteral el xs = do
       emp <- toZ3Sort el >>= mkEmptySet

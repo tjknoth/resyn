@@ -14,6 +14,7 @@ import Data.Map (Map)
 
 import Control.Lens hiding (both)
 import Control.Monad
+import Z3.Monad (AST)
 
 {- Sorts -}
 
@@ -124,7 +125,8 @@ data Formula =
   Ite Formula Formula Formula |       -- ^ If-then-else expression
   Pred Sort Id [Formula] |            -- ^ Logic function application
   Cons Sort Id [Formula] |            -- ^ Constructor application
-  All Formula Formula                 -- ^ Universal quantification
+  All Formula Formula |               -- ^ Universal quantification
+  ASTLit AST String                    -- ^ Z3 AST literal (only used to solve resource constraints), and its string version
   deriving (Show, Eq, Ord)
 
 dontCare = "_"

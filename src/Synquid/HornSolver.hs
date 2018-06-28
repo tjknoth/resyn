@@ -77,9 +77,9 @@ instance MonadSMT s => MonadHorn (FixPointSolver s) where
 instance (Monad s, Applicative s, MonadSMT s) => MonadSMT (FixPointSolver s) where 
   initSolver = lift . initSolver
   isSat = lift . isSat 
-  -- idk why I don't have to lift this
-  allUnsatCores = allUnsatCores
+  allUnsatCores a m fs = lift $ allUnsatCores a m fs
   solveWithModel = lift . solveWithModel
+  solveAndGetAssignment q f = lift $ solveAndGetAssignment q f
 
  
 {- Implementation -}
