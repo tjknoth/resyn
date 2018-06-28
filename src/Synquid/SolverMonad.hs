@@ -69,7 +69,8 @@ data TypingState = TypingState {
   _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
   _hornClauses :: [(Formula, Id)],              -- ^ Horn clauses generated from subtyping constraints
   _consistencyChecks :: [Formula],              -- ^ Formulas generated from type consistency constraints
-  _errorContext :: (SourcePos, Doc)             -- ^ Information to be added to all type errors
+  _errorContext :: (SourcePos, Doc),            -- ^ Information to be added to all type errors
+  _resourceVars :: Set String                    -- ^ Set of variables created to replace potential/multiplicity annotations
 }
 
 makeLenses ''TypingState
@@ -98,7 +99,8 @@ initTypingState env = do
     _simpleConstraints = [],
     _hornClauses = [],
     _consistencyChecks = [],
-    _errorContext = (noPos, empty)
+    _errorContext = (noPos, empty),
+    _resourceVars = Set.empty
   }
 
 

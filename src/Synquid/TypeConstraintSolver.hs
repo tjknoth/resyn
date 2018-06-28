@@ -683,43 +683,41 @@ isSatWithModel = lift . lift . lift . solveWithModel
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Bool -> Constraint -> TCSolver s Formula 
 generateFormula shouldLog checkMults c@(Subtype env tl tr _ name) = do
-    --let syms = Map.elems $ Map.filterWithKey (\k a -> k /= name) (allSymbols env) 
     let fmls = conjunction $ Set.filter (not . isTrivial) $ joinAssertions checkMults subtypeOp tl tr
     emb <- embedEnv env (conjunction (allFormulasOf tl `Set.union` allFormulasOf tr)) True
     let emb' = preprocessAssumptions $ Set.insert (refinementOf tl) emb
-    --let fmls' = conjunction emb' |=>| fmls
-    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls) -- $+$ text "From assumptions" <+> pretty emb')
-    let universals = getUniversals env fmls -- Shouldn't matter which side of the subtyping relation we extract variable bindings from
-    let len = length universals + 1
-    exs <- assembleExamples len universals (conjunction emb')
-    when (shouldLog && not (null exs)) $ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
-    --return $ conjunction emb' |=>| fmls
-    return fmls
-    --return fmls'
+    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls) 
+    instantiateUniversals shouldLog env fmls (conjunction emb')
 generateFormula shouldLog checkMults c@(WellFormed env t) = do
     let fmls = conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allRFormulas checkMults t
     emb <- embedEnv env (conjunction (allFormulasOf t)) True  
     let emb' = preprocessAssumptions $ Set.insert (refinementOf t) emb
-    --let fmls' = conjunction emb' |=>| fmls
-    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint:" <+> pretty fmls) -- $+$ text "From assumptions" <+> pretty emb')
-    let universals = getUniversals env fmls 
-    let len = length universals + 1
-    exs <- assembleExamples len universals (conjunction emb')
-    when (shouldLog && not (null exs)) $ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
-    --return $ conjunction emb' |=>| fmls
-    return fmls
-    --return fmls'
+    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)
+    instantiateUniversals shouldLog env fmls (conjunction emb')
 generateFormula shouldLog checkMults c@(SplitType env v t tl tr) = do 
     let fmls = conjunction $ partition checkMults t tl tr
     emb <- embedEnv env (conjunction (allFormulasOf t)) True
-    let emb' = preprocessAssumptions emb
-    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls) -- $+$ text "From assumptions" <+> pretty emb'
-    let universals = getUniversals env fmls
-    let len = length universals + 1 
-    exs <- assembleExamples len universals (conjunction emb')
-    when (shouldLog && not (null exs))$ writeLog 4 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
-    return fmls
-generateFormula _ _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c 
+    let emb' = preprocessAssumptions emb  
+    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls) 
+    instantiateUniversals shouldLog env fmls (conjunction emb')
+generateFormula _ _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
+
+-- | 'instantiateUniversals' @b env fml ass@ : Instantiate universally quantified terms in @fml@ under @env@ with examples satisfying assumptions @ass@
+instantiateUniversals :: (MonadHorn s, MonadSMT s) => Bool -> Environment -> Formula -> Formula -> TCSolver s Formula
+instantiateUniversals shouldLog env fml ass = do 
+  let universals = getUniversals env fml
+  case universals of
+    [] -> return fml -- nothing universally quantified, can solve directly
+    _  -> do 
+      let len = length universals + 1 
+      exs <- assembleExamples len universals ass
+      when shouldLog $ writeLog 3 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
+      fml' <- applyPolynomials fml universals
+      let fmlSkeletons = replicate len fml'
+      let exampleAssumptions = map (foldl (\a (f, e) -> Binary And (Binary Eq f e) a) ass) exs
+      let query = conjunction $ Set.fromList $ zipWith (|=>|) exampleAssumptions fmlSkeletons
+      return query
+
 
 -- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
 allRFormulas :: Bool -> RType -> Set Formula 
@@ -773,7 +771,6 @@ assembleExamples :: (MonadHorn s, MonadSMT s) => Int -> [Formula] -> Formula -> 
 assembleExamples n universals ass = do 
   exs <- mapM (\f -> (,) f <$> getExamples n ass f) universals -- List of formula + list-of-example pairs
   return $ transform exs [] 
-  --return exs
   where
     pairHeads :: [(Formula, [Formula])] -> [(Formula, Formula)]
     pairHeads []              = []
@@ -788,21 +785,38 @@ assembleExamples n universals ass = do
     transform ((_,[]):_) acc = acc
     transform exs acc        = transform (removeHeads exs) (pairHeads exs : acc)
 
- -- | 'instantiateUniversals @f exs@ : turn universally quantified sub-expressions of @f@ into a list of assertions that the expression holds for examples in @exs@
---instantiateUniversals :: Formula -> [(Formula, [Formula])] -> TCSolver s [Formula]
---instantiateUniversals f exs 
+applyPolynomials :: (MonadHorn s, MonadSMT s) => Formula -> [Formula] -> TCSolver s Formula 
+applyPolynomials v@(Var s x) universals = do 
+  vs <- use resourceVars
+  if Set.member x vs
+    then return $ generatePolynomial v universals
+    else return v
+applyPolynomials (Unary op f) universals = Unary op <$> applyPolynomials f universals
+applyPolynomials (Binary op f g) universals = (Binary op <$> applyPolynomials f universals) <*> applyPolynomials g universals
+applyPolynomials (Ite f g h) universals = ((Ite <$> applyPolynomials f universals) <*> applyPolynomials g universals) <*> applyPolynomials h universals
+applyPolynomials (Pred s x fs) universals = Pred s x <$> mapM (`applyPolynomials` universals) fs
+applyPolynomials (Cons s x fs) universals = Cons s x <$> mapM (`applyPolynomials` universals) fs
+applyPolynomials f@Unknown{} _ = do
+  throwError $ text "applyPolynomials: predicate unknown in resource assertions"
+  return f
+applyPolynomials f@All{} _ = do 
+  throwError $ text "applyPolynomials: universal quantifier in resource assertions"
+  return f
+applyPolynomials f@ASTLit{} _ = do 
+  throwError $ text "applyPolynomials: Z3 AST literal in resource assertions"
+  return f
+applyPolynomials f _ = return f 
 
-generatePolynomial :: Monad s => Formula -> [Formula] -> TCSolver s Formula
-generatePolynomial annotation universalVars = liftM2 (foldl (|+|)) constVar products
+
+generatePolynomial :: Formula -> [Formula] -> Formula
+generatePolynomial annotation universalVars = foldl (|+|) constVar products
   where 
-    products = mapM (\v -> Binary Times v <$> makeVar v) universalVars
-    constVar = Var IntS <$> freshId "K"
-    makeVar (Var s x)     = do 
-      x' <- freshId x 
-      return $ Var s (x' ++ "_" ++ show annotation)
-    makeVar (Pred s x fs) = do 
-      x' <- freshId x
-      return $ Var s (x' ++ "_" ++ show annotation) 
+    products = map (\v -> Binary Times v (makeVar v)) universalVars
+    textFrom (Var _ x) = x
+    textFrom (Pred _ x fs) = x ++ show (pretty fs)
+    toText f = show (pretty f)
+    constVar = Var IntS (toText annotation ++ "CONST")
+    makeVar f = Var IntS (textFrom f ++ "_" ++ toText annotation)
 
 -- | 'totalPotential' @schs@ : compute the total potential contained in a list of schemas @schs@
 totalPotential :: [RSchema] -> Formula
@@ -900,7 +914,7 @@ getExamples n ass fml = do
       return []
     Just exs' -> return exs'
 
--- Version of the above with accumulator
+-- Version of the above with accumulator that returns lists wrapped in Maybe
 getExamples' :: (MonadHorn s, MonadSMT s) => Int -> Formula -> String -> [Formula] -> TCSolver s (Maybe [Formula])
 getExamples' n ass fmlName acc = 
   if n <= 0
@@ -909,11 +923,14 @@ getExamples' n ass fmlName acc =
       let fmlVar = Var IntS fmlName
       let unique = fmap (Binary Neq fmlVar) acc
       let query = conjunction $ Set.fromList (ass : unique)
-      --traceM $ "QUERY " ++ show (pretty query)
       val <- lift . lift . lift $ solveAndGetAssignment query fmlName
       case val of 
         Just v -> getExamples' (n - 1) ass fmlName (uncurry ASTLit v : acc)
         Nothing -> return Nothing
+
+substituteManyInFml :: [(Formula, Formula)] -> Formula -> Formula
+substituteManyInFml [] f       = f
+substituteManyInFml (x:xs) fml = foldl (\f (g, ex) -> substituteForFml ex g f) fml xs
 
 -- Substitute variable for a formula (predicate application or variable) in given formula @fml@
 substituteForFml :: Formula -> Formula -> Formula -> Formula
@@ -928,7 +945,8 @@ substituteForFml new old p@(Pred s x fs) =
 substituteForFml new old (Cons s x fs) = Cons s x $ map (substituteForFml new old) fs
 substituteForFml new old (All f g) = All f (substituteForFml new old g)
 substituteForFml _ _ f = f
- 
+
+-- Variable name for example generation
 fmlVarName :: Monad s => Formula -> TCSolver s String
 fmlVarName (Var s x)     = return $ x ++ show s
 fmlVarName (Pred _ x fs) = freshId "F"
@@ -942,6 +960,7 @@ isInteresting (BoolLit True)           = False
 isInteresting (Binary And f g)         = isInteresting f && isInteresting g 
 isInteresting _                        = True
 
+-- Maybe this will change? idk
 subtypeOp = (|=|)
 
 writeLog level msg = do

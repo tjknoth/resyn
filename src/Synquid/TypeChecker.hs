@@ -348,11 +348,13 @@ splitType sch = do
     where
       -- Variable formula with fresh variable id
       freshPot = do 
-        id <- freshId potentialPrefix
-        return $ Var IntS id 
+        x <- freshId potentialPrefix
+        (typingState . resourceVars) %= Set.insert x
+        return $ Var IntS x 
       freshMul = do
-        id <- freshId multiplicityPrefix
-        return $ Var IntS id
+        x <- freshId multiplicityPrefix
+        (typingState . resourceVars) %= Set.insert x
+        return $ Var IntS x
       -- Replace potentials in a schema by unwrapping the foralls
       freshPotentials (Monotype t)  = do 
         t' <- freshPotentials' t
