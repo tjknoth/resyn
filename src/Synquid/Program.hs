@@ -275,6 +275,10 @@ symbolsOfArity n env = Map.findWithDefault Map.empty n (env ^. symbols)
 allSymbols :: Environment -> Map Id RSchema
 allSymbols env = Map.unions $ Map.elems (env ^. symbols)
 
+-- | All universally quantified symbols in an environment -- includes measures
+allUniversals :: Environment -> Set Id 
+allUniversals env = Set.fromList (Map.keys (allSymbols env) `union` Map.keys (env ^. measures))
+
 
 -- | 'lookupSymbol' @name env@ : type of symbol @name@ in @env@, including built-in constants
 lookupSymbol :: Id -> Int -> Bool -> Environment -> Maybe RSchema

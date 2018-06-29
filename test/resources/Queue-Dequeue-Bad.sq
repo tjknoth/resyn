@@ -21,7 +21,7 @@ measure lelems :: List a -> Set a where
 -- A queue implemented as a pair of lists, one as the front and the other as the
 -- reverse of the rear. The queue's potential is 2 * the length of the rear.
 data Queue a where
-  Queue :: f: List a -> b: {List a| |2 * llen _v} -> Queue a
+  Queue :: f: {List a| |1} -> b: {List a| |2 * llen _v} -> Queue a
 
 -- Measure the length of a queue
 termination measure qlen :: Queue a -> {Int | _v >= 0} where
@@ -45,7 +45,7 @@ measure rearLen :: Queue a -> {Int | _v >= 0} where
 reverse :: xs: {List a| |llen _v} -> {List a | llen _v == llen xs && lelems _v == lelems xs}
 
 -- Dequeue from the front of the queue. Takes 1 step in amortized time.
-dequeue :: q: {Queue a | qlen _v > 0 | 0} -> {Queue a | qlen _v == qlen q - 1}
+dequeue :: q: {Queue a | qlen _v > 0 | 1} -> {Queue a | qlen _v == qlen q - 1}
 dequeue = \q.
   match q with
     Queue f b -> match f with

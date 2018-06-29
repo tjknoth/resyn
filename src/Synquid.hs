@@ -326,8 +326,7 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
       case mProg of
         Left typeErr -> pdoc (pretty typeErr) >> pdoc empty >> exitFailure
         Right prog -> do
-          when (gSynthesize goal) $ pdoc (prettySolution goal prog)
-          pdoc empty
+          when (gSynthesize goal) $ pdoc (prettySolution goal prog) >> pdoc empty
           return ((goal, prog), stats)
     updateExplorerParams eParams goal = eParams { _checkResources = (gSynthesize goal) && (_checkResources eParams)}
     {-

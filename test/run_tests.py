@@ -144,7 +144,7 @@ DEMO_BENCHMARKS = [
 ]
 
 RESOURCE_BENCHMARKS = [
-    ('BST-Contains-Bad',    ['--resources']),
+    #('BST-Contains-Bad',    ['--resources']),
     ('BST-Contains',        ['--resources']),
     ('BST-Delete-Bad',      ['--resources']),
     ('BST-Delete',          ['--resources']),
@@ -164,9 +164,9 @@ RESOURCE_BENCHMARKS = [
     ('List-Delete',         ['--resources']),
     ('List-Double-Bad',     ['--resources']),
     ('List-Double',         ['--resources']),
-    ('List-Fold-Bad',       ['--resources']),
-    ('List-Fold',           ['--resources']),
-    ('List-Insert-Bad',     ['--resources']),
+    #('List-Fold-Bad',       ['--resources']),
+    #('List-Fold',           ['--resources']),
+    #('List-Insert-Bad',     ['--resources']),
     ('List-Insert',         ['--resources']),
     ('List-Replicate-Bad',  ['--resources']),
     ('List-Replicate',      ['--resources']),

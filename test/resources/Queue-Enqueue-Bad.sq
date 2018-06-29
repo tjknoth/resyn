@@ -6,12 +6,16 @@
 -- A list, nothing fancy here.
 data List a where
   Nil :: List a
-  Cons :: x: a -> xs: List a -> List a
+  Cons :: x: {a| |1} -> xs: List a -> List a
 
 -- Measure the length of a list
 termination measure llen :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + llen xs
+
+measure twolen :: List a -> {Int | _v >= 0} where 
+  Nil -> 0
+  Cons x xs -> 2 + twolen xs
 
 -- A set of all elements in a list
 measure lelems :: List a -> Set a where
@@ -21,7 +25,7 @@ measure lelems :: List a -> Set a where
 -- A queue implemented as a pair of lists, one as the front and the other as the
 -- reverse of the rear. The queue's potential is 2 * the length of the rear.
 data Queue a where
-  Queue :: f: List a -> b: {List a| |2 * llen _v} -> Queue a
+  Queue :: f: List a -> b: {List a| | twolen _v} -> Queue a
 
 -- Measure the length of a queue
 termination measure qlen :: Queue a -> {Int | _v >= 0} where
@@ -47,4 +51,3 @@ enqueue :: x: {1**a| |1} -> q: Queue a -> {Queue a | qelems _v == qelems q + [x]
 enqueue = \x. \q.
   match q with
     Queue f b -> Queue f (Cons x b)
-

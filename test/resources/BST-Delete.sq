@@ -47,7 +47,7 @@ append :: t1: {BST a | | pathRight _v}
 -- means we can restore 2 potential, representing the node we freed.
 delete :: x: a
        -> t: {BST a | x in elems _v | deleteCost x _v}
-       -> {BST a | !(x in elems _v) && size _v == size t - 1 | 2}
+       -> {BST a | !(x in elems _v) && size _v == size t - 1}
 delete = \x. \t.
   match t with
     Empty -> error -- Should be impossible given refinements

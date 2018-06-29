@@ -27,8 +27,8 @@ replicate = \n. \x.
     else Cons x (replicate (dec n) x)
 
 -- Needs enough memory for n copies of x; given insufficient potential
---replicate' :: n: Nat -> x: {n ** a| |n - 2} -> {List a | len _v == n}
---replicate' = \n. \x.
---  if n <= 0
---    then Nil
---    else Cons x (replicate (dec n) x)
+replicate' :: n: Nat -> x: {n ** a| |n - 2} -> {List a | len _v == n}
+replicate' = \n. \x.
+  if n <= 0
+    then Nil
+    else Cons x (replicate' (dec n) x)

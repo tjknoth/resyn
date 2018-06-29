@@ -509,7 +509,7 @@ somewhatFreshVar :: Environment -> String -> Sort -> Formula
 somewhatFreshVar env prefix s = Var s name 
   where 
     name = unbound 0 (prefix ++ show 0)
-    unbound n v = if Map.member v (allSymbols env)
+    unbound n v = if Set.member v (allUniversals env)
                     then unbound (n + 1) (v ++ show n)
                     else v
 
@@ -606,7 +606,7 @@ instantiateConsAxioms env mVal fml = let inst = instantiateConsAxioms env mVal i
         subst = Map.fromList $ (valueVarName, newValue) : zip vars args ++ zip constArgNames constVars-- substitute formals for actuals and constructor application or provided value for _v
         wrapForall xs f = foldl (flip All) f xs
         qBody = wrapForall constVars body'
-      in {-trace ("INST CONS with subs " ++ show subst ++ " IN " ++ show (pretty body')) $-} substitute subst qBody
+      in substitute subst qBody
 
 -- | 'matchConsType' @formal@ @actual@ : unify constructor return type @formal@ with @actual@
 matchConsType formal@(ScalarT (DatatypeT d vars pVars) _ _) actual@(ScalarT (DatatypeT d' args pArgs) _ p) | d == d'
@@ -656,7 +656,7 @@ embedEnv env fml consistency = do
 -- | 'solveResourceConstraints' @oldConstraints constraints@ : Transform @constraints@ into logical constraints and attempt to solve the complete system by conjoining with @oldConstraints@
 solveResourceConstraints :: (MonadHorn s, MonadSMT s) => [Constraint] -> [Constraint] -> TCSolver s (Maybe [Constraint]) 
 solveResourceConstraints oldConstraints constraints = do
-    writeLog 4 $ linebreak <+> text "Generating resource constraints:"
+    writeLog 3 $ linebreak <+> text "Generating resource constraints:"
     checkMults <- asks _checkMultiplicities
     fmlList <- mapM (generateFormula True checkMults) constraints
     -- This is repeated every iteration, could be cached:
@@ -887,17 +887,11 @@ assumeUnknowns f = f
 -- | 'getUniversals' @env f@ : return the set of universally quantified terms in formula @f@ given environment @env@ 
 getUniversals :: Environment -> Formula -> [Formula] 
 getUniversals env (SetLit s fs) = unions $ map (getUniversals env) fs
-getUniversals env v@(Var s x)  = 
-  case Map.lookup x (allSymbols env) of 
-    Nothing -> [] 
-    _       -> [v]
+getUniversals env v@(Var s x)  = [v | Set.member x (allUniversals env)] 
 getUniversals env (Unary _ f) = getUniversals env f
 getUniversals env (Binary _ f g) = getUniversals env f `union` getUniversals env g
 getUniversals env (Ite f g h) = getUniversals env f `union` getUniversals env g `union` getUniversals env h
-getUniversals env p@(Pred s x fs) = 
-  case Map.lookup x (allSymbols env) of 
-    Nothing -> [] 
-    _       -> [p]
+getUniversals env p@(Pred s x fs) = [p | Set.member x (allUniversals env)]
 getUniversals env (Cons _ x fs) = unions $ map (getUniversals env) fs
 getUniversals env (All f g) = getUniversals env g
 getUniversals _ _ = []

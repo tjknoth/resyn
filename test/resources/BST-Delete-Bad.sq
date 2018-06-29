@@ -46,8 +46,8 @@ append :: t1: {BST a | | pathRight _v}
 -- element is in the input tree, we know that we will delete one node. This
 -- means we can restore 2 potential, representing the node we freed.
 delete :: x: a
-       -> t: {BST a | x in elems _v | (deleteCost x _v) - 1} -- Probably can't prove this is nonnegative
-       -> {BST a | !(x in elems _v) && size _v == size t - 1 | 2}
+       -> t: {BST a | x in elems _v | deleteCost x _v - 1} -- Probably can't prove this is nonnegative
+       -> {BST a | !(x in elems _v) && size _v == size t - 1 }
 delete = \x. \t.
   match t with
     Empty -> error -- Should be impossible given refinements
