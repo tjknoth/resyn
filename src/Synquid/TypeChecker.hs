@@ -120,7 +120,7 @@ reconstructI env t (Program p t') = do
   reconstructI' env t'' p
 
 reconstructI' env t PErr = generateError env
---reconstructI' env t PHole = generateError env `mplus` generateI env t
+reconstructI' env t PHole = generateError env `mplus` generateI env t
 reconstructI' env t (PLet x iDef@(Program (PFun _ _) _) iBody) = do -- lambda-let: remember and type-check on use
   lambdaLets %= Map.insert x (env, iDef)
   let ctx = \p -> Program (PLet x uHole p) t
@@ -139,14 +139,14 @@ reconstructI' env t@(FunctionT _ tArg tRes) impl = case impl of
 reconstructI' env t@ScalarT{} impl = case impl of
   PFun _ _ -> throwErrorWithDescription $ text "Cannot assign non-function type" </> squotes (pretty t) </>
                            text "to lambda term" </> squotes (pretty $ untyped impl)
-  {-
+  
   PLet x iDef iBody -> do -- E-term let (since lambda-let was considered before)
-    pDef <- inContext (\p -> Program (PLet x p (Program PHole t)) t) $ reconstructETopLevel env AnyT iDef
+    (pDef, _) <- inContext (\p -> Program (PLet x p (Program PHole t)) t) $ reconstructETopLevel env AnyT iDef
     let (env', tDef) = embedContext env (typeOf pDef)
     pBody <- inContext (\p -> Program (PLet x pDef p) t) $ reconstructI (addVariable x tDef env') t iBody
     return $ Program (PLet x pDef pBody) t
-  -}   
-  {- 
+     
+   
   PIf (Program PHole AnyT) iThen iElse -> do
     cUnknown <- Unknown Map.empty <$> freshId "C"
     addConstraint $ WellFormedCond env cUnknown
@@ -155,7 +155,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
     pCond <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateCondition env cond
     pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (fnot cond) env) t iElse
     return $ Program (PIf pCond pThen pElse) t
-  -}
+  
   PIf iCond iThen iElse -> do
     (pCond, envnew) <- inContext (\p -> Program (PIf p (Program PHole t) (Program PHole t)) t) $ reconstructETopLevel env (ScalarT BoolT ftrue defPotential) iCond
     let (env', ScalarT BoolT cond pot) = embedContext envnew $ typeOf pCond
@@ -232,11 +232,12 @@ reconstructE env t (Program p AnyT) = reconstructE' env t p
 reconstructE env t (Program p t') = do
   t'' <- checkAnnotation env t t' p
   reconstructE' env t'' p
-{-
+
 reconstructE' env typ PHole = do
   d <- asks . view $ _1 . eGuessDepth
-  generateEUpTo env typ d
--}
+  p <- generateEUpTo env typ d
+  return (p, env)
+
 reconstructE' env typ (PSymbol name) =
   case lookupSymbol name (arity typ) (hasSet typ) env of
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name

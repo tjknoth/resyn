@@ -143,7 +143,7 @@ DEMO_BENCHMARKS = [
     ('Sort-Fold',           ['-m 1', '-a 2', '-e']),
 ]
 
-RESOURCE_BENCHMARKS = [
+RESOURCE_VERIFICATION_BENCHMARKS = [
     #('BST-Contains-Bad',    ['--resources']),
     ('BST-Contains',        ['--resources']),
     ('BST-Delete-Bad',      ['--resources']),
@@ -178,6 +178,23 @@ RESOURCE_BENCHMARKS = [
     ('Queue-Enqueue',       ['--resources']),
 ]
 
+RESOURCE_SYNTHESIS_BENCHMARKS = [
+    #('BST-Contains',        ['--resources']),
+    #('BST-Delete',          ['--resources']),
+    #('BST-Insert',          ['--resources']),
+    #('BST-Replicate',       ['--resources']),
+    ('List-Append',         ['--resources']),
+    ('List-Compress',       ['--resources']),
+    ('List-Cons2',          ['--resources']),
+    ('List-Delete',         ['--resources']),
+    ('List-Double',         ['--resources']),
+    #('List-Fold',           ['--resources']),
+    ('List-Insert',         ['--resources']),
+    ('List-Replicate',      ['--resources']),
+    ('List-Reverse',        ['--resources']),
+    #('Queue-Dequeue',       ['--resources']),
+    #('Queue-Enqueue',       ['--resources']),
+]
 
 class SynthesisResult:
     def __init__(self, name, time):
@@ -196,7 +213,8 @@ def cmdline():
     a.add_argument('--synt', action='store_true', help='run synthesis tests')
     a.add_argument('--sections', nargs="*", choices=SECTIONS + ['all'], default=['all'], help=('which synthesis tests to run'))
     a.add_argument('--demo', action='store_true', help='run demo tests')
-    a.add_argument('--res', action='store_true', help='run resource-aware synthesis tests')
+    a.add_argument('--res-verif', action='store_true', help='run resource-aware verification tests')
+    a.add_argument('--res-synth', action='store_true', help='run resource-aware synthesis tests')
     return a.parse_args()
 
 def printerr(str):
@@ -294,7 +312,7 @@ if __name__ == '__main__':
         synquid_path = SYNQUID_PATH_WINDOWS
 
     # By default enable all tests:
-    if not (a.unit or a.check or a.synt or a.demo or a.res):
+    if not (a.unit or a.check or a.synt or a.demo or a.res_verif or a.res_synth):
       a.unit = True
       a.check = True
       a.synt = True
@@ -334,14 +352,25 @@ if __name__ == '__main__':
         fail = check_diff()
         os.chdir('..')
 
-    if not fail and a.res:
-        # Run resource-aware synthesis benchmarks
-        os.chdir('resources')
+    if not fail and a.res_verif:
+        # Run resource-aware verification benchmarks
+        os.chdir('resources/verification')
         clear_log() 
-        for (name, args) in RESOURCE_BENCHMARKS:
+        for (name, args) in RESOURCE_VERIFICATION_BENCHMARKS:
             run_benchmark(name, args)
         fail = check_diff()
-        os.chdir('..')
+        os.chdir('../..')
+
+    if not fail and a.res_synth:
+        # Run resource-aware synthesis benchmarks
+        os.chdir('resources/synthesis')
+        clear_log() 
+        for (name, args) in RESOURCE_SYNTHESIS_BENCHMARKS:
+            run_benchmark(name, args)
+        fail = check_diff()
+        os.chdir('../..')
+
+
 
     if not fail and a.synt:
         # Run synthesis benchmarks in 'current' directory
