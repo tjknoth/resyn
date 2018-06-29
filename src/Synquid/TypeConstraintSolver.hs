@@ -704,19 +704,22 @@ generateFormula _ _ c                            = error $ show $ text "Constrai
 
 -- | 'instantiateUniversals' @b env fml ass@ : Instantiate universally quantified terms in @fml@ under @env@ with examples satisfying assumptions @ass@
 instantiateUniversals :: (MonadHorn s, MonadSMT s) => Bool -> Environment -> Formula -> Formula -> TCSolver s Formula
-instantiateUniversals shouldLog env fml ass = do 
+instantiateUniversals shouldLog env fml ass = do
+  shouldInstantiate <- asks _instantiateUnivs
   let universals = getUniversals env fml
-  case universals of
-    [] -> return fml -- nothing universally quantified, can solve directly
-    _  -> do 
+  if null universals || not shouldInstantiate
+    then return fml -- nothing universally quantified, can solve directly
+    else do 
       let len = length universals + 1 
       exs <- assembleExamples len universals ass
-      when shouldLog $ writeLog 3 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
+      when shouldLog $ writeLog 1 $ text "Universally quantified formulas" <+> pretty universals $+$ nest 4 (text "Give examples" <+> pretty exs)
       fml' <- applyPolynomials fml universals
       let fmlSkeletons = replicate len fml'
-      let exampleAssumptions = map (foldl (\a (f, e) -> Binary And (Binary Eq f e) a) ass) exs
-      let query = conjunction $ Set.fromList $ zipWith (|=>|) exampleAssumptions fmlSkeletons
-      return query
+      --let exampleAssumptions = map (foldl (\a (f, e) -> Binary And (Binary Eq f e) a) ass) exs
+      --let query = zipWith (|=>|) exampleAssumptions fmlSkeletons
+      let query = zipWith substituteManyInFml exs fmlSkeletons
+      writeLog 3 $ nest 4 $ text "Universals instantiated to" <+> pretty exs <+> text "In formulas" $+$ vsep (map pretty query)
+      return $ conjunction (Set.fromList query)
 
 
 -- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
@@ -930,7 +933,7 @@ getExamples' n ass fmlName acc =
 
 substituteManyInFml :: [(Formula, Formula)] -> Formula -> Formula
 substituteManyInFml [] f       = f
-substituteManyInFml (x:xs) fml = foldl (\f (g, ex) -> substituteForFml ex g f) fml xs
+substituteManyInFml xs fml = foldl (\f (g, ex) -> substituteForFml ex g f) fml xs
 
 -- Substitute variable for a formula (predicate application or variable) in given formula @fml@
 substituteForFml :: Formula -> Formula -> Formula -> Formula

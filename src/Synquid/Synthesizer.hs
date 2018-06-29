@@ -54,7 +54,8 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _resPolynomialDegree = _polynomialDegree explorerParams,
                         _tcSolverLogLevel = _explorerLogLevel explorerParams,
                         _checkResourceBounds = _checkResources explorerParams,
-                        _checkMultiplicities = _useMultiplicity explorerParams
+                        _checkMultiplicities = _useMultiplicity explorerParams,
+                        _instantiateUnivs = _instantiateForall explorerParams
                       }
       in do cp0 <- lift $ lift startTiming  -- TODO time stats for this one as well?
             x <- reconstruct explorerParams typingParams goal

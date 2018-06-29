@@ -63,7 +63,8 @@ data ExplorerParams = ExplorerParams {
   _polynomialDegree :: Int,               -- ^ Maximum degree of resource polynomial
   _checkResources :: Bool,                -- ^ Should we check resources usage?
   _useMultiplicity :: Bool,               -- ^ Should we generate constraints on multiplicities? Useful for modeling memory usage.
-  _dMatch :: Bool                         -- ^ Use destructive pattern match
+  _dMatch :: Bool,                        -- ^ Use destructive pattern match
+  _instantiateForall :: Bool              -- ^ Solve exists-forall constraints by instantiating universally quantified expressions
 }
 
 makeLenses ''ExplorerParams
