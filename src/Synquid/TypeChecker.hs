@@ -139,13 +139,13 @@ reconstructI' env t@(FunctionT _ tArg tRes) impl = case impl of
 reconstructI' env t@ScalarT{} impl = case impl of
   PFun _ _ -> throwErrorWithDescription $ text "Cannot assign non-function type" </> squotes (pretty t) </>
                            text "to lambda term" </> squotes (pretty $ untyped impl)
-  
+  {- 
   PLet x iDef iBody -> do -- E-term let (since lambda-let was considered before)
     (pDef, _) <- inContext (\p -> Program (PLet x p (Program PHole t)) t) $ reconstructETopLevel env AnyT iDef
     let (env', tDef) = embedContext env (typeOf pDef)
     pBody <- inContext (\p -> Program (PLet x pDef p) t) $ reconstructI (addVariable x tDef env') t iBody
     return $ Program (PLet x pDef pBody) t
-     
+  -}   
    
   PIf (Program PHole AnyT) iThen iElse -> do
     cUnknown <- Unknown Map.empty <$> freshId "C"
@@ -243,7 +243,7 @@ reconstructE' env typ (PSymbol name) =
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
     Just sch -> do
       (schl, schr) <- splitType sch
-      let (isVariable, newEnv) = removeSymbol name (arity typ) env
+      let (isVariable, newEnv) = removeSymbol name env
       let env' = if isVariable 
           then addPolyVariable name schl newEnv
           else env

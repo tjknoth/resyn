@@ -297,8 +297,8 @@ lookupSymbol name a hasSet env
     isBinary = a == 2 && (name `elem` Map.elems binOpTokens)
     asInt = asInteger name
 
-removeSymbol :: Id -> Int -> Environment -> (Bool, Environment)
-removeSymbol name a env = (Map.member name syms, env') where 
+removeSymbol :: Id -> Environment -> (Bool, Environment)
+removeSymbol name env = (Map.member name syms, env') where 
     syms = allSymbols env
     env' = removeVariable name env 
 
@@ -626,3 +626,16 @@ defaultSetType = DataDecl name typeVars preds cons
     empty = ConstructorSig emptySetCtor (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential)
     single = ConstructorSig singletonCtor (FunctionT "x" (ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential) (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential))
     insert = ConstructorSig insertSetCtor (FunctionT "x" (ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential) (FunctionT "xs" (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential) (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential)))
+
+setConstructors = [emptySetCtor, singletonCtor, insertSetCtor]
+
+-- Remove unnecessary declarations from environment of synthesis goals
+cleanEnvironment :: Goal -> Goal 
+cleanEnvironment g = 
+  if not (gSynthesize g)
+    then g 
+    else 
+      let env = gEnvironment g 
+          (_, env') = foldl (\(_, e) x -> removeSymbol x e) (True, env) setConstructors 
+          g' = g { gEnvironment = env' }
+      in g' 

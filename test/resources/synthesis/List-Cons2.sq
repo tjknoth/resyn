@@ -10,5 +10,5 @@ measure elems :: List a -> Set a where
   Nil -> [] 
   Cons x xs -> [x] + elems xs
 
-cons2 :: x: a -> {List a | elems _v == [x] && len _v == 2}
+cons2 :: x: {2 ** a| |2} -> {List a | elems _v == [x] && len _v == 2}
 cons2 = ??

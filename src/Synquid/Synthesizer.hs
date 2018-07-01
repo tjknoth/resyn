@@ -57,8 +57,9 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _checkMultiplicities = _useMultiplicity explorerParams,
                         _instantiateUnivs = _instantiateForall explorerParams
                       }
+        goal' = cleanEnvironment goal
       in do cp0 <- lift $ lift startTiming  -- TODO time stats for this one as well?
-            x <- reconstruct explorerParams typingParams goal
+            x <- reconstruct explorerParams typingParams goal'
             return (x, snd cp0)
 
     -- | Qualifier generator for conditionals
