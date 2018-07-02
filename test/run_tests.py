@@ -180,10 +180,10 @@ RESOURCE_VERIFICATION_BENCHMARKS = [
 
 RESOURCE_SYNTHESIS_BENCHMARKS = [
     #('BST-Contains',        ['--resources']),
-    ('BST-Delete',          ['--resources']),
+    #('BST-Delete',          ['--resources']),
     #('BST-ExtractMin',      ['--resources']),
-    ('BST-Insert',          ['--resources']),
-    ('BST-Member',          ['--resources']),
+    #('BST-Insert',          ['--resources']),
+    #('BST-Member',          ['--resources']),
     #('BST-Sort',            ['--resources']),
     #('BST-Replicate',       ['--resources']),
     ('List-Append',         ['--resources']),

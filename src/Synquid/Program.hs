@@ -421,6 +421,9 @@ addTypeVar a = over boundTypeVars (a :)
 addAssumption :: Formula -> Environment -> Environment
 addAssumption f = assumptions %~ Set.insert f
 
+removeAssumption :: Formula -> Environment -> Environment
+removeAssumption f = assumptions %~ Set.delete f
+
 -- | 'addScrutinee' @p env@ : @env@ with @p@ marked as having been scrutinized already
 addScrutinee :: RProgram -> Environment -> Environment
 addScrutinee p = usedScrutinees %~ (p :)
