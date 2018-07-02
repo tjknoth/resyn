@@ -418,9 +418,10 @@ enumerateAt :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Int -> Explo
 enumerateAt env typ 0 = do
     let symbols = Map.toList $ symbolsOfArity (arity typ) env
     useCounts <- use symbolUseCount
-    let symbols' = if arity typ == 0
-                      then sortBy (mappedCompare (\(x, _) -> (Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
-                      else sortBy (mappedCompare (\(x, _) -> (not $ Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
+    -- Filter set constructors out of symbols for enumeration 
+    let symbols' = filter (\(x, sch) -> notElem x setConstructors) $ if arity typ == 0
+        then sortBy (mappedCompare (\(x, _) -> (Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
+         else sortBy (mappedCompare (\(x, _) -> (not $ Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
     msum $ map pickSymbol symbols'
   where
     pickSymbol (name, sch) = do

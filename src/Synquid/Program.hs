@@ -631,13 +631,3 @@ defaultSetType = DataDecl name typeVars preds cons
     insert = ConstructorSig insertSetCtor (FunctionT "x" (ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential) (FunctionT "xs" (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential) (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential)))
 
 setConstructors = [emptySetCtor, singletonCtor, insertSetCtor]
-
--- Remove unnecessary declarations from environment of synthesis goals
-cleanEnvironment :: Goal -> Goal 
-cleanEnvironment g = 
-  if not (gSynthesize g)
-    then g 
-    else 
-      let env = gEnvironment g 
-          (_, env') = foldl (\(_, e) x -> removeSymbol x e) (True, env) setConstructors 
-      in g {gEnvironment = env' } 
