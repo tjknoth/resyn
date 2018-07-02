@@ -203,7 +203,7 @@ generateMatch env t = do
                                 (any (not . flip Set.member (env ^. constants)) scrutineeSymbols) -- Has variables (not just constants)
           guard isGoodScrutinee
           (env'', x) <- addScrutineeToEnv env' pScrutinee tScr
-          (pCase, cond, condUnknown) <- cut $ generateFirstCase env'' x pScrutinee t (head ctors)                  -- First case generated separately in an attempt to abduce a condition for the whole match
+          (pCase, cond, condUnknown) <- cut $ generateFirstCase env'' x pScrutinee t (head ctors)            -- First case generated separately in an attempt to abduce a condition for the whole match
           pCases <- map fst <$> mapM (cut . generateCase (addAssumption cond env'') x pScrutinee t) (tail ctors)  -- Generate a case for each of the remaining constructors under the assumption
           let pThen = Program (PMatch pScrutinee (pCase : pCases)) t
           generateElse env t cond condUnknown pThen                                                               -- Generate the else branch
@@ -426,7 +426,7 @@ enumerateAt env typ 0 = do
   where
     pickSymbol (name, sch) = do
       when (Set.member name (env ^. letBound)) mzero
-      (t, env') <- retrieveAndSplitVarType name sch env refineBot
+      (t, env') <- retrieveAndSplitVarType name sch env
       let p = Program (PSymbol name) t
       writeLog 2 $ linebreak $+$ text "Trying" <+> pretty p
       checkE env' typ p
@@ -675,8 +675,8 @@ addScrutineeToEnv env pScr tScr = do
   return (env'', x)
 
 -- | Given a name, schema, and environment, retrieve the variable type from the environment and split it into left and right types with fresh potential variables, generating constraints accordingly.
-retrieveAndSplitVarType :: (MonadHorn s, MonadSMT s) => Id -> RSchema -> Environment -> Refiner -> Explorer s (RType, Environment)
-retrieveAndSplitVarType name sch env refine = do 
+retrieveAndSplitVarType :: (MonadHorn s, MonadSMT s) => Id -> RSchema -> Environment -> Explorer s (RType, Environment)
+retrieveAndSplitVarType name sch env = do 
   (schl, schr) <- splitType sch
   let (isVariable, tempEnv) = removeSymbol name env
   let env' = if isVariable 
@@ -691,7 +691,7 @@ retrieveAndSplitVarType name sch env refine = do
   symbolUseCount %= Map.insertWith (+) name 1
   case Map.lookup name (env ^. shapeConstraints) of
     Nothing -> return ()
-    Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refine env sc) False ""
+    Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False ""
   return (t, env')
 
 writeLog level msg = do

@@ -239,7 +239,7 @@ reconstructE' env typ (PSymbol name) =
   case lookupSymbol name (arity typ) (hasSet typ) env of
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
     Just sch -> do
-      (t, env') <- retrieveAndSplitVarType name sch env refineTop
+      (t, env') <- retrieveAndSplitVarType name sch env 
       let p = Program (PSymbol name) t
       checkE env' typ p
       return (p, env')

@@ -470,9 +470,6 @@ allMeasurePostconditions _ _ _ = []
 typeSubstituteEnv :: TypeSubstitution -> Environment -> Environment
 typeSubstituteEnv tass = over symbols (Map.map (Map.map (schemaSubstitute tass)))
 
--- Alias
-type Refiner = Environment -> SType -> RType
-
 -- | Insert weakest refinement
 refineTop :: Environment -> SType -> RType
 refineTop env (ScalarT (DatatypeT name tArgs pArgs) _ _) =

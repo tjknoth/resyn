@@ -265,6 +265,6 @@ allSubstitutions env qual formals actuals fixedFormals fixedActuals = do
     Left _ -> [] -- Variable sort mismatch
     Right resolved -> return resolved
 
-logTopLevel level goal = when (gSynthesize goal && level > 0) $ traceM $ show $ top $+$ text (gName goal) <+> operator "::" <+> pretty (gSpec goal) $+$ linebreak
+logTopLevel level goal = when (gSynthesize goal && level > 0) $ traceM $ show $ plain $ top $+$ text (gName goal) <+> operator "::" <+> pretty (gSpec goal) $+$ linebreak
   where 
     top = linebreak $+$ linebreak $+$ text "Synthesizing:"  
