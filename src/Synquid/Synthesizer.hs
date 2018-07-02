@@ -58,7 +58,8 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _instantiateUnivs = _instantiateForall explorerParams
                       }
         goal' = cleanEnvironment goal
-      in do cp0 <- lift $ lift startTiming  -- TODO time stats for this one as well?
+      in do logTopLevel (_tcSolverLogLevel typingParams) goal'
+            cp0 <- lift $ lift startTiming  -- TODO time stats for this one as well?
             x <- reconstruct explorerParams typingParams goal'
             return (x, snd cp0)
 
@@ -264,3 +265,7 @@ allSubstitutions env qual formals actuals fixedFormals fixedActuals = do
   case resolveRefinement env qual' of
     Left _ -> [] -- Variable sort mismatch
     Right resolved -> return resolved
+
+logTopLevel level goal = when (gSynthesize goal && level > 0) $ traceM $ show $ top $+$ text (gName goal) <+> operator "::" <+> pretty (gSpec goal) $+$ linebreak
+  where 
+    top = linebreak $+$ linebreak $+$ text "Synthesizing:"  

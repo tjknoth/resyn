@@ -152,8 +152,8 @@ reconstructI' env t@ScalarT{} impl = case impl of
     addConstraint $ WellFormedCond env cUnknown
     pThen <- inContext (\p -> Program (PIf (Program PHole boolAll) p (Program PHole t)) t) $ reconstructI (addAssumption cUnknown env) t iThen
     cond <- conjunction <$> currentValuation cUnknown
-    pCond <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateCondition env cond
-    pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (fnot cond) env) t iElse
+    (pCond, env') <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateCondition env cond
+    pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (fnot cond) env') t iElse
     return $ Program (PIf pCond pThen pElse) t
   
   PIf iCond iThen iElse -> do
@@ -172,11 +172,8 @@ reconstructI' env t@ScalarT{} impl = case impl of
     let isGoodScrutinee = not (head scrutineeSymbols `elem` consNames) &&                 -- Is not a value
                           any (not . flip Set.member (env ^. constants)) scrutineeSymbols -- Has variables (not just constants)
     unless isGoodScrutinee $ throwErrorWithDescription $ text "Match scrutinee" </> squotes (pretty pScrutinee) </> text "is constant"
-    (env'', x) <- toVar (addScrutinee pScrutinee env') pScrutinee
-    varName <- freshId "x"
-    let tScr' = addPotential (typeMultiply fzero tScr) (topPotentialOf tScr)
-    let envWithLeftoverPotential = addVariable varName tScr' env''
-    pCases <- zipWithM (reconstructCase envWithLeftoverPotential x pScrutinee t) iCases consTypes
+    (env'', x) <- addScrutineeToEnv env' pScrutinee tScr
+    pCases <- zipWithM (reconstructCase env'' x pScrutinee t) iCases consTypes
     return $ Program (PMatch pScrutinee pCases) t
 
   _ -> do (p, _) <- reconstructETopLevel env t (untyped impl)
@@ -235,30 +232,16 @@ reconstructE env t (Program p t') = do
 
 reconstructE' env typ PHole = do
   d <- asks . view $ _1 . eGuessDepth
-  p <- generateEUpTo env typ d
-  return (p, env)
+  (p, env') <- generateEUpTo env typ d
+  return (p, env')
 
 reconstructE' env typ (PSymbol name) =
   case lookupSymbol name (arity typ) (hasSet typ) env of
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
     Just sch -> do
-      (schl, schr) <- splitType sch
-      let (isVariable, newEnv) = removeSymbol name env
-      let env' = if isVariable 
-          then addPolyVariable name schl newEnv
-          else env
-      let tl = typeFromSchema schl
-      let tr = typeFromSchema schr
-      addConstraint $ SplitType env name (typeFromSchema sch) tl tr 
-      addConstraint $ WellFormed env tl
-      addConstraint $ WellFormed env tr
-      t <- symbolType env name schr
+      (t, env') <- retrieveAndSplitVarType name sch env refineTop
       let p = Program (PSymbol name) t
-      symbolUseCount %= Map.insertWith (+) name 1
-      case Map.lookup name (env ^. shapeConstraints) of
-        Nothing -> return ()
-        Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False ""
-      checkE env typ p
+      checkE env' typ p
       return (p, env')
 reconstructE' env typ (PApp iFun iArg) = do
   x <- freshVar env "x"
@@ -339,44 +322,3 @@ insertAuxSolutions pAuxs (Program body t) = flip Program t $
     _ -> body
   where
     ins = insertAuxSolutions pAuxs
-
--- | 'splitType' @sch@: split type inside schema @sch@ by replacing its potential and multiplicity annotations with fresh variables.
-splitType :: MonadHorn s => RSchema -> Explorer s (RSchema, RSchema)
-splitType sch = do
-  schl <- freshPotentials sch 
-  schr <- freshPotentials sch
-  return (schl, schr)
-    where
-      -- Variable formula with fresh variable id
-      freshPot = do 
-        x <- freshId potentialPrefix
-        (typingState . resourceVars) %= Set.insert x
-        return $ Var IntS x 
-      freshMul = do
-        x <- freshId multiplicityPrefix
-        (typingState . resourceVars) %= Set.insert x
-        return $ Var IntS x
-      -- Replace potentials in a schema by unwrapping the foralls
-      freshPotentials (Monotype t)  = do 
-        t' <- freshPotentials' t
-        return $ Monotype t'
-      freshPotentials (ForallT x t) = do 
-        t' <- freshPotentials t
-        return $ ForallT x t'
-      freshPotentials (ForallP x t) = do
-        t' <- freshPotentials t
-        return $ ForallP x t'
-      -- Replace potentials in a TypeSkeleton
-      freshPotentials' (ScalarT base fml pot) = do 
-        pot' <- freshPot
-        base' <- freshMultiplicities base
-        return $ ScalarT base' fml pot'
-      freshPotentials' t = return t
-      -- Replace potentials in a BaseType
-      freshMultiplicities (TypeVarT s name m) = do 
-        m' <- freshMul
-        return $ TypeVarT s name m'
-      freshMultiplicities (DatatypeT name ts ps) = do
-        ts' <- mapM freshPotentials' ts
-        return $ DatatypeT name ts' ps
-      freshMultiplicities t = return t

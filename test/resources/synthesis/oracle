@@ -1,0 +1,75 @@
+append :: xs:{List {1**a||0}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+append = \xs . \ys . 
+    match xs with
+      Nil -> ys
+      Cons x7 x8 -> Cons x7 (append x8
+                               ys)
+
+compress :: xs:{List {1**a||0}||0} -> {CList {1**a||0}|elems _v == elems xs|0}
+./List-Compress.sq:23: Error:
+  Cannot match shape 'PList <()>'
+  with shape 'DSet'
+  when checking Nil ::
+  {DSet {PList {10000**A2||0} <P0 _0 _1>||0}||0}
+  in
+  \xs . 
+    match Insert Nil Nil with
+
+cons2 :: x:{1**a||0} -> {List {1**a||0}|elems _v == [x] && len _v == 2|0}
+./List-Cons2.sq:14: Error:
+  Cannot match shape 'List'
+  with shape 'DSet'
+  when checking Nil ::
+  {DSet {List {10000**A2||0}||0}||0}
+  in
+  \x . 
+    match Insert Nil Nil with
+
+delete :: x:{1**a||0} -> xs:{List {1**a||0}||0} -> {List {1**a||0}|elems _v == elems xs - [x]|0}
+delete = \x . \xs . 
+    match xs with
+      Nil -> xs
+      Cons x3 x4 -> 
+        if x3 == x
+          then delete x x4
+          else Cons x3 (delete x x4)
+
+double :: xs:{List {1**a||0}||0} -> {List {1**a||0}|len _v == 2 * len xs && elems _v == elems xs|0}
+double = \xs . 
+  match xs with
+    Nil -> xs
+    Cons x3 x4 -> Cons x3 (Cons x3
+                             (double x4))
+
+insert :: x:{1**a||0} -> xs:{IList {1**a||0}||0} -> {IList {1**a||0}|ielems _v == ielems xs + [x]|0}
+./List-Insert.sq:28: Error:
+  Cannot match shape 'List (1**A1)'
+  with shape '1**a'
+  when checking Nil :: {1**a||0}
+  in
+  \x . \xs . 
+      match insert Nil ?? with
+
+replicate :: n:{Nat||0} -> x:{1**a||0} -> {List {1**a||0}|len _v == n|0}
+./List-Replicate.sq:18: Error:
+  Cannot find sufficiently strong refinements
+  when checking zero ::
+  {Int|_v >= 0 && (_v >= 0 && _v < n)|0}
+  in
+  \n . \x . 
+      if 0 != n
+        then Cons x (replicate (dec n)
+                       x)
+        else 
+          match replicate zero ?? with
+
+reverse :: <p :: a -> a -> Bool> . xs:{List {1**a||0} <p>||0} -> {List {1**a||0} <p _1 _0>|len _v == len xs && elems _v == elems xs|0}
+./List-Reverse.sq:16: Error:
+  Cannot match shape 'DSet'
+  with shape 'List <()>'
+  when checking Emptyset ::
+  {List {List {10000**A2||0} <P1 _0 _1>|True && True|0} <True>||0}
+  in
+  \xs . 
+    match snoc Nil Emptyset with
+

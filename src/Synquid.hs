@@ -45,7 +45,7 @@ main = do
   res <- cmdArgsRun $ mode
   case res of
     (Synthesis file libs onlyGoals
-               appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency memoize symmetry
+               appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency symmetry
                lfp bfs
                out_file out_module outFormat resolve 
                print_spec print_stats log_ resources polynomial_deg mult dmatch forall) -> do
@@ -61,7 +61,6 @@ main = do
                     _partialSolution = partial,
                     _incrementalChecking = incremental,
                     _consistencyChecking = consistency,
-                    _useMemoization = memoize,
                     _symmetryReduction = symmetry,
                     _explorerLogLevel = log_,
                     _polynomialDegree = polynomial_deg,
@@ -117,7 +116,6 @@ data CommandLineArgs
         partial :: Bool,
         incremental :: Bool,
         consistency :: Bool,
-        memoize :: Bool,
         symmetry :: Bool,
         -- | Solver params
         lfp :: Bool,
@@ -154,7 +152,6 @@ synt = Synthesis {
   partial             = False           &= help ("Generate best-effort partial solutions (default: False)") &= name "p",
   incremental         = True            &= help ("Subtyping checks during bottom-up phase (default: True)"),
   consistency         = True            &= help ("Check incomplete application types for consistency (default: True)"),
-  memoize             = False           &= help ("Use memoization (default: False)") &= name "z",
   symmetry            = False           &= help ("Use symmetry reductions (default: False)") &= name "s",
   lfp                 = False           &= help ("Use least fixpoint solver (only works for type checking, default: False)") &= groupname "Solver parameters",
   bfs_solver          = False           &= help ("Use BFS instead of MARCO to solve second-order constraints (default: False)"),
@@ -195,7 +192,6 @@ defaultExplorerParams = ExplorerParams {
   _incrementalChecking = True,
   _consistencyChecking = False,
   _splitMeasures = True,
-  _useMemoization = False,
   _symmetryReduction = False,
   _context = id,
   _sourcePos = noPos,

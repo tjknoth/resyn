@@ -46,6 +46,7 @@ executable synquid
                     , haskell-src-exts == 1.17.*
                     , safe
                     , split
+                    , tuple
 
   ghc-options: -O2
 
