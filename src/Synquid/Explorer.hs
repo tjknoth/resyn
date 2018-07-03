@@ -27,7 +27,6 @@ import Control.Monad.Reader
 import Control.Applicative hiding (empty)
 import Control.Lens
 import Debug.Trace
-import Data.Tuple.Curry
 
 {- Interface -}
 
@@ -124,16 +123,16 @@ generateI env t@(ScalarT _ _ _) = do
 
 -- | Generate a possibly conditional term type @t@, depending on whether a condition is abduced
 generateMaybeIf :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
-generateMaybeIf env t = ifte generateThen (uncurryN generateElse) (generateMatch env t) -- If at least one solution without a match exists, go with it and continue with the else branch; otherwise try to match
+generateMaybeIf env t = ifte generateThen (uncurry3 (generateElse env t)) (generateMatch env t) -- If at least one solution without a match exists, go with it and continue with the else branch; otherwise try to match
   where
     -- | Guess an E-term and abduce a condition for it
     generateThen = do
       cUnknown <- Unknown Map.empty <$> freshId "C"
       addConstraint $ WellFormedCond env cUnknown
       -- TODO: do I care about env' here?
-      (pThen, env') <- cut $ generateE (addAssumption cUnknown env) t -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
+      (pThen, _) <- cut $ generateE (addAssumption cUnknown env) t -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
       cond <- conjunction <$> currentValuation cUnknown
-      return (removeAssumption cUnknown env', t , cond, unknownName cUnknown, pThen)
+      return (cond, unknownName cUnknown, pThen)
 
 -- | Proceed after solution @pThen@ has been found under assumption @cond@
 generateElse :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Formula -> Id -> RProgram -> Explorer s RProgram
@@ -179,7 +178,6 @@ generateCondition env fml = do
 optionalInPartial :: (MonadSMT s, MonadHorn s) => RType -> Explorer s RProgram -> Explorer s RProgram
 optionalInPartial t gen = ifM (asks . view $ _1 . partialSolution) (ifte gen return (return $ Program PHole t)) gen
 
--- TODO: move environments around correctly!
 -- | Generate a match term of type @t@
 generateMatch env t = do
   d <- asks . view $ _1 . matchDepth
@@ -202,7 +200,7 @@ generateMatch env t = do
                                 (not $ head scrutineeSymbols `elem` ctors) &&                     -- Is not a value
                                 (any (not . flip Set.member (env ^. constants)) scrutineeSymbols) -- Has variables (not just constants)
           guard isGoodScrutinee
-          (env'', x) <- addScrutineeToEnv env' pScrutinee tScr
+          (x, env'') <- addScrutineeToEnv env' pScrutinee tScr
           (pCase, cond, condUnknown) <- cut $ generateFirstCase env'' x pScrutinee t (head ctors)            -- First case generated separately in an attempt to abduce a condition for the whole match
           pCases <- map fst <$> mapM (cut . generateCase (addAssumption cond env'') x pScrutinee t) (tail ctors)  -- Generate a case for each of the remaining constructors under the assumption
           let pThen = Program (PMatch pScrutinee (pCase : pCases)) t
@@ -237,7 +235,7 @@ generateFirstCase env scrVar pScrutinee t consName = do
 
 -- | Generate the @consName@ case of a match term with scrutinee variable @scrName@ and scrutinee type @scrType@
 generateCase :: (MonadSMT s, MonadHorn s) => Environment -> Formula -> RProgram -> RType -> Id -> Explorer s (Case RType, Explorer s ())
-generateCase env scrVar pScrutinee t consName = do
+generateCase env scrVar pScrutinee t consName = 
   case Map.lookup consName (allSymbols env) of
     Nothing -> error $ show $ text "Datatype constructor" <+> text consName <+> text "not found in the environment" <+> pretty env
     Just consSch -> do
@@ -619,13 +617,13 @@ splitType sch = do
         return $ DatatypeT name ts' ps
       freshMultiplicities t = return t
 
-addScrutineeToEnv :: (MonadHorn s, MonadSMT s) => Environment -> RProgram -> RType -> Explorer s (Environment, Formula)
+addScrutineeToEnv :: (MonadHorn s, MonadSMT s) => Environment -> RProgram -> RType -> Explorer s (Formula, Environment)
 addScrutineeToEnv env pScr tScr = do 
   (x, env') <- toVar (addScrutinee pScr env) pScr
   varName <- freshId "x"
   let tScr' = addPotential (typeMultiply fzero tScr) (topPotentialOf tScr)
   let env'' = addVariable varName tScr' env'
-  return (env'', x)
+  return (x, env'')
 
 -- | Given a name, schema, and environment, retrieve the variable type from the environment and split it into left and right types with fresh potential variables, generating constraints accordingly.
 retrieveAndSplitVarType :: (MonadHorn s, MonadSMT s) => Id -> RSchema -> Environment -> Explorer s (RType, Environment)

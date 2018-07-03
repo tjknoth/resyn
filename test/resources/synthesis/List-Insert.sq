@@ -25,8 +25,4 @@ measure ielems :: IList a -> Set a where
   ICons x xs -> [x] + ielems xs
 	
 insert :: x: a -> xs: IList a -> {IList a | ielems _v == ielems xs + [x]}
-insert = ??
-
-
-
-	
+insert = ?? 

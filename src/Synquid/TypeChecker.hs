@@ -172,7 +172,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
     let isGoodScrutinee = not (head scrutineeSymbols `elem` consNames) &&                 -- Is not a value
                           any (not . flip Set.member (env ^. constants)) scrutineeSymbols -- Has variables (not just constants)
     unless isGoodScrutinee $ throwErrorWithDescription $ text "Match scrutinee" </> squotes (pretty pScrutinee) </> text "is constant"
-    (env'', x) <- addScrutineeToEnv env' pScrutinee tScr
+    (x, env'') <- addScrutineeToEnv env' pScrutinee tScr
     pCases <- zipWithM (reconstructCase env'' x pScrutinee t) iCases consTypes
     return $ Program (PMatch pScrutinee pCases) t
 

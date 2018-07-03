@@ -421,6 +421,7 @@ addTypeVar a = over boundTypeVars (a :)
 addAssumption :: Formula -> Environment -> Environment
 addAssumption f = assumptions %~ Set.insert f
 
+-- | 'removeAssumption' @f env@ : remove assumption @f@ from @env@
 removeAssumption :: Formula -> Environment -> Environment
 removeAssumption f = assumptions %~ Set.delete f
 

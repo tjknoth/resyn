@@ -29,5 +29,5 @@ os.path
 platform
 sys
 test/test.sq
-debuglog
+debuglog*
 examples.*

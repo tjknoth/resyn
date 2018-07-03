@@ -5,7 +5,24 @@ delete = \t . \x .
       Node x4 x5 x6 -> 
         if (x4 != x) && (x4 <= x)
           then Node x4 x5 (delete x6 x)
-          else t
+          else 
+            if x4 != x
+              then Node x4 (delete x5 x) x6
+              else 
+                match x5 with
+                  Empty -> x6
+                  Node x21 x22 x23 -> Node x21 x22
+                                        (delete (Node x x23 x6) x4)
+
+extractMin :: t:{BST {1**a||0}|size _v > 0|0} -> {MinPair {1**a||0}|telems t == [min _v] + telems (rest _v)|0}
+./BST-ExtractMin.sq:23: Error:
+  Cannot match shape '1**a'
+  with shape 'BST (1**A2)'
+  when checking t ::
+  {BST {BST {m1**A2||p3}|True && (Empty) < _v|p2}||0}
+  in
+  \t . 
+    match Node Empty Empty t with
 
 insert :: x:{1**a||0} -> t:{BST {1**a||0}||0} -> {BST {1**a||0}|telems _v == telems t + [x]|0}
 insert = \x . \t . 
@@ -14,10 +31,58 @@ insert = \x . \t .
       Node x7 x8 x9 -> 
         if (x <= x7) && (x7 <= x)
           then t
-          else x8
+          else 
+            if x7 <= x
+              then Node x7 x8 (insert x x9)
+              else Node x7 (insert x x8) x9
 
 member :: x:{1**a||0} -> t:{BST {1**a||0}||0} -> {Bool|_v == (x in telems t)|0}
-member = \x . \t . true
+member = \x . \t . 
+    match t with
+      Empty -> false
+      Node x4 x5 x6 -> 
+        if (x <= x4) && (x4 <= x)
+          then true
+          else 
+            if x <= x4
+              then member x x5
+              else member x x6
+
+insert :: x:{1**a||0} -> t:{BST {1**a||0}||0} -> {BST {1**a||0}|telems _v == telems t + [x]|0}
+insert = \x . \t . 
+    match t with
+      Empty -> Node x Empty Empty
+      Node x7 x8 x9 -> 
+        if (x <= x7) && (x7 <= x)
+          then t
+          else 
+            if x7 <= x
+              then Node x7 x8 (insert x x9)
+              else Node x7 (insert x x8) x9
+
+toBST :: xs:{List {1**a||0}||0} -> {BST {1**a||0}|telems _v == elems xs|0}
+toBST = \xs . 
+  match xs with
+    Nil -> Empty
+    Cons x3 x4 -> insert x3 (toBST
+                               x4)
+
+pivotAppend :: p:{1**a||0} -> xs:{IList {1**a|_v < p|0}||0} -> ys:{IList {1**a|_v > p|0}||0} -> {IList {1**a||0}|ilen _v == (ilen xs + ilen ys) + 1 && ielems _v == (ielems xs + ielems ys) + [p]|0}
+pivotAppend = \p . \xs . \ys . 
+      match xs with
+        INil -> ICons p ys
+        ICons x5 x6 -> ICons x5
+                         (pivotAppend p x6 ys)
+
+flatten :: t:{BST {1**a||0}||0} -> {IList {1**a||0}|ielems _v == telems t|0}
+flatten = \t . 
+  match t with
+    Empty -> INil
+    Node x4 x5 x6 -> pivotAppend x4
+                       (flatten x5) (flatten x6)
+
+sort :: xs:{List {1**a||0}||0} -> {IList {1**a||0}|ielems _v == elems xs|0}
+sort = \xs . flatten (toBST xs)
 
 append :: xs:{List {1**a||0}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
 append = \xs . \ys . 
@@ -31,12 +96,12 @@ compress = \xs .
   match xs with
     Nil -> Nil
     Cons x3 x4 -> 
-      match x4 with
+      match compress x4 with
         Nil -> Cons x3 Nil
-        Cons x10 x11 -> 
-          if x3 == x10
-            then compress x4
-            else xs
+        Cons x11 x12 -> 
+          if x3 == x11
+            then Cons x11 x12
+            else Cons x3 (Cons x11 x12)
 
 cons2 :: x:{2**a||2} -> {List {1**a||0}|elems _v == [x] && len _v == 2|0}
 cons2 = \x . Cons x (Cons x Nil)
@@ -48,7 +113,7 @@ delete = \x . \xs .
       Cons x3 x4 -> 
         if x3 == x
           then delete x x4
-          else xs
+          else Cons x3 (delete x x4)
 
 double :: xs:{List {1**a||0}||0} -> {List {1**a||0}|len _v == 2 * len xs && elems _v == elems xs|0}
 double = \xs . 
@@ -62,12 +127,16 @@ insert = \x . \xs .
     match xs with
       INil -> ICons x INil
       ICons x5 x6 -> 
-        if (x <= x5) && (x5 <= x)
-          then xs
-          else x6
+        if x5 <= x
+          then ICons x5 (insert x x6)
+          else ICons x (ICons x5 x6)
 
 replicate :: n:{Nat||0} -> x:{1**a||0} -> {List {1**a||0}|len _v == n|0}
-replicate = \n . \x . Nil
+replicate = \n . \x . 
+    if n <= 0
+      then Nil
+      else Cons x (replicate (dec n)
+                     x)
 
 reverse :: <p :: a -> a -> Bool> . xs:{List {1**a||0} <p>||0} -> {List {1**a||0} <p _1 _0>|len _v == len xs && elems _v == elems xs|0}
 reverse = \xs . 
