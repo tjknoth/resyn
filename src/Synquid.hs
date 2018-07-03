@@ -318,13 +318,17 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
       -- print $ vMapDoc pretty pretty (allSymbols $ gEnvironment goal)
       -- print $ pretty (gSpec goal)
       -- print $ vMapDoc pretty pretty (_measures $ gEnvironment goal)
-      (mProg, stats) <- synthesize (updateExplorerParams explorerParams goal) solverParams goal cquals tquals
+      (mProg, stats) <- synthesize (updateExplorerParams explorerParams goal) (updateSolverParams solverParams goal) goal cquals tquals
       case mProg of
         Left typeErr -> pdoc (pretty typeErr) >> pdoc empty >> exitFailure
         Right prog -> do
           when (gSynthesize goal) $ pdoc (prettySolution goal prog) >> pdoc empty
           return ((goal, prog), stats)
-    updateExplorerParams eParams goal = eParams { _checkResources = (gSynthesize goal) && (_checkResources eParams)}
+    updateLogLevel goal orig = if gSynthesize goal then orig else 0 -- prevent logging while type checking measures
+
+    updateExplorerParams eParams goal = eParams { _checkResources = (gSynthesize goal) && (_checkResources eParams), _explorerLogLevel = updateLogLevel goal (_explorerLogLevel eParams)}
+
+    updateSolverParams sParams goal = sParams { solverLogLevel = (updateLogLevel goal (solverLogLevel sParams))}
     {-
     printStats results declsByFile = do
       let env = gEnvironment (fst $ fst $ head results)
