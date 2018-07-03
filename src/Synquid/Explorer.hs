@@ -370,7 +370,7 @@ enumerateAt env typ 0 = do
     let symbols = Map.toList $ symbolsOfArity (arity typ) env
     useCounts <- use symbolUseCount
     -- Filter set constructors out of symbols for enumeration 
-    let symbols' = filter (\(x, sch) -> notElem x setConstructors) $ if arity typ == 0
+    let symbols' = filter (\(x, _) -> notElem x setConstructors) $ if arity typ == 0
         then sortBy (mappedCompare (\(x, _) -> (Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
          else sortBy (mappedCompare (\(x, _) -> (not $ Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
     msum $ map pickSymbol symbols'
@@ -379,7 +379,7 @@ enumerateAt env typ 0 = do
       when (Set.member name (env ^. letBound)) mzero
       (t, env') <- retrieveAndSplitVarType name sch env
       let p = Program (PSymbol name) t
-      writeLog 1 $ linebreak $+$ text "Trying" <+> pretty p
+      writeLog 1 $ linebreak $+$ text "Trying" <+> pretty p 
       checkE env' typ p
       return (p, env')
 
@@ -395,11 +395,11 @@ enumerateAt env typ d = do
     generateApp genFun genArg = do
       x <- freshId "X"
       -- TODO: does returned environment matter here:????
-      (fun, _) <- inContext (\p -> Program (PApp p uHole) typ)
+      (fun, env') <- inContext (\p -> Program (PApp p uHole) typ)
                 $ genFun env (FunctionT x AnyT typ) -- Find all functions that unify with (? -> typ)
       let FunctionT x tArg tRes = typeOf fun
 
-      (pApp, env') <- if isFunctionType tArg
+      (pApp, env'') <- if isFunctionType tArg
         then do -- Higher-order argument: its value is not required for the function type, return a placeholder and enqueue an auxiliary goal
           d <- asks . view $ _1 . auxDepth
           when (d <= 0) $ writeLog 2 (text "Cannot synthesize higher-order argument: no auxiliary functions allowed") >> mzero
@@ -409,12 +409,12 @@ enumerateAt env typ d = do
           let mbCut = id -- if Set.member x (varsOfType tRes) then id else cut
           (arg, newEnv) <- local (over (_1 . eGuessDepth) (-1 +))
                     $ inContext (\p -> Program (PApp fun p) tRes)
-                    $ mbCut (genArg env tArg)
+                    $ mbCut (genArg env' tArg)
           writeLog 3 (text "Synthesized argument" <+> pretty arg <+> text "of type" <+> pretty (typeOf arg))
           let tRes' = appType newEnv arg x tRes -- Probably doesn't matter which environment we use here, using newEnv for consistency 
           return (Program (PApp fun arg) tRes', newEnv)
-      checkE env' typ pApp
-      return (pApp, env')
+      checkE env'' typ pApp
+      return (pApp, env'')
 
 -- | Make environment inconsistent (if possible with current unknown assumptions)
 generateError :: (MonadSMT s, MonadHorn s) => Environment -> Explorer s RProgram
