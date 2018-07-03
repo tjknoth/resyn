@@ -42,7 +42,7 @@ reconstruct eParams tParams goal = do
 reconstructTopLevel :: (MonadSMT s, MonadHorn s) => Goal -> Explorer s RProgram
 reconstructTopLevel (Goal funName env (ForallT a sch) impl depth pos s) = reconstructTopLevel (Goal funName (addTypeVar a env) sch impl depth pos s)
 reconstructTopLevel (Goal funName env (ForallP sig sch) impl depth pos s) = reconstructTopLevel (Goal funName (addBoundPredicate sig env) sch impl depth pos s)
-reconstructTopLevel (Goal funName env (Monotype typ@(FunctionT _ _ _)) impl depth _ synth) = local (set (_1 . auxDepth) depth) reconstructFix
+reconstructTopLevel (Goal funName env (Monotype typ@FunctionT{}) impl depth _ synth) = local (set (_1 . auxDepth) depth) reconstructFix
   where
     reconstructFix = do
       let typ' = renameAsImpl (isBound env) impl typ
@@ -71,30 +71,30 @@ reconstructTopLevel (Goal funName env (Monotype typ@(FunctionT _ _ _)) impl dept
     -- | 'recursiveTypeTuple' @t fml@: type of the recursive call to a function of type @t@ when a lexicographic tuple of all recursible arguments decreases;
     -- @fml@ denotes the disjunction @x1' < x1 || ... || xk' < xk@ of strict termination conditions on all previously seen recursible arguments to be added to the type of the last recursible argument;
     -- the function returns a tuple of the weakend type @t@ and a flag that indicates if the last recursible argument has already been encountered and modified
-    recursiveTypeTuple (FunctionT x tArg tRes) fml = 
+    recursiveTypeTuple (FunctionT x tArg tRes cost) fml = 
       case terminationRefinement x tArg of
         Nothing -> do
           (tRes', seenLast) <- recursiveTypeTuple tRes fml
-          return (FunctionT x tArg tRes', seenLast)
+          return (FunctionT x tArg tRes' cost, seenLast)
         Just (argLt, argLe) -> do
           y <- freshVar env "x"
           let yForVal = Map.singleton valueVarName (Var (toSort $ baseTypeOf tArg) y)
           (tRes', seenLast) <- recursiveTypeTuple (renameVar (isBound env) x y tArg tRes) (fml `orClean` substitute yForVal argLt)
           if seenLast
-            then return (FunctionT y (addRefinement tArg argLe) tRes', True) -- already encountered the last recursible argument: add a nonstrict termination refinement to the current one
+            then return (FunctionT y (addRefinement tArg argLe) tRes' cost, True) -- already encountered the last recursible argument: add a nonstrict termination refinement to the current one
             -- else return (FunctionT y (addRefinement tArg (fml `orClean` argLt)) tRes', True) -- this is the last recursible argument: add the disjunction of strict termination refinements
             else if fml == ffalse
-                  then return (FunctionT y (addRefinement tArg argLt) tRes', True)
-                  else return (FunctionT y (addRefinement tArg (argLe `andClean` (fml `orClean` argLt))) tRes', True) -- TODO: this version in incomplete (does not allow later tuple values to go up), but is much faster
+                  then return (FunctionT y (addRefinement tArg argLt) tRes' cost, True)
+                  else return (FunctionT y (addRefinement tArg (argLe `andClean` (fml `orClean` argLt))) tRes' cost, True) -- TODO: this version in incomplete (does not allow later tuple values to go up), but is much faster
     recursiveTypeTuple t _ = return (t, False)
 
     -- | 'recursiveTypeFirst' @t fml@: type of the recursive call to a function of type @t@ when only the first recursible argument decreases
-    recursiveTypeFirst (FunctionT x tArg tRes) = 
+    recursiveTypeFirst (FunctionT x tArg tRes cost) = 
       case terminationRefinement x tArg of
-        Nothing -> FunctionT x tArg <$> recursiveTypeFirst tRes
+        Nothing -> (\t -> FunctionT x tArg t cost) <$> recursiveTypeFirst tRes
         Just (argLt, _) -> do
           y <- freshVar env "x"
-          return $ FunctionT y (addRefinement tArg argLt) (renameVar (isBound env) x y tArg tRes)
+          return $ FunctionT y (addRefinement tArg argLt) (renameVar (isBound env) x y tArg tRes) cost
     recursiveTypeFirst t = return t
 
     -- | If argument is recursible, return its strict and non-strict termination refinements, otherwise @Nothing@
@@ -126,7 +126,7 @@ reconstructI' env t (PLet x iDef@(Program (PFun _ _) _) iBody) = do -- lambda-le
   let ctx = \p -> Program (PLet x uHole p) t
   pBody <- inContext ctx $ reconstructI env t iBody
   return $ ctx pBody
-reconstructI' env t@(FunctionT _ tArg tRes) impl = case impl of
+reconstructI' env t@(FunctionT _ tArg tRes _) impl = case impl of
   PFun y impl -> do
     let ctx = \p -> Program (PFun y p) t
     pBody <- inContext ctx $ reconstructI (unfoldAllVariables $ addVariable y tArg env) tRes impl
@@ -242,8 +242,8 @@ reconstructE' env typ (PSymbol name) =
       return (p, env')
 reconstructE' env typ (PApp iFun iArg) = do
   x <- freshVar env "x"
-  (pFun, env') <- inContext (\p -> Program (PApp p uHole) typ) $ reconstructE env (FunctionT x AnyT typ) iFun
-  let tp@(FunctionT x tArg tRes) = typeOf pFun
+  (pFun, env') <- inContext (\p -> Program (PApp p uHole) typ) $ reconstructE env (FunctionT x AnyT typ defCost) iFun
+  let tp@(FunctionT x tArg tRes _) = typeOf pFun
   (pApp, env'') <- if isFunctionType tArg
     then do -- Higher-order argument: its value is not required for the function type, enqueue an auxiliary goal
       d <- asks . view $ _1 . auxDepth

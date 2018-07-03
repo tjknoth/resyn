@@ -373,17 +373,18 @@ resolveType s@(ScalarT (DatatypeT name tArgs pArgs) fml pot) = do
 
 resolveType (ScalarT baseT fml pot) = ScalarT <$> resolveBaseType baseT <*> resolveTypeRefinement (toSort baseT) fml <*> resolveTypePotential (toSort baseT) pot 
 
-resolveType (FunctionT x tArg tRes)
+resolveType (FunctionT x tArg tRes c)
+  | c < 0 = throwResError $ text "resolveType: functions must incur non-negative cost"
   | x == valueVarName =
     throwResError $ text valueVarName <+> text "is a reserved variable name"
   | x == dontCare =
-    error $ unwords ["resolveType: blank in function type", show (FunctionT x tArg tRes)] -- Should never happen
+    error $ unwords ["resolveType: blank in function type", show (FunctionT x tArg tRes c)] -- Should never happen
   | otherwise = do
       tArg' <- resolveType tArg
       tRes' <- withLocalEnv $ do
         unless (isFunctionType tArg') (environment %= addVariable x tArg')
         resolveType tRes
-      return $ FunctionT x tArg' tRes'
+      return $ FunctionT x tArg' tRes' c
 resolveType AnyT = return AnyT
 
 
@@ -683,7 +684,7 @@ checkTypePotential t@(ScalarT base _ f) = do
   checkBaseTypePotential base
   when (f `fmlGe` bottomPotential) $ throwResError $ text "Potential annotation on" <+> pretty t <+> text "must be less than" <+> pretty bottomPotential
   return ()
-checkTypePotential (FunctionT _ inT outT) = do 
+checkTypePotential (FunctionT _ inT outT _) = do 
   checkTypePotential inT 
   checkTypePotential outT
   return ()

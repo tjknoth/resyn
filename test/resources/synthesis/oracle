@@ -91,6 +91,24 @@ append = \xs . \ys .
       Cons x7 x8 -> Cons x7 (append x8
                                ys)
 
+compare :: xs:{List {1**a||0}||0} -> ys:{List {1**a||0}||0} -> {Bool|_v == (len xs == len ys)|0}
+compare = \xs . \ys . 
+    match xs with
+      Nil -> 
+        match ys with
+          Nil -> true
+          Cons x4 x5 -> false
+      Cons x8 x9 -> 
+        match ys with
+          Nil -> false
+          Cons x12 x13 -> compare x9 x13
+
+compareCT :: acc:{Bool||0} -> xs:{List {1**a||0}||0} -> ys:{List {1**a||0}||0} -> {Bool|_v == (len xs == len ys)|0}
+compareCT = \acc . \xs . \ys . 
+      if compare xs ys
+        then true
+        else false
+
 compress :: xs:{List {1**a||0}||0} -> {CList {1**a||0}|elems _v == elems xs|0}
 compress = \xs . 
   match xs with
@@ -102,6 +120,13 @@ compress = \xs .
           if x3 == x11
             then Cons x11 x12
             else Cons x3 (Cons x11 x12)
+
+concat :: xss:{ListOfLists {1**a||0}||0} -> acc:{List {1**a||0}||0} -> {List {1**a||0}|len _v == sumLen xss + len acc|0}
+concat = \xss . \acc . 
+    match xss with
+      Nil2 -> acc
+      Cons2 x3 x4 -> zappend acc
+                       (concat x4 x3)
 
 cons2 :: x:{2**a||2} -> {List {1**a||0}|elems _v == [x] && len _v == 2|0}
 cons2 = \x . Cons x (Cons x Nil)
@@ -115,7 +140,7 @@ delete = \x . \xs .
           then delete x x4
           else Cons x3 (delete x x4)
 
-double :: xs:{List {1**a||0}||0} -> {List {1**a||0}|len _v == 2 * len xs && elems _v == elems xs|0}
+double :: xs:{List {2**a||2}||0} -> {List {1**a||0}|len _v == 2 * len xs && elems _v == elems xs|0}
 double = \xs . 
   match xs with
     Nil -> xs
@@ -129,9 +154,9 @@ insert = \x . \xs .
       ICons x5 x6 -> 
         if x5 <= x
           then ICons x5 (insert x x6)
-          else ICons x (ICons x5 x6)
+          else ICons x (insert x5 x6)
 
-replicate :: n:{Nat||0} -> x:{1**a||0} -> {List {1**a||0}|len _v == n|0}
+replicate :: n:{Nat||0} -> x:{n**a||n} -> {List {1**a||0}|len _v == n|0}
 replicate = \n . \x . 
     if n <= 0
       then Nil

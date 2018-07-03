@@ -247,13 +247,13 @@ simplifyConstraint' _ _ (Subtype env (ScalarT (DatatypeT name [] (pArg:pArgs)) f
         then simplifyConstraint (Subtype env (int pArg') (int pArg) consistent label)
         else simplifyConstraint (Subtype env (int pArg) (int pArg') consistent label)
       simplifyConstraint (Subtype env (ScalarT (DatatypeT name [] pArgs) fml pot) (ScalarT (DatatypeT name' [] pArgs') fml' pot') consistent label)
-simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1) (FunctionT y tArg2 tRes2) False label)
+simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) False label)
   = do
       simplifyConstraint (Subtype env tArg2 tArg1 False label)
       if isScalarType tArg1
         then simplifyConstraint (Subtype (addVariable y tArg2 env) (renameVar (isBound env) x y tArg1 tRes1) tRes2 False label)
         else simplifyConstraint (Subtype env tRes1 tRes2 False label)
-simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1) (FunctionT y tArg2 tRes2) True label)
+simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) True label)
   = if isScalarType tArg1
       then simplifyConstraint (Subtype (addVariable x tArg1 env) tRes1 tRes2 True label)
       else simplifyConstraint (Subtype env tRes1 tRes2 True label)
@@ -261,7 +261,7 @@ simplifyConstraint' _ _ c@(WellFormed env (ScalarT (DatatypeT name tArgs _) fml 
   = do
       mapM_ (simplifyConstraint . WellFormed env) tArgs
       simpleConstraints %= (c :)
-simplifyConstraint' _ _ (WellFormed env (FunctionT x tArg tRes))
+simplifyConstraint' _ _ (WellFormed env (FunctionT x tArg tRes _))
   = do
       simplifyConstraint (WellFormed env tArg)
       simplifyConstraint (WellFormed (addVariable x tArg env) tRes)
@@ -533,8 +533,8 @@ fresh env (ScalarT baseT _ p) = do
     -- Ensure fresh base type has multiplicity 1 to avoid zeroing other formulas during unification
     --freshBase (TypeVarT subs a m) = return $ TypeVarT subs a defMultiplicity
     freshBase baseT = return baseT
-fresh env (FunctionT x tArg tFun) = 
-  liftM2 (FunctionT x) (fresh env tArg) (fresh env tFun)
+fresh env (FunctionT x tArg tFun c) = 
+  liftM2 (\t r -> FunctionT x t r c) (fresh env tArg) (fresh env tFun)
 fresh env t = let (env', t') = embedContext env t in fresh env' t'
 
 freshPred env sorts = do
@@ -851,7 +851,7 @@ multiplicityOfBase _                = Nothing
 -- Return a set of all formulas (potential, multiplicity, refinement) of a type. Doesn't mean anything necesssarily, used to embed environment assumptions
 allFormulasOf :: RType -> Set Formula
 allFormulasOf (ScalarT b f p) = Set.singleton f `Set.union` Set.singleton p `Set.union` allFormulasOfBase b
-allFormulasOf (FunctionT _ argT resT) = allFormulasOf argT `Set.union` allFormulasOf resT
+allFormulasOf (FunctionT _ argT resT _) = allFormulasOf argT `Set.union` allFormulasOf resT
 allFormulasOf (LetT x s t) = allFormulasOf s `Set.union` allFormulasOf t
 allFormulasOf t = Set.empty
 

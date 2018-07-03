@@ -243,7 +243,7 @@ instance Pretty (BaseType Formula) where
 
 prettySType :: SType -> Doc
 prettySType (ScalarT base _ _) = pretty base
-prettySType (FunctionT _ t1 t2) = hlParens (pretty t1 <+> operator "->" <+> pretty t2)
+prettySType (FunctionT _ t1 t2 c) = hlParens (pretty t1 <+> operator (arrow c) <+> pretty t2)
 prettySType AnyT = text "_"
 
 instance Pretty SType where
@@ -268,11 +268,14 @@ prettyTypeAt n t = condHlParens (n' <= n) (
     --ScalarT base fml (IntLit 0)-> hlBraces (pretty base <> operator "|" <> pretty fml)
     ScalarT base fml pot -> hlBraces (pretty base <> operator "|" <> pretty fml <> operator "|" <> pretty pot)
     AnyT -> text "_"
-    FunctionT x t1 t2 -> text x <> operator ":" <> prettyTypeAt n' t1 <+> operator "->" <+> prettyTypeAt 0 t2
+    FunctionT x t1 t2 c -> text x <> operator ":" <> prettyTypeAt n' t1 <+> operator (arrow c) <+> prettyTypeAt 0 t2
     LetT x t1 t2 -> text "LET" <+> text x <> operator ":" <> prettyTypeAt n' t1 <+> operator "IN" <+> prettyTypeAt 0 t2
   )
   where
     n' = typePower t
+
+arrow :: Int -> String
+arrow c = if c == 0 then "->" else "-[" ++ show c ++ "]->"
 
 instance Pretty RType where
   pretty = prettyType
@@ -463,7 +466,7 @@ fmlNodeCount' f = fmlNodeCount f
 typeNodeCount :: RType -> Int
 typeNodeCount (ScalarT (DatatypeT _ tArgs pArgs) fml _) = fmlNodeCount' fml + sum (map typeNodeCount tArgs) + sum (map fmlNodeCount' pArgs)
 typeNodeCount (ScalarT _ fml _) = fmlNodeCount' fml
-typeNodeCount (FunctionT _ tArg tRes) = typeNodeCount tArg + typeNodeCount tRes
+typeNodeCount (FunctionT _ tArg tRes _) = typeNodeCount tArg + typeNodeCount tRes
 
 -- | 'programNodeCount' @p@ : size of @p@ (in AST nodes)
 programNodeCount :: RProgram -> Int

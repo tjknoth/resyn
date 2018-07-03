@@ -1,0 +1,20 @@
+data List a where 
+  Nil :: List a
+  Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where 
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+measure elems :: List a -> Set a where 
+  Nil -> [] 
+  Cons x xs -> [x] + elems xs
+
+true :: {Bool | _v}
+false :: {Bool | !_v}
+
+compare :: xs: List a -> ys: List a -> {Bool | _v == (len xs == len ys)}
+compare = ??
+
+compareCT :: acc: Bool -> xs: List a -> ys: List a -> {Bool | _v == (len xs == len ys)}
+compareCT = ??

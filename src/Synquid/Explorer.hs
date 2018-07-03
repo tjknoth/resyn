@@ -111,7 +111,7 @@ runExplorer eParams tParams topLevel initTS go = do
 -- | 'generateI' @env t@ : explore all terms that have refined type @t@ in environment @env@
 -- (top-down phase of bidirectional typechecking)
 generateI :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
-generateI env t@(FunctionT x tArg tRes) = do
+generateI env t@(FunctionT x tArg tRes _) = do
   let ctx p = Program (PFun x p) t
   pBody <- inContext ctx $ generateI (unfoldAllVariables $ addVariable x tArg env) tRes
   return $ ctx pBody
@@ -264,7 +264,7 @@ generateCase env scrVar pScrutinee t consName =
 -- and (2) a formula that is the return type of @consT@ applied to @scrutinee@
 caseSymbols env x [] (ScalarT _ fml _) = let subst = substitute (Map.singleton valueVarName x) in
   return ([], subst fml)
-caseSymbols env x (name : names) (FunctionT y tArg tRes) = do
+caseSymbols env x (name : names) (FunctionT y tArg tRes _) = do
   (syms, ass) <- caseSymbols env x names (renameVar (isBound env) y name tArg tRes)
   return ((name, tArg) : syms, ass)
 
@@ -396,8 +396,8 @@ enumerateAt env typ d = do
       x <- freshId "X"
       -- TODO: does returned environment matter here:????
       (fun, env') <- inContext (\p -> Program (PApp p uHole) typ)
-                $ genFun env (FunctionT x AnyT typ) -- Find all functions that unify with (? -> typ)
-      let FunctionT x tArg tRes = typeOf fun
+                $ genFun env (FunctionT x AnyT typ defCost) -- Find all functions that unify with (? -> typ)
+      let FunctionT x tArg tRes _ = typeOf fun
 
       (pApp, env'') <- if isFunctionType tArg
         then do -- Higher-order argument: its value is not required for the function type, return a placeholder and enqueue an auxiliary goal
@@ -526,11 +526,11 @@ instantiate env sch top argNames = do
               else return ffalse
       instantiate' subst (Map.insert p fml pSubst) sch
     instantiate' subst pSubst (Monotype t) = go subst pSubst argNames t
-    go subst pSubst argNames (FunctionT x tArg tRes) = do
+    go subst pSubst argNames (FunctionT x tArg tRes cost) = do
       x' <- case argNames of
               [] -> freshVar env "x"
               (argName : _) -> return argName
-      liftM2 (FunctionT x') (go subst pSubst [] tArg) (go subst pSubst (drop 1 argNames) (renameVar (isBoundTV subst) x x' tArg tRes))
+      liftM2 (\t r -> FunctionT x' t r cost) (go subst pSubst [] tArg) (go subst pSubst (drop 1 argNames) (renameVar (isBoundTV subst) x x' tArg tRes))
     go subst pSubst _ t = return $ typeSubstitutePred pSubst . typeSubstitute subst $ t
     isBoundTV subst a = (a `Map.member` subst) || (a `elem` (env ^. boundTypeVars))
 

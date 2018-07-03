@@ -210,7 +210,7 @@ parseFunctionTypeWithArg = do
   argType <- parseUnrefTypeWithArgs <|> parseTypeAtom
   reservedOp "->"
   returnType <- parseType
-  return $ FunctionT argId argType returnType
+  return $ FunctionT argId argType returnType defCost
   where
     parseArgName = parseIdentifier <* reservedOp ":"
 
@@ -223,7 +223,7 @@ parseFunctionTypeMb = do
     parseFunctionRest argType = do
       reservedOp "->"
       returnType <- parseType
-      return $ FunctionT ("arg" ++ show (arity returnType)) argType returnType
+      return $ FunctionT ("arg" ++ show (arity returnType)) argType returnType defCost
 
 parseTypeAtom :: Parser RType
 parseTypeAtom = choice [

@@ -144,8 +144,8 @@ extractQGenFromType positive env val vars t = extractQGenFromType' positive t
         extractFromBase _ = []
         fmls = Set.toList $ conjunctsOf (sortSubstituteFml sortInst fml) -- `Set.union` conjunctsOf (sortSubstituteFml sortInst pot)
       in concatMap (instantiateTypeQualifier env val vars) fmls ++ extractFromBase baseT
-    extractQGenFromType' False  (FunctionT _ tArg tRes) = extractQGenFromType' True tArg ++ extractQGenFromType' False tRes
-    extractQGenFromType' True   (FunctionT _ tArg tRes) = extractQGenFromType' True tRes
+    extractQGenFromType' False  (FunctionT _ tArg tRes _) = extractQGenFromType' True tArg ++ extractQGenFromType' False tRes
+    extractQGenFromType' True   (FunctionT _ tArg tRes _) = extractQGenFromType' True tRes
 
     -- Extract type qualifiers from a predicate argument of a datatype:
     -- if the predicate has parameters, turn it into a type qualifier where the last parameter is replaced with _v
@@ -160,7 +160,7 @@ extractQGenFromType positive env val vars t = extractQGenFromType' positive t
 
 -- | Extract conditional qualifiers from the types of Boolean functions
 extractCondFromType :: Environment -> [Formula] -> RType -> [Formula]
-extractCondFromType env vars t@(FunctionT _ tArg _) = case lastType t of
+extractCondFromType env vars t@(FunctionT _ tArg _ _) = case lastType t of
     ScalarT BoolT (Binary Eq (Var BoolS v) fml) _ | v == valueVarName ->
       let
         sortInst = Map.fromList $ zip (Set.toList $ typeVarsOf t) (map VarS distinctTypeVars)
@@ -221,7 +221,7 @@ extractPredQGenFromType useAllArgs env actualParams actualVars t = extractPredQG
             in concatMap extractFromAtom atoms -- Substitute the variables, but leave predicate parameters unchanged (optimization)
       in extractFromRefinement fml {-++ extractFromRefinement pot-} ++ concatMap extractFromPArg pArgs ++ concatMap extractPredQGenFromType' tArgs
     extractPredQGenFromType' (ScalarT _ fml pot) = extractFromRefinement fml -- ++ extractFromRefinement pot
-    extractPredQGenFromType' (FunctionT _ tArg tRes) = extractPredQGenFromType' tArg ++ extractPredQGenFromType' tRes
+    extractPredQGenFromType' (FunctionT _ tArg tRes _) = extractPredQGenFromType' tArg ++ extractPredQGenFromType' tRes
 
 allPredApps :: Environment -> [Formula] -> Int -> [Formula]
 allPredApps _ actuals 0 = actuals

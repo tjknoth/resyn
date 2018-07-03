@@ -174,7 +174,7 @@ instance AsHaskellType (SchemaSkeleton r) where
 
 instance AsHaskellType (TypeSkeleton r) where
   toHsType env (ScalarT base _ _) = toHsType env base
-  toHsType env (FunctionT _ argType resultType) =
+  toHsType env (FunctionT _ argType resultType _) =
     TyFun (toHsType env argType) (toHsType env resultType)
   toHsType env AnyT = TyCon $ UnQual $ Ident "Any"
 

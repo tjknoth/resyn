@@ -24,7 +24,7 @@ data BaseType r = BoolT | IntT | DatatypeT Id [TypeSkeleton r] [r] | TypeVarT Su
 -- | Type skeletons (parametrized by refinements)
 data TypeSkeleton r =
   ScalarT (BaseType r) r Formula |
-  FunctionT Id (TypeSkeleton r) (TypeSkeleton r) |
+  FunctionT Id (TypeSkeleton r) (TypeSkeleton r) Int |
   LetT Id (TypeSkeleton r) (TypeSkeleton r) |
   AnyT
   deriving (Show, Eq, Ord)
@@ -40,33 +40,35 @@ equalShape t t' = t == t'
 
 defPotential = IntLit 0
 defMultiplicity = IntLit 1 
+defCost :: Int
+defCost = 0
 
 potentialPrefix = "p"
 multiplicityPrefix = "m"
 
-contextual x tDef (FunctionT y tArg tRes) = FunctionT y (contextual x tDef tArg) (contextual x tDef tRes)
+contextual x tDef (FunctionT y tArg tRes cost) = FunctionT y (contextual x tDef tArg) (contextual x tDef tRes) cost
 contextual _ _ AnyT = AnyT
 contextual x tDef t = LetT x tDef t
 
-isScalarType (ScalarT _ _ _) = True
+isScalarType ScalarT{} = True
 -- isScalarType (LetT _ _ t) = isScalarType t
-isScalarType (LetT _ _ _) = True
+isScalarType LetT{} = True
 isScalarType _ = False
 baseTypeOf (ScalarT baseT _ _) = baseT
 baseTypeOf (LetT _ _ t) = baseTypeOf t
 baseTypeOf _ = error "baseTypeOf: applied to a function type"
-isFunctionType (FunctionT _ _ _) = True
+isFunctionType FunctionT{} = True
 -- isFunctionType (LetT _ _ t) = isFunctionType t
 isFunctionType _ = False
-argType (FunctionT _ t _) = t
-resType (FunctionT _ _ t) = t
+argType (FunctionT _ t _ _) = t
+resType (FunctionT _ _ t _) = t
 
 hasAny AnyT = True
 hasAny (ScalarT baseT _ _) = baseHasAny baseT
   where
     baseHasAny (DatatypeT _ tArgs _) = any hasAny tArgs
     baseHasAny _ = False
-hasAny (FunctionT _ tArg tRes) = hasAny tArg || hasAny tRes
+hasAny (FunctionT _ tArg tRes _) = hasAny tArg || hasAny tRes
 hasAny (LetT _ tDef tBody) = hasAny tDef || hasAny tBody
 
 -- | Convention to indicate "any datatype" (for synthesizing match scrtuinees)
@@ -98,28 +100,28 @@ typeIsData (ScalarT DatatypeT{} _ _) = True
 typeIsData _ = False
 
 arity :: TypeSkeleton r -> Int
-arity (FunctionT _ _ t) = 1 + arity t
+arity (FunctionT _ _ t _) = 1 + arity t
 arity (LetT _ _ t) = arity t
 arity _ = 0
 
 -- TODO: make sure the AnyT case is OK
 hasSet :: TypeSkeleton r -> Bool
 hasSet (ScalarT (DatatypeT name _ _) _ _) = name == setTypeName
-hasSet (FunctionT _ t1 t2) = hasSet t1 || hasSet t2
+hasSet (FunctionT _ t1 t2 _) = hasSet t1 || hasSet t2
 hasSet (LetT _ t1 t2) = hasSet t1 || hasSet t2
 hasSet _ = False
 
-lastType (FunctionT _ _ tRes) = lastType tRes
+lastType (FunctionT _ _ tRes _) = lastType tRes
 lastType (LetT _ _ t) = lastType t
 lastType t = t
 
-allArgTypes (FunctionT x tArg tRes) = tArg : (allArgTypes tRes)
+allArgTypes (FunctionT x tArg tRes _) = tArg : (allArgTypes tRes)
 allArgTypes (LetT _ _ t) = allArgTypes t
 allArgTypes _ = []
 
 allArgs (ScalarT _ _ _) = []
-allArgs (FunctionT x (ScalarT baseT _ _) tRes) = (Var (toSort baseT) x) : (allArgs tRes)
-allArgs (FunctionT x _ tRes) = (allArgs tRes)
+allArgs (FunctionT x (ScalarT baseT _ _) tRes _) = (Var (toSort baseT) x) : (allArgs tRes)
+allArgs (FunctionT x _ tRes _) = (allArgs tRes)
 allArgs (LetT _ _ t) = allArgs t
 
 
@@ -129,7 +131,7 @@ varsOfType (ScalarT baseT fml pot) = varsOfBase baseT `Set.union` Set.map varNam
   where
     varsOfBase (DatatypeT name tArgs pArgs) = Set.unions (map varsOfType tArgs) `Set.union` Set.map varName (Set.unions (map varsOf pArgs))
     varsOfBase _ = Set.empty
-varsOfType (FunctionT x tArg tRes) = varsOfType tArg `Set.union` Set.delete x (varsOfType tRes)
+varsOfType (FunctionT x tArg tRes _) = varsOfType tArg `Set.union` Set.delete x (varsOfType tRes)
 varsOfType (LetT x tDef tBody) = varsOfType tDef `Set.union` Set.delete x (varsOfType tBody)
 varsOfType AnyT = Set.empty
 
@@ -139,7 +141,7 @@ predsOfType (ScalarT baseT fml pot) = predsOfBase baseT `Set.union` predsOf fml 
   where
     predsOfBase (DatatypeT name tArgs pArgs) = Set.unions (map predsOfType tArgs) `Set.union` Set.unions (map predsOf pArgs)
     predsOfBase _ = Set.empty
-predsOfType (FunctionT x tArg tRes) = predsOfType tArg `Set.union` predsOfType tRes
+predsOfType (FunctionT x tArg tRes _) = predsOfType tArg `Set.union` predsOfType tRes
 predsOfType (LetT x tDef tBody) = predsOfType tDef `Set.union` predsOfType tBody
 predsOfType AnyT = Set.empty
 
@@ -209,7 +211,7 @@ typeSubstitute subst (ScalarT baseT r p) = addRefinement substituteBase (sortSub
           pArgs' = map (sortSubstituteFml (asSortSubst subst)) pArgs
         in ScalarT (DatatypeT name tArgs' pArgs') ftrue p
       _ -> ScalarT baseT ftrue p
-typeSubstitute subst (FunctionT x tArg tRes) = FunctionT x (typeSubstitute subst tArg) (typeSubstitute subst tRes)
+typeSubstitute subst (FunctionT x tArg tRes cost) = FunctionT x (typeSubstitute subst tArg) (typeSubstitute subst tRes) cost
 typeSubstitute subst (LetT x tDef tBody) = LetT x (typeSubstitute subst tDef) (typeSubstitute subst tBody)
 typeSubstitute _ AnyT = AnyT
 
@@ -229,8 +231,8 @@ typeSubstitutePred pSubst t = let tsp = typeSubstitutePred pSubst
   in case t of
     ScalarT (DatatypeT name tArgs pArgs) fml pot -> ScalarT (DatatypeT name (map tsp tArgs) (map (substitutePredicate pSubst) pArgs)) (substitutePredicate pSubst fml) (substitutePredicate pSubst pot)
     ScalarT baseT fml pot -> ScalarT baseT (substitutePredicate pSubst fml) (substitutePredicate pSubst pot)
-    FunctionT x tArg tRes -> FunctionT x (tsp tArg) (tsp tRes)
-    LetT x tDef tBody -> FunctionT x (tsp tDef) (tsp tBody)
+    FunctionT x tArg tRes c -> FunctionT x (tsp tArg) (tsp tRes) c
+    LetT x tDef tBody -> LetT x (tsp tDef) (tsp tBody)
     AnyT -> AnyT
 
 -- | 'typeVarsOf' @t@ : all type variables in @t@
@@ -239,7 +241,7 @@ typeVarsOf t@(ScalarT baseT _ _) = case baseT of
   TypeVarT _ name _ -> Set.singleton name
   DatatypeT _ tArgs _ -> Set.unions (map typeVarsOf tArgs)
   _ -> Set.empty
-typeVarsOf (FunctionT _ tArg tRes) = typeVarsOf tArg `Set.union` typeVarsOf tRes
+typeVarsOf (FunctionT _ tArg tRes _) = typeVarsOf tArg `Set.union` typeVarsOf tRes
 typeVarsOf (LetT _ tDef tBody) = typeVarsOf tDef `Set.union` typeVarsOf tBody
 typeVarsOf _ = Set.empty
 
@@ -261,7 +263,7 @@ baseTypeMultiply fml t = t
 -- Currently only used on the argument in function types, shouldn't need more cases. Also not adding potential recursively to the basetypes.
 addPotential :: RType -> Formula -> RType 
 addPotential t@(ScalarT base ref pot) f = ScalarT (addPotentialBase base f) ref (addFormulas pot f)
---addPotential (FunctionT x argT retT) f = FunctionT x (addPotential argT f) (addPotential retT)
+--addPotential (FunctionT x argT retT c) f = FunctionT x (addPotential argT f) (addPotential retT) c
 -- Should we add potential in the stronger type t as well?
 --addPotential (LetT x t contT) = LetT x t (addPotential contT f)
 
@@ -272,7 +274,7 @@ addPotentialBase b _ = b
 -- | 'removePotential' @t@ : removes all non-default potential and multiplicity annotations, used to strip constructor annotations
 removePotential :: RType -> RType
 removePotential (ScalarT b r _) = ScalarT (removePotentialBase b) r (IntLit 0)
-removePotential (FunctionT x arg res) = FunctionT x (removePotential arg) (removePotential res)
+removePotential (FunctionT x arg res c) = FunctionT x (removePotential arg) (removePotential res) c
 removePotential (LetT x t body) = LetT x (removePotential t) (removePotential body)
 removePotential t = t
 
@@ -284,33 +286,6 @@ removePotentialBase b = b
 -- Extract top-level potential from a scalar type
 topPotentialOf :: RType -> Formula 
 topPotentialOf (ScalarT _ _ p) = p
-
--- | 'increaseFunctionPotential' @t@ : if @t@, a function type, outputs a type with zero potential on its type variables, make those potentials nonzero and increment the rest of the annotations accordingly. Should never be called with a contextual type; only used on signatures 
-increaseFunctionPotential :: RType -> (Bool, RType)
-increaseFunctionPotential (ScalarT base ref pot) = 
-  let (shouldChange, base') = 
-        case base of 
-          DatatypeT{} -> increaseFunctionPotentialBase base 
-          b           -> (pot == fzero, b)  
-      pot' = if shouldChange 
-        then addFormulas pot fone 
-        else pot
-  in (shouldChange, ScalarT base' ref pot')
-increaseFunctionPotential (FunctionT x argT resT) = 
-  let (shouldChange, resT') = increaseFunctionPotential resT
-      argT' = if shouldChange
-        then addPotential argT fone
-        else argT
-  in (shouldChange, FunctionT x argT' resT')
-increaseFunctionPotentialBase :: BaseType Formula -> (Bool, BaseType Formula)
-increaseFunctionPotentialBase (DatatypeT x ts ps) = 
-  let checkTypes = map (fst . increaseFunctionPotential) ts -- check if any of the type parameters need incrementing
-      shouldChange = or checkTypes
-      ts' = if shouldChange 
-              then fmap (`addPotential` fone) ts
-              else ts 
-  in (shouldChange, DatatypeT x ts' ps)
-increaseFunctionPotentialBase b = (False, b)
 
 {- Refinement types -}
 
@@ -333,7 +308,7 @@ shape (ScalarT (DatatypeT name tArgs pArgs) _ _) = ScalarT (DatatypeT name (map 
 shape (ScalarT IntT _ _) = ScalarT IntT () defPotential
 shape (ScalarT BoolT _ _) = ScalarT BoolT () defPotential
 shape (ScalarT (TypeVarT _ a _) _ _) = ScalarT (TypeVarT Map.empty a defMultiplicity) () defPotential
-shape (FunctionT x tArg tFun) = FunctionT x (shape tArg) (shape tFun)
+shape (FunctionT x tArg tFun _) = FunctionT x (shape tArg) (shape tFun) 0 
 shape (LetT _ _ t) = shape t
 shape AnyT = AnyT
 
@@ -349,7 +324,7 @@ addRefinement t _ = error "addRefinement: applied to function type"
 
 -- | Conjoin refinement to the return type
 addRefinementToLast t@ScalarT{} fml = addRefinement t fml
-addRefinementToLast (FunctionT x tArg tRes) fml = FunctionT x tArg (addRefinementToLast tRes fml)
+addRefinementToLast (FunctionT x tArg tRes c) fml = FunctionT x tArg (addRefinementToLast tRes fml) c
 addRefinementToLast (LetT x tDef tBody) fml = LetT x tDef (addRefinementToLast tBody fml)
 
 -- | Conjoin refinement to the return type inside a schema
@@ -370,10 +345,10 @@ substituteInType isBound subst (ScalarT baseT fml pot) = ScalarT (substituteBase
           -- else TypeVarT (oldSubst `composeSubstitutions` subst) a
     substituteBase subst (DatatypeT name tArgs pArgs) = DatatypeT name (map (substituteInType isBound subst) tArgs) (map (substitute subst) pArgs)
     substituteBase _ baseT = baseT
-substituteInType isBound subst (FunctionT x tArg tRes) =
+substituteInType isBound subst (FunctionT x tArg tRes c) =
   if Map.member x subst
     then error $ unwords ["Attempt to substitute variable", x, "bound in a function type"]
-    else FunctionT x (substituteInType isBound subst tArg) (substituteInType isBound subst tRes)
+    else FunctionT x (substituteInType isBound subst tArg) (substituteInType isBound subst tRes) c
 substituteInType isBound subst (LetT x tDef tBody) =
   if Map.member x subst
     then error $ unwords ["Attempt to substitute variable", x, "bound in a contextual type"]
@@ -395,7 +370,7 @@ intersection isBound (ScalarT baseT fml pot) (ScalarT baseT' fml' pot') = case b
   DatatypeT name tArgs pArgs -> let DatatypeT _ tArgs' pArgs' = baseT' in
                                   ScalarT (DatatypeT name (zipWith (intersection isBound) tArgs tArgs') (zipWith andClean pArgs pArgs')) (fml `andClean` fml') (fmax pot pot') 
   _ -> ScalarT baseT (fml `andClean` fml') (fmax pot pot')
-intersection isBound (FunctionT x tArg tRes) (FunctionT y tArg' tRes') = FunctionT x tArg (intersection isBound tRes (renameVar isBound y x tArg tRes'))
+intersection isBound (FunctionT x tArg tRes c) (FunctionT y tArg' tRes' c') = FunctionT x tArg (intersection isBound tRes (renameVar isBound y x tArg tRes')) (max c c')
 
 typeFromSchema :: RSchema -> RType
 typeFromSchema (Monotype t) = t
@@ -408,7 +383,7 @@ typeFromSchema (ForallP _ t) = typeFromSchema t
 typeApplySolution :: Solution -> RType -> RType
 typeApplySolution sol (ScalarT (DatatypeT name tArgs pArgs) fml pot) = ScalarT (DatatypeT name (map (typeApplySolution sol) tArgs) (map (applySolution sol) pArgs)) (applySolution sol fml) pot
 typeApplySolution sol (ScalarT base fml pot) = ScalarT base (applySolution sol fml) pot
-typeApplySolution sol (FunctionT x tArg tRes) = FunctionT x (typeApplySolution sol tArg) (typeApplySolution sol tRes)
+typeApplySolution sol (FunctionT x tArg tRes c) = FunctionT x (typeApplySolution sol tArg) (typeApplySolution sol tRes) c
 typeApplySolution sol (LetT x tDef tBody) = LetT x (typeApplySolution sol tDef) (typeApplySolution sol tBody)
 typeApplySolution _ AnyT = AnyT
 
