@@ -190,11 +190,8 @@ reconstructI' env t@ScalarT{} impl = case impl of
                           (ScalarT (DatatypeT dtName _ _) _ _) -> do
                             case mName of
                               Nothing -> return ()
-                              Just name -> if dtName == name
-                                             then return ()
-                                             else throwErrorWithDescription $ text "Expected constructor of datatype" </> squotes (text name) </>
-                                                               text "and got constructor" </> squotes (text consName) </>
-                                                               text "of datatype" </> squotes (text dtName)
+                              Just name -> 
+                                unless (dtName == name) $ throwErrorWithDescription $ text "Expected constructor of datatype" </> squotes (text name) </> text "and got constructor" </> squotes (text consName) </> text "of datatype" </> squotes (text dtName)
                             if arity (toMonotype consSch) /= length args
                               then throwErrorWithDescription $ text "Constructor" </> squotes (text consName)
                                             </> text "expected" </> pretty (arity (toMonotype consSch)) </> text "binder(s) and got" <+> pretty (length args)

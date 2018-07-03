@@ -244,8 +244,8 @@ simplifyConstraint' _ _ (Subtype env (ScalarT (DatatypeT name [] (pArg:pArgs)) f
       let variances = _predVariances ((env ^. datatypes) Map.! name)
       let isContra = variances !! (length variances - length pArgs - 1) -- Is pArg contravariant?
       if isContra
-        then simplifyConstraint (Subtype env (int $ pArg') (int $ pArg) consistent label)
-        else simplifyConstraint (Subtype env (int $ pArg) (int $ pArg') consistent label)
+        then simplifyConstraint (Subtype env (int pArg') (int pArg) consistent label)
+        else simplifyConstraint (Subtype env (int pArg) (int pArg') consistent label)
       simplifyConstraint (Subtype env (ScalarT (DatatypeT name [] pArgs) fml pot) (ScalarT (DatatypeT name' [] pArgs') fml' pot') consistent label)
 simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1) (FunctionT y tArg2 tRes2) False label)
   = do
@@ -362,9 +362,7 @@ processConstraint (Subtype env (ScalarT baseTL l potl) (ScalarT baseTR r potr) T
       let r' = subst r
       let potl' = subst potl 
       let potr' = subst potr
-      if l' == ftrue || r' == ftrue
-        then return ()
-        else simpleConstraints %= (Subtype env (ScalarT baseTL l' potl') (ScalarT baseTR r' potr') True label :)
+      unless (l' == ftrue || r' == ftrue) $ simpleConstraints %= (Subtype env (ScalarT baseTL l' potl') (ScalarT baseTR r' potr') True label :)
 processConstraint (WellFormed env t@(ScalarT baseT fml pot))
   = case fml of
       Unknown _ u -> do
@@ -374,7 +372,7 @@ processConstraint (WellFormed env t@(ScalarT baseT fml pot))
         -- Only add qualifiers if it's a new variable; multiple well-formedness constraints could have been added for constructors
         let env' = typeSubstituteEnv tass env
         let env'' = addVariable valueVarName t env'
-        when (not $ Map.member u qmap) $ addQuals u (tq env'' (Var (toSort baseT) valueVarName) (allScalars env'))
+        unless (Map.member u qmap) $ addQuals u (tq env'' (Var (toSort baseT) valueVarName) (allScalars env'))
       _ -> return ()
 processConstraint (WellFormedCond env (Unknown _ u))
   = do
@@ -422,7 +420,7 @@ generateHornClauses c = error $ show $ text "generateHornClauses: not a simple s
 -- | 'allScalars' @env@ : logic terms for all scalar symbols in @env@
 -- TODO: do something with potentials?
 allScalars :: Environment -> [Formula]
-allScalars env = catMaybes $ map toFormula $ Map.toList $ symbolsOfArity 0 env
+allScalars env = mapMaybe toFormula $ Map.toList $ symbolsOfArity 0 env
   where
     toFormula (_, ForallT _ _) = Nothing
     toFormula (x, _) | x `Set.member` (env ^. letBound) = Nothing
@@ -436,11 +434,11 @@ allScalars env = catMaybes $ map toFormula $ Map.toList $ symbolsOfArity 0 env
 
 -- | 'allPotentialScrutinees' @env@ : logic terms for all scalar symbols in @env@
 allPotentialScrutinees :: Environment -> [Formula]
-allPotentialScrutinees env = catMaybes $ map toFormula $ Map.toList $ symbolsOfArity 0 env
+allPotentialScrutinees env = mapMaybe toFormula $ Map.toList $ symbolsOfArity 0 env
   where
     toFormula (x, Monotype t) = case t of
       ScalarT b@(DatatypeT _ _ _) _ _ ->
-        if Set.member x (env ^. unfoldedVars) && not (Program (PSymbol x) t `elem` (env ^. usedScrutinees))
+        if Set.member x (env ^. unfoldedVars) && notElem (Program (PSymbol x) t) (env ^. usedScrutinees)
           then Just $ Var (toSort b) x
           else Nothing
       _ -> Nothing
@@ -457,7 +455,7 @@ embedding env vars includeQuantified = do
     tass <- use typeAssignment
     pass <- use predAssignment
     qmap <- use qualifierMap
-    let ass = Set.map (substitutePredicate pass) $ (env ^. assumptions)
+    let ass = Set.map (substitutePredicate pass) (env ^. assumptions)
     let allVars = vars `Set.union` potentialVars qmap (conjunction ass)
     return $ addBindings env tass pass qmap ass allVars
   where
@@ -535,7 +533,7 @@ fresh env (ScalarT baseT _ p) = do
     -- Ensure fresh base type has multiplicity 1 to avoid zeroing other formulas during unification
     --freshBase (TypeVarT subs a m) = return $ TypeVarT subs a defMultiplicity
     freshBase baseT = return baseT
-fresh env (FunctionT x tArg tFun) = do
+fresh env (FunctionT x tArg tFun) = 
   liftM2 (FunctionT x) (fresh env tArg) (fresh env tFun)
 fresh env t = let (env', t') = embedContext env t in fresh env' t'
 

@@ -14,5 +14,5 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs  
 	
-replicate :: n: Nat -> x: a -> {List a | len _v == n}
+replicate :: n: Nat -> x: {n ** a| |n} -> {List a | len _v == n}
 replicate = ?? 

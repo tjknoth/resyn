@@ -112,8 +112,8 @@ runExplorer eParams tParams topLevel initTS go = do
 -- (top-down phase of bidirectional typechecking)
 generateI :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
 generateI env t@(FunctionT x tArg tRes) = do
-  let ctx = \p -> Program (PFun x p) t
-  pBody <- inContext ctx $ generateI (unfoldAllVariables $ addVariable x tArg $ env) tRes
+  let ctx p = Program (PFun x p) t
+  pBody <- inContext ctx $ generateI (unfoldAllVariables $ addVariable x tArg env) tRes
   return $ ctx pBody
 generateI env t@(ScalarT _ _ _) = do
   maEnabled <- asks . view $ _1 . abduceScrutinees -- Is match abduction enabled?
@@ -208,7 +208,7 @@ generateMatch env t = do
 
         _ -> mzero -- Type of the scrutinee is not a datatype: it cannot be used in a match
 
-generateFirstCase env scrVar pScrutinee t consName = do
+generateFirstCase env scrVar pScrutinee t consName = 
   case Map.lookup consName (allSymbols env) of
     Nothing -> error $ show $ text "Datatype constructor" <+> text consName <+> text "not found in the environment" <+> pretty env
     Just consSch -> do
@@ -226,12 +226,12 @@ generateFirstCase env scrVar pScrutinee t consName = do
               deadValuation <- conjunction <$> currentValuation deadUnknown
               ifte (generateError (addAssumption deadValuation env)) (const mzero) (return ()) -- The error must be possible only in this case
               return (err, deadValuation, unknownName deadUnknown))
-            (\(err, deadCond, deadUnknown) -> return $ (Case consName binders err, deadCond, deadUnknown))
+            (\(err, deadCond, deadUnknown) -> return (Case consName binders err, deadCond, deadUnknown))
             (do
               pCaseExpr <- local (over (_1 . matchDepth) (-1 +))
                             $ inContext (\p -> Program (PMatch pScrutinee [Case consName binders p]) t)
                             $ generateI caseEnv t
-              return $ (Case consName binders pCaseExpr, ftrue, dontCare))
+              return (Case consName binders pCaseExpr, ftrue, dontCare))
 
 -- | Generate the @consName@ case of a match term with scrutinee variable @scrName@ and scrutinee type @scrType@
 generateCase :: (MonadSMT s, MonadHorn s) => Environment -> Formula -> RProgram -> RType -> Id -> Explorer s (Case RType, Explorer s ())
@@ -492,7 +492,7 @@ freshVar env prefix = runInSolver $ TCSolver.freshVar env prefix
 -- order them from weakest to strongest in terms of valuation of @u@ and split the computation
 currentValuation :: MonadHorn s => Formula -> Explorer s Valuation
 currentValuation u = do
-  runInSolver $ solveAllCandidates
+  runInSolver solveAllCandidates
   cands <- use (typingState . candidates)
   let candGroups = groupBy (\c1 c2 -> val c1 == val c2) $ sortBy (\c1 c2 -> setCompare (val c1) (val c2)) cands
   msum $ map pickCandidiate candGroups
@@ -502,7 +502,7 @@ currentValuation u = do
       typingState . candidates .= cands'
       return $ val (head cands')
 
-inContext ctx f = local (over (_1 . context) (. ctx)) f
+inContext ctx = local (over (_1 . context) (. ctx))
 
 -- | Replace all bound type and predicate variables with fresh free variables
 -- (if @top@ is @False@, instantiate with bottom refinements instead of top refinements)
