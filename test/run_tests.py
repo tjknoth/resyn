@@ -187,6 +187,7 @@ RESOURCE_SYNTHESIS_BENCHMARKS = [
     ('BST-Sort',            ['--resources']),
     #('BST-Replicate',       ['--resources']),
     ('List-Append',         ['--resources']),
+    ('List-Common',         ['--resources']),
     ('List-Compare',        ['--resources']),
     ('List-Compress',       ['--resources']),
     ('List-Concat',         ['--resources']),

@@ -24,7 +24,7 @@ data BaseType r = BoolT | IntT | DatatypeT Id [TypeSkeleton r] [r] | TypeVarT Su
 -- | Type skeletons (parametrized by refinements)
 data TypeSkeleton r =
   ScalarT (BaseType r) r Formula |
-  FunctionT Id (TypeSkeleton r) (TypeSkeleton r) Int |
+  FunctionT Id (TypeSkeleton r) (TypeSkeleton r) Integer |
   LetT Id (TypeSkeleton r) (TypeSkeleton r) |
   AnyT
   deriving (Show, Eq, Ord)
@@ -40,7 +40,6 @@ equalShape t t' = t == t'
 
 defPotential = IntLit 0
 defMultiplicity = IntLit 1 
-defCost :: Int
 defCost = 0
 
 potentialPrefix = "p"
@@ -377,6 +376,12 @@ typeFromSchema (Monotype t) = t
 typeFromSchema (ForallT _ t) = typeFromSchema t
 typeFromSchema (ForallP _ t) = typeFromSchema t
 
+-- Move cost annotations to next arrow or to scalar argument type before applying function
+shiftCost :: RType -> RType
+shiftCost (FunctionT x argT resT c) = 
+  case resT of 
+    (FunctionT y argT' resT' c') -> FunctionT x argT (FunctionT y argT' resT' (c + c')) 0
+    s@ScalarT{} -> FunctionT x (addPotential argT (IntLit c)) s 0
 
 -- | Instantiate unknowns in a type
 -- TODO: eventually will need to instantiate potential variables as well

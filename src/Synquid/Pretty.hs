@@ -274,7 +274,7 @@ prettyTypeAt n t = condHlParens (n' <= n) (
   where
     n' = typePower t
 
-arrow :: Int -> String
+arrow :: Integer -> String
 arrow c = if c == 0 then "->" else "-[" ++ show c ++ "]->"
 
 instance Pretty RType where

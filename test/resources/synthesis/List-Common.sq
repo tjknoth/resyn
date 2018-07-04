@@ -1,0 +1,25 @@
+data IList a  where 
+  INil :: IList a 
+  ICons :: x: a -> xs: IList {a | x <= _v } -> IList a 
+
+termination measure ilen :: IList a -> {Int | _v >= 0} where 
+  INil -> 0 
+  ICons x xs -> 1 + ilen xs
+
+measure ielems :: IList a -> Set a where 
+  INil -> []
+  ICons x xs -> [x] + ielems xs
+
+measure icontains :: x: a -> IList a -> Bool where 
+  INil -> False 
+  ICons y ys -> 
+    if y == x
+      then True 
+      else icontains x ys
+
+member :: x: a -> xs: IList {1 ** a | | 1} -> {Bool | _v == (x in (ielems xs))}
+
+qualifier {x < y}
+
+common :: xs: IList a -> ys: IList a -> {IList a | ielems _v == (ielems xs * ielems ys)}
+common = ??
