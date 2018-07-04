@@ -262,9 +262,9 @@ baseTypeMultiply fml t = t
 -- Currently only used on the argument in function types, shouldn't need more cases. Also not adding potential recursively to the basetypes.
 addPotential :: RType -> Formula -> RType 
 addPotential t@(ScalarT base ref pot) f = ScalarT (addPotentialBase base f) ref (addFormulas pot f)
+-- Should only be called when tBody is a scalar (hopefully)
+addPotential (LetT x tDef tBody) f = LetT x tDef (addPotential tBody f)
 --addPotential (FunctionT x argT retT c) f = FunctionT x (addPotential argT f) (addPotential retT) c
--- Should we add potential in the stronger type t as well?
---addPotential (LetT x t contT) = LetT x t (addPotential contT f)
 
 addPotentialBase :: BaseType Formula -> Formula -> BaseType Formula 
 addPotentialBase (DatatypeT x ts ps) f = DatatypeT x (fmap (`addPotential` f) ts) ps
@@ -379,9 +379,12 @@ typeFromSchema (ForallP _ t) = typeFromSchema t
 -- Move cost annotations to next arrow or to scalar argument type before applying function
 shiftCost :: RType -> RType
 shiftCost (FunctionT x argT resT c) = 
-  case resT of 
-    (FunctionT y argT' resT' c') -> FunctionT x argT (FunctionT y argT' resT' (c + c')) 0
-    s@ScalarT{} -> FunctionT x (addPotential argT (IntLit c)) s 0
+  if isScalarType resT
+    then FunctionT x (addPotential argT (IntLit c)) resT 0 
+    else FunctionT x argT (addCostToArrow resT) 0
+  where 
+    addCostToArrow (FunctionT y a r cost) = FunctionT y a r (cost + c)
+
 
 -- | Instantiate unknowns in a type
 -- TODO: eventually will need to instantiate potential variables as well

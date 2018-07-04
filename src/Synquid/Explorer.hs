@@ -397,22 +397,22 @@ enumerateAt env typ d = do
       -- TODO: does returned environment matter here:????
       (fun, env') <- inContext (\p -> Program (PApp p uHole) typ)
                 $ genFun env (FunctionT x AnyT typ defCost) -- Find all functions that unify with (? -> typ)
-      let FunctionT x tArg tRes _ = typeOf fun
-
-      (pApp, env'') <- if isFunctionType tArg
+      let tp@(FunctionT x tArg tRes _) = typeOf fun
+      let (FunctionT x' tArg' tRes' _) = shiftCost tp
+      (pApp, env'') <- if isFunctionType tArg'
         then do -- Higher-order argument: its value is not required for the function type, return a placeholder and enqueue an auxiliary goal
           d <- asks . view $ _1 . auxDepth
           when (d <= 0) $ writeLog 2 (text "Cannot synthesize higher-order argument: no auxiliary functions allowed") >> mzero
-          arg <- enqueueGoal env tArg (untyped PHole) (d - 1)
-          return (Program (PApp fun arg) tRes, env)
+          arg <- enqueueGoal env tArg' (untyped PHole) (d - 1)
+          return (Program (PApp fun arg) tRes', env')
         else do -- First-order argument: generate now
           let mbCut = id -- if Set.member x (varsOfType tRes) then id else cut
           (arg, newEnv) <- local (over (_1 . eGuessDepth) (-1 +))
-                    $ inContext (\p -> Program (PApp fun p) tRes)
-                    $ mbCut (genArg env' tArg)
+                    $ inContext (\p -> Program (PApp fun p) tRes')
+                    $ mbCut (genArg env' tArg')
           writeLog 3 (text "Synthesized argument" <+> pretty arg <+> text "of type" <+> pretty (typeOf arg))
-          let tRes' = appType newEnv arg x tRes -- Probably doesn't matter which environment we use here, using newEnv for consistency 
-          return (Program (PApp fun arg) tRes', newEnv)
+          let tRes'' = appType newEnv arg x tRes' -- Probably doesn't matter which environment we use here, using newEnv for consistency 
+          return (Program (PApp fun arg) tRes'', newEnv)
       checkE env'' typ pApp
       return (pApp, env'')
 
