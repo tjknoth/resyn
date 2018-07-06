@@ -183,9 +183,11 @@ simplifyConstraint c = do
 
 -- Any type: drop
 simplifyConstraint' _ _ (Subtype _ _ AnyT _ _) = return ()
-simplifyConstraint' _ _ c@(Subtype _ AnyT _ _ _) = return ()
-simplifyConstraint' _ _ c@(WellFormed _ AnyT) = return ()
+simplifyConstraint' _ _ (Subtype _ AnyT _ _ _) = return ()
+simplifyConstraint' _ _ (WellFormed _ AnyT) = return ()
 simplifyConstraint' _ _ (SplitType _ _ AnyT _ _) = return ()
+simplifyConstraint' _ _ (SplitType _ _ _ AnyT _) = return ()
+simplifyConstraint' _ _ (SplitType _ _ _ _ AnyT) = return ()
 -- Any datatype: drop only if lhs is a datatype
 simplifyConstraint' _ _ (Subtype _ (ScalarT (DatatypeT _ _ _) _ _) t _ _) | t == anyDatatype = return ()
 -- Well-formedness of a known predicate drop
@@ -469,7 +471,7 @@ embedding env vars includeQuantified = do
                   ScalarT baseT fml pot ->
                     let fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x)) . substitutePredicate pass)
                                           (fml : allMeasurePostconditions includeQuantified baseT env) in
-                    let newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls' in
+                    let newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls' in 
                     addBindings env tass pass qmap (fmls `Set.union` fmls') (rest `Set.union` newVars)
                   LetT y tDef tBody -> addBindings (addVariable x tBody . addVariable y tDef . removeVariable x $ env) tass pass qmap fmls vars
                   AnyT -> Set.singleton ffalse
@@ -674,7 +676,6 @@ solveResourceConstraints oldConstraints constraints = do
         writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text s) 
         return $ Just constraints 
       else return Nothing
-    
             
 -- | 'isSatWithModel' : check satisfiability and return the model accordingly
 isSatWithModel :: MonadSMT s => Formula -> TCSolver s (Bool, String)
@@ -684,23 +685,25 @@ isSatWithModel = lift . lift . lift . solveWithModel
 generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Bool -> Constraint -> TCSolver s Formula 
 generateFormula shouldLog checkMults c@(Subtype env tl tr _ name) = do
     let fmls = conjunction $ Set.filter (not . isTrivial) $ assertSubtypes env checkMults subtypeOp tl tr
-    emb <- embedEnv env (conjunction (allFormulasOf tl `Set.union` allFormulasOf tr)) True
-    let emb' = preprocessAssumptions $ Set.insert (refinementOf tl) emb
-    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls) 
-    instantiateUniversals shouldLog env fmls (conjunction emb')
+    embedAndProcessConstraint env shouldLog c fmls (conjunction (allFormulasOf tl `Set.union` allFormulasOf tr)) (Set.insert (refinementOf tl))
 generateFormula shouldLog checkMults c@(WellFormed env t) = do
     let fmls = conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allRFormulas checkMults t
-    emb <- embedEnv env (conjunction (allFormulasOf t)) True  
-    let emb' = preprocessAssumptions $ Set.insert (refinementOf t) emb
-    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)
-    instantiateUniversals shouldLog env fmls (conjunction emb')
+    embedAndProcessConstraint env shouldLog c fmls (conjunction (allFormulasOf t)) (Set.insert (refinementOf t))
 generateFormula shouldLog checkMults c@(SplitType env v t tl tr) = do 
     let fmls = conjunction $ partition checkMults t tl tr
-    emb <- embedEnv env (conjunction (allFormulasOf t)) True
-    let emb' = preprocessAssumptions emb  
-    when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls) 
-    instantiateUniversals shouldLog env fmls (conjunction emb')
+    embedAndProcessConstraint env shouldLog c fmls (conjunction (allFormulasOf t)) id
 generateFormula _ _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
+
+embedAndProcessConstraint :: (MonadSMT s, MonadHorn s) => Environment -> Bool -> Constraint -> Formula -> Formula -> (Set Formula -> Set Formula) -> TCSolver s Formula
+embedAndProcessConstraint env shouldLog c fmls relevantFml addTo = do 
+  emb <- embedEnv env relevantFml True
+  let isFSingleton s = (Set.size s == 1) && (Set.findMin s == ffalse)
+  if isFSingleton emb  
+    then return ftrue
+    else do 
+      let emb' = preprocessAssumptions $ addTo emb
+      when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)
+      instantiateUniversals shouldLog env fmls (conjunction emb')
 
 -- | 'instantiateUniversals' @b env fml ass@ : Instantiate universally quantified terms in @fml@ under @env@ with examples satisfying assumptions @ass@
 instantiateUniversals :: (MonadHorn s, MonadSMT s) => Bool -> Environment -> Formula -> Formula -> TCSolver s Formula
