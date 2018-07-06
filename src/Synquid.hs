@@ -48,7 +48,7 @@ main = do
                appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency symmetry
                lfp bfs
                out_file out_module outFormat resolve 
-               print_spec print_stats log_ resources polynomial_deg mult dmatch forall) -> do
+               print_spec print_stats log_ resources mult dmatch forall) -> do
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
                     _scrutineeDepth = scrutineeMax,
@@ -63,7 +63,6 @@ main = do
                     _consistencyChecking = consistency,
                     _symmetryReduction = symmetry,
                     _explorerLogLevel = log_,
-                    _polynomialDegree = polynomial_deg,
                     _checkResources = resources,
                     _useMultiplicity = mult,
                     _dMatch = dmatch,
@@ -130,7 +129,6 @@ data CommandLineArgs
         log_ :: Int,
         -- | Resource params
         resources :: Bool,
-        max_polynomial :: Int,
         multiplicities :: Bool,
         destructive_match :: Bool,
         instantiate_foralls :: Bool
@@ -163,7 +161,6 @@ synt = Synthesis {
   print_stats         = False           &= help ("Show specification and solution size (default: False)"),
   log_                = 0               &= help ("Logger verboseness level (default: 0)") &= name "l",
   resources           = True            &= help ("Verify resource usage (default: True)") &= name "r" &= groupname "Resource analysis parameters",
-  max_polynomial      = 1               &= help ("Maximum degree of resource polynomial"),
   multiplicities      = True            &= help ("Use multiplicities when verifying resource usage (default: True") &= name "m",
   destructive_match    = True           &= help ("Use destructive pattern match (default: True)") &= name "d",
   instantiate_foralls  = True           &= help ("Solve exists-forall constraints by instantiating universally quantified expressions (default: True)")
@@ -196,7 +193,6 @@ defaultExplorerParams = ExplorerParams {
   _context = id,
   _sourcePos = noPos,
   _explorerLogLevel = 0,
-  _polynomialDegree = 1,
   _checkResources = True,
   _useMultiplicity = True,
   _dMatch = False,

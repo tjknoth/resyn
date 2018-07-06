@@ -59,7 +59,6 @@ data ExplorerParams = ExplorerParams {
   _symmetryReduction :: Bool,             -- ^ Should partial applications be memoized to check for redundancy?
   _sourcePos :: SourcePos,                -- ^ Source position of the current goal
   _explorerLogLevel :: Int,               -- ^ How verbose logging is
-  _polynomialDegree :: Int,               -- ^ Maximum degree of resource polynomial
   _checkResources :: Bool,                -- ^ Should we check resources usage?
   _useMultiplicity :: Bool,               -- ^ Should we generate constraints on multiplicities? Useful for modeling memory usage.
   _dMatch :: Bool,                        -- ^ Use destructive pattern match
@@ -579,43 +578,52 @@ generateAuxGoals = do
 -- | 'splitType' @sch@: split type inside schema @sch@ by replacing its potential and multiplicity annotations with fresh variables.
 splitType :: MonadHorn s => RSchema -> Explorer s (RSchema, RSchema)
 splitType sch = do
-  schl <- freshPotentials sch 
-  schr <- freshPotentials sch
+  schl <- freshPotentials sch True
+  schr <- freshPotentials sch True
   return (schl, schr)
-    where
-      -- Variable formula with fresh variable id
-      freshPot = do 
-        x <- freshId potentialPrefix
-        (typingState . resourceVars) %= Set.insert x
-        return $ Var IntS x 
-      freshMul = do
-        x <- freshId multiplicityPrefix
-        (typingState . resourceVars) %= Set.insert x
-        return $ Var IntS x
-      -- Replace potentials in a schema by unwrapping the foralls
-      freshPotentials (Monotype t)  = do 
-        t' <- freshPotentials' t
-        return $ Monotype t'
-      freshPotentials (ForallT x t) = do 
-        t' <- freshPotentials t
-        return $ ForallT x t'
-      freshPotentials (ForallP x t) = do
-        t' <- freshPotentials t
-        return $ ForallP x t'
-      -- Replace potentials in a TypeSkeleton
-      freshPotentials' (ScalarT base fml pot) = do 
-        pot' <- freshPot
-        base' <- freshMultiplicities base
-        return $ ScalarT base' fml pot'
-      freshPotentials' t = return t
-      -- Replace potentials in a BaseType
-      freshMultiplicities (TypeVarT s name m) = do 
-        m' <- freshMul
-        return $ TypeVarT s name m'
-      freshMultiplicities (DatatypeT name ts ps) = do
-        ts' <- mapM freshPotentials' ts
-        return $ DatatypeT name ts' ps
-      freshMultiplicities t = return t
+
+-- Variable formula with fresh variable id
+freshPot :: MonadHorn s => Explorer s Formula
+freshPot = do 
+  x <- freshId potentialPrefix
+  (typingState . resourceVars) %= Set.insert x
+  return $ Var IntS x 
+
+freshMul :: MonadHorn s => Explorer s Formula
+freshMul = do
+  x <- freshId multiplicityPrefix
+  (typingState . resourceVars) %= Set.insert x
+  return $ Var IntS x
+
+-- | 'freshPotentials' @sch r@ : Replace potentials in schema @sch@ by unwrapping the foralls. If @r@, recursively replace potential annotations in the entire type. Otherwise, just replace top-level annotations.
+freshPotentials :: MonadHorn s => RSchema -> Bool -> Explorer s RSchema
+freshPotentials (Monotype t) replaceAll = do 
+  t' <- freshPotentials' t replaceAll
+  return $ Monotype t'
+freshPotentials (ForallT x t) replaceAll = do 
+  t' <- freshPotentials t replaceAll 
+  return $ ForallT x t'
+freshPotentials (ForallP x t) replaceAll = do
+  t' <- freshPotentials t replaceAll
+  return $ ForallP x t'
+
+-- Replace potentials in a TypeSkeleton
+freshPotentials' :: MonadHorn s => RType -> Bool -> Explorer s RType
+freshPotentials' (ScalarT base fml pot) replaceAll = do 
+  pot' <- freshPot
+  base' <- if replaceAll then freshMultiplicities base replaceAll else return base
+  return $ ScalarT base' fml pot'
+freshPotentials' t _ = return t
+
+-- Replace potentials in a BaseType
+freshMultiplicities :: MonadHorn s => BaseType Formula -> Bool -> Explorer s (BaseType Formula)
+freshMultiplicities (TypeVarT s name m) _ = do 
+  m' <- freshMul
+  return $ TypeVarT s name m'
+freshMultiplicities (DatatypeT name ts ps) replaceAll = do
+  ts' <- mapM (`freshPotentials'` replaceAll) ts
+  return $ DatatypeT name ts' ps
+freshMultiplicities t _ = return t
 
 addScrutineeToEnv :: (MonadHorn s, MonadSMT s) => Environment -> RProgram -> RType -> Explorer s (Formula, Environment)
 addScrutineeToEnv env pScr tScr = do 
@@ -644,6 +652,24 @@ retrieveAndSplitVarType name sch env = do
     Nothing -> return ()
     Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False ""
   return (t, env')
+
+-- Fresh potential variables for everything in environment
+freshEnv :: (MonadHorn s, MonadSMT s) => Environment -> Explorer s Environment
+freshEnv env = freshFilteredEnv env (\x _ -> False)
+
+-- Fresh potential variables for every symbol except @name@
+freshEnvExcept :: (MonadHorn s, MonadSMT s) => Environment -> Id -> Explorer s Environment
+freshEnvExcept env name = freshFilteredEnv env (\x _ -> x == name)
+
+-- | 'freshFilteredEnv' @env test@: Replace top-level potentials on all elements in environment @env@ for which @test@ fails with fresh variables for nondeterministic subtyping
+freshFilteredEnv :: (MonadHorn s, MonadSMT s) => Environment -> (Id -> RSchema -> Bool)-> Explorer s Environment
+freshFilteredEnv env test = do
+  let syms = _symbols env
+  syms' <- mapM (mapMWithKey maybeFresh) syms
+  return $ env { _symbols = syms' }
+  where 
+    mapMWithKey f = sequence . Map.mapWithKey f
+    maybeFresh k s = if test k s then return s else freshPotentials s False 
 
 writeLog level msg = do
   maxLevel <- asks . view $ _1 . explorerLogLevel

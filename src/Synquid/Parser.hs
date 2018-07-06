@@ -208,9 +208,9 @@ parseType = withPos (choice [try parseFunctionTypeWithArg, parseFunctionTypeMb] 
 parseFunctionTypeWithArg = do
   argId <- parseArgName
   argType <- parseUnrefTypeWithArgs <|> parseTypeAtom
-  reservedOp "->"
+  cost <- parseArrow
   returnType <- parseType
-  return $ FunctionT argId argType returnType defCost
+  return $ FunctionT argId argType returnType cost
   where
     parseArgName = parseIdentifier <* reservedOp ":"
 
@@ -221,9 +221,24 @@ parseFunctionTypeMb = do
   parseFunctionRest argType <|> return argType
   where
     parseFunctionRest argType = do
-      reservedOp "->"
+      cost <- parseArrow
       returnType <- parseType
-      return $ FunctionT ("arg" ++ show (arity returnType)) argType returnType defCost
+      return $ FunctionT ("arg" ++ show (arity returnType)) argType returnType cost
+
+parseArrow = do 
+  c <- try parseArrowWithCost <|> parseArrowWithoutCost
+  return $ fromMaybe defCost c
+  
+parseArrowWithoutCost = do 
+  reservedOp "->"
+  return Nothing
+
+parseArrowWithCost = do 
+  reservedOp "-["
+  n <- natural 
+  reservedOp "]->"
+  return $ Just n
+
 
 parseTypeAtom :: Parser RType
 parseTypeAtom = choice [

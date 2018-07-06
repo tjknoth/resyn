@@ -45,7 +45,6 @@ data TypingParams = TypingParams {
   _typeQualsGen :: Environment -> Formula -> [Formula] -> QSpace,   -- ^ Qualifier generator for types
   _predQualsGen :: Environment -> [Formula] -> [Formula] -> QSpace, -- ^ Qualifier generator for bound predicates
   _tcSolverSplitMeasures :: Bool,
-  _resPolynomialDegree :: Int,                                      -- ^ Maximum degree of resource polynomials
   _tcSolverLogLevel :: Int,                                         -- ^     How verbose logging is
   _checkResourceBounds :: Bool,                                     -- ^      Is resource checking enabled
   _checkMultiplicities :: Bool,                                     -- ^   Should multiplicities be considered when generating resource constraints

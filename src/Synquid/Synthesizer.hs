@@ -51,7 +51,6 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _typeQualsGen = typeQuals,
                         _predQualsGen = predQuals,
                         _tcSolverSplitMeasures = _splitMeasures explorerParams,
-                        _resPolynomialDegree = _polynomialDegree explorerParams,
                         _tcSolverLogLevel = _explorerLogLevel explorerParams,
                         _checkResourceBounds = _checkResources explorerParams,
                         _checkMultiplicities = _useMultiplicity explorerParams,

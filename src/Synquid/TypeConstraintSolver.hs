@@ -656,6 +656,7 @@ solveResourceConstraints :: (MonadHorn s, MonadSMT s) => [Constraint] -> [Constr
 solveResourceConstraints oldConstraints constraints = do
     writeLog 3 $ linebreak <+> text "Generating resource constraints:"
     checkMults <- asks _checkMultiplicities
+    -- Generate numerical resource-usage formulas from typing constraints:
     fmlList <- mapM (generateFormula True checkMults) constraints
     -- This is repeated every iteration, could be cached:
     accFmlList <- mapM (generateFormula False checkMults) oldConstraints
@@ -663,6 +664,7 @@ solveResourceConstraints oldConstraints constraints = do
     let fmls = Set.fromList (filter (not . isTrivial) fmlList)
     let query = conjunction fmls
     let accumlatedQuery = conjunction (Set.fromList accFmlList)
+    -- Check satisfiability
     (b, s) <- isSatWithModel (accumlatedQuery |&| query)
     let result = if b then "SAT" else "UNSAT"
     writeLog 5 $ nest 4 $ text "Accumulated resource constraints" $+$ prettyConjuncts (filter isInteresting accFmlList)
@@ -681,7 +683,7 @@ isSatWithModel = lift . lift . lift . solveWithModel
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Bool -> Constraint -> TCSolver s Formula 
 generateFormula shouldLog checkMults c@(Subtype env tl tr _ name) = do
-    let fmls = conjunction $ Set.filter (not . isTrivial) $ joinAssertions checkMults subtypeOp tl tr
+    let fmls = conjunction $ Set.filter (not . isTrivial) $ assertSubtypes env checkMults subtypeOp tl tr
     emb <- embedEnv env (conjunction (allFormulasOf tl `Set.union` allFormulasOf tr)) True
     let emb' = preprocessAssumptions $ Set.insert (refinementOf tl) emb
     when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls) 
@@ -741,25 +743,25 @@ partitionBase cm (TypeVarT _ _ m) (TypeVarT _ _ ml) (TypeVarT _ _ mr) = if cm th
 partitionBase _ _ _ _ = Set.empty
 
 -- | 'joinAssertions' @op tl tr@  : Generate the set of all formulas in types @tl@ and @tr@, zipped by a binary operation @op@ on formulas 
-joinAssertions :: Bool -> (Formula -> Formula -> Formula) -> RType -> RType -> Set Formula
-joinAssertions cm op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (fl `op` fr) $ joinAssertionsBase cm op bl br
+assertSubtypes :: Environment -> Bool -> (Formula -> Formula -> Formula) -> RType -> RType -> Set Formula
+assertSubtypes env cm op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (fl `op` fr) $ assertSubtypesBase env cm op bl br
 -- TODO: add total potential from input and output environment to left and right sides
 {-
-joinAssertions op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (( leftTotal |+| fl) `op` (rightTotal |+| fr)) $ joinAssertionsBase allsyms op bl br
+assertSubtypes op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (( leftTotal |+| fl) `op` (rightTotal |+| fr)) $ assertSubtypesBase allsyms op bl br
   where 
     leftTotal = totalMultiplicity allsyms
     rightTotal = totalMultiplicity allsyms
 -}
-joinAssertions _ op _ _ = Set.empty 
+assertSubtypes _ _ op _ _ = Set.empty 
 
-joinAssertionsBase :: Bool -> (Formula -> Formula -> Formula) -> BaseType Formula -> BaseType Formula -> Set Formula
-joinAssertionsBase cm op (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Set.unions $ zipWith (joinAssertions cm op) tsl tsr
-joinAssertionsBase cm op (TypeVarT _ _ ml) (TypeVarT _ _ mr) = 
+assertSubtypesBase :: Environment -> Bool -> (Formula -> Formula -> Formula) -> BaseType Formula -> BaseType Formula -> Set Formula
+assertSubtypesBase env cm op (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Set.unions $ zipWith (assertSubtypes env cm op) tsl tsr
+assertSubtypesBase env cm op (TypeVarT _ _ ml) (TypeVarT _ _ mr) = 
   if cm && not (isTrivial fml)
     then Set.singleton fml
     else Set.empty
     where fml = ml `op` mr
-joinAssertionsBase _ _ _ _ = Set.empty 
+assertSubtypesBase _ _ _ _ _ = Set.empty 
 
 -- Is given constraint relevant for resource analysis
 isResourceConstraint :: Constraint -> Bool
