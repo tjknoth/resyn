@@ -22,9 +22,8 @@ measure elems :: List a -> Set a where
   Nil -> []
   Cons x xs -> [x] + elems xs
 
+lessthan :: x: {0 ** a} -> y: {0 ** a} -> {Bool | _v == (x < y)}
 member :: x: a -> xs: IList {1 ** a | | 1} -> {Bool | _v == (x in (ielems xs))}
-
-qualifier { x < y }
 
 common :: l1: IList a -> l2: IList a -> {List a | elems _v == (ielems l1 * ielems l2)}
 common = \l1. \l2.
@@ -34,7 +33,7 @@ common = \l1. \l2.
       match l2 with 
         INil -> Nil 
         ICons y ys ->
-          if x < y
+          if lessthan x y
             then common xs l2
             else if y < x 
                 then common l1 ys
