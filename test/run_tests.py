@@ -247,10 +247,10 @@ def printerr(str):
     print (Back.RED + Fore.RED + Style.BRIGHT + str + Style.RESET_ALL, end = ' ')
 
 def printok(str):
-    printp (Back.GREEN + Fore.GREEN + Style.BRIGHT + str + Style.RESET_ALL, end = ' ')
+    print (Back.GREEN + Fore.GREEN + Style.BRIGHT + str + Style.RESET_ALL, end = ' ')
 
 def printwarn(str):
-    printp (Back.YELLOW + Fore.YELLOW + Style.BRIGHT + str + Style.RESET_ALL, end = ' ')
+    print (Back.YELLOW + Fore.YELLOW + Style.BRIGHT + str + Style.RESET_ALL, end = ' ')
 
 def run_benchmark(name, opts, path='.'):
     global total_time
@@ -291,7 +291,7 @@ def run_resyn_benchmark(name, opts, path='.'):
         if with_res.returncode:
           printerr("FAIL")
         else:
-          printerr("OK")
+          printok("OK")
         diff = difflib.unified_diff(with_res.stdout, without_res.stdout)
         # Check if diff is empty
         try:
