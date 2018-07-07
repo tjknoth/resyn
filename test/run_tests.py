@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 import sys
 import os, os.path
 import platform
@@ -6,7 +6,7 @@ import shutil
 import time
 import re
 import difflib
-from subprocess import call, check_output
+import subprocess
 from colorama import init, Fore, Back, Style
 
 # Parameters
@@ -21,6 +21,7 @@ TIMEOUT_COMMAND = 'timeout'
 TIMEOUT= '120'
 
 SECTIONS = ['.', 'sygus', 'rbt', 'AVL']
+RESOURCE_FALSE = ['-r=false']
 
 BENCHMARKS = {
   '.' : [
@@ -239,29 +240,30 @@ def cmdline():
     a.add_argument('--demo', action='store_true', help='run demo tests')
     a.add_argument('--res-verif', action='store_true', help='run resource-aware verification tests')
     a.add_argument('--res-synth', action='store_true', help='run resource-aware synthesis tests')
+    a.add_argument('--optimize', action='store_true', help='Check if ReSyn improved performance of Synquid-generated code' )
     return a.parse_args()
 
 def printerr(str):
-    print (Back.RED + Fore.RED + Style.BRIGHT + str + Style.RESET_ALL)
+    print (Back.RED + Fore.RED + Style.BRIGHT + str + Style.RESET_ALL, end = ' ')
 
 def printok(str):
-    print (Back.GREEN + Fore.GREEN + Style.BRIGHT + str + Style.RESET_ALL)
+    printp (Back.GREEN + Fore.GREEN + Style.BRIGHT + str + Style.RESET_ALL, end = ' ')
 
 def printwarn(str):
-    print (Back.YELLOW + Fore.YELLOW + Style.BRIGHT + str + Style.RESET_ALL)
+    printp (Back.YELLOW + Fore.YELLOW + Style.BRIGHT + str + Style.RESET_ALL, end = ' ')
 
 def run_benchmark(name, opts, path='.'):
     global total_time
-    print (name),
+    print (name, end=' ')
 
     with open(LOGFILE_NAME, 'a+') as logfile:
       start = time.time()
       logfile.seek(0, os.SEEK_END)
-      return_code = call(synquid_path + COMMON_OPTS + opts + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
+      return_code = subprocess.call(synquid_path + COMMON_OPTS + opts + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
       end = time.time()
 
       t = end - start
-      print ('{0:0.2f}'.format(t)),
+      print ('{0:0.2f}'.format(t), end=' ')
       total_time = total_time + t
       bad_flag = name.endswith("-Bad")
       if (bool(return_code) ^ bad_flag):
@@ -270,13 +272,41 @@ def run_benchmark(name, opts, path='.'):
           printok("OK")
           results [name] = SynthesisResult(name, t)
 
+def run_resyn_benchmark(name, opts, path='.'):
+    global total_time 
+    print (name, end=' ')
+
+    with open(LOGFILE_NAME, 'a+') as logfile:
+        start = time.time()
+        with_res = subprocess.run(synquid_path + COMMON_OPTS + opts + [os.path.join (path, name + '.sq')], stderr=subprocess.STDOUT, stdout=subprocess.PIPE, universal_newlines=True)
+        res_end = time.time()
+        without_res = subprocess.run(synquid_path + COMMON_OPTS + RESOURCE_FALSE + opts + [os.path.join(path, name + '.sq')], stderr=subprocess.STDOUT, stdout=subprocess.PIPE, universal_newlines=True)
+        end = time.time()
+        rtime = res_end - start
+        print ('{0:0.2f}'.format(rtime), end=' ')
+        total_time = total_time + rtime 
+
+        logfile.seek(0, os.SEEK_END)
+        logfile.write(with_res.stdout)
+        if with_res.returncode:
+          printerr("FAIL")
+        else:
+          printerr("OK")
+        diff = difflib.unified_diff(with_res.stdout, without_res.stdout)
+        # Check if diff is empty
+        try:
+            first = next(diff)
+            printok('Optimized')
+        except StopIteration:
+            print('Unchanged')
+
 
 def run_test(name, path='.'):
     print (name)
 
     with open(LOGFILE_NAME, 'a+') as logfile:
       logfile.seek(0, os.SEEK_END)
-      call(synquid_path + COMMON_OPTS + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
+      subprocess.call(synquid_path + COMMON_OPTS + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
 
 def write_times(benchmarks):
     with open(OUTFILE_NAME, 'w') as outfile:
@@ -289,7 +319,7 @@ def write_times(benchmarks):
             outfile.write ('\n')
 
 def check_diff ():
-    print
+    print()
     if not os.path.isfile(ORACLE_NAME):
         # Create oracle
         printwarn('Oracle file not found, creating a new one')
@@ -304,15 +334,15 @@ def check_diff ():
         try:
             first = next(diff)
             printerr('TESTS FAILED WITH DIFF')
-            print
+            print()
             print(first)
             sys.stdout.writelines(diff)
-            print
+            print()
             return True
 
         except StopIteration:
             printok('TESTS PASSED')
-            print
+            print()
             return False
 
 def clear_log():
@@ -390,7 +420,10 @@ if __name__ == '__main__':
         os.chdir('resources/synthesis')
         clear_log() 
         for (name, args) in RESOURCE_SYNTHESIS_BENCHMARKS:
-            run_benchmark(name, args)
+            if a.optimize:
+                run_resyn_benchmark(name, args)
+            else:
+                run_benchmark(name, args)
         fail = check_diff()
         os.chdir('../..')
 
