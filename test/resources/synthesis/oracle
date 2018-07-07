@@ -1,3 +1,15 @@
+insert :: t:{Heap {1**a||0}||0} -> x:{1**a||0} -> {Heap {1**a||0}|elems _v == elems t + [x]|0}
+insert = \t . \x . 
+    match t with
+      Empty -> Node x Empty Empty
+      Node x7 x8 x9 -> 
+        if (x <= x7) && (x7 <= x)
+          then t
+          else 
+            if x7 <= x
+              then Node x7 x8 (insert x9 x)
+              else Node x x8 (insert x9 x7)
+
 delete :: t:{BST {1**a||0}||0} -> x:{1**a||0} -> {BST {1**a||0}|telems _v == telems t - [x]|0}
 delete = \t . \x . 
     match t with
@@ -13,16 +25,6 @@ delete = \t . \x .
                   Empty -> x6
                   Node x21 x22 x23 -> Node x21 x22
                                         (delete (Node x x23 x6) x4)
-
-extractMin :: t:{BST {1**a||0}|size _v > 0|0} -> {MinPair {1**a||0}|telems t == [min _v] + telems (rest _v)|0}
-./BST-ExtractMin.sq:23: Error:
-  Cannot match shape '1**a'
-  with shape 'BST (1**A2)'
-  when checking t ::
-  {BST {BST {m1**A2||p3}|True && (Empty) < _v|p2}||0}
-  in
-  \t . 
-    match Node Empty Empty t with
 
 insert :: x:{1**a||0} -> t:{BST {1**a||0}||0} -> {BST {1**a||0}|telems _v == telems t + [x]|0}
 insert = \x . \t . 
@@ -84,30 +86,42 @@ flatten = \t .
 sort :: xs:{List {1**a||0}||0} -> {IList {1**a||0}|ielems _v == elems xs|0}
 sort = \xs . flatten (toBST xs)
 
-append :: xs:{List {1**a||0}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+merge :: xs:{IList {1**a||0}||0} -> ys:{IList {1**a||0}||0} -> {IList {1**a||0}|ilen _v == ilen xs + ilen ys && ielems _v == ielems xs + ielems ys|0}
+merge = \xs . \ys . 
+    match ys with
+      INil -> xs
+      ICons x4 x5 -> 
+        match xs with
+          INil -> ys
+          ICons x8 x9 -> 
+            if x4 <= x8
+              then ICons x4 (merge (ICons x8
+                                      x9) x5)
+              else ICons x8 (merge x9 (ICons
+                                         x4 x5))
+
+pivotAppend :: p:{1**a||0} -> xs:{IList {1**a|_v <= p|0}||0} -> ys:{IList {1**a|_v > p|0}||0} -> {IList {1**a||0}|ilen _v == (ilen xs + ilen ys) + 1 && ielems _v == (ielems xs + ielems ys) + [p]|0}
+pivotAppend = \p . \xs . \ys . 
+      match xs with
+        INil -> ICons p ys
+        ICons x5 x6 -> ICons x5
+                         (pivotAppend p x6 ys)
+
+append :: xs:{List {1**a||2}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
 append = \xs . \ys . 
     match xs with
       Nil -> ys
-      Cons x7 x8 -> Cons x7 (append x8
-                               ys)
+      Cons z zs -> Cons z (append zs
+                             ys)
 
-compare :: xs:{List {1**a||0}||0} -> ys:{List {1**a||0}||0} -> {Bool|_v == (len xs == len ys)|0}
-compare = \xs . \ys . 
-    match xs with
-      Nil -> 
-        match ys with
-          Nil -> true
-          Cons x4 x5 -> false
-      Cons x8 x9 -> 
-        match ys with
-          Nil -> false
-          Cons x12 x13 -> compare x9 x13
-
-compareCT :: acc:{Bool||0} -> xs:{List {1**a||0}||0} -> ys:{List {1**a||0}||0} -> {Bool|_v == (len xs == len ys)|0}
-compareCT = \acc . \xs . \ys . 
-      if compare xs ys
-        then true
-        else false
+common :: l1:{List {1**a||0}||0} -> l2:{List {1**a||0}||0} -> {List {1**a||0}|elems _v == elems l1 * elems l2|0}
+common = \l1 . \l2 . 
+    match l1 with
+      Nil -> l1
+      Cons x3 x4 -> 
+        if member x3 l2
+          then Cons x3 (common x4 l2)
+          else common x4 l2
 
 compress :: xs:{List {1**a||0}||0} -> {CList {1**a||0}|elems _v == elems xs|0}
 compress = \xs . 
@@ -120,13 +134,6 @@ compress = \xs .
           if x3 == x11
             then Cons x11 x12
             else Cons x3 (Cons x11 x12)
-
-concat :: xss:{ListOfLists {1**a||0}||0} -> acc:{List {1**a||0}||0} -> {List {1**a||0}|len _v == sumLen xss + len acc|0}
-concat = \xss . \acc . 
-    match xss with
-      Nil2 -> acc
-      Cons2 x3 x4 -> zappend acc
-                       (concat x4 x3)
 
 cons2 :: x:{2**a||2} -> {List {1**a||0}|elems _v == [x] && len _v == 2|0}
 cons2 = \x . Cons x (Cons x Nil)
@@ -147,6 +154,47 @@ double = \xs .
     Cons x3 x4 -> Cons x3 (Cons x3
                              (double x4))
 
+drop :: n:{Nat||0} -> xs:{List {1**a||0}|len _v >= n|0} -> {List {1**a||0}|len _v == len xs - n|0}
+drop = \n . \xs . 
+    if 0 != n
+      then 
+        match xs with
+          Nil -> error
+          Cons x3 x4 -> drop (dec n) x4
+      else xs
+
+elem :: x:{1**a||0} -> xs:{List {1**a||0}||0} -> {Bool|_v == (x in elems xs)|0}
+elem = \x . \xs . 
+    match xs with
+      Nil -> false
+      Cons x3 x4 -> 
+        if x3 == x
+          then true
+          else elem x x4
+
+elemIndex :: <p :: Int -> a -> Bool> . x:{1**a||0} -> xs:{List {1**a||0} <p>|x in elems _v|0} -> {Int|p _v x|0}
+elemIndex = \x . \xs . 
+    match xs with
+      Nil -> error
+      Cons x3 x4 -> 
+        if x3 == x
+          then zero
+          else inc (elemIndex x x4)
+
+extractMin :: xs:{List {1**a||0}|len _v > 0|0} -> {MinPair {1**a||0}|elems xs == [min _v] + elems (rest _v) && len xs == 1 + len (rest _v)|0}
+extractMin = \xs . 
+  match xs with
+    Nil -> error
+    Cons x3 x4 -> 
+      match x4 with
+        Nil -> MinPair x3 Nil
+        Cons x10 x11 -> 
+          match extractMin x4 with
+            MinPair x16 x17 -> 
+              if x16 <= x3
+                then MinPair x16 (Cons x3 x17)
+                else MinPair x3 (Cons x16 x17)
+
 insert :: x:{1**a||0} -> xs:{IList {1**a||0}||0} -> {IList {1**a||0}|ielems _v == ielems xs + [x]|0}
 insert = \x . \xs . 
     match xs with
@@ -155,6 +203,56 @@ insert = \x . \xs .
         if x5 <= x
           then ICons x5 (insert x x6)
           else ICons x (insert x5 x6)
+
+ith :: <p :: Int -> a -> Bool> . xs:{List {1**a||0} <p>||0} -> i:{Int|0 <= _v && _v < len xs|0} -> {1**a|p i _v|0}
+ith = \xs . \i . 
+    match xs with
+      Nil -> error
+      Cons x3 x4 -> 
+        if 0 == i
+          then x3
+          else ith x4 (dec i)
+
+elem :: x:{1**a||0} -> xs:{List {1**a||0}||0} -> {Bool|_v == (x in elems xs)|0}
+elem = \x . \xs . 
+    match xs with
+      Nil -> false
+      Cons x3 x4 -> 
+        if x3 == x
+          then true
+          else elem x x4
+
+nub' :: xs:{List {1**a||0}||0} -> acc:{UList {1**a||0}||0} -> {UList {1**a||0}|elems _v == elems acc + elems xs|0}
+nub' = \xs . \acc . 
+    match xs with
+      Nil -> acc
+      Cons x3 x4 -> 
+        if elem x3 acc
+          then nub' x4 acc
+          else 
+            if elem x3 x4
+              then nub' x4 acc
+              else Cons x3 (nub' x4 acc)
+
+nub :: xs:{List {1**a||0}||0} -> {UList {1**a||0}|elems _v == elems xs|0}
+nub = \xs . nub' xs Nil
+
+null :: xs:{List {1**a||0}||0} -> {Bool|_v == (len xs == 0)|0}
+null = \xs . 
+  match xs with
+    Nil -> true
+    Cons x3 x4 -> false
+
+partition :: p:{1**a||0} -> xs:{List {1**a||0}||0} -> {Pair {List {1**a|_v <= p|0}||0} {List {1**a|_v > p|0}||0}|len (fst _v) + len (snd _v) == len xs && elems (fst _v) + elems (snd _v) == elems xs|0}
+partition = \p . \xs . 
+    match xs with
+      Nil -> Pair Nil Nil
+      Cons x5 x6 -> 
+        match partition p x6 with
+          Pair x12 x13 -> 
+            if x5 <= p
+              then Pair (Cons x5 x12) x13
+              else Pair x12 (Cons x5 x13)
 
 replicate :: n:{Nat||0} -> x:{n**a||n} -> {List {1**a||0}|len _v == n|0}
 replicate = \n . \x . 
@@ -169,4 +267,53 @@ reverse = \xs .
     Nil -> Nil
     Cons x3 x4 -> snoc x3 (reverse
                              x4)
+
+snoc :: <p :: a -> a -> Bool> . x:{1**a||0} -> xs:{List {1**a|p _v x|0} <p>||0} -> {List {1**a||0} <p>|len _v == len xs + 1 && elems _v == elems xs + [x]|0}
+snoc = \x . \xs . 
+    match xs with
+      Nil -> Cons x Nil
+      Cons x5 x6 -> Cons x5 (snoc x
+                               x6)
+
+zip :: xs:{List {1**a||0}||0} -> ys:{List {1**b||0}|len _v == len xs|0} -> {List {Pair {1**a||0} {1**b||0}||0}|len _v == len xs|0}
+zip = \xs . \ys . 
+    match xs with
+      Nil -> Nil
+      Cons x3 x4 -> 
+        match ys with
+          Nil -> error
+          Cons x7 x8 -> Cons (Pair x3 x7)
+                          (zip x4 x8)
+
+flatten :: t:{Tree {1**a||0}||0} -> {List {1**a||0}|len _v == size t|0}
+flatten = \t . 
+  match t with
+    Empty -> Nil
+    Node x4 x5 x6 -> Cons x4 (append
+                                (flatten x5) (flatten x6))
+
+delete :: x:{1**a||0} -> xs:{UList {1**a||0}||0} -> {UList {1**a||0}|elems _v == elems xs - [x]|0}
+delete = \x . \xs . 
+    match xs with
+      Nil -> xs
+      Cons x3 x4 -> 
+        if x3 == x
+          then x4
+          else Cons x3 (delete x x4)
+
+insert :: x:{1**a||0} -> xs:{UList {1**a||0}||0} -> {UList {1**a||0}|elems _v == elems xs + [x]|0}
+insert = \x . \xs . 
+    match xs with
+      Nil -> Cons x xs
+      Cons x5 x6 -> 
+        if x5 == x
+          then xs
+          else Cons x5 (insert x x6)
+
+range :: size:{Nat||0} -> lo:{Int||0} -> {UList {Int|lo <= _v && _v <= lo + size|0}|len _v == size|0}
+range = \size . \lo . 
+    if size <= 0
+      then Nil
+      else Cons lo (range (dec size)
+                      (inc lo))
 

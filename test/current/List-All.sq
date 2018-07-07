@@ -14,7 +14,7 @@ true :: {Bool | _v}
 false :: {Bool | !_v}
   
 all :: <p :: a -> Bool> . 
-  f:(x: a -> {Bool | _v == p x}) -> xs: List a -> { Bool | _v <==> (elems xs == [x | x in elems xs && p x]) }
+  f: ( x: a -> {Bool | _v == p x} ) -> xs: List a -> { Bool | _v <==> (elems xs == [x | x in elems xs && p x]) }
 all = ??
 
 any :: <p :: a -> Bool> . 

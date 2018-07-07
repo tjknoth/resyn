@@ -141,7 +141,7 @@ synt = Synthesis {
   only                = Nothing         &= typ "GOAL,..." &= help ("Only synthesize the specified functions"),
   app_max             = 3               &= help ("Maximum depth of an application term (default: 3)") &= groupname "Explorer parameters",
   scrutinee_max       = 1               &= help ("Maximum depth of a match scrutinee (default: 1)"),
-  match_max           = 2               &= help ("Maximum depth of matches (default: 2)"),
+  match_max           = 2               &= help ("Maximum depth of matches (default: 2)") &= name "m",
   aux_max             = 1               &= help ("Maximum depth of auxiliary functions (default: 1)") &= name "x",
   fix                 = FirstArgument   &= help (unwords ["What should termination metric for fixpoints be derived from?", show AllArguments, show FirstArgument, show DisableFixpoint, show Nonterminating, "(default:", show FirstArgument, ")"]),
   generalize_preds    = True            &= help ("Make recursion polymorphic in abstract refinements (default: False)"),
@@ -161,7 +161,7 @@ synt = Synthesis {
   print_stats         = False           &= help ("Show specification and solution size (default: False)"),
   log_                = 0               &= help ("Logger verboseness level (default: 0)") &= name "l",
   resources           = True            &= help ("Verify resource usage (default: True)") &= name "r" &= groupname "Resource analysis parameters",
-  multiplicities      = True            &= help ("Use multiplicities when verifying resource usage (default: True") &= name "m",
+  multiplicities      = True            &= help ("Use multiplicities when verifying resource usage (default: True"),
   destructive_match    = True           &= help ("Use destructive pattern match (default: True)") &= name "d",
   instantiate_foralls  = True           &= help ("Solve exists-forall constraints by instantiating universally quantified expressions (default: True)")
   } &= auto &= help "Synthesize goals specified in the input file"
