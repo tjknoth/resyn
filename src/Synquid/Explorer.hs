@@ -62,7 +62,8 @@ data ExplorerParams = ExplorerParams {
   _checkResources :: Bool,                -- ^ Should we check resources usage?
   _useMultiplicity :: Bool,               -- ^ Should we generate constraints on multiplicities? Useful for modeling memory usage.
   _dMatch :: Bool,                        -- ^ Use destructive pattern match
-  _instantiateForall :: Bool              -- ^ Solve exists-forall constraints by instantiating universally quantified expressions
+  _instantiateForall :: Bool,             -- ^ Solve exists-forall constraints by instantiating universally quantified expressions
+  _shouldCut :: Bool                      -- ^ Should cut the search upon synthesizing a functionally correct branch
 }
 
 makeLenses ''ExplorerParams
@@ -129,7 +130,7 @@ generateMaybeIf env t = ifte generateThen (uncurry3 (generateElse env t)) (gener
       cUnknown <- Unknown Map.empty <$> freshId "C"
       addConstraint $ WellFormedCond env cUnknown
       -- TODO: do I care about env' here?
-      (pThen, _) <- generateE (addAssumption cUnknown env) t -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
+      (pThen, _) <- cut $ generateE (addAssumption cUnknown env) t -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
       cond <- conjunction <$> currentValuation cUnknown
       return (cond, unknownName cUnknown, pThen)
 
@@ -168,7 +169,7 @@ generateCondition env fml = do
     genConjunct env c = if isExecutable c
                       -- TODO: this is wrong! guard's resource aren't analyzed if formula is executable 
                             then return (fmlToProgram c, env)
-                            else generateE env (ScalarT BoolT (valBool |=| c) defPotential)
+                            else cut $ generateE' env (ScalarT BoolT (valBool |=| c) defPotential) 1
     andSymb = Program (PSymbol $ binOpTokens Map.! And) (toMonotype $ binOpType And)
     conjoin p1 p2 = Program (PApp (Program (PApp andSymb p1) boolAll) p2) boolAll
 
@@ -322,6 +323,9 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
 generateE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s (RProgram, Environment)
 generateE env typ = do
   d <- asks . view $ _1 . eGuessDepth
+  generateE' env typ d
+
+generateE' env typ d = do
   (Program pTerm pTyp, env') <- generateEUpTo env typ d                      -- Generate the E-term
   runInSolver $ isFinal .= True >> solveTypeConstraints >> isFinal .= False  -- Final type checking pass that eliminates all free type variables
   newGoals <- uses auxGoals (map gName)                                      -- Remember unsolved auxiliary goals
@@ -546,9 +550,11 @@ symbolType env _ sch = freshInstance sch
       then instantiate env sch False [] -- Nullary polymorphic function: it is safe to instantiate it with bottom refinements, since nothing can force the refinements to be weaker
       else instantiate env sch True []
 
--- | Perform an exploration, and once it succeeds, do not backtrack it
+-- | Perform an exploration, and once it succeeds, do not backtrack (assuming flag is set)
 cut :: MonadHorn s => Explorer s a -> Explorer s a
-cut = once
+cut e = do 
+  b <- asks . view $ _1 . shouldCut
+  if b then once e else e
 
 -- | Synthesize auxiliary goals accumulated in @auxGoals@ and store the result in @solvedAuxGoals@
 generateAuxGoals :: MonadHorn s => Explorer s ()

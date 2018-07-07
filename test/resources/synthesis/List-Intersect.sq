@@ -27,7 +27,8 @@ qualifier { x < y }
 --qualifier { x <= y }
 
 common :: l1: IList a -> l2: IList a -> {List a | elems _v == (ielems l1 * ielems l2)}
-common = ?? {- \l1. \l2.
+common = ??
+{- \l1. \l2.
   match l1 with
     INil -> Nil
     ICons x xs -> 

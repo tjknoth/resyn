@@ -48,7 +48,7 @@ main = do
                appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency symmetry
                lfp bfs
                out_file out_module outFormat resolve 
-               print_spec print_stats log_ resources mult dmatch forall) -> do
+               print_spec print_stats log_ resources mult dmatch forall cb) -> do
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
                     _scrutineeDepth = scrutineeMax,
@@ -66,7 +66,8 @@ main = do
                     _checkResources = resources,
                     _useMultiplicity = mult,
                     _dMatch = dmatch,
-                    _instantiateForall = forall
+                    _instantiateForall = forall,
+                    _shouldCut = cb
                     }
                   let solverParams = defaultHornSolverParams {
                     isLeastFixpoint = lfp,
@@ -131,7 +132,8 @@ data CommandLineArgs
         resources :: Bool,
         multiplicities :: Bool,
         destructive_match :: Bool,
-        instantiate_foralls :: Bool
+        instantiate_foralls :: Bool,
+        cut_branches :: Bool
       }
   deriving (Data, Typeable, Show, Eq)
 
@@ -163,7 +165,8 @@ synt = Synthesis {
   resources           = True            &= help ("Verify resource usage (default: True)") &= name "r" &= groupname "Resource analysis parameters",
   multiplicities      = True            &= help ("Use multiplicities when verifying resource usage (default: True"),
   destructive_match    = True           &= help ("Use destructive pattern match (default: True)") &= name "d",
-  instantiate_foralls  = True           &= help ("Solve exists-forall constraints by instantiating universally quantified expressions (default: True)")
+  instantiate_foralls  = True           &= help ("Solve exists-forall constraints by instantiating universally quantified expressions (default: True)"),
+  cut_branches         = True           &= help ("Do not backtrack past successfully synthesized branches (default: True")
   } &= auto &= help "Synthesize goals specified in the input file"
     where
       defaultFormat = outputFormat defaultSynquidParams
@@ -196,7 +199,8 @@ defaultExplorerParams = ExplorerParams {
   _checkResources = True,
   _useMultiplicity = True,
   _dMatch = False,
-  _instantiateForall = True
+  _instantiateForall = True,
+  _shouldCut = True
 }
 
 -- | Parameters for constraint solving

@@ -191,8 +191,8 @@ RESOURCE_SYNTHESIS_BENCHMARKS = [
     ('IncList-Pivot',       []),
     ('Int-Add',             []),
     ('List-Append',         []),
-    ('List-Common-Slow',    ['-r=false']),
-    #('List-Common',         ['-f=AllArguments']),
+    # Without AllArguments it'll synthesize different slow implementations
+    ('List-Intersect',      ['-f=AllArguments', '--cut-branches=false']),
     #('List-Compare',        []),
     ('List-Compress',       []),
     #('List-Concat',         []),
@@ -257,20 +257,21 @@ def run_benchmark(name, opts, path='.'):
     print (name, end=' ')
 
     with open(LOGFILE_NAME, 'a+') as logfile:
-      start = time.time()
-      logfile.seek(0, os.SEEK_END)
-      return_code = subprocess.call(synquid_path + COMMON_OPTS + opts + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
-      end = time.time()
+        start = time.time()
+        logfile.seek(0, os.SEEK_END)
+        return_code = subprocess.call(synquid_path + COMMON_OPTS + opts + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
+        end = time.time()
 
-      t = end - start
-      print ('{0:0.2f}'.format(t), end=' ')
-      total_time = total_time + t
-      bad_flag = name.endswith("-Bad")
-      if (bool(return_code) ^ bad_flag):
-          printerr("FAIL")
-      else:
-          printok("OK")
-          results [name] = SynthesisResult(name, t)
+        t = end - start
+        print ('{0:0.2f}'.format(t), end=' ')
+        total_time = total_time + t
+        bad_flag = name.endswith("-Bad")
+        if (bool(return_code) ^ bad_flag):
+            printerr("FAIL")
+        else:
+            printok("OK")
+            results [name] = SynthesisResult(name, t)
+        print()
 
 def run_resyn_benchmark(name, opts, path='.'):
     global total_time 
@@ -297,6 +298,7 @@ def run_resyn_benchmark(name, opts, path='.'):
         try:
             first = next(diff)
             printok('Optimized')
+            print()
         except StopIteration:
             print('Unchanged')
 
@@ -426,8 +428,6 @@ if __name__ == '__main__':
                 run_benchmark(name, args)
         fail = check_diff()
         os.chdir('../..')
-
-
 
     if not fail and a.synt:
         # Run synthesis benchmarks in 'current' directory
