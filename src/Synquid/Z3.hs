@@ -283,27 +283,35 @@ toAST expr = case expr of
     unOp Not = mkNot
 
     binOp :: BinOp -> AST -> AST -> Z3State AST
-    binOp op =
+    binOp op e1 e2 =
       case op of
-        Eq -> mkEq
-        Neq -> list2 mkDistinct
-        Gt -> mkGt
-        Lt -> mkLt
-        Le -> mkLe
-        Ge -> mkGe
-        Times -> list2 mkMul
-        Plus -> list2 mkAdd
-        Minus -> list2 mkSub
-        And   -> list2 mkAnd
-        Or    -> list2 mkOr
-        Implies -> mkImplies
-        Iff -> mkIff
-        Union -> list2 mkSetUnion
-        Intersect -> list2 mkSetIntersect
-        Diff -> mkSetDifference
-        Member -> mkSetMember
-        Subset -> mkSetSubset
+        Eq -> mkEq e1 e2
+        Neq -> list2 mkDistinct e1 e2
+        Gt -> mkGt e1 e2
+        Lt -> mkLt e1 e2
+        Le -> do 
+          s1 <- getSort e1 >>= getSortKind 
+          s2 <- getSort e2 >>= getSortKind 
+          if isBoolSort s1 || isBoolSort s2
+            then mkImplies e1 e2 -- For booleans, <= is equivalent to =>
+            else mkLe e1 e2
+        Ge -> mkGe e1 e2
+        Times -> list2 mkMul e1 e2
+        Plus -> list2 mkAdd e1 e2
+        Minus -> list2 mkSub e1 e2
+        And   -> list2 mkAnd e1 e2
+        Or    -> list2 mkOr e1 e2
+        Implies -> mkImplies e1 e2
+        Iff -> mkIff e1 e2
+        Union -> list2 mkSetUnion e1 e2
+        Intersect -> list2 mkSetIntersect e1 e2
+        Diff -> mkSetDifference e1 e2
+        Member -> mkSetMember e1 e2
+        Subset -> mkSetSubset e1 e2
     list2 o x y = o [x, y]
+    
+    isBoolSort Z3_BOOL_SORT = True
+    isBoolSort _            = False
 
     -- | Lookup or create a variable with name `ident' and sort `s'
     var s ident = do

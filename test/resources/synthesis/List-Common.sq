@@ -22,20 +22,20 @@ measure elems :: List a -> Set a where
   Nil -> []
   Cons x xs -> [x] + elems xs
 
-lessthan :: x: {0 ** a} -> y: {0 ** a} -> {Bool | _v == (x < y)}
 member :: x: a -> xs: IList {1 ** a | | 1} -> {Bool | _v == (x in (ielems xs))}
+qualifier { x < y }
+--qualifier { x <= y }
 
 common :: l1: IList a -> l2: IList a -> {List a | elems _v == (ielems l1 * ielems l2)}
-common = \l1. \l2.
+common = ?? {- \l1. \l2.
   match l1 with
     INil -> Nil
     ICons x xs -> 
       match l2 with 
         INil -> Nil 
         ICons y ys ->
-          if lessthan x y
-            then common xs l2
+          if x < y
+            then common xs (ICons y ys) 
             else if y < x 
-                then common l1 ys
-                else Cons x (common xs ys)
-
+                then ?? -- common (ICons x xs) ys
+                else ?? -- Cons x (common xs ys) -}

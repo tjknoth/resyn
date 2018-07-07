@@ -129,7 +129,7 @@ generateMaybeIf env t = ifte generateThen (uncurry3 (generateElse env t)) (gener
       cUnknown <- Unknown Map.empty <$> freshId "C"
       addConstraint $ WellFormedCond env cUnknown
       -- TODO: do I care about env' here?
-      (pThen, _) <- cut $ generateE (addAssumption cUnknown env) t -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
+      (pThen, _) <- generateE (addAssumption cUnknown env) t -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
       cond <- conjunction <$> currentValuation cUnknown
       return (cond, unknownName cUnknown, pThen)
 
@@ -158,7 +158,6 @@ generateCondition :: (MonadHorn s, MonadSMT s) => Environment -> Formula -> Expl
 generateCondition env fml = do
   conjuncts <- genConjuncts env allConjuncts
   let env' = (snd . head) conjuncts -- Environment on head of list will be the final environment from generating all conjunctions independently
-  -- Take tail to eliminate the starting value added by the fold above
   return (fmap (`addRefinement` (valBool |=| fml)) (foldl1 conjoin (map fst conjuncts)), env')
   where
     allConjuncts = Set.toList $ conjunctsOf fml
@@ -167,9 +166,9 @@ generateCondition env fml = do
       (p, env') <- genConjunct env c
       ((p, env') :) <$> genConjuncts env' cs
     genConjunct env c = if isExecutable c
-                      -- TODO: this is wrong! guard's resource aren't analyzed 
+                      -- TODO: this is wrong! guard's resource aren't analyzed if formula is executable 
                             then return (fmlToProgram c, env)
-                            else cut $ generateE env (ScalarT BoolT (valBool |=| c) defPotential)
+                            else generateE env (ScalarT BoolT (valBool |=| c) defPotential)
     andSymb = Program (PSymbol $ binOpTokens Map.! And) (toMonotype $ binOpType And)
     conjoin p1 p2 = Program (PApp (Program (PApp andSymb p1) boolAll) p2) boolAll
 
@@ -627,11 +626,14 @@ freshMultiplicities t _ = return t
 
 addScrutineeToEnv :: (MonadHorn s, MonadSMT s) => Environment -> RProgram -> RType -> Explorer s (Formula, Environment)
 addScrutineeToEnv env pScr tScr = do 
+  checkres <- asks . view $ _1 . checkResources
   (x, env') <- toVar (addScrutinee pScr env) pScr
   varName <- freshId "x"
   let tScr' = addPotential (typeMultiply fzero tScr) (topPotentialOf tScr)
   let env'' = addVariable varName tScr' env'
-  return (x, env'')
+  if checkres
+    then return (x, env'')
+    else return (x, env')
 
 -- | Given a name, schema, and environment, retrieve the variable type from the environment and split it into left and right types with fresh potential variables, generating constraints accordingly.
 retrieveAndSplitVarType :: (MonadHorn s, MonadSMT s) => Id -> RSchema -> Environment -> Explorer s (RType, Environment)

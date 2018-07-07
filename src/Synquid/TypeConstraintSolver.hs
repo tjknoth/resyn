@@ -230,9 +230,9 @@ simplifyConstraint' _ _ (SplitType env v t (LetT x tDef tBody) tr) = simplifyCon
 simplifyConstraint' _ _ (SplitType env v t tl (LetT x tDef tBody)) = simplifyConstraint (SplitType (addVariable x tDef env) v t tl tBody)
 
 -- Unknown free variable and a type: extend type assignment
-simplifyConstraint' _ _ c@(Subtype env (ScalarT (TypeVarT _ a m) _ _) t _ _) | not (isBound env a)
+simplifyConstraint' _ _ c@(Subtype env (ScalarT (TypeVarT _ a _) _ _) t _ _) | not (isBound env a)
   = unify env a t >> simplifyConstraint c
-simplifyConstraint' _ _ c@(Subtype env t (ScalarT (TypeVarT _ a m) _ _) _ _) | not (isBound env a)
+simplifyConstraint' _ _ c@(Subtype env t (ScalarT (TypeVarT _ a _) _ _) _ _) | not (isBound env a)
   = unify env a t >> simplifyConstraint c
 
 -- Compound types: decompose
@@ -697,6 +697,7 @@ generateFormula _ _ c                            = error $ show $ text "Constrai
 embedAndProcessConstraint :: (MonadSMT s, MonadHorn s) => Environment -> Bool -> Constraint -> Formula -> Formula -> (Set Formula -> Set Formula) -> TCSolver s Formula
 embedAndProcessConstraint env shouldLog c fmls relevantFml addTo = do 
   emb <- embedEnv env relevantFml True
+  -- Check if embedding is singleton { false }
   let isFSingleton s = (Set.size s == 1) && (Set.findMin s == ffalse)
   if isFSingleton emb  
     then return ftrue
