@@ -153,9 +153,11 @@ reconstructI' env t@ScalarT{} impl = case impl of
     cUnknown <- Unknown Map.empty <$> freshId "C"
     addConstraint $ WellFormedCond env cUnknown
     pThen <- inContext (\p -> Program (PIf (Program PHole boolAll) p (Program PHole t)) t) $ reconstructI (addAssumption cUnknown env) t iThen
-    (pThen, env') <- inContext (\p -> Program (PIf (Program PHole boolAll) p (Program PHole t)) t) $ reconstructE (addAssumption cUnknown env) t iThen
+    (pThen, _) <- inContext (\p -> Program (PIf (Program PHole boolAll) p (Program PHole t)) t) $ reconstructE (addAssumption cUnknown env) t iThen
     cond <- conjunction <$> currentValuation cUnknown
     (pCond, env') <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateConditionFromFml env cond
+    checkE (addAssumption cond env') t pThen
+    
     pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (fnot cond) env') t iElse
     return $ Program (PIf pCond pThen pElse) t
   
