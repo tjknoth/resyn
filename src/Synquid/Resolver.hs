@@ -9,6 +9,7 @@ import Synquid.Program
 import Synquid.Error
 import Synquid.Pretty
 import Synquid.Util
+
 import Control.Applicative
 import Control.Monad.Except
 import Control.Monad.State
@@ -16,6 +17,7 @@ import Control.Lens
 import qualified Data.Map as Map
 import Data.Map (Map)
 import qualified Data.Set as Set
+import Data.Set (Set)
 import Data.Maybe
 import Data.Either
 import Data.List
@@ -37,7 +39,8 @@ data ResolverState = ResolverState {
   _inlines :: Map Id ([Id], Formula),
   _sortConstraints :: [SortConstraint],
   _currentPosition :: SourcePos,
-  _idCount :: Int
+  _idCount :: Int,
+  _potentialVars :: Set String 
 }
 
 makeLenses ''ResolverState
@@ -52,7 +55,8 @@ initResolverState = ResolverState {
   _inlines = Map.empty,
   _sortConstraints = [],
   _currentPosition = noPos,
-  _idCount = 0
+  _idCount = 0,
+  _potentialVars = Set.empty
 }
 
 -- | Convert a parsed program AST into a list of synthesis goals and qualifier maps
@@ -86,8 +90,8 @@ resolveDecls declarations =
 resolveRefinement :: Environment -> Formula -> Either ErrorMessage Formula
 resolveRefinement env fml = runExcept (evalStateT (resolveTypeRefinement AnyS fml) (initResolverState {_environment = env}))
 
-resolveRefinedType :: Environment -> RType -> Either ErrorMessage RType
-resolveRefinedType env t = runExcept (evalStateT (resolveType t) (initResolverState {_environment = env}))
+resolveRefinedType :: Environment -> RType -> Set String -> Either ErrorMessage RType
+resolveRefinedType env t extraSyms = runExcept (evalStateT (resolveType t) (initResolverState {_environment = env, _potentialVars = extraSyms }))
 
 instantiateSorts :: [Sort] -> [Sort]
 instantiateSorts sorts = fromRight $ runExcept (evalStateT (instantiate sorts) (initResolverState))
@@ -373,7 +377,7 @@ resolveType s@(ScalarT (DatatypeT name tArgs pArgs) fml pot) = do
 
 resolveType (ScalarT baseT fml pot) = ScalarT <$> resolveBaseType baseT <*> resolveTypeRefinement (toSort baseT) fml <*> resolveTypePotential (toSort baseT) pot 
 
-resolveType (FunctionT x tArg tRes c)
+resolveType (FunctionT x tArg tRes c)  
   | c < 0 = throwResError $ text "resolveType: functions must incur non-negative cost"
   | x == valueVarName =
     throwResError $ text valueVarName <+> text "is a reserved variable name"
@@ -383,7 +387,7 @@ resolveType (FunctionT x tArg tRes c)
       tArg' <- resolveType tArg
       tRes' <- withLocalEnv $ do
         unless (isFunctionType tArg') (environment %= addVariable x tArg')
-        resolveType tRes
+        resolveType tRes 
       return $ FunctionT x tArg' tRes' c
 resolveType AnyT = return AnyT
 
@@ -456,7 +460,7 @@ resolveMeasureFormula (Ite f1 f2 f3) = do
 resolveMeasureFormula (Pred s name f) = do
   inlineMb <- uses inlines (Map.lookup name)
   case inlineMb of
-    Just (args, body) -> do 
+    Just (args, body) ->  
       resolveMeasureFormula (substitute (Map.fromList $ zip args f) body)
     Nothing -> do
       f' <- mapM resolveMeasureFormula f
@@ -474,15 +478,18 @@ resolveMeasureFormula f = return f
 resolveFormula :: Formula -> Resolver Formula
 resolveFormula (Var _ x) = do
   env <- use environment
-  case Map.lookup x (symbolsOfArity 0 env) of
-    Just sch ->
-      case sch of
-        Monotype (ScalarT baseType _ _) -> do
-          let s' = toSort baseType
-          return $ Var s' x
-        _ -> error $ unwords ["resolveFormula: encountered non-scalar variable", x, "in a formula"]
-    Nothing -> resolveFormula (Pred AnyS x []) `catchError` -- Maybe it's a zero-argument predicate?
-               const (throwResError $ text "Variable" <+> text x <+> text "is not in scope")      -- but if not, throw this error to avoid confusion
+  pSyms <- use potentialVars
+  if Set.member x pSyms
+    then return $ Var IntS x
+    else case Map.lookup x (symbolsOfArity 0 env) of
+      Just sch ->
+        case sch of
+          Monotype (ScalarT baseType _ _) -> do
+            let s' = toSort baseType
+            return $ Var s' x
+          _ -> error $ unwords ["resolveFormula: encountered non-scalar variable", x, "in a formula"]
+      Nothing -> resolveFormula (Pred AnyS x []) `catchError` -- Maybe it's a zero-argument predicate?
+                const (throwResError $ text "Variable" <+> text x <+> text "is not in scope")      -- but if not, throw this error to avoid confusionn
 
 resolveFormula (SetLit _ elems) = do
   elemSort <- freshSort

@@ -107,21 +107,33 @@ pivotAppend = \p . \xs . \ys .
         ICons x5 x6 -> ICons x5
                          (pivotAppend p x6 ys)
 
+add :: x:{Nat||0} -> y:{Nat||0} -> {Int|_v == x + y|0}
+add = \x . \y . 
+    if x <= 0
+      then y
+      else add (dec x) (inc y)
+
 append :: xs:{List {1**a||2}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
 append = \xs . \ys . 
     match xs with
       Nil -> ys
-      Cons z zs -> Cons z (append zs
-                             ys)
+      Cons x7 x8 -> Cons x7 (append x8
+                               ys)
 
-common :: l1:{List {1**a||0}||0} -> l2:{List {1**a||0}||0} -> {List {1**a||0}|elems _v == elems l1 * elems l2|0}
+common :: l1:{IList {1**a||0}||0} -> l2:{IList {1**a||0}||0} -> {List {1**a||0}|elems _v == ielems l1 * ielems l2|0}
 common = \l1 . \l2 . 
     match l1 with
-      Nil -> l1
-      Cons x3 x4 -> 
-        if member x3 l2
-          then Cons x3 (common x4 l2)
-          else common x4 l2
+      INil -> Nil
+      ICons x4 x5 -> 
+        match l2 with
+          INil -> Nil
+          ICons x8 x9 -> 
+            if x8 < x4
+              then common l1 x9
+              else 
+                if x4 < x8
+                  then common x5 l2
+                  else Cons x4 (common l1 x9)
 
 compress :: xs:{List {1**a||0}||0} -> {CList {1**a||0}|elems _v == elems xs|0}
 compress = \xs . 
@@ -228,14 +240,20 @@ nub' = \xs . \acc .
       Nil -> acc
       Cons x3 x4 -> 
         if elem x3 acc
-          then nub' x4 acc
+          then 
+            match acc with
+              Nil -> error
+              Cons x7 x8 -> nub' x4 acc
           else 
             if elem x3 x4
               then nub' x4 acc
               else Cons x3 (nub' x4 acc)
 
 nub :: xs:{List {1**a||0}||0} -> {UList {1**a||0}|elems _v == elems xs|0}
-nub = \xs . nub' xs Nil
+nub = \xs . 
+  match xs with
+    Nil -> Nil
+    Cons x3 x4 -> nub' xs Nil
 
 null :: xs:{List {1**a||0}||0} -> {Bool|_v == (len xs == 0)|0}
 null = \xs . 

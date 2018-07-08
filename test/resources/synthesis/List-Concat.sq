@@ -20,12 +20,9 @@ measure sumLen :: ListOfLists a -> {Int | _v >= 0} where
 
 zappend :: xs: List {a| |1} -> ys: List a -> { List a | len _v == len xs + len ys }
 
-concat :: xss: ListOfLists {a| |1} -> acc: List a -> { List a | len _v == sumLen xss + len acc }
-concat = \xss. \acc.
-  match xss with 
-    Nil2 -> acc 
-    Cons2 x3 x4 -> zappend acc (concat x4 x3) --x4 (zappend acc x3) 
+concat :: acc: List a -> xss: ListOfLists {a| |1} -> { List a | len _v == sumLen xss + len acc }
+concat = ?? 
 
 -- Linear solution: append acc (concat x4 x3)
 -- Quadratic: concat x4 (append acc x3)
--- Also linear: concat x4 (append x3 acc) 
+-- Also linear (in reality) but quadratic to the solver: concat x4 (append x3 acc) 

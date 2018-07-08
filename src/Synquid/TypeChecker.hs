@@ -139,6 +139,8 @@ reconstructI' env t@(FunctionT _ tArg tRes _) impl = case impl of
 reconstructI' env t@ScalarT{} impl = case impl of
   PFun _ _ -> throwErrorWithDescription $ text "Cannot assign non-function type" </> squotes (pretty t) </>
                            text "to lambda term" </> squotes (pretty $ untyped impl)
+
+ -- Why don't I need this? 
   {- 
   PLet x iDef iBody -> do -- E-term let (since lambda-let was considered before)
     (pDef, _) <- inContext (\p -> Program (PLet x p (Program PHole t)) t) $ reconstructETopLevel env AnyT iDef
@@ -151,8 +153,9 @@ reconstructI' env t@ScalarT{} impl = case impl of
     cUnknown <- Unknown Map.empty <$> freshId "C"
     addConstraint $ WellFormedCond env cUnknown
     pThen <- inContext (\p -> Program (PIf (Program PHole boolAll) p (Program PHole t)) t) $ reconstructI (addAssumption cUnknown env) t iThen
+    (pThen, env') <- inContext (\p -> Program (PIf (Program PHole boolAll) p (Program PHole t)) t) $ reconstructE (addAssumption cUnknown env) t iThen
     cond <- conjunction <$> currentValuation cUnknown
-    (pCond, env') <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateCondition env cond
+    (pCond, env') <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateConditionFromFml env cond
     pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (fnot cond) env') t iElse
     return $ Program (PIf pCond pThen pElse) t
   
@@ -278,7 +281,8 @@ reconstructE' env typ impl =
 checkAnnotation :: (MonadSMT s, MonadHorn s) => Environment -> RType -> RType -> BareProgram RType -> Explorer s RType
 checkAnnotation env t t' p = do
   tass <- use (typingState . typeAssignment)
-  case resolveRefinedType (typeSubstituteEnv tass env) t' of
+  potentialSyms <- use (typingState . resourceVars)
+  case resolveRefinedType (typeSubstituteEnv tass env) t' potentialSyms of
     Left err -> throwError err
     Right t'' -> do
       ctx <- asks . view $ _1 . context

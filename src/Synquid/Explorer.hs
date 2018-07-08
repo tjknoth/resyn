@@ -94,7 +94,7 @@ type Explorer s = StateT ExplorerState (
 
 -- | This type encapsulates the 'reconstructTopLevel' function of the type checker,
 -- which the explorer calls for auxiliary goals
-newtype Reconstructor s = Reconstructor (Goal -> Explorer s RProgram)
+newtype Reconstructor s = Reconstructor (Goal -> Explorer s RProgram) 
 
 
 
@@ -137,9 +137,11 @@ generateMaybeIf env t = ifte generateThen (uncurry3 (generateElse env t)) (gener
 -- | Proceed after solution @pThen@ has been found under assumption @cond@
 generateElse :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Formula -> Id -> RProgram -> Explorer s RProgram
 generateElse env t cond condUnknown pThen = if cond == ftrue
-  then return pThen -- @pThen@ is valid under no assumptions: return it
+  then return 
+  pThen -- @pThen@ is valid under no assumptions: return it
   else do -- @pThen@ is valid under a nontrivial assumption, proceed to look for the solution for the rest of the inputs
-    (pCond, env') <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateCondition env cond
+    (pCond, env') <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateConditionFromFml env cond
+    checkE (addAssumption cond env') t pThen
 
     cUnknown <- Unknown Map.empty <$> freshId "C"
     runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton $ fnot cond) -- Create a fixed-valuation unknown to assume @!cond@
@@ -155,8 +157,8 @@ tryEliminateBranching branch recheck =
             recheck -- Re-check Horn constraints after retracting the branch guard
             (const $ return True) -- constraints still hold: @branch@ is a valid solution overall
             (return False) -- constraints don't hold: the guard is essential
-generateCondition :: (MonadHorn s, MonadSMT s) => Environment -> Formula -> Explorer s (RProgram, Environment)
-generateCondition env fml = do
+generateConditionFromFml :: (MonadHorn s, MonadSMT s) => Environment -> Formula -> Explorer s (RProgram, Environment)
+generateConditionFromFml env fml = do
   conjuncts <- genConjuncts env allConjuncts
   let env' = (snd . head) conjuncts -- Environment on head of list will be the final environment from generating all conjunctions independently
   return (fmap (`addRefinement` (valBool |=| fml)) (foldl1 conjoin (map fst conjuncts)), env')
