@@ -16,7 +16,7 @@ BENCH_PATH = '.'
 LOGFILE_NAME = 'results.log'
 ORACLE_NAME = 'oracle'
 OUTFILE_NAME = 'results.csv'
-COMMON_OPTS = []
+COMMON_OPTS = ['']
 TIMEOUT_COMMAND = 'timeout'
 TIMEOUT= '120'
 
@@ -195,7 +195,7 @@ RESOURCE_SYNTHESIS_BENCHMARKS = [
     ('List-Intersect',      ['-f=AllArguments', '--cut-branches=false']),
     #('List-Compare',        []),
     ('List-Compress',       []),
-    #('List-Concat',         []),
+    ('List-Concat',         []),
     ('List-Cons2',          []),
     ('List-Delete',         []),
     ('List-Stutter',        []),
@@ -203,7 +203,6 @@ RESOURCE_SYNTHESIS_BENCHMARKS = [
     ('List-Elem',           []),
     ('List-ElemIndex',      []),
     ('List-ExtractMin',     ['-a=2', '-m=3']),
-    #('List-Fold',           []),
     ('List-Insert',         []),
     ('List-Ith',            []),
     ('List-Nub',            []),

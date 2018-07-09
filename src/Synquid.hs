@@ -166,7 +166,7 @@ synt = Synthesis {
   multiplicities      = True            &= help ("Use multiplicities when verifying resource usage (default: True"),
   destructive_match    = True           &= help ("Use destructive pattern match (default: True)") &= name "d",
   instantiate_foralls  = True           &= help ("Solve exists-forall constraints by instantiating universally quantified expressions (default: True)"),
-  cut_branches         = True           &= help ("Do not backtrack past successfully synthesized branches (default: True")
+  cut_branches         = True           &= help ("Do not backtrack past successfully synthesized branches (default: True)")
   } &= auto &= help "Synthesize goals specified in the input file"
     where
       defaultFormat = outputFormat defaultSynquidParams
