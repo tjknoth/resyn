@@ -48,7 +48,7 @@ main = do
                appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency symmetry
                lfp bfs
                out_file out_module outFormat resolve 
-               print_spec print_stats log_ resources mult dmatch forall cb) -> do
+               print_spec print_stats log_ resources mult dmatch forall cb nump) -> do
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
                     _scrutineeDepth = scrutineeMax,
@@ -67,7 +67,8 @@ main = do
                     _useMultiplicity = mult,
                     _dMatch = dmatch,
                     _instantiateForall = forall,
-                    _shouldCut = cb
+                    _shouldCut = cb,
+                    _numPrograms = nump
                     }
                   let solverParams = defaultHornSolverParams {
                     isLeastFixpoint = lfp,
@@ -133,7 +134,8 @@ data CommandLineArgs
         multiplicities :: Bool,
         destructive_match :: Bool,
         instantiate_foralls :: Bool,
-        cut_branches :: Bool
+        cut_branches :: Bool,
+        num_programs :: Int
       }
   deriving (Data, Typeable, Show, Eq)
 
@@ -166,7 +168,8 @@ synt = Synthesis {
   multiplicities      = True            &= help ("Use multiplicities when verifying resource usage (default: True"),
   destructive_match    = True           &= help ("Use destructive pattern match (default: True)") &= name "d",
   instantiate_foralls  = True           &= help ("Solve exists-forall constraints by instantiating universally quantified expressions (default: True)"),
-  cut_branches         = True           &= help ("Do not backtrack past successfully synthesized branches (default: True)")
+  cut_branches         = True           &= help ("Do not backtrack past successfully synthesized branches (default: True)"),
+  num_programs         = 1              &= help ("Number of programs to produce if possible (default: 1)")
   } &= auto &= help "Synthesize goals specified in the input file"
     where
       defaultFormat = outputFormat defaultSynquidParams
@@ -200,7 +203,8 @@ defaultExplorerParams = ExplorerParams {
   _useMultiplicity = True,
   _dMatch = False,
   _instantiateForall = True,
-  _shouldCut = True
+  _shouldCut = True,
+  _numPrograms = 1
 }
 
 -- | Parameters for constraint solving
@@ -292,7 +296,8 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure
     Right (goals, cquals, tquals) -> when (not $ resolveOnly synquidParams) $ do
       results <- mapM (synthesizeGoal cquals tquals) (requested goals)
-      when (not (null results) && showStats synquidParams) $ printStats results declsByFile
+      let fstResults = map (\((g, rs), s) -> ((g, head rs), s)) results 
+      when (not (null results) && showStats synquidParams) $ printStats fstResults declsByFile
       return ()
       -- Generate output if requested
       --let libsWithDecls = collectLibDecls libs declsByFile
@@ -320,15 +325,18 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
       (mProg, stats) <- synthesize (updateExplorerParams explorerParams goal) (updateSolverParams solverParams goal) goal cquals tquals
       case mProg of
         Left typeErr -> pdoc (pretty typeErr) >> pdoc empty >> exitFailure
-        Right prog -> do
-          when (gSynthesize goal) $ pdoc (prettySolution goal prog) >> pdoc empty
-          return ((goal, prog), stats)
+        Right progs  -> do
+          when (gSynthesize goal) $ mapM_ (\p -> pdoc (prettySolution goal p) >> pdoc empty) progs
+          return ((goal, progs), stats)
     updateLogLevel goal orig = if gSynthesize goal then orig else 0 -- prevent logging while type checking measures
 
     updateExplorerParams eParams goal = eParams { _checkResources = (gSynthesize goal) && (_checkResources eParams), _explorerLogLevel = updateLogLevel goal (_explorerLogLevel eParams)}
 
     updateSolverParams sParams goal = sParams { solverLogLevel = (updateLogLevel goal (solverLogLevel sParams))}
     
+    separateResults ((b, []), s) = []
+    separateResults ((b, (r:rs)), s) = ((b,r),s) : (separateResults ((b, rs), s))
+
     printStats results declsByFile = do
       let env = gEnvironment (fst $ fst $ head results)
       let measureCount = Map.size $ _measures $ env

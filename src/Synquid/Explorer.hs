@@ -63,7 +63,8 @@ data ExplorerParams = ExplorerParams {
   _useMultiplicity :: Bool,               -- ^ Should we generate constraints on multiplicities? Useful for modeling memory usage.
   _dMatch :: Bool,                        -- ^ Use destructive pattern match
   _instantiateForall :: Bool,             -- ^ Solve exists-forall constraints by instantiating universally quantified expressions
-  _shouldCut :: Bool                      -- ^ Should cut the search upon synthesizing a functionally correct branch
+  _shouldCut :: Bool,                     -- ^ Should cut the search upon synthesizing a functionally correct branch
+  _numPrograms :: Int                     -- ^ Number of programs to search for
 }
 
 makeLenses ''ExplorerParams
@@ -99,12 +100,13 @@ newtype Reconstructor s = Reconstructor (Goal -> Explorer s RProgram)
 
 
 -- | 'runExplorer' @eParams tParams initTS go@ : execute exploration @go@ with explorer parameters @eParams@, typing parameters @tParams@ in typing state @initTS@
-runExplorer :: (MonadSMT s, MonadHorn s) => ExplorerParams -> TypingParams -> Reconstructor s -> TypingState -> Explorer s a -> s (Either ErrorMessage a)
+runExplorer :: (MonadSMT s, MonadHorn s) => ExplorerParams -> TypingParams -> Reconstructor s -> TypingState -> Explorer s a -> s (Either ErrorMessage [a])
 runExplorer eParams tParams topLevel initTS go = do
-  (ress, PersistentState errs) <- runStateT (observeManyT 1 $ runReaderT (evalStateT go initExplorerState) (eParams, tParams, topLevel)) (PersistentState [])
+  let n = _numPrograms eParams
+  (ress, PersistentState errs) <- runStateT (observeManyT n $ runReaderT (evalStateT go initExplorerState) (eParams, tParams, topLevel)) (PersistentState [])
   case ress of
     [] -> return $ Left $ head errs
-    (res : _) -> return $ Right res
+    res -> return $ Right res--(res : _) -> return $ Right res
   where
     initExplorerState = ExplorerState initTS [] Map.empty Map.empty Map.empty Map.empty
 
