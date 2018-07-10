@@ -28,15 +28,3 @@ qualifier { x < y }
 
 common :: l1: IList a -> l2: IList a -> {List a | elems _v == (ielems l1 * ielems l2)}
 common = ??
-{- \l1. \l2.
-  match l1 with
-    INil -> Nil
-    ICons x xs -> 
-      match l2 with 
-        INil -> Nil 
-        ICons y ys ->
-          if x < y
-            then common xs (ICons y ys) 
-            else if y < x 
-                then ?? -- common (ICons x xs) ys
-                else ?? -- Cons x (common xs ys) -}

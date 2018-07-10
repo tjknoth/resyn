@@ -11,14 +11,6 @@ termination measure ilen :: IList a -> {Int | _v >= 0} where
 measure ielems :: IList a -> Set a where
   INil -> []
   ICons x xs -> [x] + ielems xs
-
-measure numgt :: x: a -> IList a -> {Int | _v >= 0} where 
-  INil -> 0
-  ICons y ys -> 
-    if x >= y 
-      then 1 + numgt x ys
-      else numgt x ys
-
-
-insert :: x: a -> xs: {IList a| |numgt x _v} -[1]-> {IList a | ielems _v == ielems xs + [x]}
-insert = ?? 
+	
+merge :: xs: IList a -> ys: IList a -> {IList a | ilen _v == ilen xs + ilen ys && ielems _v == ielems xs + ielems ys}
+merge = ??

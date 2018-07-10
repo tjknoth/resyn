@@ -1,7 +1,5 @@
-false :: {Bool | !_v}
-not :: x: Bool -> {Bool | _v == !x}
-or :: x: Bool -> y: Bool -> {Bool | _v == (x || y)}
-qualifier {x <= y, x != y}
+leq :: x: a -> y: a -> {Bool | _v == (x <= y)}
+neq :: x: a -> y: a -> {Bool | _v == (x != y)}
 
 data Heap a where
 	Empty :: Heap a
@@ -13,7 +11,7 @@ termination measure size :: Heap a -> {Int | _v >= 0} where
   
 measure elems :: Heap a -> Set a where
   Empty -> []
-  Node x l r -> elems l + elems r + [x]    
-
-member :: x: {10 ** a} -> t: Heap {10 ** a} -> {Bool | _v == (x in elems t)}
-member = ??
+  Node x l r -> elems l + elems r + [x]
+ 
+tripleton :: x: a -> y: a -> z: a -> {Heap a | elems _v == [x, y, z]}
+tripleton = ??

@@ -1,0 +1,14 @@
+data List a where
+	Nil :: List a
+	Cons :: x: {1 ** a| |1} -> xs: List a -> List a
+  
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+  
+measure elems :: List a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs  
+	
+append :: xs: List {1 ** a| |2} -> ys: List a -> {List a | len _v == len xs + len ys && elems _v == elems xs + elems ys}
+append = ?? 

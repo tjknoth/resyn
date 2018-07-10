@@ -1,6 +1,3 @@
-false :: {Bool | !_v}
-not :: x: Bool -> {Bool | _v == !x}
-or :: x: Bool -> y: Bool -> {Bool | _v == (x || y)}
 qualifier {x <= y, x != y}
 
 data Heap a where
@@ -15,5 +12,5 @@ measure elems :: Heap a -> Set a where
   Empty -> []
   Node x l r -> elems l + elems r + [x]    
 
-member :: x: {10 ** a} -> t: Heap {10 ** a} -> {Bool | _v == (x in elems t)}
-member = ??
+insert :: t: Heap a -> x: a -> {Heap a | elems _v == elems t + [x]}
+insert = ??

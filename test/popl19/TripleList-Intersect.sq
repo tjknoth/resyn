@@ -1,0 +1,17 @@
+data IList a where 
+  Nil :: IList a
+  Cons :: x: a -> xs: IList {a | x <= _v} -> IList a
+
+termination measure ilen :: IList a -> {Int | _v >= 0} where 
+  Nil -> 0 
+  Cons x xs -> 1 + ilen xs
+
+measure ielems :: IList a -> Set a where 
+  Nil -> []
+  Cons x xs -> [x] + ielems xs
+
+member :: x: a -> xs: IList {1 ** a | | 1} -> {Bool | _v == (x in ielems xs)}
+qualifier { x < y }
+
+intersect :: l1: IList a -> l2: IList a -> l3: IList a -> {IList a | ielems _v == ielems l1 * (ielems l2 * ielems l3)}
+intersect = ??

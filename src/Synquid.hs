@@ -291,10 +291,9 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
   case resolveDecls decls of
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure
     Right (goals, cquals, tquals) -> when (not $ resolveOnly synquidParams) $ do
-      mapM (synthesizeGoal cquals tquals) (requested goals)
+      results <- mapM (synthesizeGoal cquals tquals) (requested goals)
+      when (not (null results) && showStats synquidParams) $ printStats results declsByFile
       return ()
-      --results <- mapM (synthesizeGoal cquals tquals) (requested goals)
-      --when (not (null results) && showStats synquidParams) $ printStats results declsByFile
       -- Generate output if requested
       --let libsWithDecls = collectLibDecls libs declsByFile
       --codegen (fillinCodegenParams file libsWithDecls codegenParams) (map fst results)
@@ -329,7 +328,7 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
     updateExplorerParams eParams goal = eParams { _checkResources = (gSynthesize goal) && (_checkResources eParams), _explorerLogLevel = updateLogLevel goal (_explorerLogLevel eParams)}
 
     updateSolverParams sParams goal = sParams { solverLogLevel = (updateLogLevel goal (solverLogLevel sParams))}
-    {-
+    
     printStats results declsByFile = do
       let env = gEnvironment (fst $ fst $ head results)
       let measureCount = Map.size $ _measures $ env
@@ -362,4 +361,4 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
                   parens (text "Solution size:" <+> pretty solutionSize)
                 ] ++
               [empty]
-    -}
+    
