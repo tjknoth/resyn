@@ -103,7 +103,7 @@ newtype Reconstructor s = Reconstructor (Goal -> Explorer s RProgram)
 runExplorer :: (MonadSMT s, MonadHorn s) => ExplorerParams -> TypingParams -> Reconstructor s -> TypingState -> Explorer s a -> s (Either ErrorMessage [a])
 runExplorer eParams tParams topLevel initTS go = do
   let n = _numPrograms eParams
-  (ress, PersistentState errs) <- runStateT (observeManyT n $ runReaderT (evalStateT go initExplorerState) (eParams, tParams, topLevel)) (PersistentState [])
+  (ress, PersistentState errs) <- runStateT (observeManyT n (runReaderT (evalStateT go initExplorerState) (eParams, tParams, topLevel))) (PersistentState [])
   case ress of
     [] -> return $ Left $ head errs
     res -> return $ Right res--(res : _) -> return $ Right res

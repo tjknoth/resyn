@@ -37,15 +37,15 @@ timed cp phase operation = do
 {- Statistics Table -}
 
 data StatsRow = StatsRow { 
-  sName :: String,    sSpec :: Int,    sTempl :: Int,    sSolution :: Int, 
+  sName :: String,    sSpec :: Int,    sTempl :: Int,    sSolution :: Int, sConstraints :: Int,
   sTmTypeCheck :: Tm, sTmRepair :: Tm, sTmRecheck :: Tm, sTmTotal :: Tm
 }
 
 statsTable :: [StatsRow] -> Doc
 statsTable dataRows =
   let headerRow = [text "Goal", {-text "Spec",-} text "Templ", text "Solution", text "Time: Typecheck", text "Repair", text "Recheck", text "Total Synth"]
-      totalsRow = StatsRow "Totals" (sum $ map sSpec dataRows) (sum $ map sTempl dataRows) (sum $ map sSolution dataRows) (sum $ map sTmTypeCheck dataRows) (sum $ map sTmRepair dataRows) (sum $ map sTmRecheck dataRows) (sum $ map sTmTotal dataRows)
-      toDocs (StatsRow a b c d e f g h) = [text a, {-pretty b, -}pretty c, pretty d, tm e, tm f, tm g, tm h]
+      totalsRow = StatsRow "Totals" (sum $ map sSpec dataRows) (sum $ map sTempl dataRows) (sum $ map sSolution dataRows) (sum $ map sConstraints dataRows) (sum $ map sTmTypeCheck dataRows) (sum $ map sTmRepair dataRows) (sum $ map sTmRecheck dataRows) (sum $ map sTmTotal dataRows)
+      toDocs (StatsRow a b c d  _ e f g h) = [text a, {-pretty b, -}pretty c, pretty d, tm e, tm f, tm g, tm h]
       tm t = text $ show (realToFrac t :: Centi) ++ "s"
       colWidths = [20, {--8,-} -8, -8, -16, -9 ,-9, -11]   -- TODO autocompute width of first column
   in

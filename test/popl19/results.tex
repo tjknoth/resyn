@@ -1,36 +1,36 @@
-\multirow{15}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{List}}} & is empty & 2 & true, false & 1 & 9 & 16 & 0.17 & 0.05 & - & - & - \\
- & is member & 3 & true, false, $=$, $\neq$ & 2 & 9 & 41 & 0.15 & 0.08 & - & - & - \\
- & duplicate each element & 3 &  & 2 & 16 & 39 & 0.29 & 0.20 & - & - & - \\
- & replicate & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 7 & 31 & 0.26 & 0.16 & - & - & - \\
- & append two lists & 3 &  & 2 & 20 & 38 & 0.80 & 0.37 & - & - & - \\
- & concatenate list of lists & 4 & append & 3 & 17 & 49 & 1.06 & 0.42 & 49 & - & Yes \\
- & take first $n$ elements & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 11 & 34 & 0.34 & 0.19 & - & - & - \\
- & drop first $n$ elements & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 14 & 30 & 0.30 & 0.16 & - & - & - \\
- & delete value & 3 & $=$, $\neq$ & 2 & 11 & 49 & 0.36 & 0.17 & - & - & - \\
+\multirow{16}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{List}}} & is empty & 2 & true, false & 1 & 9 & 16 & 0.09 & 0.04 & - & - & - \\
+ & is member & 3 & true, false, $=$, $\neq$ & 2 & 9 & 41 & 0.09 & 0.07 & - & - & - \\
+ & duplicate each element & 3 &  & 2 & 16 & 39 & 0.22 & 0.13 & - & - & - \\
+ & replicate & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 7 & 31 & 0.26 & 0.09 & - & - & - \\
+ & append two lists & 3 &  & 2 & 20 & 38 & 0.46 & 0.38 & - & - & - \\
+ & concatenate list of lists & 4 & append & 3 & 17 & 49 & 1.06 & 0.41 & 49 & - & - \\
+ & take first $n$ elements & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 11 & 34 & 0.30 & 0.19 & - & - & - \\
+ & drop first $n$ elements & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 14 & 30 & 0.29 & 0.16 & - & - & - \\
+ & delete value & 3 & $=$, $\neq$ & 2 & 11 & 49 & 0.34 & 0.16 & - & - & - \\
  & zip & 2 &  & 1 & 13 & 32 & 0.17 & 0.08 & - & - & - \\
- & $i$-th element & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 16 & 30 & 0.14 & 0.11 & - & - & - \\
- & index of element & 3 & 0, inc, dec, $=$, $\neq$ & 2 & 13 & 43 & 0.26 & 0.16 & - & - & - \\
- & insert at end & 3 &  & 2 & 26 & 42 & 0.27 & 0.16 & - & - & - \\
- & reverse & 3 & insert at end & 2 & 20 & 35 & 0.26 & 0.19 & - & - & - \\
- & extract minimum & 5 & $\leq$, $\neq$ & 4 & 26 & 71 & 7.53 & 7.60 & 71 & - & Yes \\
+ & $i$-th element & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 16 & 30 & 0.12 & 0.09 & - & - & - \\
+ & index of element & 3 & 0, inc, dec, $=$, $\neq$ & 2 & 13 & 43 & 0.20 & 0.13 & - & - & - \\
+ & insert at end & 3 &  & 2 & 26 & 42 & 0.26 & 0.16 & - & - & - \\
+ & reverse & 3 & insert at end & 2 & 20 & 35 & 0.26 & 0.18 & - & - & - \\
+ & intersection & 5 & $<$, member & 4 & 14 & 87 & 26.91 & 1.08 & 90 & - & - \\
+ & extract minimum & 5 & $\leq$, $\neq$ & 4 & 26 & 71 & 7.37 & 7.36 & 71 & - & - \\
 \hline\multirow{7}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Unique list}}} & insert & 3 & $=$, $\neq$ & 2 & 13 & 49 & 0.36 & 0.21 & - & - & - \\
- & delete & 3 & $=$, $\neq$ & 2 & 13 & 45 & 0.30 & 0.19 & - & - & - \\
- & remove duplicates & 5 & is member & 2 & 24 & 89 & 3.19 & 1.42 & - & - & - \\
- & remove adjacent dupl. & 4 & $=$, $\neq$ & 3 & 11 & 64 & 2.62 & 1.63 & 62 & - & Yes \\
- & integer range & 3 & 0, inc, dec, $\leq$, $\neq$ & 2 & 18 & 46 & 3.64 & 3.13 & - & - & - \\
- & partition & 5 & $\leq$ & 4 & 30 & 71 & 11.30 & 5.62 & - & - & - \\
- & append with pivot & 3 &  & 2 & 31 & 45 & 0.73 & 0.42 & - & - & - \\
-\hline\multirow{3}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Sorted list}}} & insert & 3 & $<$ & 2 & 11 & 64 & 0.69 & 0.33 & - & - & - \\
- & delete & 3 & $<$ & 2 & 11 & 52 & 0.39 & 0.18 & - & - & - \\
- & intersection (sorted) & 5 & $<$, member & 4 & 14 & 87 & 27.25 & 1.14 & 90 & - & Yes \\
-\hline\multirow{2}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Tree}}} & node count & 2 & 0, 1, + & 1 & 7 & 34 & 1.06 & 0.34 & - & - & - \\
- & preorder & 3 & append & 2 & 11 & 45 & 0.99 & 0.33 & - & - & - \\
-\hline\multirow{4}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{BST}}} & is member & 3 & true, false, $\leq$, $\neq$ & 2 & 9 & 72 & 0.26 & 0.17 & - & - & - \\
- & insert & 3 & $\leq$, $\neq$ & 2 & 11 & 90 & 2.94 & 1.32 & - & - & - \\
- & delete & 3 & $\leq$, $\neq$ & 2 & 11 & 103 & 20.55 & 8.23 & - & - & - \\
- & BST sort & 11 & $\leq$, $\neq$ & 6 & 60 & 191 & 4.66 & 2.22 & - & - & - \\
-\hline\multirow{4}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Binary Heap}}} & insert & 3 & $\leq$, $\neq$ & 2 & 11 & 90 & 2.46 & 0.83 & - & - & - \\
- & 1-element constructor & 3 & $\leq$, $\neq$ & 2 & 8 & 44 & 0.09 & 0.07 & - & - & - \\
- & 2-element constructor & 3 & $\leq$, $\neq$ & 2 & 9 & 91 & 0.59 & 0.19 & - & - & - \\
- & 3-element constructor & 3 & $\leq$, $\neq$ & 2 & 10 & 274 & 24.30 & 3.59 & - & - & - \\
+ & delete & 3 & $=$, $\neq$ & 2 & 13 & 45 & 0.29 & 0.19 & - & - & - \\
+ & remove duplicates & 5 & is member & 2 & 24 & 89 & 3.14 & 1.30 & - & - & - \\
+ & remove adjacent dupl. & 4 & $=$, $\neq$ & 3 & 11 & 64 & 2.54 & 1.56 & 62 & 3 & - \\
+ & integer range & 3 & 0, inc, dec, $\leq$, $\neq$ & 2 & 18 & 46 & 3.88 & 2.79 & - & - & - \\
+ & partition & 5 & $\leq$ & 4 & 30 & 71 & 9.51 & 5.29 & - & - & - \\
+ & append with pivot & 3 &  & 2 & 31 & 45 & 0.64 & 0.41 & - & - & - \\
+\hline\multirow{2}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Sorted list}}} & insert & 3 & $<$ & 2 & 11 & 64 & 0.63 & 0.27 & - & - & - \\
+ & delete & 3 & $<$ & 2 & 11 & 52 & 0.27 & 0.15 & - & - & - \\
+\hline\multirow{2}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Tree}}} & node count & 2 & 0, 1, + & 1 & 7 & 34 & 1.09 & 0.30 & - & - & - \\
+ & preorder & 3 & append & 2 & 11 & 45 & 0.96 & 0.32 & - & - & - \\
+\hline\multirow{4}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{BST}}} & is member & 3 & true, false, $\leq$, $\neq$ & 2 & 9 & 72 & 0.24 & 0.17 & - & - & - \\
+ & insert & 3 & $\leq$, $\neq$ & 2 & 11 & 90 & 2.84 & 1.32 & - & - & - \\
+ & delete & 3 & $\leq$, $\neq$ & 2 & 11 & 103 & 19.93 & 8.19 & - & - & - \\
+ & BST sort & 11 & $\leq$, $\neq$ & 6 & 60 & 191 & 4.51 & 2.13 & - & - & - \\
+\hline\multirow{4}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Binary Heap}}} & insert & 3 & $\leq$, $\neq$ & 2 & 11 & 90 & 2.41 & 0.82 & - & - & - \\
+ & 1-element constructor & 3 & $\leq$, $\neq$ & 2 & 8 & 44 & 0.08 & 0.07 & - & - & - \\
+ & 2-element constructor & 3 & $\leq$, $\neq$ & 2 & 9 & 91 & 0.58 & 0.20 & - & - & - \\
+ & 3-element constructor & 3 & $\leq$, $\neq$ & 2 & 10 & 274 & 23.84 & 3.55 & - & - & - \\
 \hline

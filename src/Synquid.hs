@@ -326,7 +326,7 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
       case mProg of
         Left typeErr -> pdoc (pretty typeErr) >> pdoc empty >> exitFailure
         Right progs  -> do
-          when (gSynthesize goal) $ mapM_ (\p -> pdoc (prettySolution goal p) >> pdoc empty) progs
+          when (gSynthesize goal) $ mapM_ (\p -> pdoc (prettySolution goal (fst p)) >> pdoc empty) progs
           return ((goal, progs), stats)
     updateLogLevel goal orig = if gSynthesize goal then orig else 0 -- prevent logging while type checking measures
 
@@ -347,16 +347,18 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
            ) decls
       let totalSizeOf = sum . map (typeNodeCount . toMonotype .unresolvedType env)
       let policySize = Map.fromList $ map (\(file, decls) -> (file, totalSizeOf $ namesOfConstants decls)) declsByFile
-      let getStatsFor ((goal, prog), stats) =
+      let getStatsFor ((goal, (prog, constraints)), stats) =
              StatsRow
              (gName goal)
              (typeNodeCount $ toMonotype $ unresolvedSpec goal)
              (programNodeCount $ gImpl goal)   -- size of implementation template (before synthesis/repair)
              (programNodeCount prog)           -- size of generated solution
+             constraints                       -- Number of resource constraints generated
              (stats ! TypeCheck) (stats ! Repair) (stats ! Recheck) (sum $ Map.elems stats)  -- time measurements
       let perResult = map getStatsFor results
       let specSize = sum $ map (typeNodeCount . toMonotype . unresolvedSpec . fst . fst) results
-      let solutionSize = sum $ map (programNodeCount . snd . fst) results
+      let solutionSize = sum $ map (programNodeCount . fst . snd . fst) results
+      let numC = sum $ map (snd . snd . fst) results
       pdoc $ vsep $ [
                 parens (text "Goals:" <+> pretty (length results)),
                 parens (text "Measures:" <+> pretty measureCount)] ++
@@ -366,7 +368,8 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
                   statsTable perResult]
                 else [
                   parens (text "Spec size:" <+> pretty specSize),
-                  parens (text "Solution size:" <+> pretty solutionSize)
+                  parens (text "Solution size:" <+> pretty solutionSize),
+                  parens (text "Number of constraints:" <+> pretty numC)
                 ] ++
               [empty]
     

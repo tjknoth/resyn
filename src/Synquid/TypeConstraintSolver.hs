@@ -632,12 +632,13 @@ finalizeType t = do
 
 -- | Substitute type variables, predicate variables, and predicate unknowns in @p@
 -- using current type assignment, predicate assignment, and liquid assignment
-finalizeProgram :: Monad s => RProgram -> TCSolver s RProgram
+finalizeProgram :: Monad s => RProgram -> TCSolver s (RProgram, Int)
 finalizeProgram p = do
   tass <- use typeAssignment
   pass <- use predAssignment
   sol <- uses candidates (solution . head)
-  return $ fmap (typeApplySolution sol . typeSubstitutePred pass . typeSubstitute tass) p
+  cs <- use resourceConstraints
+  return ((typeApplySolution sol . typeSubstitutePred pass . typeSubstitute tass) <$> p, length cs)
 
 embedEnv :: (MonadHorn s, MonadSMT s) => Environment -> Formula -> Bool -> TCSolver s (Set Formula)
 embedEnv env fml consistency = do 

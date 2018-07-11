@@ -33,11 +33,12 @@ FNULL = open(os.devnull, 'w')                                   # Null file
 PAPER_PATH = '/home/tristan/Research/resyn/paper/'
 
 class Benchmark:
-    def __init__(self, name, description, components='', options=[]):
+    def __init__(self, name, description, components='', options=[], np = '-'):
         self.name = name                # Id
         self.description = description  # Description (in the table)
         self.components = components    # Description of components used (in the table)
         self.options = options          # Command-line options to use for this benchmark when running in individual context
+        self.num_programs = np          # Number of programs generated in the enumerate-and-check process
 
     def str(self):
         return self.name + ': ' + self.description + ' ' + str(self.options)
@@ -73,9 +74,8 @@ ALL_BENCHMARKS = [
     BenchmarkGroup("Unique list", [], [
         Benchmark('UniqueList-Insert', 'insert', '$=$, $\\neq$'),
         Benchmark('UniqueList-Delete', 'delete', '$=$, $\\neq$'),
-        Benchmark('')
         Benchmark('List-Nub', 'remove duplicates', 'is member', []),
-        Benchmark('List-Compress', 'remove adjacent dupl.', '$=$, $\\neq$'),
+        Benchmark('List-Compress', 'remove adjacent dupl.', '$=$, $\\neq$', np = 3),
         Benchmark('UniqueList-Range', 'integer range', '0, inc, dec, $\\leq$, $\\neq$'),
         Benchmark('List-Partition', 'partition', '$\\leq$'),
         Benchmark('IncList-Pivot', 'append with pivot'),
@@ -83,7 +83,7 @@ ALL_BENCHMARKS = [
     BenchmarkGroup("Sorted list", ['-f=AllArguments'], [
         Benchmark('StrictIncList-Insert', 'insert', '$<$'),
         Benchmark('StrictIncList-Delete', 'delete', '$<$'),
-        Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments', '--cut-branches=false']),
+        #Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments', '--cut-branches=false']),
         ]),
     BenchmarkGroup("Tree",  [], [
         Benchmark('Tree-Count', 'node count', '0, 1, +'),
@@ -208,8 +208,9 @@ def write_csv():
                 outfile.write (format_time(result.time) + ',')
                 outfile.write (format_time(result.nres_time) + ',')
                 outfile.write (result.nres_code_size + ',')
+                outfile.write (str(b.num_programs) + ',')
                 outfile.write (result.eac_time + ',')
-                outfile.write (optstr + ',')
+                #outfile.write (optstr + ',')
                 outfile.write ('\n')
 
 def write_latex():
@@ -240,8 +241,9 @@ def write_latex():
                     ' & ' + format_time(result.time) + \
                     ' & ' + format_time(result.nres_time) + \
                     ' & ' + result.nres_code_size + \
-                    ' & ' + result.eac_time + \
-                    ' & ' + optstr + ' \\\\'
+                    ' & ' + str(b.num_programs) + \
+                    ' & ' + str(result.eac_time) + ' \\\\'
+                    #' & ' + optstr + ' \\\\'
                 outfile.write (row)
                 outfile.write ('\n')
                 
