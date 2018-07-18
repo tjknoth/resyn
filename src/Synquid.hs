@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, StandaloneDeriving #-}
+{-# LANGUAGE DeriveDataTypeable, StandaloneDeriving, TemplateHaskell #-}
 
 module Main where
 
@@ -285,6 +285,14 @@ codegen params results = case params of
 collectLibDecls libs declsByFile =
   Map.filterWithKey (\k _ -> k `elem` libs) $ Map.fromList declsByFile
 
+data SynthesisResult = SynthesisResult {
+  prog :: RProgram,
+  finalTState :: TypingState,
+  extraResults :: [(RProgram, TypingState)],
+  timeStats :: TimeStats,
+  goal :: Goal
+} deriving (Eq, Ord)
+
 -- | Parse and resolve file, then synthesize the specified goals
 runOnFile :: SynquidParams -> ExplorerParams -> HornSolverParams -> CodegenParams
                            -> String -> [String] -> IO ()
@@ -295,8 +303,7 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure
     Right (goals, cquals, tquals) -> when (not $ resolveOnly synquidParams) $ do
       results <- mapM (synthesizeGoal cquals tquals) (requested goals)
-      let fstResults = map (\((g, rs), s) -> ((g, head rs), s)) results 
-      when (not (null results) && showStats synquidParams) $ printStats fstResults declsByFile
+      when (not (null results) && showStats synquidParams) $ printStats results declsByFile
       return ()
       -- Generate output if requested
       --let libsWithDecls = collectLibDecls libs declsByFile
@@ -325,8 +332,11 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
       case mProg of
         Left typeErr -> pdoc (pretty typeErr) >> pdoc empty >> exitFailure
         Right progs  -> do
+          -- Print synthesized program
           when (gSynthesize goal) $ mapM_ (\p -> pdoc (prettySolution goal (fst p)) >> pdoc empty) progs
-          return ((goal, progs), stats)
+          let result = assembleResult stats goal progs
+          return result
+    assembleResult stats goal ps = SynthesisResult (fst (head ps)) (snd (head ps)) (tail ps) stats goal
     updateLogLevel goal orig = if gSynthesize goal then orig else 0 -- prevent logging while type checking measures
 
     updateExplorerParams eParams goal = eParams { _checkResources = (gSynthesize goal) && (_checkResources eParams), _explorerLogLevel = updateLogLevel goal (_explorerLogLevel eParams)}
@@ -337,27 +347,27 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
     separateResults ((b, (r:rs)), s) = ((b,r),s) : (separateResults ((b, rs), s))
 
     printStats results declsByFile = do
-      let env = gEnvironment (fst $ fst $ head results)
+      let env = gEnvironment $ goal (head results)
       let measureCount = Map.size $ _measures $ env
       let namesOfConstants decls = mapMaybe (\decl ->
            case decl of
              Pos { node = FuncDecl name _ } -> Just name
              _ -> Nothing
            ) decls
-      let totalSizeOf = sum . map (typeNodeCount . toMonotype .unresolvedType env)
+      let totalSizeOf = sum . map (typeNodeCount . toMonotype . unresolvedType env)
       let policySize = Map.fromList $ map (\(file, decls) -> (file, totalSizeOf $ namesOfConstants decls)) declsByFile
-      let getStatsFor ((goal, (prog, constraints)), stats) =
+      let getStatsFor (SynthesisResult prog tstate _ stats goal) =
              StatsRow
              (gName goal)
              (typeNodeCount $ toMonotype $ unresolvedSpec goal)
-             (programNodeCount $ gImpl goal)   -- size of implementation template (before synthesis/repair)
-             (programNodeCount prog)           -- size of generated solution
-             constraints                       -- Number of resource constraints generated
+             (programNodeCount $ gImpl goal)        -- size of implementation template (before synthesis/repair)
+             (programNodeCount prog)                -- size of generated solution
+             (length (_resourceConstraints tstate)) -- Number of resource constraints generated
              (stats ! TypeCheck) (stats ! Repair) (stats ! Recheck) (sum $ Map.elems stats)  -- time measurements
       let perResult = map getStatsFor results
-      let specSize = sum $ map (typeNodeCount . toMonotype . unresolvedSpec . fst . fst) results
-      let solutionSize = sum $ map (programNodeCount . fst . snd . fst) results
-      let numC = sum $ map (snd . snd . fst) results
+      let numC = sum $ map (length . _resourceConstraints . finalTState) results
+      let specSize = sum $ map (typeNodeCount . toMonotype . unresolvedSpec . goal) results
+      let solutionSize = sum $ map (programNodeCount . prog) results
       pdoc $ vsep $ [
                 parens (text "Goals:" <+> pretty (length results)),
                 parens (text "Measures:" <+> pretty measureCount)] ++

@@ -6,10 +6,8 @@ module Synquid.TypeConstraintSolver (
   typingConstraints,
   typeAssignment,
   qualifierMap,
-  hornClauses,
   candidates,
   errorContext,
-  isFinal, 
   addTypingConstraint,
   addFixedUnknown,
   setUnknownRecheck,
@@ -22,9 +20,7 @@ module Synquid.TypeConstraintSolver (
   currentAssignment,
   finalizeType,
   finalizeProgram,
-  initEnv,
   allScalars,
-  condQualsGen,
   processAllConstraints,
   generateAllHornClauses,
   solveHornClauses,
@@ -596,13 +592,14 @@ finalizeType t = do
 
 -- | Substitute type variables, predicate variables, and predicate unknowns in @p@
 -- using current type assignment, predicate assignment, and liquid assignment
-finalizeProgram :: Monad s => RProgram -> TCSolver s (RProgram, Int)
+finalizeProgram :: Monad s => RProgram -> TCSolver s (RProgram, TypingState) 
 finalizeProgram p = do
   tass <- use typeAssignment
   pass <- use predAssignment
   sol <- uses candidates (solution . head)
-  cs <- use resourceConstraints
-  return ((typeApplySolution sol . typeSubstitutePred pass . typeSubstitute tass) <$> p, length cs)
+  tstate <- get
+  let prog = (typeApplySolution sol . typeSubstitutePred pass . typeSubstitute tass) <$> p
+  return (prog, tstate)
 
 embedEnv :: (MonadHorn s, MonadSMT s) => Environment -> Formula -> Bool -> TCSolver s (Set Formula)
 embedEnv env fml consistency = do 
