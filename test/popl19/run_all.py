@@ -83,6 +83,8 @@ ALL_BENCHMARKS = [
     BenchmarkGroup("Sorted list", ['-f=AllArguments'], [
         Benchmark('StrictIncList-Insert', 'insert', '$<$'),
         Benchmark('StrictIncList-Delete', 'delete', '$<$'),
+        Benchmark('List-Diff', 'difference', 'member, $<$', ['--cut-branches=false', '-f=AllArguments']),
+        #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member',['-f=AllArguments','--cut-branches=false','-m=3'])
         #Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments', '--cut-branches=false']),
         ]),
     BenchmarkGroup("Tree",  [], [
@@ -104,7 +106,7 @@ ALL_BENCHMARKS = [
 ]
 
 class SynthesisResult:
-    def __init__(self, name, time, goal_count, code_size, spec_size, measure_count):
+    def __init__(self, name, time, goal_count, code_size, spec_size, measure_count, num_constraints):
         self.name = name                        # Benchmark name
         self.time = time                        # Synthesis time (seconds)
         self.goal_count = goal_count            # Number of synthesis goals 
@@ -115,6 +117,7 @@ class SynthesisResult:
         self.nres_code_size = '-' 
         self.nres_time = -3.0 
         self.eac_time = '-'
+        self.num_constraints = num_constraints
 
     def str(self):
         return self.name + ', ' + '{0:0.2f}'.format(self.time) + ', ' + self.goal_count + ', ' + self.code_size + ', ' + self.spec_size + ', ' + self.measure_count
@@ -136,13 +139,14 @@ def run_benchmark(name, opts, default_opts):
           results [name] = SynthesisResult(name, (end - start), '-', '-', '-', '-')
       else: # Synthesis succeeded: code metrics from the output and record synthesis time
           logfile.write(synthesis_res.stdout)
-          lastLines = synthesis_res.stdout.split('\n')[-5:]
-          synthesis_output = synthesis_res.stdout.split('\n')[:-5]
+          lastLines = synthesis_res.stdout.split('\n')[-6:]
+          synthesis_output = synthesis_res.stdout.split('\n')[:-6]
           goal_count = re.match("\(Goals: (\d+)\).*$", lastLines[0]).group(1)
           measure_count = re.match("\(Measures: (\d+)\).*$", lastLines[1]).group(1)
           spec_size = re.match("\(Spec size: (\d+)\).*$", lastLines[2]).group(1)
           solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)                    
-          results [name] = SynthesisResult(name, (end - start), goal_count, solution_size, spec_size, measure_count)
+          num_constraints = re.match("\(Number of constraints: (\d+)\).*$", lastLines[4]).group(1)
+          results [name] = SynthesisResult(name, (end - start), goal_count, solution_size, spec_size, measure_count, num_constraints)
           print(Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL, end = ' ')
 
       variant_options = [   # Command-line options to use for each variant of Synquid
@@ -165,7 +169,7 @@ def run_version(name, variant_id, variant_opts, logfile, with_res):
         variant_opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
     end = time.time()
 
-    lastLines = synthesis_res.stdout.split('\n')[-5:]
+    lastLines = synthesis_res.stdout.split('\n')[-6:]
     solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)   
 
     print('{0:0.2f}'.format(end - start), end = ' ')
@@ -177,7 +181,7 @@ def run_version(name, variant_id, variant_opts, logfile, with_res):
       results[name].nres_time = -2
     else: # Synthesis succeeded: record time for variant
       results[name].nres_time = (end - start)
-      without_res = synthesis_res.stdout.split('\n')[:-5]
+      without_res = synthesis_res.stdout.split('\n')[:-6]
       # Compare outputs to see if resources led to any optimization
       diff = difflib.unified_diff(with_res, str(without_res))
       print(Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL, end=' ')
@@ -236,7 +240,6 @@ def write_latex():
                     ' & ' + result.goal_count +\
                     ' & ' + b.components + \
                     ' & ' + result.measure_count + \
-                    ' & ' + result.spec_size + \
                     ' & ' + result.code_size + \
                     ' & ' + format_time(result.time) + \
                     ' & ' + format_time(result.nres_time) + \

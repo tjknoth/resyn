@@ -1,5 +1,3 @@
-
-
 all :: <p :: a -> Bool> . arg1:(x:{1**a||0} -> {Bool|_v == p x|0}) -> arg0:{List {1**a|p _v|0}||0} -> {Bool|_v|0}
 all = \f . \xs . 
     match xs with
@@ -18,8 +16,6 @@ notAllPos :: {Bool|_v|0}
   {Bool|_v == True|0} in
   \x . x > 0
 
-
-
 client :: xs:{List {Nat||0}||0} -> {List {Int|_v == 0|0}||0}
 client = \xs . filterLE 0 xs
 
@@ -29,7 +25,6 @@ clientBad :: xs:{List {Int||0}||0} -> ys:{List {Nat||0}||0} -> {List {Int|_v == 
   when checking xs ::
   {List {Int|_v >= 0|0}||0} in
   \xs . \ys . filterLE1 0 xs ??
-
 
 ./Instantiation.sq:12: Resolution Error:
   Constructor Zero must return type {Natural {1**n||0}||0}, got {Natural {Z||0}||0}
@@ -41,7 +36,6 @@ clientBad :: xs:{List {Int||0}||0} -> ys:{List {Nat||0}||0} -> {List {Int|_v == 
   \arg0 . 
     match arg0 with
       Cons x xs -> 1 + (len xs)
-
 
 map1 :: f:(arg0:{1**a||0} -> {1**b||0}) -> xs:{List {1**a||0}||0} -> {List {1**b||0}|len _v == len xs|0}
 map1 = \f . \xs . 
@@ -77,9 +71,6 @@ map4 = \f . \xs .
 map5 :: f:(arg0:{1**a||0} -> {1**b||0}) -> xs:{List {1**a||0}||0} -> {List {1**b||0}|len _v == len xs|0}
 ./HOChecking.sq:40: Error:
   Not in scope: f
-
-
-
 
 filterAbove :: xs:{IList||0} -> x:{Int||0} -> {IList|aboveAll x _v|0}
 filterAbove = \xs . \x . 

@@ -11,6 +11,7 @@ import Synquid.Explorer
 import Synquid.Util
 import Synquid.Pretty
 import Synquid.Resolver
+import Synquid.Resources
 
 import qualified Data.Set as Set
 import Data.Set (Set)

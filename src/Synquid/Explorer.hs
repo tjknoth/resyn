@@ -10,6 +10,7 @@ import Synquid.Error
 import Synquid.SolverMonad
 import Synquid.TypeConstraintSolver hiding (freshId, freshVar)
 import qualified Synquid.TypeConstraintSolver as TCSolver (freshId, freshVar)
+import Synquid.Resources
 import Synquid.Util
 import Synquid.Pretty
 import Synquid.Tokens
@@ -480,7 +481,7 @@ runInSolver :: MonadHorn s => TCSolver s a -> Explorer s a
 runInSolver f = do
   tParams <- asks . view $ _2
   tState <- use typingState
-  res <- lift . lift . lift . lift $ runTCSolver tParams tState f
+  res <- lift . lift . lift . lift $ runTCSolver tParams tState f 
   case res of
     Left err -> throwError err
     Right (res, st) -> do
@@ -584,9 +585,9 @@ generateAuxGoals = do
     etaContract' [] f@(PSymbol _)                                            = Just f
     etaContract' binders p                                                   = Nothing
 
--- | 'splitType' @sch@: split type inside schema @sch@ by replacing its potential and multiplicity annotations with fresh variables.
-splitType :: MonadHorn s => RSchema -> Explorer s (RSchema, RSchema)
-splitType sch = do
+-- | 'shareType' @sch@: split type inside schema @sch@ by replacing its potential and multiplicity annotations with fresh variables.
+shareType :: MonadHorn s => RSchema -> Explorer s (RSchema, RSchema)
+shareType sch = do
   schl <- freshPotentials sch True
   schr <- freshPotentials sch True
   return (schl, schr)
@@ -648,14 +649,14 @@ addScrutineeToEnv env pScr tScr = do
 -- | Given a name, schema, and environment, retrieve the variable type from the environment and split it into left and right types with fresh potential variables, generating constraints accordingly.
 retrieveAndSplitVarType :: (MonadHorn s, MonadSMT s) => Id -> RSchema -> Environment -> Explorer s (RType, Environment)
 retrieveAndSplitVarType name sch env = do 
-  (schl, schr) <- splitType sch
+  (schl, schr) <- shareType sch
   let (isVariable, tempEnv) = removeSymbol name env
   let env' = if isVariable 
       then addPolyVariable name schl tempEnv
       else env
   let tl = typeFromSchema schl
   let tr = typeFromSchema schr
-  addConstraint $ SplitType env name (typeFromSchema sch) tl tr 
+  addConstraint $ SharedType env name (typeFromSchema sch) tl tr 
   addConstraint $ WellFormed env tl
   addConstraint $ WellFormed env tr
   t <- symbolType env name schr
