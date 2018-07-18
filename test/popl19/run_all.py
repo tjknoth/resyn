@@ -145,7 +145,7 @@ def run_benchmark(name, opts, default_opts):
           measure_count = re.match("\(Measures: (\d+)\).*$", lastLines[1]).group(1)
           spec_size = re.match("\(Spec size: (\d+)\).*$", lastLines[2]).group(1)
           solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)                    
-          num_constraints = re.match("\(Number of constraints: (\d+)\).*$", lastLines[4]).group(1)
+          num_constraints = re.match("\(Number of resource constraints: (\d+)\).*$", lastLines[4]).group(1)
           results [name] = SynthesisResult(name, (end - start), goal_count, solution_size, spec_size, measure_count, num_constraints)
           print(Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL, end = ' ')
 

@@ -258,7 +258,7 @@ def run_benchmark(name, opts, path='.'):
     with open(LOGFILE_NAME, 'a+') as logfile:
         start = time.time()
         logfile.seek(0, os.SEEK_END)
-        return_code = subprocess.call(synquid_path + [os.path.join (path, name + '.sq')] + COMMON_OPTS + opts, stdout=logfile, stderr=logfile)
+        return_code = subprocess.call(synquid_path + COMMON_OPTS + opts + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
         end = time.time()
 
         t = end - start
@@ -278,9 +278,9 @@ def run_resyn_benchmark(name, opts, path='.'):
 
     with open(LOGFILE_NAME, 'a+') as logfile:
         start = time.time()
-        with_res = subprocess.run(synquid_path + [os.path.join (path, name + '.sq')] + COMMON_OPTS + opts, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, universal_newlines=True)
+        with_res = subprocess.run(synquid_path + COMMON_OPTS + opts + [os.path.join (path, name + '.sq')], stderr=subprocess.STDOUT, stdout=subprocess.PIPE, universal_newlines=True)
         res_end = time.time()
-        without_res = subprocess.run(synquid_path + [os.path.join(path, name + '.sq')] + COMMON_OPTS + RESOURCE_FALSE + opts, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, universal_newlines=True)
+        without_res = subprocess.run(synquid_path + COMMON_OPTS + RESOURCE_FALSE + opts + [os.path.join(path, name + '.sq')], stderr=subprocess.STDOUT, stdout=subprocess.PIPE, universal_newlines=True)
         end = time.time()
         rtime = res_end - start
         print ('{0:0.2f}'.format(rtime), end=' ')
@@ -307,7 +307,7 @@ def run_test(name, path='.'):
 
     with open(LOGFILE_NAME, 'a+') as logfile:
       logfile.seek(0, os.SEEK_END)
-      subprocess.call(synquid_path + [os.path.join (path, name + '.sq')] + COMMON_OPTS, stdout=logfile, stderr=logfile)
+      subprocess.call(synquid_path + COMMON_OPTS + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
 
 def write_times(benchmarks):
     with open(OUTFILE_NAME, 'w') as outfile:

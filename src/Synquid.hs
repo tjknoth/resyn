@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, StandaloneDeriving, TemplateHaskell #-}
+{-# LANGUAGE DeriveDataTypeable, StandaloneDeriving #-}
 
 module Main where
 
@@ -343,9 +343,6 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
 
     updateSolverParams sParams goal = sParams { solverLogLevel = (updateLogLevel goal (solverLogLevel sParams))}
     
-    separateResults ((b, []), s) = []
-    separateResults ((b, (r:rs)), s) = ((b,r),s) : (separateResults ((b, rs), s))
-
     printStats results declsByFile = do
       let env = gEnvironment $ goal (head results)
       let measureCount = Map.size $ _measures $ env
@@ -378,7 +375,7 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
                 else [
                   parens (text "Spec size:" <+> pretty specSize),
                   parens (text "Solution size:" <+> pretty solutionSize),
-                  parens (text "Number of constraints:" <+> pretty numC)
+                  parens (text "Number of resource constraints:" <+> pretty numC)
                 ] ++
               [empty]
     
