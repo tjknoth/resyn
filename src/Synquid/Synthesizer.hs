@@ -39,11 +39,11 @@ type HornSolver = FixPointSolver Z3State
 -- in the typing environment @env@ and follows template @templ@,
 -- using conditional qualifiers @cquals@ and type qualifiers @tquals@,
 -- with parameters for template generation, constraint generation, and constraint solving @templGenParam@ @consGenParams@ @solverParams@ respectively
-synthesize :: ExplorerParams -> HornSolverParams -> Goal -> [Formula] -> [Formula] -> IO (Either ErrorMessage RProgram, TimeStats)
+synthesize :: ExplorerParams -> HornSolverParams -> Goal -> [Formula] -> [Formula] -> IO (Either ErrorMessage [(RProgram, TypingState)], TimeStats)
 synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFixPointSolver reconstruction solverParams
   where
     -- | Stream of programs that satisfy the specification or type error
-    reconstruction :: HornSolver (Either ErrorMessage RProgram, TimeStats)
+    reconstruction :: HornSolver (Either ErrorMessage [(RProgram, TypingState)], TimeStats)
     reconstruction = let
         typingParams = TypingParams {
                         _condQualsGen = condQuals,
@@ -57,8 +57,8 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _instantiateUnivs = _instantiateForall explorerParams
                       }
       in do cp0 <- lift $ lift startTiming  -- TODO time stats for this one as well?
-            x <- reconstruct explorerParams typingParams goal
-            return (x, snd cp0)
+            res <- reconstruct explorerParams typingParams goal
+            return (res, snd cp0)
 
     -- | Qualifier generator for conditionals
     condQuals :: Environment -> [Formula] -> QSpace

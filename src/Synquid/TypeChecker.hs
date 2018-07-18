@@ -11,6 +11,7 @@ import Synquid.Explorer
 import Synquid.Util
 import Synquid.Pretty
 import Synquid.Resolver
+import Synquid.Resources
 
 import qualified Data.Set as Set
 import Data.Set (Set)
@@ -28,7 +29,7 @@ import Debug.Trace
 
 -- | 'reconstruct' @eParams tParams goal@ : reconstruct missing types and terms in the body of @goal@ so that it represents a valid type judgment;
 -- return a type error if that is impossible
-reconstruct :: (MonadSMT s, MonadHorn s) => ExplorerParams -> TypingParams -> Goal -> s (Either ErrorMessage RProgram)
+reconstruct :: (MonadSMT s, MonadHorn s) => ExplorerParams -> TypingParams -> Goal -> s (Either ErrorMessage [(RProgram, TypingState)])
 reconstruct eParams tParams goal = do
     initTS <- initTypingState $ gEnvironment goal
     runExplorer (eParams { _sourcePos = gSourcePos goal }) tParams (Reconstructor reconstructTopLevel) initTS go

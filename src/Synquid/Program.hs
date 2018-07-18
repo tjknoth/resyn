@@ -128,7 +128,7 @@ fmlToProgram fml@(Binary op e1 e2) = let
     opRes
       | op == Times || op == Times || op == Times = int $ valInt |=| Binary op (intVar "x") (intVar "y")
       | otherwise                                 = bool $ valBool |=| Binary op (intVar "x") (intVar "y")
-fmlToProgram fml@(Pred s x (f:fs)) = curriedApp fn fs --(addRefinement (fromSort s) (varRefinement x s))
+fmlToProgram fml@(Pred s x fs) = curriedApp fn fs --(addRefinement (fromSort s) (varRefinement x s))
   where
     fn = Program (PSymbol x) (FunctionT x AnyT AnyT defCost {-(fromSort s)-})
     curriedApp :: RProgram -> [Formula] -> RProgram
@@ -530,7 +530,7 @@ data Constraint = Subtype Environment RType RType Bool Id
   | WellFormedCond Environment Formula
   | WellFormedMatchCond Environment Formula
   | WellFormedPredicate Environment [Sort] Id
-  | SplitType Environment Id RType RType RType
+  | SharedType Environment Id RType RType RType
   deriving (Show, Eq, Ord)
 
 -- | Resource constraints -- can include universally quantified expressions so we store representative examples alongside the constraint

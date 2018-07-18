@@ -1,6 +1,6 @@
 data List a where
 	Nil :: List a
-	Cons :: x: {1 ** a| |1} -> xs: List a -> List a
+	Cons :: x: a -> xs: List a -> List a
   
 termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
@@ -9,10 +9,10 @@ termination measure len :: List a -> {Int | _v >= 0} where
 measure elems :: List a -> Set a where
   Nil -> []
   Cons x xs -> [x] + elems xs  
-
-data IList a where 
-  INil :: IList a
-  ICons :: x: a -> xs: IList {a | x <= _v} -> IList a
+  
+data IList a  where 
+  INil :: IList a 
+  ICons :: x: a -> xs: IList {a | x <= _v } -> IList a 
 
 termination measure ilen :: IList a -> {Int | _v >= 0} where 
   INil -> 0 
@@ -22,8 +22,8 @@ measure ielems :: IList a -> Set a where
   INil -> []
   ICons x xs -> [x] + ielems xs
 
---member :: x: a -> xs: IList {1 ** a | | 1} -> {Bool | _v == (x in ielems xs)}
+member :: x: a -> xs: IList {1 ** a | | 1} -> {Bool | _v == (x in ielems xs)}
 qualifier { x < y }
 
-intersect :: l1: IList {2**a} -> l2: IList {2**a} -> l3: IList {2**a} -> {List a | elems _v == ielems l1 * (ielems l2 * ielems l3)}
-intersect = ??
+diff :: l1: IList a -> l2: IList a -> {List a | elems _v == (ielems l1 - ielems l2)}
+diff = ??

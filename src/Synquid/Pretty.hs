@@ -370,7 +370,7 @@ prettyConstraint (WellFormed env t) = prettyBindings env <+> operator "|-" <+> p
 prettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 prettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 prettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
-prettyConstraint (SplitType _ v t tl tr) = pretty v <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr)
+prettyConstraint (SharedType _ v t tl tr) = pretty v <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr)
 
 -- Do not show environment
 simplePrettyConstraint :: Constraint -> Doc
@@ -380,7 +380,7 @@ simplePrettyConstraint (WellFormed env t) = prettyBindings env <+> operator "|-"
 simplePrettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 simplePrettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 simplePrettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
-simplePrettyConstraint (SplitType _ v t tl tr) = pretty v <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr)
+simplePrettyConstraint (SharedType _ v t tl tr) = pretty v <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr)
 
 instance Pretty Constraint where
   pretty = prettyConstraint

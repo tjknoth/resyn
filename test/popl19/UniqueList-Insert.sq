@@ -16,5 +16,3 @@ qualifier {x == y, x != y}
 	
 insert :: x: a -> xs: UList a -> {UList a | elems _v == elems xs + [x]}
 insert = ??
-
-	

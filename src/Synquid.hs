@@ -48,7 +48,7 @@ main = do
                appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency symmetry
                lfp bfs
                out_file out_module outFormat resolve 
-               print_spec print_stats log_ resources mult dmatch forall cb) -> do
+               print_spec print_stats log_ resources mult dmatch forall cb nump) -> do
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
                     _scrutineeDepth = scrutineeMax,
@@ -67,7 +67,8 @@ main = do
                     _useMultiplicity = mult,
                     _dMatch = dmatch,
                     _instantiateForall = forall,
-                    _shouldCut = cb
+                    _shouldCut = cb,
+                    _numPrograms = nump
                     }
                   let solverParams = defaultHornSolverParams {
                     isLeastFixpoint = lfp,
@@ -133,7 +134,8 @@ data CommandLineArgs
         multiplicities :: Bool,
         destructive_match :: Bool,
         instantiate_foralls :: Bool,
-        cut_branches :: Bool
+        cut_branches :: Bool,
+        num_programs :: Int
       }
   deriving (Data, Typeable, Show, Eq)
 
@@ -166,7 +168,8 @@ synt = Synthesis {
   multiplicities      = True            &= help ("Use multiplicities when verifying resource usage (default: True"),
   destructive_match    = True           &= help ("Use destructive pattern match (default: True)") &= name "d",
   instantiate_foralls  = True           &= help ("Solve exists-forall constraints by instantiating universally quantified expressions (default: True)"),
-  cut_branches         = True           &= help ("Do not backtrack past successfully synthesized branches (default: True)")
+  cut_branches         = True           &= help ("Do not backtrack past successfully synthesized branches (default: True)"),
+  num_programs         = 1              &= help ("Number of programs to produce if possible (default: 1)")
   } &= auto &= help "Synthesize goals specified in the input file"
     where
       defaultFormat = outputFormat defaultSynquidParams
@@ -200,7 +203,8 @@ defaultExplorerParams = ExplorerParams {
   _useMultiplicity = True,
   _dMatch = False,
   _instantiateForall = True,
-  _shouldCut = True
+  _shouldCut = True,
+  _numPrograms = 1
 }
 
 -- | Parameters for constraint solving
@@ -281,6 +285,13 @@ codegen params results = case params of
 collectLibDecls libs declsByFile =
   Map.filterWithKey (\k _ -> k `elem` libs) $ Map.fromList declsByFile
 
+data SynthesisResult = SynthesisResult {
+  prog :: RProgram,
+  finalTState :: TypingState,
+  extraResults :: [(RProgram, TypingState)],
+  timeStats :: TimeStats,
+  goal :: Goal
+} deriving (Eq, Ord)
 
 -- | Parse and resolve file, then synthesize the specified goals
 runOnFile :: SynquidParams -> ExplorerParams -> HornSolverParams -> CodegenParams
@@ -320,9 +331,12 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
       (mProg, stats) <- synthesize (updateExplorerParams explorerParams goal) (updateSolverParams solverParams goal) goal cquals tquals
       case mProg of
         Left typeErr -> pdoc (pretty typeErr) >> pdoc empty >> exitFailure
-        Right prog -> do
-          when (gSynthesize goal) $ pdoc (prettySolution goal prog) >> pdoc empty
-          return ((goal, prog), stats)
+        Right progs  -> do
+          -- Print synthesized program
+          when (gSynthesize goal) $ mapM_ (\p -> pdoc (prettySolution goal (fst p)) >> pdoc empty) progs
+          let result = assembleResult stats goal progs
+          return result
+    assembleResult stats goal ps = SynthesisResult (fst (head ps)) (snd (head ps)) (tail ps) stats goal
     updateLogLevel goal orig = if gSynthesize goal then orig else 0 -- prevent logging while type checking measures
 
     updateExplorerParams eParams goal = eParams { _checkResources = (gSynthesize goal) && (_checkResources eParams), _explorerLogLevel = updateLogLevel goal (_explorerLogLevel eParams)}
@@ -330,25 +344,27 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
     updateSolverParams sParams goal = sParams { solverLogLevel = (updateLogLevel goal (solverLogLevel sParams))}
     
     printStats results declsByFile = do
-      let env = gEnvironment (fst $ fst $ head results)
+      let env = gEnvironment $ goal (head results)
       let measureCount = Map.size $ _measures $ env
       let namesOfConstants decls = mapMaybe (\decl ->
            case decl of
              Pos { node = FuncDecl name _ } -> Just name
              _ -> Nothing
            ) decls
-      let totalSizeOf = sum . map (typeNodeCount . toMonotype .unresolvedType env)
+      let totalSizeOf = sum . map (typeNodeCount . toMonotype . unresolvedType env)
       let policySize = Map.fromList $ map (\(file, decls) -> (file, totalSizeOf $ namesOfConstants decls)) declsByFile
-      let getStatsFor ((goal, prog), stats) =
+      let getStatsFor (SynthesisResult prog tstate _ stats goal) =
              StatsRow
              (gName goal)
              (typeNodeCount $ toMonotype $ unresolvedSpec goal)
-             (programNodeCount $ gImpl goal)   -- size of implementation template (before synthesis/repair)
-             (programNodeCount prog)           -- size of generated solution
+             (programNodeCount $ gImpl goal)        -- size of implementation template (before synthesis/repair)
+             (programNodeCount prog)                -- size of generated solution
+             (length (_resourceConstraints tstate)) -- Number of resource constraints generated
              (stats ! TypeCheck) (stats ! Repair) (stats ! Recheck) (sum $ Map.elems stats)  -- time measurements
       let perResult = map getStatsFor results
-      let specSize = sum $ map (typeNodeCount . toMonotype . unresolvedSpec . fst . fst) results
-      let solutionSize = sum $ map (programNodeCount . snd . fst) results
+      let numC = sum $ map (length . _resourceConstraints . finalTState) results
+      let specSize = sum $ map (typeNodeCount . toMonotype . unresolvedSpec . goal) results
+      let solutionSize = sum $ map (programNodeCount . prog) results
       pdoc $ vsep $ [
                 parens (text "Goals:" <+> pretty (length results)),
                 parens (text "Measures:" <+> pretty measureCount)] ++
@@ -358,7 +374,8 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
                   statsTable perResult]
                 else [
                   parens (text "Spec size:" <+> pretty specSize),
-                  parens (text "Solution size:" <+> pretty solutionSize)
+                  parens (text "Solution size:" <+> pretty solutionSize),
+                  parens (text "Number of resource constraints:" <+> pretty numC)
                 ] ++
               [empty]
     

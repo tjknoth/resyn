@@ -16,7 +16,7 @@ BENCH_PATH = '.'
 LOGFILE_NAME = 'results.log'
 ORACLE_NAME = 'oracle'
 OUTFILE_NAME = 'results.csv'
-COMMON_OPTS = ['']
+COMMON_OPTS = []
 TIMEOUT_COMMAND = 'timeout'
 TIMEOUT= '120'
 
@@ -381,6 +381,7 @@ if __name__ == '__main__':
     if a.unit:
         # Run unit tests
         os.chdir('unit')
+        print(os.getcwd())
         clear_log() 
         for name in os.listdir('.'):
             filename, file_extension = os.path.splitext(name)
