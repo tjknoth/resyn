@@ -6,7 +6,7 @@ module Synquid.Z3 (Z3State, evalZ3State) where
 import Synquid.Logic
 import Synquid.Type
 import Synquid.Program
-import Synquid.SolverMonad
+import Synquid.Solver.Monad
 import Synquid.Util
 import Synquid.Pretty
 import Z3.Monad hiding (Z3Env, newEnv, Sort)
@@ -22,12 +22,9 @@ import qualified Data.Bimap as Bimap
 import Data.Bimap (Bimap)
 
 import Control.Monad
-import Control.Monad.Trans
 import Control.Monad.Trans.State
-import Control.Applicative
 import Control.Lens hiding (both)
 
-import Debug.Trace
 
 -- | Z3 state while building constraints
 data Z3Data = Z3Data {

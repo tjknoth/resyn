@@ -5,26 +5,20 @@ import Synquid.Logic
 import Synquid.Type hiding (set)
 import Synquid.Program
 import Synquid.Error
-import Synquid.SolverMonad
-import Synquid.TypeConstraintSolver hiding (freshId, freshVar)
 import Synquid.Explorer
 import Synquid.Util
 import Synquid.Pretty
 import Synquid.Resolver
-import Synquid.Resources
+import Synquid.Solver.Monad
+import Synquid.Solver.TypeConstraint hiding (freshId, freshVar)
 
-import qualified Data.Set as Set
-import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
 import qualified Data.Foldable as F
 import Control.Monad.Logic
-import Control.Monad.State
 import Control.Monad.Reader
-import Control.Applicative hiding (empty)
 import Control.Lens
-import qualified Text.PrettyPrint.ANSI.Leijen as L
-import Debug.Trace
+import qualified Data.Set as Set
 
 
 -- | 'reconstruct' @eParams tParams goal@ : reconstruct missing types and terms in the body of @goal@ so that it represents a valid type judgment;
@@ -124,14 +118,11 @@ reconstructI' env t PErr = generateError env
 reconstructI' env t PHole = generateError env `mplus` generateI env t
 reconstructI' env t (PLet x iDef@(Program (PFun _ _) _) iBody) = do -- lambda-let: remember and type-check on use
   lambdaLets %= Map.insert x (env, iDef)
-  let ctx = \p -> Program (PLet x uHole p) t
+  let ctx p = Program (PLet x uHole p) t
   pBody <- inContext ctx $ reconstructI env t iBody
   return $ ctx pBody
-reconstructI' env t@(FunctionT _ tArg tRes _) impl = case impl of
-  PFun y impl -> do
-    let ctx = \p -> Program (PFun y p) t
-    pBody <- inContext ctx $ reconstructI (unfoldAllVariables $ addVariable y tArg env) tRes impl
-    return $ ctx pBody
+reconstructI' env t@(FunctionT _ tArg tRes c) impl = case impl of
+  PFun y impl -> exploreFunction env (FunctionT y tArg tRes c) (\e t -> reconstructI e t impl) 
   PSymbol f -> do
     fun <- etaExpand t f
     reconstructI' env t $ content fun

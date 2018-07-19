@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 -- | Interface to SMT solvers
-module Synquid.SolverMonad where
+module Synquid.Solver.Monad where
 
 import Synquid.Logic
 import Synquid.Program
@@ -14,7 +14,6 @@ import qualified Data.Map as Map
 import Data.Map (Map)
 import qualified Data.Set as Set
 import Data.Set (Set)
-import Control.Applicative hiding (empty)
 import Control.Lens
 import Control.Monad.Reader
 import Control.Monad.State
@@ -37,7 +36,6 @@ class (Monad s, Applicative s) => MonadHorn s where
   refineCandidates :: [Formula] -> QMap -> ExtractAssumptions -> [Candidate] -> s [Candidate] -- ^ Refine current candidates to satisfy new constraints
   pruneQualifiers :: QSpace -> s QSpace                                                       -- ^ Prune redundant qualifiers
  
-
 -- | Parameters of type constraint solving
 data TypingParams = TypingParams {
   _condQualsGen :: Environment -> [Formula] -> QSpace,              -- ^ Qualifier generator for conditionals
@@ -102,7 +100,6 @@ initTypingState env = do
     _errorContext = (noPos, empty),
     _resourceVars = Set.empty
   }
-
 
 instance Eq TypingState where
   (==) st1 st2 = (restrictDomain (Set.fromList ["a", "u"]) (_idCount st1) == restrictDomain (Set.fromList ["a", "u"]) (_idCount st2)) &&

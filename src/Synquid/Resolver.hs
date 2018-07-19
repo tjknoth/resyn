@@ -10,7 +10,6 @@ import Synquid.Error
 import Synquid.Pretty
 import Synquid.Util
 
-import Control.Applicative
 import Control.Monad.Except
 import Control.Monad.State
 import Control.Lens
@@ -19,13 +18,10 @@ import Data.Map (Map)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import Data.Maybe
-import Data.Either
 import Data.List
 import qualified Data.Foldable as Foldable
-import qualified Data.Traversable as Traversable
 import Control.Arrow (first)
 
-import Debug.Trace
 
 {- Interface -}
 

@@ -2,19 +2,12 @@
 module Synquid.Type where
 
 import Synquid.Logic
-import Synquid.Tokens
 import Synquid.Util
 
-import Data.Maybe
-import Data.Either
-import Data.List
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
-import Control.Monad
-import Control.Lens hiding (set)
-import Debug.Trace
 
 {- Type skeletons -}
 
@@ -33,7 +26,7 @@ data TypeSkeleton r =
 
 -- Ignore multiplicity and potential when comparing baseTypes
 equalShape :: BaseType Formula -> BaseType Formula -> Bool
-equalShape (TypeVarT s name m) (TypeVarT s' name' m') = (TypeVarT s name defMultiplicity :: BaseType Formula) == (TypeVarT s' name' defMultiplicity :: BaseType Formula)
+equalShape (TypeVarT s name _) (TypeVarT s' name' m') = (TypeVarT s name defMultiplicity :: BaseType Formula) == (TypeVarT s' name' defMultiplicity :: BaseType Formula)
 equalShape (DatatypeT name ts ps) (DatatypeT name' ts' ps') = (name == name') && (fmap shape ts == fmap shape ts') && (ps == ps')
 equalShape t t' = t == t'
 
@@ -90,8 +83,7 @@ refineSort (DataS name sArgs) f = ScalarT (DatatypeT name (map fromSort sArgs) [
 refineSort (SetS s) f = ScalarT dt f defPotential
   where
     dt = DatatypeT setTypeName [fromSort s] []
-    tvar = ScalarT (TypeVarT Map.empty setTypeVar defMultiplicity) f defPotential
-refineSort AnyS f = AnyT
+refineSort AnyS _ = AnyT
 
 
 typeIsData :: TypeSkeleton r -> Bool
@@ -120,15 +112,15 @@ allArgTypes _ = []
 
 allArgs (ScalarT _ _ _) = []
 allArgs (FunctionT x (ScalarT baseT _ _) tRes _) = (Var (toSort baseT) x) : (allArgs tRes)
-allArgs (FunctionT x _ tRes _) = (allArgs tRes)
+allArgs (FunctionT _ _ tRes _) = (allArgs tRes)
 allArgs (LetT _ _ t) = allArgs t
 
 
 -- | Free variables of a type
 varsOfType :: RType -> Set Id
-varsOfType (ScalarT baseT fml pot) = varsOfBase baseT `Set.union` Set.map varName (varsOf fml) --`Set.union` Set.map varName (varsOf pot)
+varsOfType (ScalarT baseT fml _) = varsOfBase baseT `Set.union` Set.map varName (varsOf fml) --`Set.union` Set.map varName (varsOf pot)
   where
-    varsOfBase (DatatypeT name tArgs pArgs) = Set.unions (map varsOfType tArgs) `Set.union` Set.map varName (Set.unions (map varsOf pArgs))
+    varsOfBase (DatatypeT _ tArgs pArgs) = Set.unions (map varsOfType tArgs) `Set.union` Set.map varName (Set.unions (map varsOf pArgs))
     varsOfBase _ = Set.empty
 varsOfType (FunctionT x tArg tRes _) = varsOfType tArg `Set.union` Set.delete x (varsOfType tRes)
 varsOfType (LetT x tDef tBody) = varsOfType tDef `Set.union` Set.delete x (varsOfType tBody)
@@ -136,12 +128,12 @@ varsOfType AnyT = Set.empty
 
 -- | Free variables of a type
 predsOfType :: RType -> Set Id
-predsOfType (ScalarT baseT fml pot) = predsOfBase baseT `Set.union` predsOf fml --`Set.union` predsOf pot
+predsOfType (ScalarT baseT fml _) = predsOfBase baseT `Set.union` predsOf fml --`Set.union` predsOf pot
   where
-    predsOfBase (DatatypeT name tArgs pArgs) = Set.unions (map predsOfType tArgs) `Set.union` Set.unions (map predsOf pArgs)
+    predsOfBase (DatatypeT _ tArgs pArgs) = Set.unions (map predsOfType tArgs) `Set.union` Set.unions (map predsOf pArgs)
     predsOfBase _ = Set.empty
-predsOfType (FunctionT x tArg tRes _) = predsOfType tArg `Set.union` predsOfType tRes
-predsOfType (LetT x tDef tBody) = predsOfType tDef `Set.union` predsOfType tBody
+predsOfType (FunctionT _ tArg tRes _) = predsOfType tArg `Set.union` predsOfType tRes
+predsOfType (LetT _ tDef tBody) = predsOfType tDef `Set.union` predsOfType tBody
 predsOfType AnyT = Set.empty
 
 varRefinement x s = Var s valueVarName |=| Var s x
@@ -352,7 +344,7 @@ substituteInType isBound subst (LetT x tDef tBody) =
   if Map.member x subst
     then error $ unwords ["Attempt to substitute variable", x, "bound in a contextual type"]
     else LetT x (substituteInType isBound subst tDef) (substituteInType isBound subst tBody)
-substituteInType isBound subst AnyT = AnyT
+substituteInType isBound _ AnyT = AnyT
 
 -- | 'renameVar' @old new t typ@: rename all occurrences of @old@ in @typ@ into @new@ of type @t@
 renameVar :: (Id -> Bool) -> Id -> Id -> RType -> RType -> RType

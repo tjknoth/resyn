@@ -1,52 +1,28 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 -- | Resource analysis
-module Synquid.Resources (
-  solveTypeConstraints
+module Synquid.Solver.Resource (
+  checkResources 
 ) where
 
 import Synquid.Logic 
 import Synquid.Type hiding (set)
 import Synquid.Program
-import Synquid.SolverMonad
+import Synquid.Solver.Monad
 import Synquid.Pretty
 import Synquid.Error
-import Synquid.TypeConstraintSolver
+import Synquid.Solver.Util
 
 import Data.Maybe
 import Data.List hiding (partition)
 import qualified Data.Set as Set 
 import Data.Set (Set)
-import qualified Data.Map as Map
-import Data.Map (Map)
 import Control.Monad.Logic
 import Control.Monad.State
 import Control.Monad.Trans.Except
 import Control.Monad.Reader
 import Control.Lens
 import Debug.Trace
-
-{- Top-level constraint interface -}
-
--- | Solve @typingConstraints@: either strengthen the current candidates and return shapeless type constraints or fail
-solveTypeConstraints :: (MonadSMT s, MonadHorn s) => TCSolver s ()
-solveTypeConstraints = do
-  simplifyAllConstraints
-
-  scs <- use simpleConstraints
-  writeLog 2 (text "Simple Constraints" $+$ nest 2 (vsep (map pretty scs)))
-  processAllPredicates
-  processAllConstraints
-  generateAllHornClauses
-
-  solveHornClauses
-  checkTypeConsistency
-
-  res <- asks _checkResourceBounds
-  when res $ checkResources scs 
-
-  hornClauses .= []
-  consistencyChecks .= []
 
 {- Implementation -}
 
@@ -85,10 +61,6 @@ solveResourceConstraints oldConstraints constraints = do
         return $ Just constraints 
       else return Nothing
             
--- | 'isSatWithModel' : check satisfiability and return the model accordingly
-isSatWithModel :: MonadSMT s => Formula -> TCSolver s (Bool, String)
-isSatWithModel = lift . lift . lift . solveWithModel
-
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Bool -> Constraint -> TCSolver s Formula 
 generateFormula shouldLog checkMults c@(Subtype env tl tr _ name) = do
@@ -372,12 +344,3 @@ isInteresting _                        = True
 -- Maybe this will change? idk
 subtypeOp = (|=|)
 
--- | Signal type error
-throwError :: MonadHorn s => Doc -> TCSolver s ()
-throwError msg = do
-  (pos, ec) <- use errorContext
-  lift $ lift $ throwE $ ErrorMessage TypeError pos (msg $+$ ec)
-
-writeLog level msg = do
-  maxLevel <- asks _tcSolverLogLevel
-  when (level <= maxLevel) $ traceShow (plain msg) $ return () 

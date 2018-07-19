@@ -31,3 +31,5 @@ sys
 test/test.sq
 debuglog*
 examples.*
+*.hp
+*.prof

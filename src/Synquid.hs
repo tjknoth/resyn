@@ -2,16 +2,14 @@
 
 module Main where
 
-import Synquid.Logic
 import Synquid.Type
 import Synquid.Program
 import Synquid.Error
 import Synquid.Pretty
 import Synquid.Parser
 import Synquid.Resolver (resolveDecls)
-import Synquid.SolverMonad 
-import Synquid.HornSolver
-import Synquid.TypeConstraintSolver
+import Synquid.Solver.Monad 
+import Synquid.Solver.HornClause
 import Synquid.Explorer
 import Synquid.Synthesizer
 import Synquid.HtmlOutput
@@ -19,20 +17,14 @@ import Synquid.Codegen
 import Synquid.Stats
 
 import Control.Monad
-import Control.Lens ((^.))
 import System.Exit
 import System.Console.CmdArgs
-import System.Console.ANSI
 import System.FilePath
 import Data.Char
 import Data.Time.Calendar
 import Data.Map ((!))
 import qualified Data.Map as Map
-import qualified Data.Set as Set
 import Data.Maybe (mapMaybe)
-
-import qualified Text.PrettyPrint.ANSI.Leijen as PP
-import Text.PrettyPrint.ANSI.Leijen (fill, column)
 
 import Data.List.Split
 

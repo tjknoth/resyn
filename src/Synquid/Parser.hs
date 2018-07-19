@@ -11,12 +11,10 @@ import Synquid.Tokens
 import Synquid.Util
 
 import Data.List
-import qualified Data.Map as Map
-import Data.Map (Map)
 import Data.Maybe (fromMaybe)
+import qualified Data.Map as Map
 
 import Control.Monad.State
-import Control.Applicative hiding ((<|>), many)
 
 import Text.Parsec hiding (State)
 import qualified Text.Parsec.Token as Token

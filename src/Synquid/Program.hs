@@ -10,16 +10,12 @@ import Synquid.Util
 import Synquid.Error
 
 import Data.Maybe
-import Data.Either
 import Data.List
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
-import Control.Monad
 import Control.Lens as Lens
-import Debug.Trace
-import Z3.Monad (AST)
 
 {- Program terms -}
 

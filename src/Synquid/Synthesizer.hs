@@ -5,35 +5,23 @@ import Synquid.Util
 import Synquid.Logic
 import Synquid.Type
 import Synquid.Program
-import Synquid.SolverMonad
-import Synquid.HornSolver
 import Synquid.Z3
-import Synquid.Pretty
 import Synquid.Resolver
-import Synquid.TypeConstraintSolver
 import Synquid.Explorer
 import Synquid.TypeChecker
 import Synquid.Stats
+import Synquid.Solver.Monad
+import Synquid.Solver.HornClause
+import Synquid.Solver.TypeConstraint
 
-import Data.Maybe
-import Data.Either
 import Data.List
-import qualified Data.Set as Set
-import Data.Set (Set)
-import qualified Data.Map as Map
-import Data.Map (Map)
 import Control.Monad
 import Control.Monad.State
 import Control.Lens
-import Control.Applicative ((<$>))
-
-import Data.Time.Clock
-import Data.Time.Format
-
-import Debug.Trace
+import qualified Data.Set as Set
+import qualified Data.Map as Map
 
 type HornSolver = FixPointSolver Z3State
-
 
 -- | 'synthesize' @templGenParam consGenParams solverParams env typ templ cq tq@ : synthesize a program that has a type @typ@
 -- in the typing environment @env@ and follows template @templ@,
