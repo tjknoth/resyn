@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 -- | Incremental solving of subtyping and well-formedness constraints
-module Synquid.TypeConstraintSolver (
+module Synquid.Solver.TypeConstraint (
   ErrorMessage,
   typingConstraints,
   typeAssignment,
@@ -26,7 +26,7 @@ module Synquid.TypeConstraintSolver (
   solveHornClauses,
   processAllPredicates,
   checkTypeConsistency,
-  embedEnv
+  solveTypeConstraints
 ) where
 
 import Synquid.Logic
@@ -34,9 +34,11 @@ import Synquid.Type hiding (set)
 import Synquid.Program
 import Synquid.Error
 import Synquid.Pretty
-import Synquid.SolverMonad
 import Synquid.Util
 import Synquid.Resolver (addAllVariables)
+import Synquid.Solver.Monad
+import Synquid.Solver.Util
+import Synquid.Solver.Resource
 
 import Data.Maybe
 import Data.List 
@@ -47,10 +49,30 @@ import Data.Map (Map)
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Trans.Except
-import Control.Applicative hiding (empty)
 import Control.Lens hiding (both)
 import Debug.Trace
-import Z3.Monad (AST)
+
+{- Top-level constraint solving interface -}
+
+-- | Solve @typingConstraints@: either strengthen the current candidates and return shapeless type constraints or fail
+solveTypeConstraints :: (MonadSMT s, MonadHorn s) => TCSolver s ()
+solveTypeConstraints = do
+  simplifyAllConstraints
+
+  scs <- use simpleConstraints
+  writeLog 2 (text "Simple Constraints" $+$ nest 2 (vsep (map pretty scs)))
+  processAllPredicates
+  processAllConstraints
+  generateAllHornClauses
+
+  solveHornClauses
+  checkTypeConsistency
+
+  res <- asks _checkResourceBounds
+  when res $ checkResources scs 
+
+  hornClauses .= []
+  consistencyChecks .= []
 
 -- | Impose typing constraint @c@ on the programs
 addTypingConstraint c = over typingConstraints (nub . (c :))
@@ -411,67 +433,23 @@ hasPotentialScrutinees env = do
   tass <- use typeAssignment
   return $ not $ null $ allPotentialScrutinees (typeSubstituteEnv tass env)
 
--- | Assumptions encoded in an environment
-embedding :: Monad s => Environment -> Set Id -> Bool -> TCSolver s (Set Formula)
-embedding env vars includeQuantified = do
-    tass <- use typeAssignment
-    pass <- use predAssignment
-    qmap <- use qualifierMap
-    let ass = Set.map (substitutePredicate pass) (env ^. assumptions)
-    let allVars = vars `Set.union` potentialVars qmap (conjunction ass)
-    return $ addBindings env tass pass qmap ass allVars
+
+
+addTypeAssignment tv t = typeAssignment %= Map.insert tv t
+addPredAssignment p fml = predAssignment %= Map.insert p fml
+
+addQuals :: MonadHorn s => Id -> QSpace -> TCSolver s ()
+addQuals name quals = do
+  quals' <- lift . lift . lift $ pruneQualifiers quals
+  qualifierMap %= Map.insert name quals'
+
+-- | Add unknown @name@ with valuation @valuation@ to solutions of all candidates
+addFixedUnknown :: MonadHorn s => Id -> Set Formula -> TCSolver s ()
+addFixedUnknown name valuation = do
+    addQuals name (toSpace Nothing (Set.toList valuation))
+    candidates %= map update
   where
-    addBindings env tass pass qmap fmls vars =
-      if Set.null vars
-        then fmls
-        else let (x, rest) = Set.deleteFindMin vars in
-              case Map.lookup x (allSymbols env) of
-                Nothing -> addBindings env tass pass qmap fmls rest -- Variable not found (useful to ignore value variables)
-                Just (Monotype t) -> case typeSubstitute tass t of
-                  ScalarT baseT fml pot ->
-                    let fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x)) . substitutePredicate pass)
-                                          (fml : allMeasurePostconditions includeQuantified baseT env) in
-                    let newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls' in 
-                    addBindings env tass pass qmap (fmls `Set.union` fmls') (rest `Set.union` newVars)
-                  LetT y tDef tBody -> addBindings (addVariable x tBody . addVariable y tDef . removeVariable x $ env) tass pass qmap fmls vars
-                  AnyT -> Set.singleton ffalse
-                  _ -> error $ unwords ["embedding: encountered non-scalar variable", x, "in 0-arity bucket"]
-                Just sch -> addBindings env tass pass qmap fmls rest -- TODO: why did this work before?
-    allSymbols env = symbolsOfArity 0 env
-
-bottomValuation :: QMap -> Formula -> Formula
-bottomValuation qmap fml = applySolution bottomSolution fml
-  where
-    unknowns = Set.toList $ unknownsOf fml
-    bottomSolution = Map.fromList $ zip (map unknownName unknowns) (map (Set.fromList . lookupQualsSubst qmap) unknowns)
-
--- | 'potentialVars' @qmap fml@ : variables of @fml@ if all unknowns get strongest valuation according to @quals@
-potentialVars :: QMap -> Formula -> Set Id
-potentialVars qmap fml = Set.map varName $ varsOf $ bottomValuation qmap fml
-
--- | 'freshId' @prefix@ : fresh identifier starting with @prefix@
-freshId :: Monad s => String -> TCSolver s String
-freshId prefix = do
-  i <- uses idCount (Map.findWithDefault 0 prefix)
-  idCount %= Map.insert prefix (i + 1)
-  return $ prefix ++ show i
-
-freshVar :: Monad s => Environment -> String -> TCSolver s String
-freshVar env prefix = do
-  x <- freshId prefix
-  if Map.member x (allSymbols env)
-    then freshVar env prefix
-    else return x
-
--- | 'somewhatFreshVar' @env prefix sort@ : A variable of sort @sort@ not bound in @env@
--- Exists to generate fresh variables for multi-argument measures without making all of the constructor axiom instantiation code monadic
-somewhatFreshVar :: Environment -> String -> Sort -> Formula
-somewhatFreshVar env prefix s = Var s name 
-  where 
-    name = unbound 0 (prefix ++ show 0)
-    unbound n v = if Set.member v (allUniversals env)
-                    then unbound (n + 1) (v ++ show n)
-                    else v
+    update cand = cand { solution = Map.insert name valuation (solution cand) }
 
 -- | 'fresh' @t@ : a type with the same shape as @t@ but fresh type variables, fresh predicate variables, and fresh unknowns as refinements
 fresh :: Monad s => Environment -> RType -> TCSolver s RType
@@ -499,27 +477,12 @@ fresh env (FunctionT x tArg tFun c) =
   liftM2 (\t r -> FunctionT x t r c) (fresh env tArg) (fresh env tFun)
 fresh env t = let (env', t') = embedContext env t in fresh env' t'
 
+
 freshPred env sorts = do
   p' <- freshId "P"
   modify $ addTypingConstraint (WellFormedPredicate env sorts p')
   let args = zipWith Var sorts deBrujns
   return $ Pred BoolS p' args
-
-addTypeAssignment tv t = typeAssignment %= Map.insert tv t
-addPredAssignment p fml = predAssignment %= Map.insert p fml
-
-addQuals :: MonadHorn s => Id -> QSpace -> TCSolver s ()
-addQuals name quals = do
-  quals' <- lift . lift . lift $ pruneQualifiers quals
-  qualifierMap %= Map.insert name quals'
-
--- | Add unknown @name@ with valuation @valuation@ to solutions of all candidates
-addFixedUnknown :: MonadHorn s => Id -> Set Formula -> TCSolver s ()
-addFixedUnknown name valuation = do
-    addQuals name (toSpace Nothing (Set.toList valuation))
-    candidates %= map update
-  where
-    update cand = cand { solution = Map.insert name valuation (solution cand) }
 
 -- | Set valuation of unknown @name@ to @valuation@
 -- and re-check all potentially affected constraints in all candidates
@@ -600,19 +563,3 @@ finalizeProgram p = do
   tstate <- get
   let prog = (typeApplySolution sol . typeSubstitutePred pass . typeSubstitute tass) <$> p
   return (prog, tstate)
-
-embedEnv :: (MonadHorn s, MonadSMT s) => Environment -> Formula -> Bool -> TCSolver s (Set Formula)
-embedEnv env fml consistency = do 
-  qmap <- use qualifierMap
-  let relevantVars = potentialVars qmap fml
-  embedding env relevantVars consistency
-
--- | Signal type error
-throwError :: MonadHorn s => Doc -> TCSolver s ()
-throwError msg = do
-  (pos, ec) <- use errorContext
-  lift $ lift $ throwE $ ErrorMessage TypeError pos (msg $+$ ec)
-
-writeLog level msg = do
-  maxLevel <- asks _tcSolverLogLevel
-  if level <= maxLevel then traceShow (plain msg) $ return () else return ()

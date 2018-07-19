@@ -67,11 +67,9 @@ import Synquid.Util
 import Text.PrettyPrint.ANSI.Leijen hiding ((<+>), (<$>), hsep, vsep)
 import qualified Text.PrettyPrint.ANSI.Leijen as L
 import qualified Data.Set as Set
-import Data.Set (Set)
 import qualified Data.Map as Map
-import Data.Map (Map, (!))
+import Data.Map (Map)
 import Data.List
-import Debug.Trace
 
 import Control.Lens
 

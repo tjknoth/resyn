@@ -7,25 +7,22 @@ import Synquid.Logic
 import Synquid.Type hiding (set)
 import Synquid.Program
 import Synquid.Error
-import Synquid.SolverMonad
-import Synquid.TypeConstraintSolver hiding (freshId, freshVar)
-import qualified Synquid.TypeConstraintSolver as TCSolver (freshId, freshVar)
-import Synquid.Resources
 import Synquid.Util
 import Synquid.Pretty
 import Synquid.Tokens
+import Synquid.Solver.Monad
+import Synquid.Solver.TypeConstraint hiding (freshId, freshVar)
+import qualified Synquid.Solver.TypeConstraint as TCSolver (freshId, freshVar)
 
 import Data.Maybe
 import Data.List
-import qualified Data.Set as Set
-import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
+import qualified Data.Set as Set
 import Data.Char
 import Control.Monad.Logic
 import Control.Monad.State
 import Control.Monad.Reader
-import Control.Applicative hiding (empty)
 import Control.Lens
 import Debug.Trace
 
@@ -98,7 +95,7 @@ type Explorer s = StateT ExplorerState (
 -- which the explorer calls for auxiliary goals
 newtype Reconstructor s = Reconstructor (Goal -> Explorer s RProgram) 
 
-
+type TypeExplorer s = Environment -> RType -> Explorer s RProgram
 
 -- | 'runExplorer' @eParams tParams initTS go@ : execute exploration @go@ with explorer parameters @eParams@, typing parameters @tParams@ in typing state @initTS@
 runExplorer :: (MonadSMT s, MonadHorn s) => ExplorerParams -> TypingParams -> Reconstructor s -> TypingState -> Explorer s a -> s (Either ErrorMessage [a])
@@ -114,15 +111,20 @@ runExplorer eParams tParams topLevel initTS go = do
 -- | 'generateI' @env t@ : explore all terms that have refined type @t@ in environment @env@
 -- (top-down phase of bidirectional typechecking)
 generateI :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
-generateI env t@(FunctionT x tArg tRes _) = do
-  let ctx p = Program (PFun x p) t
-  pBody <- inContext ctx $ generateI (unfoldAllVariables $ addVariable x tArg env) tRes
-  return $ ctx pBody
-generateI env t@(ScalarT _ _ _) = do
+generateI env t@(FunctionT x tArg tRes _) = exploreFunction env t generateI 
+generateI env t@ScalarT{} = do
   maEnabled <- asks . view $ _1 . abduceScrutinees -- Is match abduction enabled?
   d <- asks . view $ _1 . matchDepth
   maPossible <- runInSolver $ hasPotentialScrutinees env -- Are there any potential scrutinees in scope?
   if maEnabled && d > 0 && maPossible then generateMaybeMatchIf env t else generateMaybeIf env t
+
+-- | Either generate lambda expression or reconstruct type of existing implementation
+exploreFunction :: (MonadSMT s, MonadHorn s) => Environment -> RType -> TypeExplorer s -> Explorer s RProgram
+exploreFunction env t@(FunctionT x tArg tRes _) explore = do 
+  let ctx p = Program (PFun x p) t
+  pBody <- inContext ctx $ explore (unfoldAllVariables $ addVariable x tArg env) tRes
+  return $ ctx pBody
+exploreFunction _ t _ = throwErrorWithDescription $ text "exploreFunction: called with non-function type" <+> pretty t
 
 -- | Generate a possibly conditional term type @t@, depending on whether a condition is abduced
 generateMaybeIf :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram

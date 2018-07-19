@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
 
 -- | Solver for second-order constraints
-module Synquid.HornSolver (
+module Synquid.Solver.HornClause (
     CandidatePickStrategy (..)
   , ConstraintPickStrategy (..)
   , OptimalValuationsStrategy (..)
@@ -11,23 +11,18 @@ module Synquid.HornSolver (
   ) where
 
 import Synquid.Logic
-import Synquid.SolverMonad
+import Synquid.Solver.Monad
 import Synquid.Util
 import Synquid.Pretty
 
-import Data.Function
 import Data.List
 import Data.Maybe
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
-import Data.Map (Map)
-import qualified Data.Foldable as F
 
 import Control.Monad
 import Control.Monad.Reader
-import Control.Monad.Trans.Maybe
-import Control.Applicative
 import Control.Lens hiding (both)
 
 import Debug.Trace

@@ -2,15 +2,12 @@
 module Synquid.Util where
 
 import Data.Maybe
-import Data.Either
-import Data.List
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Data.Char
 
-import Control.Applicative
 import Control.Monad
 import Control.Lens hiding (both)
 
@@ -91,7 +88,7 @@ boundedSubsets n s
       
 -- | Partition a set-valued map into sub-maps where value non-disjoint value sets are grouped together
 toDisjointGroups :: (Ord k, Ord v) => Map k (Set v) -> [(Set k, Set v)]
-toDisjointGroups m = toDisjointGroups' m []
+toDisjointGroups x = toDisjointGroups' x []
   where
     toDisjointGroups' :: (Ord k, Ord v) => Map k (Set v) -> [(Set k, Set v)] -> [(Set k, Set v)]
     toDisjointGroups' m acc

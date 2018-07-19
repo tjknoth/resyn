@@ -4,7 +4,7 @@ module Synquid.Codegen where
 
 import Data.Char
 import qualified Data.Map as Map
-import Data.Map (assocs,keys,elems,union,empty,findWithDefault,filterWithKey,(!))
+import Data.Map (assocs,keys,elems,findWithDefault,filterWithKey,(!))
 import qualified Data.Set as Set
 import Data.Set ((\\))
 
@@ -22,10 +22,8 @@ import Language.Haskell.Exts.Pretty
 import Synquid.Util
 import Synquid.Type
 import Synquid.Program
-import Synquid.Logic hiding (Var)
 import Synquid.Tokens
 import Synquid.Error
-import qualified Synquid.Pretty
 
 
 (|>) x y = y x

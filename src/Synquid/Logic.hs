@@ -80,7 +80,7 @@ unifySorts boundTvs = unifySorts' Map.empty
     unifySorts' subst (x : xs) (VarS y : ys)
       | not (Set.member y boundTvs)
       = unifySorts' subst (VarS y : ys) (x:xs)
-    unifySorts' subst (x: _) (y: _)
+    unifySorts' _ (x: _) (y: _)
       = Left (x, y)
 
 -- | Constraints generated during formula resolution
@@ -226,7 +226,7 @@ posUnknowns = fst . posNegUnknowns
 negUnknowns = snd . posNegUnknowns
 
 posNegPreds :: Formula -> (Set Id, Set Id)
-posNegPreds (Pred BoolS p es) = (Set.singleton p, Set.empty)
+posNegPreds (Pred BoolS p _) = (Set.singleton p, Set.empty)
 posNegPreds (Unary Not e) = swap $ posNegPreds e
 posNegPreds (Binary Implies e1 e2) = both2 Set.union (swap $ posNegPreds e1) (posNegPreds e2)
 posNegPreds (Binary Iff e1 e2) = both2 Set.union (posNegPreds $ e1 |=>| e2) (posNegPreds $ e2 |=>| e1)
@@ -243,7 +243,7 @@ predsOf (SetLit _ elems) = Set.unions $ map predsOf elems
 predsOf (Unary _ e) = predsOf e
 predsOf (Binary _ e1 e2) = predsOf e1 `Set.union` predsOf e2
 predsOf (Ite e0 e1 e2) = predsOf e0 `Set.union` predsOf e1 `Set.union` predsOf e2
-predsOf (All x e) = predsOf e
+predsOf (All _ e) = predsOf e
 predsOf _ = Set.empty
 
 -- | 'leftHandSide' @fml@ : left-hand side of a binary expression
