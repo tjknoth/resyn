@@ -12,13 +12,13 @@ from colorama import init, Fore, Back, Style
 
 # Globals
 if platform.system() in ['Linux', 'Darwin']:
-    SYNQUID_CMD = 'synquid'                                     # Command to call Synquid
-    TIMEOUT_CMD = 'timeout'                                     # Timeout command
-    TIMEOUT = '120'                                             # Timeout value (seconds)    
+    SYNQUID_CMD = ['stack', 'exec', '--', 'synquid']            # Command to call Synquid
+    TIMEOUT_CMD = ['timeout']                                   # Timeout command
+    TIMEOUT = ['120']                                           # Timeout value (seconds)    
 else:
-    SYNQUID_CMD = 'Synquid.exe'
-    TIMEOUT_CMD = ''
-    TIMEOUT = ''
+    SYNQUID_CMD = ['Synquid.exe']
+    TIMEOUT_CMD = ['']
+    TIMEOUT = ['']
 
 LOGFILE = 'results.log'                                         # Log file
 DUMPFILE = 'results'                                            # Result serialization file
@@ -130,7 +130,7 @@ def run_benchmark(name, opts, default_opts):
       logfile.write(name + '\n')
       logfile.seek(0, os.SEEK_END)
       # Run Synquid on the benchmark:
-      synthesis_res = run([SYNQUID_CMD] + COMMON_OPTS + RESOURCE_OPTS + opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
+      synthesis_res = run(SYNQUID_CMD + COMMON_OPTS + RESOURCE_OPTS + opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
       end = time.time()
 
       print('{0:0.2f}'.format(end - start), end = ' ')
@@ -165,7 +165,7 @@ def run_version(name, variant_id, variant_opts, logfile, with_res):
     start = time.time()
     logfile.seek(0, os.SEEK_END)
     # Run Synquid on the benchmark, mute output:
-    synthesis_res = run([TIMEOUT_CMD] + [TIMEOUT] + [SYNQUID_CMD] + COMMON_OPTS +
+    synthesis_res = run(TIMEOUT_CMD + TIMEOUT + SYNQUID_CMD + COMMON_OPTS +
         variant_opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
     end = time.time()
 
