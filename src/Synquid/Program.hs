@@ -522,20 +522,18 @@ isSynthesisGoal _ = False
 
 -- | Typing constraints
 data Constraint = Subtype Environment RType RType Bool Id
-  | WellFormed Environment RType
+  | WellFormed Environment RType Id
   | WellFormedCond Environment Formula
   | WellFormedMatchCond Environment Formula
   | WellFormedPredicate Environment [Sort] Id
-  | SharedType Environment Id RType RType RType
+  | SharedType Environment RType RType RType Id
   deriving (Show, Eq, Ord)
 
--- | Resource constraints -- can include universally quantified expressions so we store representative examples alongside the constraint
-data RConstraint = RConstraint {
-  _constraint :: Constraint,
-  _examples :: Map Formula [Formula]
-} deriving (Show, Eq, Ord)
-
-makeLenses ''RConstraint
+labelOf :: Constraint -> Id
+labelOf (Subtype _ _ _ _ l)    = l
+labelOf (WellFormed _ _ l)     = l
+labelOf (SharedType _ _ _ _ l) = l
+labelOf _                      = ""
 
 -- | Synthesis goal
 data Goal = Goal {
@@ -547,7 +545,6 @@ data Goal = Goal {
   gSourcePos :: SourcePos,      -- ^ Source Position,
   gSynthesize :: Bool           -- ^ Synthesis flag (false implies typechecking only)
 } deriving (Show, Eq, Ord)
-
 
 
 unresolvedType env ident = (env ^. unresolvedConstants) Map.! ident

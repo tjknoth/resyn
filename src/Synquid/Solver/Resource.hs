@@ -63,13 +63,13 @@ solveResourceConstraints oldConstraints constraints = do
             
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Bool -> Constraint -> TCSolver s Formula 
-generateFormula shouldLog checkMults c@(Subtype env tl tr _ name) = do
+generateFormula shouldLog checkMults c@(Subtype env tl tr _ label) = do
     let fmls = conjunction $ Set.filter (not . isTrivial) $ assertSubtypes env checkMults subtypeOp tl tr
     embedAndProcessConstraint env shouldLog c fmls (conjunction (allFormulasOf tl `Set.union` allFormulasOf tr)) (Set.insert (refinementOf tl))
-generateFormula shouldLog checkMults c@(WellFormed env t) = do
+generateFormula shouldLog checkMults c@(WellFormed env t label) = do
     let fmls = conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allRFormulas checkMults t
     embedAndProcessConstraint env shouldLog c fmls (conjunction (allFormulasOf t)) (Set.insert (refinementOf t))
-generateFormula shouldLog checkMults c@(SharedType env v t tl tr) = do 
+generateFormula shouldLog checkMults c@(SharedType env t tl tr label) = do 
     let fmls = conjunction $ partition checkMults t tl tr
     embedAndProcessConstraint env shouldLog c fmls (conjunction (allFormulasOf t)) id
 generateFormula _ _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
@@ -83,7 +83,7 @@ embedAndProcessConstraint env shouldLog c fmls relevantFml addTo = do
     then return ftrue
     else do 
       let emb' = preprocessAssumptions $ addTo emb
-      when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)
+      when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls <+> text "src:" <+> text (labelOf c))
       instantiateUniversals shouldLog env fmls (conjunction emb')
 
 -- | 'instantiateUniversals' @b env fml ass@ : Instantiate universally quantified terms in @fml@ under @env@ with examples satisfying assumptions @ass@

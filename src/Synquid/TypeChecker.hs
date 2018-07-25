@@ -281,7 +281,7 @@ checkAnnotation env t t' p = do
     Right t'' -> do
       ctx <- asks . view $ _1 . context
       writeLog 2 $ text "Checking consistency of type annotation" <+> pretty t'' <+> text "with" <+> pretty t <+> text "in" $+$ pretty (ctx (Program p t''))
-      addConstraint $ Subtype env t'' t True ""
+      addConstraint $ Subtype env t'' t True (show (pretty p)) 
 
       fT <- runInSolver $ finalizeType t
       fT'' <- runInSolver $ finalizeType t''

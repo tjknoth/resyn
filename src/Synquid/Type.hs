@@ -238,9 +238,7 @@ typeVarsOf _ = Set.empty
 
 -- | 'updateAnnotations' @t m p@ : "multiply" @t@ by multiplicity @m@, then add on surplus potential @p@
 updateAnnotations :: RType -> Formula -> Formula -> RType
-updateAnnotations t@ScalarT{} mult p = addPotential mType p
-  where 
-    mType = typeMultiply mult t
+updateAnnotations t@ScalarT{} mult = addPotential (typeMultiply mult t)
 
 typeMultiply :: Formula -> RType -> RType
 typeMultiply fml (ScalarT t ref pot) = ScalarT (baseTypeMultiply fml t) ref (multiplyFormulas fml pot)
@@ -256,7 +254,6 @@ addPotential :: RType -> Formula -> RType
 addPotential t@(ScalarT base ref pot) f = ScalarT (addPotentialBase base f) ref (addFormulas pot f)
 -- Should only be called when tBody is a scalar (hopefully)
 addPotential (LetT x tDef tBody) f = LetT x tDef (addPotential tBody f)
---addPotential (FunctionT x argT retT c) f = FunctionT x (addPotential argT f) (addPotential retT) c
 
 addPotentialBase :: BaseType Formula -> Formula -> BaseType Formula 
 addPotentialBase (DatatypeT x ts ps) f = DatatypeT x (fmap (`addPotential` f) ts) ps

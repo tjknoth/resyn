@@ -65,10 +65,10 @@ data TypingState = TypingState {
   _resourceConstraints :: [Constraint],         -- ^ Constraints relevant to resource analysis
   -- Temporary state:
   _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
-  _hornClauses :: [(Formula, Id)],              -- ^ Horn clauses generated from subtyping constraints
+  _hornClauses :: [Formula],                    -- ^ Horn clauses generated from subtyping constraints
   _consistencyChecks :: [Formula],              -- ^ Formulas generated from type consistency constraints
   _errorContext :: (SourcePos, Doc),            -- ^ Information to be added to all type errors
-  _resourceVars :: Set String                    -- ^ Set of variables created to replace potential/multiplicity annotations
+  _resourceVars :: Set String                   -- ^ Set of variables created to replace potential/multiplicity annotations
 }
 
 makeLenses ''TypingState

@@ -364,9 +364,11 @@ checkE env typ p@(Program pTerm pTyp) = do
 
   incremental <- asks . view $ _1 . incrementalChecking -- Is incremental type checking of E-terms enabled?
   consistency <- asks . view $ _1 . consistencyChecking -- Is consistency checking enabled?
-
-  when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False "") -- Add subtyping check, unless it's a function type and incremental checking is diasbled
-  when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True "") -- Add consistency constraint for function types
+  
+  -- Add subtyping check, unless it's a function type and incremental checking is diasbled:
+  when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False (show (pretty pTerm))) 
+  -- Add consistency constraint for function types:
+  when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True (show (pretty pTerm))) 
   fTyp <- runInSolver $ finalizeType typ
   pos <- asks . view $ _1 . sourcePos
   typingState . errorContext .= (pos, text "when checking" </> pretty p </> text "::" </> pretty fTyp </> text "in" $+$ pretty (ctx p))
@@ -432,7 +434,7 @@ generateError env = do
   writeLog 1 $ text "Checking" <+> pretty (show errorProgram) <+> text "in" $+$ pretty (ctx errorProgram)
   tass <- use (typingState . typeAssignment)
   let env' = typeSubstituteEnv tass env
-  addConstraint $ Subtype env (int $ conjunction $ Set.fromList $ map trivial (allScalars env')) (int ffalse) False ""
+  addConstraint $ Subtype env (int $ conjunction $ Set.fromList $ map trivial (allScalars env')) (int ffalse) False "Generate Error"
   pos <- asks . view $ _1 . sourcePos
   typingState . errorContext .= (pos, text "when checking" </> pretty errorProgram </> text "in" $+$ pretty (ctx errorProgram))
   runInSolver solveTypeConstraints
@@ -521,9 +523,9 @@ instantiate env sch top argNames = do
   writeLog 3 (text "INSTANTIATE" <+> pretty sch $+$ text "INTO" <+> pretty t)
   return t
   where
-    instantiate' subst pSubst (ForallT a sch) = do
+    instantiate' subst pSubst t@(ForallT a sch) = do
       a' <- freshId "A"
-      addConstraint $ WellFormed env (vartSafe a' ftrue)
+      addConstraint $ WellFormed env (vartSafe a' ftrue) (show (text "Instantiate" <+> pretty t))
       instantiate' (Map.insert a (vartSafe a' (BoolLit top)) subst) pSubst sch
     instantiate' subst pSubst (ForallP (PredSig p argSorts _) sch) = do
       let argSorts' = map (sortSubstitute (asSortSubst subst)) argSorts
@@ -658,9 +660,9 @@ retrieveAndSplitVarType name sch env = do
       else env
   let tl = typeFromSchema schl
   let tr = typeFromSchema schr
-  addConstraint $ SharedType env name (typeFromSchema sch) tl tr 
-  addConstraint $ WellFormed env tl
-  addConstraint $ WellFormed env tr
+  addConstraint $ SharedType env (typeFromSchema sch) tl tr name
+  addConstraint $ WellFormed env tl name
+  addConstraint $ WellFormed env tr name
   t <- symbolType env name schr
   symbolUseCount %= Map.insertWith (+) name 1
   case Map.lookup name (env ^. shapeConstraints) of

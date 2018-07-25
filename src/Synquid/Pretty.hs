@@ -329,6 +329,9 @@ prettyProgram (Program p typ) = case p of
   where
     withType doc t = doc -- <> text ":" <+> pretty t
 
+instance Pretty (BareProgram RType) where 
+  pretty p = pretty $ Program p AnyT
+
 instance (Pretty t) => Pretty (Program t) where
   pretty = prettyProgram
 
@@ -362,27 +365,26 @@ instance Show SortConstraint where
   show = show . pretty
 
 prettyConstraint :: Constraint -> Doc
-prettyConstraint (Subtype env t1 t2 False label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "<:" <+> pretty t2 <+> parens (text label)
-prettyConstraint (Subtype env t1 t2 True label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "/\\" <+> pretty t2 <+> parens (text label)
-prettyConstraint (WellFormed env t) = prettyBindings env <+> operator "|-" <+> pretty t
+prettyConstraint (Subtype env t1 t2 False label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "<:" <+> pretty t2 
+prettyConstraint (Subtype env t1 t2 True label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "/\\" <+> pretty t2 
+prettyConstraint (WellFormed env t label) = prettyBindings env <+> operator "|-" <+> pretty t 
 prettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 prettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 prettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
-prettyConstraint (SharedType _ v t tl tr) = pretty v <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr)
+prettyConstraint (SharedType _ t tl tr label) = pretty label <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr)
 
 -- Do not show environment
 simplePrettyConstraint :: Constraint -> Doc
-simplePrettyConstraint (Subtype _ t1 t2 False label) = pretty t1 <+> operator "<:" <+> pretty t2 <+> parens (text label)
-simplePrettyConstraint (Subtype _ t1 t2 True label) = pretty t1 <+> operator "/\\" <+> pretty t2 <+> parens (text label)
-simplePrettyConstraint (WellFormed env t) = prettyBindings env <+> operator "|-" <+> pretty t
+simplePrettyConstraint (Subtype _ t1 t2 False label) = pretty t1 <+> operator "<:" <+> pretty t2
+simplePrettyConstraint (Subtype _ t1 t2 True label) = pretty t1 <+> operator "/\\" <+> pretty t2 
+simplePrettyConstraint (WellFormed env t label) = prettyBindings env <+> operator "|-" <+> pretty t 
 simplePrettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 simplePrettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 simplePrettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
-simplePrettyConstraint (SharedType _ v t tl tr) = pretty v <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr)
+simplePrettyConstraint (SharedType _ t tl tr label) = pretty label <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr) 
 
 instance Pretty Constraint where
   pretty = prettyConstraint
-
 
 instance Pretty Candidate where
   pretty (Candidate sol valids invalids label) = text label <> text ":" <+> pretty sol <+> parens (pretty (Set.size valids) <+> pretty (Set.size invalids))
