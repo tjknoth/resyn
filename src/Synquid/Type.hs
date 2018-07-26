@@ -141,14 +141,12 @@ isVarRefinemnt (Binary Eq (Var _ v) (Var _ _)) = v == valueVarName
 isVarRefinemnt _ = False
 
 
-
 -- | Polymorphic type skeletons (parametrized by refinements)
 data SchemaSkeleton r =
   Monotype (TypeSkeleton r) |
   ForallT Id (SchemaSkeleton r) |       -- Type-polymorphic
   ForallP PredSig (SchemaSkeleton r)    -- Predicate-polymorphic
   deriving (Show, Eq, Ord)
-
 
 
 toMonotype :: SchemaSkeleton r -> TypeSkeleton r
@@ -272,8 +270,9 @@ removePotentialBase (DatatypeT x ts ps) = DatatypeT x (fmap removePotential ts) 
 removePotentialBase b = b
 
 -- Extract top-level potential from a scalar type
-topPotentialOf :: RType -> Formula 
-topPotentialOf (ScalarT _ _ p) = p
+topPotentialOf :: RType -> Maybe Formula 
+topPotentialOf (ScalarT _ _ p) = Just p
+topPotentialOf _               = Nothing
 
 {- Refinement types -}
 

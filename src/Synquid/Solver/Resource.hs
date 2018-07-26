@@ -74,6 +74,7 @@ generateFormula shouldLog checkMults c@(SharedType env t tl tr label) = do
     embedAndProcessConstraint env shouldLog c fmls (conjunction (allFormulasOf t)) id
 generateFormula _ _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
 
+-- | Embed the environment assumptions and preproess the constraint for solving 
 embedAndProcessConstraint :: (MonadSMT s, MonadHorn s) => Environment -> Bool -> Constraint -> Formula -> Formula -> (Set Formula -> Set Formula) -> TCSolver s Formula
 embedAndProcessConstraint env shouldLog c fmls relevantFml addTo = do 
   emb <- embedEnv env relevantFml True
@@ -118,24 +119,21 @@ allRFormulasBase _ _                   = Set.empty
 
 -- | 'partition' @t tl tr@ : Generate numerical constraints referring to a partition of the resources associated with @t@ into types @tl@ and @tr@ 
 partition :: Bool -> RType -> RType -> RType -> Set Formula 
-partition cm (ScalarT b _ f) (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (f |=| (fl |+| fr)) $ partitionBase cm b bl br
+partition cm (ScalarT b _ f) (ScalarT bl _ fl) (ScalarT br _ fr) 
+  = Set.insert (f |=| (fl |+| fr)) $ partitionBase cm b bl br
 partition _ _ _ _ = Set.empty
 
 partitionBase :: Bool -> BaseType Formula -> BaseType Formula -> BaseType Formula -> Set Formula
-partitionBase cm (DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Set.unions $ zipWith3 (partition cm) ts tsl tsr
-partitionBase cm (TypeVarT _ _ m) (TypeVarT _ _ ml) (TypeVarT _ _ mr) = if cm then Set.singleton $ m |=| (ml |+| mr) else Set.empty
+partitionBase cm (DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _) 
+  = Set.unions $ zipWith3 (partition cm) ts tsl tsr
+partitionBase cm (TypeVarT _ _ m) (TypeVarT _ _ ml) (TypeVarT _ _ mr) 
+  = if cm then Set.singleton $ m |=| (ml |+| mr) else Set.empty
 partitionBase _ _ _ _ = Set.empty
 
 -- | 'joinAssertions' @op tl tr@  : Generate the set of all formulas in types @tl@ and @tr@, zipped by a binary operation @op@ on formulas 
 assertSubtypes :: Environment -> Bool -> (Formula -> Formula -> Formula) -> RType -> RType -> Set Formula
 assertSubtypes env cm op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (fl `op` fr) $ assertSubtypesBase env cm op bl br
 -- TODO: add total potential from input and output environment to left and right sides
-{-
-assertSubtypes op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (( leftTotal |+| fl) `op` (rightTotal |+| fr)) $ assertSubtypesBase allsyms op bl br
-  where 
-    leftTotal = totalMultiplicity allsyms
-    rightTotal = totalMultiplicity allsyms
--}
 assertSubtypes _ _ op _ _ = Set.empty 
 
 assertSubtypesBase :: Environment -> Bool -> (Formula -> Formula -> Formula) -> BaseType Formula -> BaseType Formula -> Set Formula
@@ -151,14 +149,17 @@ assertSubtypesBase _ _ _ _ _ = Set.empty
 isResourceConstraint :: Constraint -> Bool
 isResourceConstraint (Subtype e ScalarT{} ScalarT{} _ _) = True
 isResourceConstraint WellFormed{} = True
-isResourceConstraint SharedType{}  = True
+isResourceConstraint SharedType{} = True
 isResourceConstraint _            = False
 
+-- | Get example set for a universally quantified formula
 assembleExamples :: (MonadHorn s, MonadSMT s) => Int -> [Formula] -> Formula -> TCSolver s [[(Formula, Formula)]]
 assembleExamples n universals ass = do 
   exs <- mapM (\f -> (,) f <$> getExamples n ass f) universals -- List of formula + list-of-example pairs
   return $ transform exs [] 
   where
+    -- Transform list of formula + list-of-example pairs into a list of formula-example pairs
+    -- ie transform [(Formula, [Formula])] -> [[(Formula, Formula)]]
     pairHeads :: [(Formula, [Formula])] -> [(Formula, Formula)]
     pairHeads []              = []
     pairHeads ((f, []):_)     = []
@@ -172,6 +173,7 @@ assembleExamples n universals ass = do
     transform ((_,[]):_) acc = acc
     transform exs acc        = transform (removeHeads exs) (pairHeads exs : acc)
 
+-- | Replace universally quantified subexpressions in a Formula with polynomial
 applyPolynomials :: (MonadHorn s, MonadSMT s) => Formula -> [Formula] -> TCSolver s Formula 
 applyPolynomials v@(Var s x) universals = do 
   vs <- use resourceVars
@@ -194,7 +196,7 @@ applyPolynomials f@ASTLit{} _ = do
   return f
 applyPolynomials f _ = return f 
 
-
+-- | Generate a first-degree polynomial over possible universally quanitified expressions
 generatePolynomial :: Formula -> [Formula] -> Formula
 generatePolynomial annotation universalVars = foldl (|+|) constVar products
   where 
@@ -205,36 +207,12 @@ generatePolynomial annotation universalVars = foldl (|+|) constVar products
     constVar = Var IntS (toText annotation ++ "CONST")
     makeVar f = Var IntS (textFrom f ++ "_" ++ toText annotation)
 
--- | 'totalPotential' @schs@ : compute the total potential contained in a list of schemas @schs@
-totalPotential :: [RSchema] -> Formula
-totalPotential schs = foldl (|+|) (IntLit 0) $ catMaybes $ fmap (potentialOf . typeFromSchema) schs
+-- Sum of all top level potential annotations in an environment (\Phi)
+totalTopLevelPotential :: [RSchema] -> Formula
+totalTopLevelPotential schs = foldl addFormulas fzero (mapMaybe (topPotentialOf . typeFromSchema) schs)
 
--- | 'totalMultiplicity' @schs@ : compute the total of the multiplicities contained in a list of schemas @schs@
-totalMultiplicity :: [RSchema] -> Formula
-totalMultiplicity schs = foldl (|+|) (IntLit 0) $ catMaybes $ fmap (multiplicityOfType . typeFromSchema) schs
-
--- Extract potential from refinement type
-potentialOf :: RType -> Maybe Formula
-potentialOf (ScalarT (DatatypeT _ ts _) _ _) = case foldl (|+|) (IntLit 0) (catMaybes (fmap potentialOf ts)) of 
-    (IntLit 0) -> Nothing
-    f          -> Just f
-potentialOf (ScalarT _ _ p) = Just p  
-potentialOf _               = Nothing 
-
--- Total multiplicity in a refinement type
-multiplicityOfType :: RType -> Maybe Formula 
-multiplicityOfType (ScalarT base f p) = multiplicityOfBase base 
-multiplicityOfType _                  = Nothing
-
--- Total multiplicity in a base type
-multiplicityOfBase :: BaseType Formula -> Maybe Formula
-multiplicityOfBase (TypeVarT _ _ m)      = Just m
-multiplicityOfBase (DatatypeT name ts _) = case foldl (|+|) (IntLit 0) (catMaybes (fmap multiplicityOfType ts)) of 
-    (IntLit 0) -> Nothing -- No multiplicities in constructors 
-    f          -> Just f
-multiplicityOfBase _                = Nothing
-
--- Return a set of all formulas (potential, multiplicity, refinement) of a type. Doesn't mean anything necesssarily, used to embed environment assumptions
+-- Return a set of all formulas (potential, multiplicity, refinement) of a type. 
+--   Doesn't mean anything necesssarily, used to embed environment assumptions
 allFormulasOf :: RType -> Set Formula
 allFormulasOf (ScalarT b f p) = Set.singleton f `Set.union` Set.singleton p `Set.union` allFormulasOfBase b
 allFormulasOf (FunctionT _ argT resT _) = allFormulasOf argT `Set.union` allFormulasOf resT
@@ -309,6 +287,7 @@ getExamples' n ass fmlName acc =
         Just v -> getExamples' (n - 1) ass fmlName (uncurry ASTLit v : acc)
         Nothing -> return Nothing
 
+-- | Apply a list of substitutions to a formula
 substituteManyInFml :: [(Formula, Formula)] -> Formula -> Formula
 substituteManyInFml [] f       = f
 substituteManyInFml xs fml = foldl (\f (g, ex) -> substituteForFml ex g f) fml xs

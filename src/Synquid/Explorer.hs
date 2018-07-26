@@ -24,6 +24,7 @@ import Control.Monad.Logic
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Lens
+import Data.Key (mapWithKeyM)
 import Debug.Trace
 
 {- Interface -}
@@ -644,7 +645,7 @@ addScrutineeToEnv env pScr tScr = do
   checkres <- asks . view $ _1 . checkResources
   (x, env') <- toVar (addScrutinee pScr env) pScr
   varName <- freshId "x"
-  let tScr' = addPotential (typeMultiply fzero tScr) (topPotentialOf tScr)
+  let tScr' = addPotential (typeMultiply fzero tScr) (fromMaybe fzero (topPotentialOf tScr))
   let env'' = addVariable varName tScr' env'
   if checkres
     then return (x, env'')
@@ -670,23 +671,12 @@ retrieveAndSplitVarType name sch env = do
     Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False ""
   return (t, env')
 
--- Fresh potential variables for everything in environment
-freshEnv :: (MonadHorn s, MonadSMT s) => Environment -> Explorer s Environment
-freshEnv env = freshFilteredEnv env (\x _ -> False)
-
--- Fresh potential variables for every symbol except @name@
-freshEnvExcept :: (MonadHorn s, MonadSMT s) => Environment -> Id -> Explorer s Environment
-freshEnvExcept env name = freshFilteredEnv env (\x _ -> x == name)
-
--- | 'freshFilteredEnv' @env test@: Replace top-level potentials on all elements in environment @env@ for which @test@ fails with fresh variables for nondeterministic subtyping
-freshFilteredEnv :: (MonadHorn s, MonadSMT s) => Environment -> (Id -> RSchema -> Bool)-> Explorer s Environment
-freshFilteredEnv env test = do
-  let syms = _symbols env
-  syms' <- mapM (mapMWithKey maybeFresh) syms
+-- | Fresh top-level potential annotations for all scalar symbols in an environment
+freshFreePotential :: MonadHorn s => Environment -> Explorer s Environment
+freshFreePotential env = do
+  let freshen = mapM (`freshPotentials` False) 
+  syms' <- mapWithKeyM (\arity vars -> if arity == 0 then freshen vars else return vars) (_symbols env)
   return $ env { _symbols = syms' }
-  where 
-    mapMWithKey f = sequence . Map.mapWithKey f
-    maybeFresh k s = if test k s then return s else freshPotentials s False 
 
 writeLog level msg = do
   maxLevel <- asks . view $ _1 . explorerLogLevel
