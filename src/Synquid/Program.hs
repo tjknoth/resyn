@@ -216,10 +216,12 @@ makeLenses ''MeasureDef
 
 {- Evaluation environment -}
 
+type SymbolMap = Map Int (Map Id RSchema)  -- Variables and constants indexed by arity
+
 -- | Typing environment
 data Environment = Environment {
   -- | Variable part:
-  _symbols :: Map Int (Map Id RSchema),    -- ^ Variables and constants (with their refinement types), indexed by arity
+  _symbols :: SymbolMap,                   -- ^ Variables and constants (with their refinement types), indexed by arity
   _boundTypeVars :: [Id],                  -- ^ Bound type variables
   _boundPredicates :: [PredSig],           -- ^ Argument sorts of bound abstract refinements
   _assumptions :: Set Formula,             -- ^ Unknown assumptions
@@ -313,8 +315,8 @@ symbolAsFormula env name t
     sort = toSort (baseTypeOf t)
     asInt = asInteger name
 
-unOpType Neg       = Monotype $ FunctionT "x" intAll (int (valInt |=| fneg (intVar "x"))) defCost
-unOpType Not       = Monotype $ FunctionT "x" boolAll (bool (valBool |=| fnot (boolVar "x"))) defCost
+unOpType Neg        = Monotype $ FunctionT "x" intAll (int (valInt |=| fneg (intVar "x"))) defCost
+unOpType Not        = Monotype $ FunctionT "x" boolAll (bool (valBool |=| fnot (boolVar "x"))) defCost
 binOpType Times     = Monotype $ FunctionT "x" intAll (FunctionT "y" intAll (int (valInt |=| intVar "x" |*| intVar "y")) defCost) defCost
 binOpType Plus      = Monotype $ FunctionT "x" intAll (FunctionT "y" intAll (int (valInt |=| intVar "x" |+| intVar "y")) defCost) defCost
 binOpType Minus     = Monotype $ FunctionT "x" intAll (FunctionT "y" intAll (int (valInt |=| intVar "x" |-| intVar "y")) defCost) defCost
@@ -492,7 +494,6 @@ refineBot _ (ScalarT (TypeVarT vSubst a _) _ _) = ScalarT (TypeVarT vSubst a def
 refineBot env (FunctionT x tArg tFun c) = FunctionT x (refineTop env tArg) (refineBot env tFun) c
 
 
-
 {- Input language declarations -}
 
 -- | Constructor signature: name and type
@@ -521,7 +522,7 @@ isSynthesisGoal _ = False
 {- Misc -}
 
 -- | Typing constraints
-data Constraint = Subtype Environment RType RType Bool Id
+data Constraint = Subtype Environment SymbolMap RType RType Bool Id
   | WellFormed Environment RType Id
   | WellFormedCond Environment Formula
   | WellFormedMatchCond Environment Formula
@@ -530,7 +531,7 @@ data Constraint = Subtype Environment RType RType Bool Id
   deriving (Show, Eq, Ord)
 
 labelOf :: Constraint -> Id
-labelOf (Subtype _ _ _ _ l)    = l
+labelOf (Subtype _ _ _ _ _ l)  = l
 labelOf (WellFormed _ _ l)     = l
 labelOf (SharedType _ _ _ _ l) = l
 labelOf _                      = ""

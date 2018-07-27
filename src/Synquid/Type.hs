@@ -30,7 +30,6 @@ equalShape (TypeVarT s name _) (TypeVarT s' name' m') = (TypeVarT s name defMult
 equalShape (DatatypeT name ts ps) (DatatypeT name' ts' ps') = (name == name') && (fmap shape ts == fmap shape ts') && (ps == ps')
 equalShape t t' = t == t'
 
-
 defPotential = IntLit 0
 defMultiplicity = IntLit 1 
 defCost = 0

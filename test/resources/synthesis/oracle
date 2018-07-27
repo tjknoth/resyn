@@ -147,6 +147,13 @@ compress = \xs .
             then Cons x11 x12
             else Cons x3 (Cons x11 x12)
 
+concat :: xss:{ListOfLists {1**a||1}||0} -> acc:{List {1**a||0}||0} -> {List {1**a||0}|len _v == sumLen xss + len acc|0}
+concat = \xss . \acc . 
+    match xss with
+      Nil2 -> acc
+      Cons2 x3 x4 -> zappend x3
+                       (concat x4 acc)
+
 cons2 :: x:{2**a||2} -> {List {1**a||0}|elems _v == [x] && len _v == 2|0}
 cons2 = \x . Cons x (Cons x Nil)
 
@@ -207,14 +214,14 @@ extractMin = \xs .
                 then MinPair x16 (Cons x3 x17)
                 else MinPair x3 (Cons x16 x17)
 
-insert :: x:{1**a||0} -> xs:{IList {1**a||0}||0} -> {IList {1**a||0}|ielems _v == ielems xs + [x]|0}
+insert :: x:{1**a||0} -> xs:{IList {1**a||0}||numgt x _v} -[1]-> {IList {1**a||0}|ielems _v == ielems xs + [x]|0}
 insert = \x . \xs . 
     match xs with
       INil -> ICons x INil
-      ICons x5 x6 -> 
-        if x5 <= x
-          then ICons x5 (insert x x6)
-          else ICons x (insert x5 x6)
+      ICons x6 x7 -> 
+        if x6 <= x
+          then ICons x6 (insert x x7)
+          else ICons x (insert x6 x7)
 
 ith :: <p :: Int -> a -> Bool> . xs:{List {1**a||0} <p>||0} -> i:{Int|0 <= _v && _v < len xs|0} -> {1**a|p i _v|0}
 ith = \xs . \i . 

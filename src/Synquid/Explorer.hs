@@ -367,9 +367,9 @@ checkE env typ p@(Program pTerm pTyp) = do
   consistency <- asks . view $ _1 . consistencyChecking -- Is consistency checking enabled?
   
   -- Add subtyping check, unless it's a function type and incremental checking is diasbled:
-  when (incremental || arity typ == 0) (addConstraint $ Subtype env pTyp typ False (show (pretty pTerm))) 
+  when (incremental || arity typ == 0) (checkSubtype env pTyp typ False (show (pretty pTerm))) 
   -- Add consistency constraint for function types:
-  when (consistency && arity typ > 0) (addConstraint $ Subtype env pTyp typ True (show (pretty pTerm))) 
+  when (consistency && arity typ > 0) (checkSubtype env pTyp typ True (show (pretty pTerm))) 
   fTyp <- runInSolver $ finalizeType typ
   pos <- asks . view $ _1 . sourcePos
   typingState . errorContext .= (pos, text "when checking" </> pretty p </> text "::" </> pretty fTyp </> text "in" $+$ pretty (ctx p))
@@ -435,7 +435,7 @@ generateError env = do
   writeLog 1 $ text "Checking" <+> pretty (show errorProgram) <+> text "in" $+$ pretty (ctx errorProgram)
   tass <- use (typingState . typeAssignment)
   let env' = typeSubstituteEnv tass env
-  addConstraint $ Subtype env (int $ conjunction $ Set.fromList $ map trivial (allScalars env')) (int ffalse) False "Generate Error"
+  checkSubtype env (int $ conjunction $ Set.fromList $ map trivial (allScalars env')) (int ffalse) False "Generate Error"
   pos <- asks . view $ _1 . sourcePos
   typingState . errorContext .= (pos, text "when checking" </> pretty errorProgram </> text "in" $+$ pretty (ctx errorProgram))
   runInSolver solveTypeConstraints
@@ -449,19 +449,19 @@ toVar :: (MonadSMT s, MonadHorn s) => Environment -> RProgram -> Explorer s (For
 toVar env (Program (PSymbol name) t) = return (symbolAsFormula env name t, env)
 toVar env (Program _ t) = do
   g <- freshId "G"
-  return ((Var (toSort $ baseTypeOf t) g), addLetBound g t env)
+  return (Var (toSort $ baseTypeOf t) g, addLetBound g t env)
 
 -- | 'appType' @env p x tRes@: a type semantically equivalent to [p/x]tRes;
 -- if @p@ is not a variable, instead of a literal substitution use the contextual type LET x : (typeOf p) IN tRes
 appType :: Environment -> RProgram -> Id -> RType -> RType
 appType env (Program (PSymbol name) t) x tRes = substituteInType (isBound env) (Map.singleton x $ symbolAsFormula env name t) tRes
-appType env (Program _ t) x tRes = contextual x t tRes
+appType env (Program _ t) x tRes = contextual x (typeMultiply fzero t) tRes
 
 isPolyConstructor (Program (PSymbol name) t) = isTypeName name && (not . Set.null . typeVarsOf $ t)
 
 enqueueGoal env typ impl depth = do
   g <- freshVar env "f"
-  auxGoals %= ((Goal g env (Monotype typ) impl depth noPos True) :)
+  auxGoals %= (Goal g env (Monotype typ) impl depth noPos True :)
   return $ Program (PSymbol g) typ
 
 {- Utility -}
@@ -668,16 +668,21 @@ retrieveAndSplitVarType name sch env = do
   symbolUseCount %= Map.insertWith (+) name 1
   case Map.lookup name (env ^. shapeConstraints) of
     Nothing -> return ()
-    Just sc -> addConstraint $ Subtype env (refineBot env $ shape t) (refineTop env sc) False ""
+    Just sc -> checkSubtype env (refineBot env $ shape t) (refineTop env sc) False ""
   return (t, env')
 
+-- | Generate subtyping constraint
+--   TODO: grab some fresh symbols
+checkSubtype :: (MonadHorn s, MonadSMT s) => Environment -> RType -> RType -> Bool -> Id -> Explorer s ()
+checkSubtype env ltyp rtyp consistency tag = 
+  addConstraint $ Subtype env (_symbols env) ltyp rtyp consistency tag
+
 -- | Fresh top-level potential annotations for all scalar symbols in an environment
-freshFreePotential :: MonadHorn s => Environment -> Explorer s Environment
+freshFreePotential :: MonadHorn s => Environment -> Explorer s SymbolMap
 freshFreePotential env = do
   let freshen = mapM (`freshPotentials` False) 
-  syms' <- mapWithKeyM (\arity vars -> if arity == 0 then freshen vars else return vars) (_symbols env)
-  return $ env { _symbols = syms' }
+  mapWithKeyM (\arity vars -> if arity == 0 then freshen vars else return vars) (_symbols env)
 
 writeLog level msg = do
   maxLevel <- asks . view $ _1 . explorerLogLevel
-  if level <= maxLevel then traceShow (plain msg) $ return () else return ()
+  when (level <= maxLevel) $ traceShow (plain msg) $ return () 
