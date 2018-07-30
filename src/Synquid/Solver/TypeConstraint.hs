@@ -176,12 +176,12 @@ simplifyConstraint' _ _ (Subtype _ _ (ScalarT (DatatypeT _ _ _) _ _) t _ _) | t 
 simplifyConstraint' _ pass c@(WellFormedPredicate _ _ p) | p `Map.member` pass = return ()
 
 -- Type variable with known assignment: substitute
-simplifyConstraint' tass _ (Subtype env syms tv@(ScalarT (TypeVarT _ a _) _ _) t consistent label) 
+simplifyConstraint' tass _ (Subtype env syms tv@(ScalarT (TypeVarT _ a _) _ _) t variant label) 
   | a `Map.member` tass 
-    = simplifyConstraint (Subtype env syms (typeSubstitute tass tv) t consistent label)
-simplifyConstraint' tass _ (Subtype env syms t tv@(ScalarT (TypeVarT _ a _) _ _) consistent label) 
+    = simplifyConstraint (Subtype env syms (typeSubstitute tass tv) t variant label)
+simplifyConstraint' tass _ (Subtype env syms t tv@(ScalarT (TypeVarT _ a _) _ _) variant label) 
   | a `Map.member` tass
-    = simplifyConstraint (Subtype env syms t (typeSubstitute tass tv) consistent label)
+    = simplifyConstraint (Subtype env syms t (typeSubstitute tass tv) variant label)
 simplifyConstraint' tass _ (WellFormed env tv@(ScalarT (TypeVarT _ a _) _ _) l) 
   | a `Map.member` tass
     = simplifyConstraint (WellFormed env (typeSubstitute tass tv) l)
@@ -210,10 +210,10 @@ simplifyConstraint' _ _ c@(WellFormedPredicate _ _ _) = modify $ addTypingConstr
 
 -- Let types: extend environment (has to be done before trying to extend the type assignment)
 -- Note: it's ok to not extend the SymbolMap since contextual types will not have potential in the type bindings
-simplifyConstraint' _ _ (Subtype env syms (LetT x tDef tBody) t consistent label)
-  = simplifyConstraint (Subtype (addVariable x tDef env) syms tBody t consistent label) -- ToDo: make x unique?
-simplifyConstraint' _ _ (Subtype env syms t (LetT x tDef tBody) consistent label)
-  = simplifyConstraint (Subtype (addVariable x tDef env) syms t tBody consistent label) -- ToDo: make x unique?
+simplifyConstraint' _ _ (Subtype env syms (LetT x tDef tBody) t variant label)
+  = simplifyConstraint (Subtype (addVariable x tDef env) syms tBody t variant label) -- ToDo: make x unique?
+simplifyConstraint' _ _ (Subtype env syms t (LetT x tDef tBody) variant label)
+  = simplifyConstraint (Subtype (addVariable x tDef env) syms t tBody variant label) -- ToDo: make x unique?
 simplifyConstraint' _ _ (SharedType env (LetT x tDef tBody) tl tr label) 
   = simplifyConstraint (SharedType (addVariable x tDef env) tBody tl tr label)
 simplifyConstraint' _ _ (SharedType env t (LetT x tDef tBody) tr label) 
@@ -229,28 +229,28 @@ simplifyConstraint' _ _ c@(Subtype env _syms t (ScalarT (TypeVarT _ a _) _ _) _ 
 
 -- Compound types: decompose
 -- TODO: do something with potential?
-simplifyConstraint' _ _ (Subtype env syms (ScalarT (DatatypeT name (tArg:tArgs) pArgs) fml pot) (ScalarT (DatatypeT name' (tArg':tArgs') pArgs') fml' pot') consistent label)
+simplifyConstraint' _ _ (Subtype env syms (ScalarT (DatatypeT name (tArg:tArgs) pArgs) fml pot) (ScalarT (DatatypeT name' (tArg':tArgs') pArgs') fml' pot') variant label)
   = do
-      simplifyConstraint (Subtype env syms tArg tArg' consistent label)
-      simplifyConstraint (Subtype env syms (ScalarT (DatatypeT name tArgs pArgs) fml pot) (ScalarT (DatatypeT name' tArgs' pArgs') fml' pot') consistent label)
-simplifyConstraint' _ _ (Subtype env syms (ScalarT (DatatypeT name [] (pArg:pArgs)) fml pot) (ScalarT (DatatypeT name' [] (pArg':pArgs')) fml' pot') consistent label)
+      simplifyConstraint (Subtype env syms tArg tArg' variant label)
+      simplifyConstraint (Subtype env syms (ScalarT (DatatypeT name tArgs pArgs) fml pot) (ScalarT (DatatypeT name' tArgs' pArgs') fml' pot') variant label)
+simplifyConstraint' _ _ (Subtype env syms (ScalarT (DatatypeT name [] (pArg:pArgs)) fml pot) (ScalarT (DatatypeT name' [] (pArg':pArgs')) fml' pot') variant label)
   = do
       let variances = _predVariances ((env ^. datatypes) Map.! name)
       let isContra = variances !! (length variances - length pArgs - 1) -- Is pArg contravariant?
       if isContra
-        then simplifyConstraint (Subtype env syms (int pArg') (int pArg) consistent label)
-        else simplifyConstraint (Subtype env syms (int pArg) (int pArg') consistent label)
-      simplifyConstraint (Subtype env syms (ScalarT (DatatypeT name [] pArgs) fml pot) (ScalarT (DatatypeT name' [] pArgs') fml' pot') consistent label)
-simplifyConstraint' _ _ (Subtype env syms (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) False label)
-  = do
-      simplifyConstraint (Subtype env syms tArg2 tArg1 False label)
-      if isScalarType tArg1
-        then simplifyConstraint (Subtype (addVariable y tArg2 env) syms (renameVar (isBound env) x y tArg1 tRes1) tRes2 False label)
-        else simplifyConstraint (Subtype env syms tRes1 tRes2 False label)
-simplifyConstraint' _ _ (Subtype env syms (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) True label)
+        then simplifyConstraint (Subtype env syms (int pArg') (int pArg) variant label)
+        else simplifyConstraint (Subtype env syms (int pArg) (int pArg') variant label)
+      simplifyConstraint (Subtype env syms (ScalarT (DatatypeT name [] pArgs) fml pot) (ScalarT (DatatypeT name' [] pArgs') fml' pot') variant label)
+simplifyConstraint' _ _ (Subtype env syms (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) Consistency label)
   = if isScalarType tArg1
-      then simplifyConstraint (Subtype (addVariable x tArg1 env) syms tRes1 tRes2 True label)
-      else simplifyConstraint (Subtype env syms tRes1 tRes2 True label)
+      then simplifyConstraint (Subtype (addVariable x tArg1 env) syms tRes1 tRes2 Consistency label)
+      else simplifyConstraint (Subtype env syms tRes1 tRes2 Consistency label)
+simplifyConstraint' _ _ (Subtype env syms (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) variant label)
+  = do
+      simplifyConstraint (Subtype env syms tArg2 tArg1 variant label)
+      if isScalarType tArg1
+        then simplifyConstraint (Subtype (addVariable y tArg2 env) syms (renameVar (isBound env) x y tArg1 tRes1) tRes2 variant label)
+        else simplifyConstraint (Subtype env syms tRes1 tRes2 variant label)
 simplifyConstraint' _ _ c@(WellFormed env (ScalarT (DatatypeT name tArgs _) fml pot) label)
   = do
       mapM_ (simplifyConstraint . (\t -> WellFormed env t label)) tArgs
@@ -306,7 +306,18 @@ processPredicate c = modify $ addTypingConstraint c
 
 -- | Eliminate type and predicate variables from simple constraints, create qualifier maps, split measure-based subtyping constraints
 processConstraint :: MonadHorn s => Constraint -> TCSolver s ()
-processConstraint c@(Subtype env syms (ScalarT baseTL l potl) (ScalarT baseTR r potr) False label) | equalShape baseTL baseTR
+processConstraint (Subtype env syms (ScalarT baseTL l potl) (ScalarT baseTR r potr) Consistency label) | equalShape baseTL baseTR
+  = do
+      tass <- use typeAssignment
+      pass <- use predAssignment
+      let subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass
+      let l' = subst l
+      let r' = subst r
+      let potl' = subst potl 
+      let potr' = subst potr
+      unless (l' == ftrue || r' == ftrue) $ simpleConstraints %= (Subtype env syms (ScalarT baseTL l' potl') (ScalarT baseTR r' potr') Consistency label :)
+
+processConstraint c@(Subtype env syms (ScalarT baseTL l potl) (ScalarT baseTR r potr) variant label) | equalShape baseTL baseTR
   = unless (l == ffalse || r == ftrue) $ do
       tass <- use typeAssignment
       pass <- use predAssignment
@@ -315,7 +326,7 @@ processConstraint c@(Subtype env syms (ScalarT baseTL l potl) (ScalarT baseTR r 
       let r' = subst r
       let potl' = subst potl
       let potr' = subst potr
-      let c' = Subtype env syms (ScalarT baseTL l' potl') (ScalarT baseTR r' potr') False label
+      let c' = Subtype env syms (ScalarT baseTL l' potl') (ScalarT baseTR r' potr') variant label
       if Set.null $ (predsOf l' `Set.union` predsOf r') Set.\\ Map.keysSet (allPredicates env)
           then case baseTL of -- Subtyping of datatypes: try splitting into individual constraints between measures
                 DatatypeT dtName _ _ -> do
@@ -345,19 +356,10 @@ processConstraint c@(Subtype env syms (ScalarT baseTL l potl) (ScalarT baseTR r 
     addSplitConstraint ml (measures, rConjuncts) = do
       let rhs = conjunction rConjuncts
       let lhs = conjunction $ setConcatMap (\measure -> Map.findWithDefault Set.empty measure ml) measures
-      let c' = Subtype env syms (ScalarT baseTL lhs potl) (ScalarT baseTR rhs potr) False label
+      let c' = Subtype env syms (ScalarT baseTL lhs potl) (ScalarT baseTR rhs potr) variant label
       simpleConstraints %= (c' :)
 
-processConstraint (Subtype env syms (ScalarT baseTL l potl) (ScalarT baseTR r potr) True label) | equalShape baseTL baseTR
-  = do
-      tass <- use typeAssignment
-      pass <- use predAssignment
-      let subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass
-      let l' = subst l
-      let r' = subst r
-      let potl' = subst potl 
-      let potr' = subst potr
-      unless (l' == ftrue || r' == ftrue) $ simpleConstraints %= (Subtype env syms (ScalarT baseTL l' potl') (ScalarT baseTR r' potr') True label :)
+
 processConstraint (WellFormed env t@(ScalarT baseT fml pot) _)
   = case fml of
       Unknown _ u -> do
@@ -398,16 +400,16 @@ processConstraint SharedType{} = return ()
 processConstraint c = error $ show $ text "processConstraint: not a simple constraint" <+> pretty c
 
 generateHornClauses :: (MonadHorn s, MonadSMT s) => Constraint -> TCSolver s ()
-generateHornClauses c@(Subtype env _syms (ScalarT baseTL l potl) (ScalarT baseTR r potr) False label) | equalShape baseTL baseTR
-  = do
-      emb <- embedEnv env (l |&| r) True
-      clauses <- lift . lift . lift $ preprocessConstraint (conjunction (Set.insert l emb) |=>| r)
-      hornClauses %= (clauses ++)
-generateHornClauses (Subtype env _syms (ScalarT baseTL l potl) (ScalarT baseTR r potr) True _) | equalShape baseTL baseTR
+generateHornClauses (Subtype env _syms (ScalarT baseTL l potl) (ScalarT baseTR r potr) Consistency _) | equalShape baseTL baseTR
   = do
       emb <- embedEnv env (l |&| r) False
       let clause = conjunction (Set.insert l $ Set.insert r emb)
       consistencyChecks %= (clause :)
+generateHornClauses c@(Subtype env _syms (ScalarT baseTL l potl) (ScalarT baseTR r potr) _var label) | equalShape baseTL baseTR
+  = do
+      emb <- embedEnv env (l |&| r) True
+      clauses <- lift . lift . lift $ preprocessConstraint (conjunction (Set.insert l emb) |=>| r)
+      hornClauses %= (clauses ++)
 generateHornClauses c@SharedType{}
   = return ()
 generateHornClauses c = error $ show $ text "generateHornClauses: not a simple subtyping constraint" <+> pretty c

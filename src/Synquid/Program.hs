@@ -521,8 +521,14 @@ isSynthesisGoal _ = False
 
 {- Misc -}
 
+data SubtypeVariant = Simple -- Consistency = False, Nondeterministic = False
+  | Consistency -- Consistency = True, Nondeterministic = False
+  | Nondeterministic -- Consistency = False, Nondeterministic = True
+  deriving (Show, Eq, Ord)
+
 -- | Typing constraints
-data Constraint = Subtype Environment SymbolMap RType RType Bool Id
+data Constraint = 
+  Subtype Environment SymbolMap RType RType SubtypeVariant Id
   | WellFormed Environment RType Id
   | WellFormedCond Environment Formula
   | WellFormedMatchCond Environment Formula
@@ -531,10 +537,10 @@ data Constraint = Subtype Environment SymbolMap RType RType Bool Id
   deriving (Show, Eq, Ord)
 
 labelOf :: Constraint -> Id
-labelOf (Subtype _ _ _ _ _ l)  = l
-labelOf (WellFormed _ _ l)     = l
-labelOf (SharedType _ _ _ _ l) = l
-labelOf _                      = ""
+labelOf (Subtype _ _ _ _ _ l) = l
+labelOf (WellFormed _ _ l)      = l
+labelOf (SharedType _ _ _ _ l)  = l
+labelOf _                       = ""
 
 -- | Synthesis goal
 data Goal = Goal {

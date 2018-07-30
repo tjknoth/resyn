@@ -672,10 +672,17 @@ retrieveAndSplitVarType name sch env = do
   return (t, env')
 
 -- | Generate subtyping constraint
---   TODO: grab some fresh symbols
 checkSubtype :: (MonadHorn s, MonadSMT s) => Environment -> RType -> RType -> Bool -> Id -> Explorer s ()
 checkSubtype env ltyp rtyp consistency tag = 
-  addConstraint $ Subtype env (_symbols env) ltyp rtyp consistency tag
+  let variant = if consistency then Consistency else Simple in
+  addConstraint $ Subtype env (_symbols env) ltyp rtyp variant tag
+
+-- | Generate nondeterministic subtyping constraint -- attempt to re-partition "free" potential between variables in context
+checkNDSubtype :: (MonadHorn s, MonadSMT s) => Environment -> RType -> RType -> Id -> Explorer s Environment
+checkNDSubtype env ltyp rtyp tag = do 
+  syms' <- freshFreePotential env
+  addConstraint $ Subtype env syms' ltyp rtyp Nondeterministic tag
+  return $ env { _symbols = syms' }
 
 -- | Fresh top-level potential annotations for all scalar symbols in an environment
 freshFreePotential :: MonadHorn s => Environment -> Explorer s SymbolMap

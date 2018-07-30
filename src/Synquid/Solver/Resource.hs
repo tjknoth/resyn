@@ -63,7 +63,7 @@ solveResourceConstraints oldConstraints constraints = do
             
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Bool -> Constraint -> TCSolver s Formula 
-generateFormula shouldLog checkMults c@(Subtype env _syms tl tr _ label) = do
+generateFormula shouldLog checkMults c@(Subtype env _syms tl tr variant label) = do
     let fmls = conjunction $ Set.filter (not . isTrivial) $ assertSubtypes env checkMults subtypeOp tl tr
     embedAndProcessConstraint env shouldLog c fmls (conjunction (allFormulasOf tl `Set.union` allFormulasOf tr)) (Set.insert (refinementOf tl))
 generateFormula shouldLog checkMults c@(WellFormed env t label) = do
@@ -147,7 +147,7 @@ assertSubtypesBase _ _ _ _ _ = Set.empty
 
 -- Is given constraint relevant for resource analysis
 isResourceConstraint :: Constraint -> Bool
-isResourceConstraint (Subtype _ _ ScalarT{} ScalarT{} _ _) = True
+isResourceConstraint (Subtype _ _ ScalarT{} ScalarT{} _variant _label) = True
 isResourceConstraint WellFormed{} = True
 isResourceConstraint SharedType{} = True
 isResourceConstraint _            = False
