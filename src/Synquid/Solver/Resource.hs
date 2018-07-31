@@ -38,14 +38,15 @@ checkResources constraints = do
     Just f -> resourceConstraints %= (++ f) 
 
 -- | 'solveResourceConstraints' @oldConstraints constraints@ : Transform @constraints@ into logical constraints and attempt to solve the complete system by conjoining with @oldConstraints@
-solveResourceConstraints :: (MonadHorn s, MonadSMT s) => [Constraint] -> [Constraint] -> TCSolver s (Maybe [Constraint]) 
+solveResourceConstraints :: (MonadHorn s, MonadSMT s) => [TaggedConstraint] -> [Constraint] -> TCSolver s (Maybe [TaggedConstraint]) 
 solveResourceConstraints oldConstraints constraints = do
     writeLog 3 $ linebreak <+> text "Generating resource constraints:"
     checkMults <- asks _checkMultiplicities
     -- Generate numerical resource-usage formulas from typing constraints:
-    fmlList <- mapM (generateFormula True checkMults) constraints
+    constraintList <- mapM (generateFormula True checkMults) constraints
+    let fmlList = map constraint constraintList
     -- This is repeated every iteration, could be cached:
-    accFmlList <- mapM (generateFormula False checkMults) oldConstraints
+    let accFmlList = map constraint oldConstraints
     -- Filter out trivial constraints, mostly for readability
     let fmls = Set.fromList (filter (not . isTrivial) fmlList)
     let query = conjunction fmls
@@ -58,20 +59,22 @@ solveResourceConstraints oldConstraints constraints = do
     if b 
       then do
         writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text s) 
-        return $ Just constraints 
+        return $ Just constraintList
       else return Nothing
             
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
-generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Bool -> Constraint -> TCSolver s Formula 
-generateFormula shouldLog checkMults c@(Subtype env _syms tl tr variant label) = do
-    let fmls = conjunction $ Set.filter (not . isTrivial) $ assertSubtypes env checkMults subtypeOp tl tr
-    embedAndProcessConstraint env shouldLog c fmls (conjunction (allFormulasOf tl `Set.union` allFormulasOf tr)) (Set.insert (refinementOf tl))
+generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Bool -> Constraint -> TCSolver s TaggedConstraint 
+generateFormula shouldLog checkMults c@(Subtype env syms tl tr variant label) = do
+    let fmls = conjunction $ Set.filter (not . isTrivial) $ case variant of 
+          Nondeterministic -> assertSubtypes env syms checkMults tl tr
+          _                -> directSubtypes env checkMults tl tr
+    TaggedConstraint label <$> embedAndProcessConstraint env shouldLog c fmls (conjunction (allFormulasOf tl `Set.union` allFormulasOf tr)) (Set.insert (refinementOf tl))
 generateFormula shouldLog checkMults c@(WellFormed env t label) = do
     let fmls = conjunction $ Set.filter (not . isTrivial) $ Set.map (|>=| fzero) $ allRFormulas checkMults t
-    embedAndProcessConstraint env shouldLog c fmls (conjunction (allFormulasOf t)) (Set.insert (refinementOf t))
+    TaggedConstraint label <$> embedAndProcessConstraint env shouldLog c fmls (conjunction (allFormulasOf t)) (Set.insert (refinementOf t))
 generateFormula shouldLog checkMults c@(SharedType env t tl tr label) = do 
     let fmls = conjunction $ partition checkMults t tl tr
-    embedAndProcessConstraint env shouldLog c fmls (conjunction (allFormulasOf t)) id
+    TaggedConstraint label <$> embedAndProcessConstraint env shouldLog c fmls (conjunction (allFormulasOf t)) id
 generateFormula _ _ c                            = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
 
 -- | Embed the environment assumptions and preproess the constraint for solving 
@@ -130,23 +133,33 @@ partitionBase cm (TypeVarT _ _ m) (TypeVarT _ _ ml) (TypeVarT _ _ mr)
   = if cm then Set.singleton $ m |=| (ml |+| mr) else Set.empty
 partitionBase _ _ _ _ = Set.empty
 
--- | 'joinAssertions' @op tl tr@  : Generate the set of all formulas in types @tl@ and @tr@, zipped by a binary operation @op@ on formulas 
-assertSubtypes :: Environment -> Bool -> (Formula -> Formula -> Formula) -> RType -> RType -> Set Formula
-assertSubtypes env cm op (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (fl `op` fr) $ assertSubtypesBase env cm op bl br
--- TODO: add total potential from input and output environment to left and right sides
-assertSubtypes _ _ op _ _ = Set.empty 
+-- | 'assertSubtypes' @env tl tr@ : Generate formulas partitioning potential appropriately amongst
+--    environment @env@ in order to check @tl@ <: @tr@
+assertSubtypes :: Environment -> SymbolMap -> Bool -> RType -> RType -> Set Formula
+assertSubtypes env syms cm (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (leftSum `subtypeOp` rightSum) $ directSubtypesBase env cm bl br
+  where 
+    leftSum  = fl -- Placeholder!
+    rightSum = fr -- Placeholder!
+assertSubtypes _ _ _ _ _ = Set.empty
 
-assertSubtypesBase :: Environment -> Bool -> (Formula -> Formula -> Formula) -> BaseType Formula -> BaseType Formula -> Set Formula
-assertSubtypesBase env cm op (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Set.unions $ zipWith (assertSubtypes env cm op) tsl tsr
-assertSubtypesBase env cm op (TypeVarT _ _ ml) (TypeVarT _ _ mr) = 
+-- | 'directSubtypes' @env tl tr@ : Generate the set of all formulas in types @tl@ and @tr@, zipped by a binary operation @op@ on formulas 
+directSubtypes :: Environment -> Bool -> RType -> RType -> Set Formula
+directSubtypes env cm (ScalarT bl _ fl) (ScalarT br _ fr) = Set.insert (fl `subtypeOp` fr) $ directSubtypesBase env cm bl br
+-- TODO: add total potential from input and output environment to left and right sides
+directSubtypes _ _ _ _ = Set.empty 
+
+directSubtypesBase :: Environment -> Bool -> BaseType Formula -> BaseType Formula -> Set Formula
+directSubtypesBase env cm (DatatypeT _ tsl _) (DatatypeT _ tsr _) = Set.unions $ zipWith (directSubtypes env cm) tsl tsr
+directSubtypesBase env cm (TypeVarT _ _ ml) (TypeVarT _ _ mr) = 
   if cm && not (isTrivial fml)
     then Set.singleton fml
     else Set.empty
-    where fml = ml `op` mr
-assertSubtypesBase _ _ _ _ _ = Set.empty 
+    where fml = ml `subtypeOp` mr
+directSubtypesBase _ _ _ _ = Set.empty 
 
 -- Is given constraint relevant for resource analysis
 isResourceConstraint :: Constraint -> Bool
+isResourceConstraint (Subtype _ _ _ _ Consistency _) = False
 isResourceConstraint (Subtype _ _ ScalarT{} ScalarT{} _variant _label) = True
 isResourceConstraint WellFormed{} = True
 isResourceConstraint SharedType{} = True

@@ -356,7 +356,7 @@ generateEUpTo env typ d = msum $ map (enumerateAt env typ) [0..d]
 -- | Perform a gradual check that @p@ has type @typ@ in @env@:
 -- if @p@ is a scalar, perform a full subtyping check;
 -- if @p@ is a (partially applied) function, check as much as possible with unknown arguments
-checkE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> RProgram -> Explorer s ()
+checkE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> RProgram -> Explorer s Environment
 checkE env typ p@(Program pTerm pTyp) = do
   ctx <- asks . view $ _1 . context
   writeLog 1 $ linebreak <+> linebreak <+> special "Checking" <+> pretty p <+> text "::" <+> pretty typ <+> text "in" $+$ pretty (ctx (untyped PHole))
@@ -366,8 +366,10 @@ checkE env typ p@(Program pTerm pTyp) = do
   incremental <- asks . view $ _1 . incrementalChecking -- Is incremental type checking of E-terms enabled?
   consistency <- asks . view $ _1 . consistencyChecking -- Is consistency checking enabled?
   
-  -- Add subtyping check, unless it's a function type and incremental checking is diasbled:
-  when (incremental || arity typ == 0) (checkSubtype env pTyp typ False (show (pretty pTerm))) 
+  -- Add nondeterministic subtyping check, unless it's a function type and incremental checking is diasbled:
+  env' <- if incremental || arity typ == 0
+            then checkNDSubtype env pTyp typ (show (pretty pTerm))
+            else return env
   -- Add consistency constraint for function types:
   when (consistency && arity typ > 0) (checkSubtype env pTyp typ True (show (pretty pTerm))) 
   fTyp <- runInSolver $ finalizeType typ
@@ -375,6 +377,7 @@ checkE env typ p@(Program pTerm pTyp) = do
   typingState . errorContext .= (pos, text "when checking" </> pretty p </> text "::" </> pretty fTyp </> text "in" $+$ pretty (ctx p))
   runInSolver solveTypeConstraints
   typingState . errorContext .= (noPos, empty)
+  return env'
   
 
 enumerateAt :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Int -> Explorer s (RProgram, Environment)

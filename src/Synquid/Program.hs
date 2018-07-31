@@ -536,6 +536,11 @@ data Constraint =
   | SharedType Environment RType RType RType Id
   deriving (Show, Eq, Ord)
 
+data TaggedConstraint = TaggedConstraint {
+  tag :: Id,            -- Source info for debugging
+  constraint :: Formula -- Simplified Constraint
+} deriving (Show, Eq, Ord)
+
 labelOf :: Constraint -> Id
 labelOf (Subtype _ _ _ _ _ l) = l
 labelOf (WellFormed _ _ l)      = l
