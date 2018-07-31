@@ -45,7 +45,6 @@ solveResourceConstraints oldConstraints constraints = do
     -- Generate numerical resource-usage formulas from typing constraints:
     constraintList <- mapM (generateFormula True checkMults) constraints
     let fmlList = map constraint constraintList
-    -- This is repeated every iteration, could be cached:
     let accFmlList = map constraint oldConstraints
     -- Filter out trivial constraints, mostly for readability
     let fmls = Set.fromList (filter (not . isTrivial) fmlList)
@@ -54,8 +53,10 @@ solveResourceConstraints oldConstraints constraints = do
     -- Check satisfiability
     (b, s) <- isSatWithModel (accumlatedQuery |&| query)
     let result = if b then "SAT" else "UNSAT"
-    writeLog 5 $ nest 4 $ text "Accumulated resource constraints" $+$ prettyConjuncts (filter isInteresting accFmlList)
-    writeLog 3 $ nest 4 $ text "Solved resource constraint after conjoining formulas:" <+> text result $+$ prettyConjuncts (filter isInteresting fmlList)
+    writeLog 5 $ nest 4 $ text "Accumulated resource constraints:" 
+      $+$ prettyConjuncts (filter (isInteresting . constraint) oldConstraints)
+    writeLog 3 $ nest 4 $ text "Solved resource constraint after conjoining formulas:" <+> text result 
+      $+$ prettyConjuncts (filter (isInteresting . constraint) constraintList)
     if b 
       then do
         writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text s) 
@@ -87,7 +88,7 @@ embedAndProcessConstraint env shouldLog c fmls relevantFml addTo = do
     then return ftrue
     else do 
       let emb' = preprocessAssumptions $ addTo emb
-      when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls <+> text "src:" <+> text (labelOf c))
+      when (shouldLog && isInteresting fmls) $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls)
       instantiateUniversals shouldLog env fmls (conjunction emb')
 
 -- | 'instantiateUniversals' @b env fml ass@ : Instantiate universally quantified terms in @fml@ under @env@ with examples satisfying assumptions @ass@

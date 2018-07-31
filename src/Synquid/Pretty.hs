@@ -510,5 +510,6 @@ lfill w d        = case renderCompact d of
            | otherwise = text $ replicate n ' '
 
 -- Helper for printing conjunctions line-by-line for readability
-prettyConjuncts :: [Formula] -> Doc
-prettyConjuncts fmls = vsep $ fmap fmlDoc fmls
+prettyConjuncts :: [TaggedConstraint] -> Doc
+prettyConjuncts fmls = vsep $ fmap printWithTag fmls
+  where printWithTag (TaggedConstraint t f) = fmlDoc f <+> text "src:" <+> text t
