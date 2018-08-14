@@ -40,7 +40,7 @@ main = do
                appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency symmetry
                lfp bfs
                out_file out_module outFormat resolve 
-               print_spec print_stats log_ resources mult dmatch forall cb nump constTime) -> do
+               print_spec print_stats log_ resources mult forall cut nump constTime) -> do
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
                     _scrutineeDepth = scrutineeMax,
@@ -57,9 +57,8 @@ main = do
                     _explorerLogLevel = log_,
                     _checkResources = resources,
                     _useMultiplicity = mult,
-                    _dMatch = dmatch,
                     _instantiateForall = forall,
-                    _shouldCut = cb,
+                    _shouldCut = cut,
                     _numPrograms = nump,
                     _constantTime = constTime
                     }
@@ -125,7 +124,6 @@ data CommandLineArgs
         -- | Resource params
         resources :: Bool,
         multiplicities :: Bool,
-        destructive_match :: Bool,
         instantiate_foralls :: Bool,
         cut_branches :: Bool,
         num_programs :: Int,
@@ -160,7 +158,6 @@ synt = Synthesis {
   log_                = 0               &= help ("Logger verboseness level (default: 0)") &= name "l",
   resources           = True            &= help ("Verify resource usage (default: True)") &= name "r" &= groupname "Resource analysis parameters",
   multiplicities      = True            &= help ("Use multiplicities when verifying resource usage (default: True)"),
-  destructive_match   = True            &= help ("Use destructive pattern match (default: True)") &= name "d",
   instantiate_foralls = True            &= help ("Solve exists-forall constraints by instantiating universally quantified expressions (default: True)"),
   cut_branches        = True            &= help ("Do not backtrack past successfully synthesized branches (default: True)"),
   num_programs        = 1               &= help ("Number of programs to produce if possible (default: 1)"),
@@ -196,7 +193,6 @@ defaultExplorerParams = ExplorerParams {
   _explorerLogLevel = 0,
   _checkResources = True,
   _useMultiplicity = True,
-  _dMatch = False,
   _instantiateForall = True,
   _shouldCut = True,
   _numPrograms = 1,

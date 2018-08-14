@@ -352,7 +352,8 @@ prettyBindings env = commaSep (map pretty (Map.keys $ removeDomain (env ^. const
 -- prettyBindings env = hMapDoc pretty pretty (removeDomain (env ^. constants) (allSymbols env))
 -- prettyBindings env = empty
 
-prettyScalars env = vsep $ pretty <$> Map.assocs (_symbols env Map.! 0)
+prettyScalarTypes env = vsep $ pretty <$> Map.assocs (_symbols env Map.! 0)
+prettyScalars env = vsep $ pretty <$> Map.keys (_symbols env Map.! 0)
 
 instance Pretty Environment where
   pretty env = prettyBindings env <+> prettyAssumptions env
@@ -375,7 +376,7 @@ prettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <
 prettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 prettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
 prettyConstraint (SharedType _ t tl tr label) = pretty label <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr)
-prettyConstraint (ConstantRes env label) = text "CONSTANTRES, scalars:" <+> prettyScalars env 
+prettyConstraint (ConstantRes env label) = text "CT expression:" <+> text label <+> text "from scalars:" <+> prettyScalars env 
 
 -- Do not show environment
 simplePrettyConstraint :: Constraint -> Doc
@@ -386,7 +387,7 @@ simplePrettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator 
 simplePrettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 simplePrettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
 simplePrettyConstraint (SharedType _ t tl tr label) = pretty label <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr) 
-simplePrettyConstraint (ConstantRes env label) = text "CONSTANTRES, scalars:" <+> prettyScalars env 
+simplePrettyConstraint (ConstantRes env label) = text "CT Expression:" <+> text label <+> text "from scalars:" <+> prettyScalars env 
 
 detailedPrettyConstraint :: Constraint -> Doc
 detailedPrettyConstraint c@(Subtype _env _syms _t1 _t2 Consistency _label) = prettyConstraint c

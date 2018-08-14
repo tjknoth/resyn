@@ -201,8 +201,7 @@ reconstructCase :: (MonadSMT s, MonadHorn s) => Environment -> Formula -> UProgr
 reconstructCase env scrVar pScrutinee t (Case consName args iBody) consT = cut $ do
   -- matchConsType simply assigns type variables appropriately
   runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
-  dm <- asks . view $ _1 . dMatch 
-  consT' <- runInSolver $ currentAssignment (if dm then consT else removePotential consT) -- if match is not destructive, strip constructor annotations so that binders have potential from top-level annotations
+  consT' <- runInSolver $ currentAssignment consT 
   (syms, ass) <- caseSymbols env scrVar args consT'
   let caseEnv = foldr (uncurry addVariable) (addAssumption ass env) syms
   pCaseExpr <- local (over (_1 . matchDepth) (-1 +)) $

@@ -60,7 +60,6 @@ data ExplorerParams = ExplorerParams {
   _explorerLogLevel :: Int,               -- ^ How verbose logging is
   _checkResources :: Bool,                -- ^ Should we check resources usage?
   _useMultiplicity :: Bool,               -- ^ Should we generate constraints on multiplicities? Useful for modeling memory usage.
-  _dMatch :: Bool,                        -- ^ Use destructive pattern match
   _instantiateForall :: Bool,             -- ^ Solve exists-forall constraints by instantiating universally quantified expressions
   _shouldCut :: Bool,                     -- ^ Should cut the search upon synthesizing a functionally correct branch
   _numPrograms :: Int,                    -- ^ Number of programs to search for
@@ -331,7 +330,7 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
 generateIE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s (RProgram, Environment)
 generateIE env t = do 
   (p, env') <- generateE env t
-  addCTConstraint env' ""  
+  addCTConstraint env' (show (pretty p))
   return (p, env')
 
 -- | 'generateE' @env typ@ : explore all elimination terms of type @typ@ in environment @env@
