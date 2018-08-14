@@ -15,8 +15,6 @@ module Synquid.Solver.TypeConstraint (
   solveAllCandidates,
   matchConsType,
   hasPotentialScrutinees,
-  freshId,
-  freshVar,
   currentAssignment,
   finalizeType,
   finalizeProgram,
@@ -84,7 +82,7 @@ addTypingConstraint c = over typingConstraints (nub . (c :))
 simplifyAllConstraints :: MonadHorn s => TCSolver s ()
 simplifyAllConstraints = do
   tcs <- use typingConstraints
-  writeLog 3 $ nest 2 $ text "Typing Constraints" $+$ vsep (map pretty tcs)
+  writeLog 3 $ nest 2 $ text "Typing Constraints" $+$ vsep (map pretty tcs) 
   typingConstraints .= []
   tass <- use typeAssignment
   mapM_ simplifyConstraint tcs
@@ -274,6 +272,9 @@ simplifyConstraint' _ _ (Subtype _ _ t t' _ _) =
 -- TODO: actually simplify! -- need to check that shapes are equal and drop any splitting constraints from non-scalar types.
 simplifyConstraint' _ _ c@SharedType{} = simpleConstraints %= (c :)
 
+-- Constant resource constraints are already simplified
+simplifyConstraint' _ _ c@(ConstantRes _ _) = simpleConstraints %= (c :)
+
 -- | Unify type variable @a@ with type @t@ or fail if @a@ occurs in @t@
 unify env a t = if a `Set.member` typeVarsOf t
   then error $ show $ text "simplifyConstraint: type variable occurs in the other type"
@@ -396,7 +397,8 @@ processConstraint (SharedType env (ScalarT base fml pot) (ScalarT baseL fmlL pot
       potL' = subst potL
       potR' = subst potR
   simpleConstraints %= (SharedType env (ScalarT base fml' pot') (ScalarT baseL fmlL' potL') (ScalarT baseR fmlR' potR') label :)
-processConstraint SharedType{} = return ()
+processConstraint SharedType{}  = return ()
+processConstraint ConstantRes{} = return ()
 processConstraint c = error $ show $ text "processConstraint: not a simple constraint" <+> pretty c
 
 generateHornClauses :: (MonadHorn s, MonadSMT s) => Constraint -> TCSolver s ()
@@ -411,6 +413,8 @@ generateHornClauses c@(Subtype env _syms (ScalarT baseTL l potl) (ScalarT baseTR
       clauses <- lift . lift . lift $ preprocessConstraint (conjunction (Set.insert l emb) |=>| r)
       hornClauses %= (clauses ++)
 generateHornClauses c@SharedType{}
+  = return ()
+generateHornClauses c@ConstantRes{} 
   = return ()
 generateHornClauses c = error $ show $ text "generateHornClauses: not a simple subtyping constraint" <+> pretty c
 

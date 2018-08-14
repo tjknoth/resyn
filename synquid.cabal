@@ -13,11 +13,11 @@ build-type:           Simple
 extra-source-files:   README.md
 cabal-version:        >=1.10
 
-flag synquid
+flag synquid 
   Description: Build the synquid executable
   Default:     True
 
-executable synquid
+executable synquid 
   main-is:            Synquid.hs
 
   other-extensions:   TemplateHaskell

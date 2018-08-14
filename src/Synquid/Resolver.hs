@@ -117,7 +117,7 @@ resolveDeclaration (FuncDecl funcName typeSchema) = do
   addNewSignature funcName typeSchema
 resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
   mapM_ (\(ConstructorSig _ t) -> checkTypePotential t) ctors
-  let ctors' = fmap (\(ConstructorSig x t) -> ConstructorSig x (updateEmptyCtors t)) ctors 
+  ctors' <- mapM (\(ConstructorSig x t) -> ConstructorSig x <$> updateEmptyCtors x t) ctors 
   let
     (pParams, pVariances) = unzip pVarParams
     datatype = DatatypeDef {
@@ -131,12 +131,19 @@ resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
   let addPreds typ = foldl (flip ForallP) (Monotype typ) pParams
   mapM_ (\(ConstructorSig name typ) -> addNewSignature name $ addPreds typ) ctors'
   where 
-    -- TODO: Should potentials also become bot?
-    updateEmptyCtors t@(ScalarT base ref pot) = ScalarT (updateBase base) ref pot
-    updateEmptyCtors t = t 
-    updateBase (TypeVarT subs name mult) = TypeVarT subs name bottomMultiplicity
-    updateBase (DatatypeT name ts ps) = DatatypeT name (fmap updateEmptyCtors ts) ps
-    updateBase b = b
+    -- If a constructor's type signature is a scalar, it builds an empty data structure
+    updateEmptyCtors :: Id -> RType -> Resolver RType
+    updateEmptyCtors cname t@(ScalarT base ref pot) = do 
+      environment %= addEmptyCtor cname
+      base' <- updateBase cname base
+      return $ ScalarT base' ref bottomPotential 
+    updateEmptyCtors _ t = return t 
+    updateBase :: Id -> BaseType Formula -> Resolver (BaseType Formula)
+    updateBase _ (TypeVarT subs name mult) = return $ TypeVarT subs name bottomMultiplicity
+    updateBase cname (DatatypeT dname ts ps) = do 
+      ts' <- mapM (updateEmptyCtors cname) ts
+      return $ DatatypeT dname ts' ps
+    updateBase _ b = return b
 resolveDeclaration (MeasureDecl measureName inSort outSort post defCases args isTermination) = do
   env <- use environment
   let allInSorts = fmap snd args ++ [inSort]

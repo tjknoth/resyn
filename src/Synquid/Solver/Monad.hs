@@ -21,11 +21,11 @@ import Control.Monad.Trans.Except
 import Z3.Monad (AST)
 
 class (Monad s, Applicative s) => MonadSMT s where  
-  initSolver :: Environment -> s ()                                       -- ^ Initialize solver  
-  isSat :: Formula -> s Bool                                              -- ^ 'isSat' @fml@: is @fml@ satisfiable?
-  allUnsatCores :: Formula -> Formula -> [Formula] -> s [[Formula]]       -- ^ 'allUnsatCores' @assumption@ @mustHave@ @fmls@: all minimal unsatisfiable subsets of @fmls@ with @mustHave@, which contain @mustHave@, assuming @assumption@
-  solveWithModel :: Formula -> s (Bool, String)                           -- ^ 'solveWithModel' @fml@: if @fml@ is satisfiable, return a satisfying model
-  solveAndGetAssignment :: Formula -> String -> s (Maybe (AST, String))   -- ^ 'solveAndGetAssignment' @fml v@ : if @fml@ is satisfiable, return the assignment for variable @v@ (and the string form of the AST node for debugging)
+  initSolver :: Environment -> s ()                                              -- ^ Initialize solver  
+  isSat :: Formula -> s Bool                                                     -- ^ 'isSat' @fml@: is @fml@ satisfiable?
+  allUnsatCores :: Formula -> Formula -> [Formula] -> s [[Formula]]              -- ^ 'allUnsatCores' @assumption@ @mustHave@ @fmls@: all minimal unsatisfiable subsets of @fmls@ with @mustHave@, which contain @mustHave@, assuming @assumption@
+  solveWithModel :: Formula -> s (Bool, String)                                  -- ^ 'solveWithModel' @fml@: if @fml@ is satisfiable, return a satisfying model
+  solveAndGetAssignment :: Formula -> [String] -> s (Maybe (Map String Formula)) -- ^ 'solveAndGetAssignment' @fml v@ : if @fml@ is satisfiable, return the assignment for variable @v@ (and the string form of the AST node for debugging)
 
   
   
@@ -63,12 +63,12 @@ data TypingState = TypingState {
   _idCount :: Map String Int,                   -- ^ Number of unique identifiers issued so far
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
   _resourceConstraints :: [TaggedConstraint],   -- ^ Constraints relevant to resource analysis
+  _resourceVars :: Set String,                  -- ^ Set of variables created to replace potential/multiplicity annotations
   -- Temporary state:
   _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
   _hornClauses :: [Formula],                    -- ^ Horn clauses generated from subtyping constraints
   _consistencyChecks :: [Formula],              -- ^ Formulas generated from type consistency constraints
-  _errorContext :: (SourcePos, Doc),            -- ^ Information to be added to all type errors
-  _resourceVars :: Set String                   -- ^ Set of variables created to replace potential/multiplicity annotations
+  _errorContext :: (SourcePos, Doc)             -- ^ Information to be added to all type errors
 }
 
 makeLenses ''TypingState

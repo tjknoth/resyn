@@ -11,8 +11,8 @@ import Synquid.Util
 import Synquid.Pretty
 import Synquid.Tokens
 import Synquid.Solver.Monad
-import Synquid.Solver.TypeConstraint hiding (freshId, freshVar)
-import qualified Synquid.Solver.TypeConstraint as TCSolver (freshId, freshVar)
+import Synquid.Solver.TypeConstraint
+import qualified Synquid.Solver.Util as TCSolver (freshId, freshVar)
 
 import Data.Maybe
 import Data.List
@@ -63,7 +63,8 @@ data ExplorerParams = ExplorerParams {
   _dMatch :: Bool,                        -- ^ Use destructive pattern match
   _instantiateForall :: Bool,             -- ^ Solve exists-forall constraints by instantiating universally quantified expressions
   _shouldCut :: Bool,                     -- ^ Should cut the search upon synthesizing a functionally correct branch
-  _numPrograms :: Int                     -- ^ Number of programs to search for
+  _numPrograms :: Int,                    -- ^ Number of programs to search for
+  _constantTime :: Bool                   -- ^ Demand that all resources are used at all branching terms
 }
 
 makeLenses ''ExplorerParams
@@ -136,7 +137,7 @@ generateMaybeIf env t = ifte generateThen (uncurry3 (generateElse env t)) (gener
       cUnknown <- Unknown Map.empty <$> freshId "C"
       addConstraint $ WellFormedCond env cUnknown
       -- TODO: do I care about env' here?
-      (pThen, _) <- cut $ generateE (addAssumption cUnknown env) t -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
+      (pThen, _) <- cut $ generateIE (addAssumption cUnknown env) t -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
       cond <- conjunction <$> currentValuation cUnknown
       return (cond, unknownName cUnknown, pThen)
 
@@ -147,7 +148,7 @@ generateElse env t cond condUnknown pThen = if cond == ftrue
   pThen -- @pThen@ is valid under no assumptions: return it
   else do -- @pThen@ is valid under a nontrivial assumption, proceed to look for the solution for the rest of the inputs
     (pCond, env') <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateConditionFromFml env cond
-    checkE (addAssumption cond env') t pThen
+    _ <- checkE (addAssumption cond env') t pThen
 
     cUnknown <- Unknown Map.empty <$> freshId "C"
     runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton $ fnot cond) -- Create a fixed-valuation unknown to assume @!cond@
@@ -298,7 +299,7 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
         guard $ length matchConds <= d
         return (matchConds, conjunction condValuation, unknownName condUnknown, p0)
 
-    generateEOrError env typ = generateError env `mplus` fmap fst (generateE env typ)
+    generateEOrError env typ = generateError env `mplus` fmap fst (generateIE env typ)
 
     -- | Proceed after solution @p0@ has been found under assumption @cond@ and match-assumption @matchCond@
     generateOtherBranches (matchConds, cond, condUnknown, p0) = do
@@ -325,6 +326,13 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
                   (genOtherCases (previousCases ++ [c]) rest)
 
       genOtherCases [Case c [] pBaseCase] (delete c ctors)
+
+-- | Transition from I-terms to E-terms
+generateIE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s (RProgram, Environment)
+generateIE env t = do 
+  (p, env') <- generateE env t
+  addCTConstraint env' ""  
+  return (p, env')
 
 -- | 'generateE' @env typ@ : explore all elimination terms of type @typ@ in environment @env@
 -- (bottom-up phase of bidirectional typechecking)
@@ -371,7 +379,7 @@ checkE env typ p@(Program pTerm pTyp) = do
             then checkNDSubtype env pTyp typ (show (pretty pTerm))
             else return env
   -- Add consistency constraint for function types:
-  when (consistency && arity typ > 0) (checkSubtype env pTyp typ True (show (pretty pTerm))) 
+  when (consistency && arity typ > 0) (addSubtypeConstraint env pTyp typ True (show (pretty pTerm))) 
   fTyp <- runInSolver $ finalizeType typ
   pos <- asks . view $ _1 . sourcePos
   typingState . errorContext .= (pos, text "when checking" </> pretty p </> text "::" </> pretty fTyp </> text "in" $+$ pretty (ctx p))
@@ -395,8 +403,8 @@ enumerateAt env typ 0 = do
       (t, env') <- retrieveAndSplitVarType name sch env
       let p = Program (PSymbol name) t
       writeLog 1 $ linebreak $+$ text "Trying" <+> pretty p 
-      checkE env' typ p
-      return (p, env')
+      env'' <- checkE env' typ p
+      return (p, env'')
 
 enumerateAt env typ d = do
   let maxArity = fst $ Map.findMax (env ^. symbols)
@@ -428,7 +436,7 @@ enumerateAt env typ d = do
           writeLog 3 (text "Synthesized argument" <+> pretty arg <+> text "of type" <+> pretty (typeOf arg))
           let tRes'' = appType newEnv arg x tRes' -- Probably doesn't matter which environment we use here, using newEnv for consistency 
           return (Program (PApp fun arg) tRes'', newEnv)
-      checkE env'' typ pApp
+      _ <- checkE env'' typ pApp
       return (pApp, env'')
 
 -- | Make environment inconsistent (if possible with current unknown assumptions)
@@ -438,7 +446,7 @@ generateError env = do
   writeLog 1 $ text "Checking" <+> pretty (show errorProgram) <+> text "in" $+$ pretty (ctx errorProgram)
   tass <- use (typingState . typeAssignment)
   let env' = typeSubstituteEnv tass env
-  checkSubtype env (int $ conjunction $ Set.fromList $ map trivial (allScalars env')) (int ffalse) False "Generate Error"
+  addSubtypeConstraint env (int $ conjunction $ Set.fromList $ map trivial (allScalars env')) (int ffalse) False "Generate Error"
   pos <- asks . view $ _1 . sourcePos
   typingState . errorContext .= (pos, text "when checking" </> pretty errorProgram </> text "in" $+$ pretty (ctx errorProgram))
   runInSolver solveTypeConstraints
@@ -483,6 +491,13 @@ throwError e = do
 
 -- | Impose typing constraint @c@ on the programs
 addConstraint c = typingState %= addTypingConstraint c
+
+-- | When constant-time flag is set, add the appropriate constraint 
+addCTConstraint :: MonadHorn s => Environment -> Id -> Explorer s ()
+addCTConstraint env tag = do 
+  checkCT <- asks . view $ _1 . constantTime
+  let c = ConstantRes env tag
+  when checkCT $ addConstraint c
 
 -- | Embed a type-constraint checker computation @f@ in the explorer; on type error, record the error and backtrack
 runInSolver :: MonadHorn s => TCSolver s a -> Explorer s a
@@ -671,21 +686,25 @@ retrieveAndSplitVarType name sch env = do
   symbolUseCount %= Map.insertWith (+) name 1
   case Map.lookup name (env ^. shapeConstraints) of
     Nothing -> return ()
-    Just sc -> checkSubtype env (refineBot env $ shape t) (refineTop env sc) False ""
+    Just sc -> addSubtypeConstraint env (refineBot env $ shape t) (refineTop env sc) False ""
   return (t, env')
 
 -- | Generate subtyping constraint
-checkSubtype :: (MonadHorn s, MonadSMT s) => Environment -> RType -> RType -> Bool -> Id -> Explorer s ()
-checkSubtype env ltyp rtyp consistency tag = 
+addSubtypeConstraint :: (MonadHorn s, MonadSMT s) => Environment -> RType -> RType -> Bool -> Id -> Explorer s ()
+addSubtypeConstraint env ltyp rtyp consistency tag = 
   let variant = if consistency then Consistency else Simple in
   addConstraint $ Subtype env (_symbols env) ltyp rtyp variant tag
 
 -- | Generate nondeterministic subtyping constraint -- attempt to re-partition "free" potential between variables in context
 checkNDSubtype :: (MonadHorn s, MonadSMT s) => Environment -> RType -> RType -> Id -> Explorer s Environment
-checkNDSubtype env ltyp rtyp tag = do 
+checkNDSubtype env ltyp@ScalarT{} rtyp@ScalarT{} tag = do 
   syms' <- freshFreePotential env
   addConstraint $ Subtype env syms' ltyp rtyp Nondeterministic tag
   return $ env { _symbols = syms' }
+-- Do not re-partition potential when checking non-scalar types
+checkNDSubtype env ltyp rtyp tag = do 
+  addSubtypeConstraint env ltyp rtyp False tag
+  return env
 
 -- | Fresh top-level potential annotations for all scalar symbols in an environment
 freshFreePotential :: MonadHorn s => Environment -> Explorer s SymbolMap

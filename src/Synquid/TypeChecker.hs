@@ -133,7 +133,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
   PFun _ _ -> throwErrorWithDescription $ text "Cannot assign non-function type" </> squotes (pretty t) </>
                            text "to lambda term" </> squotes (pretty $ untyped impl)
 
- -- Why don't I need this? 
+  -- Why don't I need this? 
   {- 
   PLet x iDef iBody -> do -- E-term let (since lambda-let was considered before)
     (pDef, _) <- inContext (\p -> Program (PLet x p (Program PHole t)) t) $ reconstructETopLevel env AnyT iDef
@@ -146,10 +146,10 @@ reconstructI' env t@ScalarT{} impl = case impl of
     cUnknown <- Unknown Map.empty <$> freshId "C"
     addConstraint $ WellFormedCond env cUnknown
     pThen <- inContext (\p -> Program (PIf (Program PHole boolAll) p (Program PHole t)) t) $ reconstructI (addAssumption cUnknown env) t iThen
-    (pThen, _) <- inContext (\p -> Program (PIf (Program PHole boolAll) p (Program PHole t)) t) $ reconstructE (addAssumption cUnknown env) t iThen
+    (pThen, _) <- inContext (\p -> Program (PIf (Program PHole boolAll) p (Program PHole t)) t) $ reconstructIE (addAssumption cUnknown env) t iThen
     cond <- conjunction <$> currentValuation cUnknown
     (pCond, env') <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateConditionFromFml env cond
-    checkE (addAssumption cond env') t pThen
+    _ <- checkE (addAssumption cond env') t pThen
     
     pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $ reconstructI (addAssumption (fnot cond) env') t iElse
     return $ Program (PIf pCond pThen pElse) t
@@ -174,7 +174,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
     pCases <- zipWithM (reconstructCase env'' x pScrutinee t) iCases consTypes
     return $ Program (PMatch pScrutinee pCases) t
 
-  _ -> do (p, _) <- reconstructETopLevel env t (untyped impl)
+  _ -> do (p, env') <- reconstructIE env t (untyped impl)
           return p
 
   where
@@ -210,6 +210,13 @@ reconstructCase env scrVar pScrutinee t (Case consName args iBody) consT = cut $
                reconstructI caseEnv t iBody
   return $ Case consName args pCaseExpr
 
+-- | Transition from I-terms to E-terms in reconstruction process
+reconstructIE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> UProgram -> Explorer s (RProgram, Environment)
+reconstructIE env t impl = do 
+  (p, env') <- reconstructETopLevel env t impl
+  addCTConstraint env' (show (pretty impl)) 
+  return (p, env')
+
 -- | 'reconstructE' @env t impl@ :: reconstruct unknown types and terms in a judgment @env@ |- @impl@ :: @t@ where @impl@ is an elimination term
 -- (bottom-up phase of bidirectional reconstruction)
 reconstructETopLevel :: (MonadSMT s, MonadHorn s) => Environment -> RType -> UProgram -> Explorer s (RProgram, Environment)
@@ -236,8 +243,8 @@ reconstructE' env typ (PSymbol name) =
     Just sch -> do
       (t, env') <- retrieveAndSplitVarType name sch env 
       let p = Program (PSymbol name) t
-      checkE env' typ p
-      return (p, env')
+      env'' <- checkE env' typ p
+      return (p, env'')
 reconstructE' env typ (PApp iFun iArg) = do
   x <- freshVar env "x"
   (pFun, env') <- inContext (\p -> Program (PApp p uHole) typ) $ reconstructE env (FunctionT x AnyT typ defCost) iFun
@@ -252,7 +259,7 @@ reconstructE' env typ (PApp iFun iArg) = do
       (pArg, envnew) <- inContext (\p -> Program (PApp pFun p) typ) $ reconstructE env' tArg' iArg
       let tRes'' = appType env pArg x tRes'
       return (Program (PApp pFun pArg) tRes'', envnew)
-  checkE env'' typ pApp
+  _ <- checkE env'' typ pApp
   return (pApp, env'')
   where
     generateHOArg env d tArg iArg = case content iArg of
@@ -282,7 +289,7 @@ checkAnnotation env t t' p = do
     Right t'' -> do
       ctx <- asks . view $ _1 . context
       writeLog 2 $ text "Checking consistency of type annotation" <+> pretty t'' <+> text "with" <+> pretty t <+> text "in" $+$ pretty (ctx (Program p t''))
-      checkSubtype env t'' t True (show (pretty p)) 
+      addSubtypeConstraint env t'' t True (show (pretty p)) 
 
       fT <- runInSolver $ finalizeType t
       fT'' <- runInSolver $ finalizeType t''

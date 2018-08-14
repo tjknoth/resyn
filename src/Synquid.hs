@@ -40,7 +40,7 @@ main = do
                appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency symmetry
                lfp bfs
                out_file out_module outFormat resolve 
-               print_spec print_stats log_ resources mult dmatch forall cb nump) -> do
+               print_spec print_stats log_ resources mult dmatch forall cb nump constTime) -> do
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
                     _scrutineeDepth = scrutineeMax,
@@ -60,7 +60,8 @@ main = do
                     _dMatch = dmatch,
                     _instantiateForall = forall,
                     _shouldCut = cb,
-                    _numPrograms = nump
+                    _numPrograms = nump,
+                    _constantTime = constTime
                     }
                   let solverParams = defaultHornSolverParams {
                     isLeastFixpoint = lfp,
@@ -127,7 +128,8 @@ data CommandLineArgs
         destructive_match :: Bool,
         instantiate_foralls :: Bool,
         cut_branches :: Bool,
-        num_programs :: Int
+        num_programs :: Int,
+        ct :: Bool
       }
   deriving (Data, Typeable, Show, Eq)
 
@@ -157,11 +159,12 @@ synt = Synthesis {
   print_stats         = False           &= help ("Show specification and solution size (default: False)"),
   log_                = 0               &= help ("Logger verboseness level (default: 0)") &= name "l",
   resources           = True            &= help ("Verify resource usage (default: True)") &= name "r" &= groupname "Resource analysis parameters",
-  multiplicities      = True            &= help ("Use multiplicities when verifying resource usage (default: True"),
-  destructive_match    = True           &= help ("Use destructive pattern match (default: True)") &= name "d",
-  instantiate_foralls  = True           &= help ("Solve exists-forall constraints by instantiating universally quantified expressions (default: True)"),
-  cut_branches         = True           &= help ("Do not backtrack past successfully synthesized branches (default: True)"),
-  num_programs         = 1              &= help ("Number of programs to produce if possible (default: 1)")
+  multiplicities      = True            &= help ("Use multiplicities when verifying resource usage (default: True)"),
+  destructive_match   = True            &= help ("Use destructive pattern match (default: True)") &= name "d",
+  instantiate_foralls = True            &= help ("Solve exists-forall constraints by instantiating universally quantified expressions (default: True)"),
+  cut_branches        = True            &= help ("Do not backtrack past successfully synthesized branches (default: True)"),
+  num_programs        = 1               &= help ("Number of programs to produce if possible (default: 1)"),
+  ct                  = False           &= help ("Require that all branching expressions consume a constant amount of resources (default: False)")
   } &= auto &= help "Synthesize goals specified in the input file"
     where
       defaultFormat = outputFormat defaultSynquidParams
@@ -196,7 +199,8 @@ defaultExplorerParams = ExplorerParams {
   _dMatch = False,
   _instantiateForall = True,
   _shouldCut = True,
-  _numPrograms = 1
+  _numPrograms = 1,
+  _constantTime = False
 }
 
 -- | Parameters for constraint solving

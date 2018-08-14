@@ -100,23 +100,24 @@ instance MonadSMT Z3State where
         str <- modelToString mod 
         return (r', str)
 
-  solveAndGetAssignment fml val = do 
+  solveAndGetAssignment fml vals = do 
     (r, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
     case m of 
       Nothing  -> return Nothing 
-      Just mod -> do
-        modStr <- modelToString mod
-        vFun <- varFun val
-        --traceM $ "SAT with model " ++ modStr
-        c <- modelEval mod vFun True
+      -- Since satisfied, return a map from variable names to satisfying valuations:
+      Just mod -> (Just . Map.fromList . catMaybes) <$> mapM (getAssignment mod) vals
+    where
+      -- Z3 AST function corresponding to a given variable 
+      varFun s = toAST (Var IntS s) 
+      -- Get the assignment for a variable @name@:
+      getAssignment model name = do 
+        vFun <- varFun name
+        c <- modelEval model vFun True
         case c of 
           Nothing -> return Nothing 
           Just ast -> do 
             vstr <- astToString ast
-            --traceM $ "VAR " ++ val ++ " has value " ++ vstr
-            return $ Just (ast, vstr) 
-    where 
-      varFun s = toAST (Var IntS s) 
+            return $ Just (name, ASTLit ast vstr)
 
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
 convertDatatypes _ [] = return ()

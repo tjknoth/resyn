@@ -346,10 +346,13 @@ instance Pretty MeasureDef where
 
 prettyBinding (name, typ) = text name <+> operator "::" <+> pretty typ
 
+
 prettyAssumptions env = commaSep (map pretty (Set.toList $ env ^. assumptions))
 prettyBindings env = commaSep (map pretty (Map.keys $ removeDomain (env ^. constants) (allSymbols env)))
 -- prettyBindings env = hMapDoc pretty pretty (removeDomain (env ^. constants) (allSymbols env))
 -- prettyBindings env = empty
+
+prettyScalars env = vsep $ pretty <$> Map.assocs (_symbols env Map.! 0)
 
 instance Pretty Environment where
   pretty env = prettyBindings env <+> prettyAssumptions env
@@ -372,6 +375,7 @@ prettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <
 prettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 prettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
 prettyConstraint (SharedType _ t tl tr label) = pretty label <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr)
+prettyConstraint (ConstantRes env label) = text "CONSTANTRES, scalars:" <+> prettyScalars env 
 
 -- Do not show environment
 simplePrettyConstraint :: Constraint -> Doc
@@ -382,6 +386,12 @@ simplePrettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator 
 simplePrettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 simplePrettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
 simplePrettyConstraint (SharedType _ t tl tr label) = pretty label <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr) 
+simplePrettyConstraint (ConstantRes env label) = text "CONSTANTRES, scalars:" <+> prettyScalars env 
+
+detailedPrettyConstraint :: Constraint -> Doc
+detailedPrettyConstraint c@(Subtype _env _syms _t1 _t2 Consistency _label) = prettyConstraint c
+detailedPrettyConstraint c@(Subtype env syms t1 t2 _ label) = prettyConstraint c $+$ text "ENV" <+> prettyScalars env $+$ text "ENV'" <+> prettyScalars (env {_symbols = syms}) 
+detailedPrettyConstraint c = prettyConstraint c
 
 instance Pretty Constraint where
   pretty = prettyConstraint
@@ -512,4 +522,4 @@ lfill w d        = case renderCompact d of
 -- Helper for printing conjunctions line-by-line for readability
 prettyConjuncts :: [TaggedConstraint] -> Doc
 prettyConjuncts fmls = vsep $ fmap printWithTag fmls
-  where printWithTag (TaggedConstraint t f) = fmlDoc f <+> text "src:" <+> text t
+  where printWithTag (TaggedConstraint t f) = fmlDoc f <+> text "   src:" <+> text t

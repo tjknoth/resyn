@@ -235,7 +235,8 @@ data Environment = Environment {
   _globalPredicates :: Map Id [Sort],      -- ^ Signatures (resSort:argSorts) of module-level logic functions (measures, predicates)
   _measures :: Map Id MeasureDef,          -- ^ Measure definitions
   _typeSynonyms :: Map Id ([Id], RType),   -- ^ Type synonym definitions
-  _unresolvedConstants :: Map Id RSchema   -- ^ Unresolved types of components (used for reporting specifications with macros)
+  _unresolvedConstants :: Map Id RSchema,  -- ^ Unresolved types of components (used for reporting specifications with macros)
+  _emptyCtors :: Set Id                    -- ^ Empty constructors for data types 
 } deriving (Show)
 
 makeLenses ''Environment
@@ -261,10 +262,9 @@ emptyEnv = Environment {
   _datatypes = Map.empty,
   _measures = Map.empty,
   _typeSynonyms = Map.empty,
-  _unresolvedConstants = Map.empty
+  _unresolvedConstants = Map.empty,
+  _emptyCtors = Set.empty
 }
-
-
 
 -- | 'symbolsOfArity' @n env@: all symbols of arity @n@ in @env@
 symbolsOfArity n env = Map.findWithDefault Map.empty n (env ^. symbols)
@@ -404,6 +404,10 @@ addTypeSynonym name tvs t = over typeSynonyms (Map.insert name (tvs, t))
 addDatatype :: Id -> DatatypeDef -> Environment -> Environment
 addDatatype name dt = over datatypes (Map.insert name dt)
 
+-- | 'addEmptyCtor' @name env@ : add empty constructor @name@ the environment
+addEmptyCtor :: Id -> Environment -> Environment
+addEmptyCtor name = over emptyCtors (Set.insert name)
+
 -- | 'lookupConstructor' @ctor env@ : the name of the datatype for which @ctor@ is registered as a constructor in @env@, if any
 lookupConstructor :: Id -> Environment -> Maybe Id
 lookupConstructor ctor env = let m = Map.filter (\dt -> ctor `elem` dt ^. constructors) (env ^. datatypes)
@@ -534,6 +538,7 @@ data Constraint =
   | WellFormedMatchCond Environment Formula
   | WellFormedPredicate Environment [Sort] Id
   | SharedType Environment RType RType RType Id
+  | ConstantRes Environment Id
   deriving (Show, Eq, Ord)
 
 data TaggedConstraint = TaggedConstraint {

@@ -248,7 +248,8 @@ baseTypeMultiply fml t = t
 
 -- Currently only used on the argument in function types, shouldn't need more cases. Also not adding potential recursively to the basetypes.
 addPotential :: RType -> Formula -> RType 
-addPotential t@(ScalarT base ref pot) f = ScalarT (addPotentialBase base f) ref (addFormulas pot f)
+--addPotential t@(ScalarT base ref pot) f = ScalarT (addPotentialBase base f) ref (addFormulas pot f)
+addPotential t@(ScalarT base ref pot) f = ScalarT base ref (addFormulas pot f)
 -- Should only be called when tBody is a scalar (hopefully)
 addPotential (LetT x tDef tBody) f = LetT x tDef (addPotential tBody f)
 
@@ -268,10 +269,10 @@ removePotentialBase (DatatypeT x ts ps) = DatatypeT x (fmap removePotential ts) 
 --removePotentialBase (TypeVarT subs x _) = TypeVarT subs x (IntLit 1)
 removePotentialBase b = b
 
--- Extract top-level potential from a scalar type
+-- Extract top-level potential from a scalar type (after performing appropriate substitution)
 topPotentialOf :: RType -> Maybe Formula 
 topPotentialOf (ScalarT _ _ p) = Just p
-topPotentialOf _               = Nothing
+topPotentialOf _                  = Nothing
 
 {- Refinement types -}
 

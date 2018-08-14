@@ -126,7 +126,7 @@ data Formula =
   Pred Sort Id [Formula] |            -- ^ Logic function application
   Cons Sort Id [Formula] |            -- ^ Constructor application
   All Formula Formula |               -- ^ Universal quantification
-  ASTLit AST String                    -- ^ Z3 AST literal (only used to solve resource constraints), and its string version
+  ASTLit AST String                   -- ^ Z3 AST literal (only used to solve resource constraints), and its string version
   deriving (Show, Eq, Ord)
 
 dontCare = "_"
@@ -540,6 +540,8 @@ isZero _          = False
 
 multiplyFormulas = simpleFormulaBOp simpleMultiply isMultiplicativeId
 addFormulas = simpleFormulaBOp (|+|) isAdditiveId
+sumFormulas :: Foldable t => t Formula -> Formula
+sumFormulas = foldl addFormulas fzero
 
 isMultiplicativeId (IntLit 1) = True
 isMultiplicativeId _          = False

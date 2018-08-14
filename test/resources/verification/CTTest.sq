@@ -1,0 +1,14 @@
+-- Constant time (# of recursive calls) length comparison
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+  
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+  
+concat :: xs: List {a| |1} -[1]-> ys: List a -> {List a | len _v == (len xs + len ys)}
+concat = \xs. \ys. 
+  match xs with
+    Nil -> ys
+    Cons xh xt -> Cons xh (concat xt ys)
