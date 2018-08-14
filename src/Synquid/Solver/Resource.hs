@@ -36,24 +36,19 @@ checkResources constraints = do
   oldConstraints <- use resourceConstraints 
   newC <- solveResourceConstraints oldConstraints (filter isResourceConstraint constraints)
   case newC of 
-    Nothing -> throwError $ text "Insufficient resources"
-    Just f -> resourceConstraints %= (++ f) 
+    Left err -> throwError $ text err
+    Right f  -> resourceConstraints %= (++ f) 
 
 -- | 'solveResourceConstraints' @oldConstraints constraints@ : Transform @constraints@ into logical constraints and attempt to solve the complete system by conjoining with @oldConstraints@
-solveResourceConstraints :: (MonadHorn s, MonadSMT s) => [TaggedConstraint] -> [Constraint] -> TCSolver s (Maybe [TaggedConstraint]) 
+solveResourceConstraints :: (MonadHorn s, MonadSMT s) => [TaggedConstraint] -> [Constraint] -> TCSolver s (Either String [TaggedConstraint]) 
 solveResourceConstraints oldConstraints constraints = do
     writeLog 3 $ linebreak <+> text "Generating resource constraints:"
     checkMults <- asks _checkMultiplicities
     -- Generate numerical resource-usage formulas from typing constraints:
     constraintList <- mapM (generateFormula checkMults) constraints
-    let fmlList = map constraint constraintList
-    let accFmlList = map constraint oldConstraints
-    -- Filter out trivial constraints, mostly for readability
-    let fmls = Set.fromList (filter (not . isTrivial) fmlList)
-    let query = conjunction fmls
-    let accumlatedQuery = conjunction (Set.fromList accFmlList)
+    let query = assembleFormula oldConstraints constraintList 
     -- Check satisfiability
-    (b, s) <- isSatWithModel (accumlatedQuery |&| query)
+    (b, s) <- isSatWithModel query
     let result = if b then "SAT" else "UNSAT"
     writeLog 5 $ nest 4 $ text "Accumulated resource constraints:" 
       $+$ prettyConjuncts (filter (isInteresting . constraint) oldConstraints)
@@ -62,8 +57,31 @@ solveResourceConstraints oldConstraints constraints = do
     if b 
       then do
         writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text s) 
-        return $ Just constraintList
-      else return Nothing
+        return $ Right constraintList
+      else Left <$> checkUnsatCause oldConstraints constraints 
+
+-- | Given lists of constraints (newly-generated and accumulated), construct the corresponding solver query
+assembleFormula :: [TaggedConstraint] -> [TaggedConstraint] -> Formula 
+assembleFormula accConstraints constraints = 
+  let fmlList = map constraint (filter (\(TaggedConstraint _ f) -> (not . isTrivial) f) constraints)
+      accFmlList = map constraint accConstraints 
+      query = conjunction $ accFmlList ++ fmlList
+  in query
+
+-- | checkUnsatCause : determine whether the constant-resource demands are the cause of unsatisfiability or not, returning an appropriate error message
+checkUnsatCause :: (MonadHorn s, MonadSMT s) => [TaggedConstraint] -> [Constraint] -> TCSolver s String 
+checkUnsatCause oldConstraints constraints = do
+  checkMults <- asks _checkMultiplicities
+  constraintList <- mapM (generateFormula checkMults) (filter (not . isCTConstraint) constraints)
+  let query = assembleFormula oldConstraints constraintList 
+  (b, _) <- isSatWithModel query 
+  if b 
+    then return "Branching expression is not constant-time" 
+    else return "Insufficient resources" 
+    where 
+      isCTConstraint (ConstantRes _ _) = True
+      isCTConstraint _                 = False
+
             
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Constraint -> TCSolver s TaggedConstraint 
@@ -174,7 +192,7 @@ instantiateUniversals env fml ass = do
       --let query = zipWith (|=>|) exampleAssumptions fmlSkeletons
       let query = zipWith substituteManyInFml exs fmlSkeletons
       writeLog 3 $ nest 4 $ text "Universals instantiated to" <+> pretty exs <+> text "In formulas" $+$ vsep (map pretty query)
-      return $ conjunction (Set.fromList query)
+      return $ conjunction query 
 -}
 
 -- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
@@ -404,7 +422,7 @@ getExamples' n ass fmlName acc =
     else do 
       let fmlVar = Var IntS fmlName
       let unique = fmap (Binary Neq fmlVar) acc
-      let query = conjunction $ Set.fromList (ass : unique)
+      let query = conjunction (ass : unique)
       val <- lift . lift . lift $ solveAndGetAssignment query fmlName
       case val of 
         Just v -> getExamples' (n - 1) ass fmlName (uncurry ASTLit v : acc)

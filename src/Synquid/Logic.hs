@@ -170,8 +170,10 @@ fone = IntLit 1
 
 andClean l r = if l == ftrue then r else (if r == ftrue then l else (if l == ffalse || r == ffalse then ffalse else l |&| r))
 orClean l r = if l == ffalse then r else (if r == ffalse then l else (if l == ftrue || r == ftrue then ftrue else l ||| r))
-conjunction fmls = foldl andClean ftrue (Set.toList fmls)
-disjunction fmls = foldl orClean ffalse (Set.toList fmls)
+conjunction :: Foldable t => t Formula -> Formula
+conjunction = foldl andClean ftrue
+disjunction :: Foldable t => t Formula -> Formula
+disjunction = foldl orClean ffalse
 
 (/+/) = Binary Union
 (/*/) = Binary Intersect
