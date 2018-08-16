@@ -46,7 +46,7 @@ solveResourceConstraints oldConstraints constraints = do
     checkMults <- asks _checkMultiplicities
     -- Generate numerical resource-usage formulas from typing constraints:
     constraintList <- mapM (generateFormula checkMults) constraints
-    let query = assembleFormula oldConstraints constraintList 
+    let query = assembleQuery oldConstraints constraintList 
     -- Check satisfiability
     (b, s) <- isSatWithModel query
     let result = if b then "SAT" else "UNSAT"
@@ -61,19 +61,20 @@ solveResourceConstraints oldConstraints constraints = do
       else Left <$> checkUnsatCause oldConstraints constraints 
 
 -- | Given lists of constraints (newly-generated and accumulated), construct the corresponding solver query
-assembleFormula :: [TaggedConstraint] -> [TaggedConstraint] -> Formula 
-assembleFormula accConstraints constraints = 
+assembleQuery :: [TaggedConstraint] -> [TaggedConstraint] -> Formula 
+assembleQuery accConstraints constraints = 
   let fmlList = map constraint (filter (\(TaggedConstraint _ f) -> (not . isTrivial) f) constraints)
       accFmlList = map constraint accConstraints 
       query = conjunction $ accFmlList ++ fmlList
   in query
 
--- | checkUnsatCause : determine whether the constant-resource demands are the cause of unsatisfiability or not, returning an appropriate error message
+-- | checkUnsatCause : determine whether the constant-resource demands are the cause of unsatisfiability or not.
+--     returns an appropriate error message
 checkUnsatCause :: (MonadHorn s, MonadSMT s) => [TaggedConstraint] -> [Constraint] -> TCSolver s String 
 checkUnsatCause oldConstraints constraints = do
   checkMults <- asks _checkMultiplicities
   constraintList <- mapM (generateFormula checkMults) (filter (not . isCTConstraint) constraints)
-  let query = assembleFormula oldConstraints constraintList 
+  let query = assembleQuery oldConstraints constraintList 
   (b, _) <- isSatWithModel query 
   if b 
     then return "Branching expression is not constant-time" 
@@ -114,8 +115,9 @@ embedAndProcessConstraint env c fmls relevantFml addTo = do
     else do 
       let emb' = preprocessAssumptions $ addTo emb
       writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls) -- <+> text "from scalars" $+$ prettyScalars env)
-      checkUniversals env fmls -- Throw error if any universally quantified expressions! (for now)
-      --return $ conjunction emb' |=>| fmls
+      -- TODO: get universals from the assumptions as well!
+      --checkUniversals env fmls -- Throw error if any universally quantified expressions! (for now)
+      return $ conjunction emb' |=>| fmls
       --instantiateUniversals env fmls (conjunction emb')
 
 checkUniversals :: (MonadSMT s, MonadHorn s) => Environment -> Formula -> TCSolver s Formula
@@ -222,7 +224,7 @@ assertZeroPotential :: Bool -> TypeSubstitution -> Environment -> Formula
 assertZeroPotential cm tass env = sumFormulas (fmap (totalPotential cm) scalars) |=| fzero
   where 
     scalars = fmap (typeSubstitute tass . typeFromSchema) rawScalars
-    rawScalars = Map.filterWithKey notEmptyCtor $ fromMaybe Map.empty $ Map.lookup 0 (_symbols env)
+    rawScalars = Map.filterWithKey notEmptyCtor (symbolsOfArity 0 env) 
     notEmptyCtor x _ = Set.notMember x (_emptyCtors env) 
 
 -- | 'assertSubtypes' @env tl tr@ : Generate formulas partitioning potential appropriately amongst
@@ -244,8 +246,6 @@ assertSubtypes env syms tass cm (ScalarT bl _ fl) (ScalarT br _ fr) =
       subtypeAssertions = Set.insert (leftSum `subtypeOp` rightSum) $ directSubtypesBase cm bl br
       wellFormedAssertions = wellFormed $ scalarsOf syms
       notEmptyCtor x _ = Set.notMember x (_emptyCtors env) 
-
-      
 assertSubtypes _ _ _ _ _ _ = Set.empty
 
 -- | 'directSubtypes' @env tl tr@ : Generate the set of all formulas in types @tl@ and @tr@, zipped by a binary operation @op@ on formulas 

@@ -273,6 +273,12 @@ symbolsOfArity n env = Map.findWithDefault Map.empty n (env ^. symbols)
 allSymbols :: Environment -> Map Id RSchema
 allSymbols env = Map.unions $ Map.elems (env ^. symbols)
 
+-- | All symbols of a given sort in an environment
+allScalarsOfSort :: Environment -> Sort -> Map Id RSchema
+allScalarsOfSort env s = Map.filter (isSort s) (symbolsOfArity 0 env)
+  where 
+    isSort s sch = (fromSort s) == (typeFromSchema sch)
+
 -- | All universally quantified symbols in an environment -- includes measures
 allUniversals :: Environment -> Set Id 
 allUniversals env = Set.fromList (Map.keys (allSymbols env) `union` Map.keys (env ^. measures))
@@ -441,14 +447,22 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
     let
       allMeasures = Map.toList $ allMeasuresOf dtName env
       isAbstract = null $ ((env ^. datatypes) Map.! dtName) ^. constructors
-    in catMaybes $ map extractPost allMeasures ++
+    in catMaybes $ concatMap extractPost allMeasures ++
                    if isAbstract then map contentProperties allMeasures else [] ++
                    if includeQuanitifed then map elemProperties allMeasures else []
   where
-    extractPost (mName, MeasureDef _ outSort _ _ fml) =
+    allPossibleArgs (_, sort) = map (Var sort) $ Map.keys $ allScalarsOfSort env sort 
+
+    extractPost (mName, MeasureDef _ outSort _ [] fml) =
       if fml == ftrue
-        then Nothing
-        else Just $ substitute (Map.singleton valueVarName (Pred outSort mName [Var (toSort baseT) valueVarName])) fml
+        then [Nothing]
+        else [Just (substitute (Map.singleton valueVarName (Pred outSort mName [Var (toSort baseT) valueVarName])) fml)]
+    extractPost (mName, MeasureDef _ outSort _ constArgs fml) = 
+      if fml == ftrue
+        then [Nothing]
+        else let argLists = sequence (map allPossibleArgs constArgs)
+                 makePred args = Pred outSort mName (args ++ [Var (toSort baseT) valueVarName])
+             in concatMap (\args -> [Just (substitute (Map.singleton valueVarName (makePred args)) fml)]) argLists
     -- TODO: should potentials transfer as well?
     contentProperties (mName, MeasureDef (DataS _ vars) a _ _ _) = case elemIndex a vars of
       Nothing -> Nothing

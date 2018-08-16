@@ -48,15 +48,16 @@ embedding env vars includeQuantified = do
                 Nothing -> addBindings env tass pass qmap fmls rest -- Variable not found (useful to ignore value variables)
                 Just (Monotype t) -> case typeSubstitute tass t of
                   ScalarT baseT fml pot ->
-                    let fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x)) . substitutePredicate pass)
-                                          (fml : allMeasurePostconditions includeQuantified baseT env) in
-                    let newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls' in 
+                    let allPost = allMeasurePostconditions includeQuantified baseT env
+                        fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x)) . substitutePredicate pass)
+                                          (fml : allPost) 
+                        newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls' in 
                     addBindings env tass pass qmap (fmls `Set.union` fmls') (rest `Set.union` newVars)
                   LetT y tDef tBody -> addBindings (addVariable x tBody . addVariable y tDef . removeVariable x $ env) tass pass qmap fmls vars
                   AnyT -> Set.singleton ffalse
                   _ -> error $ unwords ["embedding: encountered non-scalar variable", x, "in 0-arity bucket"]
                 Just sch -> addBindings env tass pass qmap fmls rest -- TODO: why did this work before?
-    allSymbols env = symbolsOfArity 0 env
+    allSymbols = symbolsOfArity 0 
 
 embedEnv :: (MonadHorn s, MonadSMT s) => Environment -> Formula -> Bool -> TCSolver s (Set Formula)
 embedEnv env fml consistency = do 
