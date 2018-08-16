@@ -3,6 +3,7 @@
 -- Solver utilities
 module Synquid.Solver.Util (
     embedEnv,
+    instantiateConsAxioms,
     potentialVars,
     freshId,
     freshVar,
@@ -20,6 +21,7 @@ import Synquid.Pretty
 import Synquid.Error
 import Synquid.Solver.Monad
 
+import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set 
 import Data.Set (Set)
 import qualified Data.Map as Map
@@ -64,6 +66,34 @@ embedEnv env fml consistency = do
   qmap <- use qualifierMap
   let relevantVars = potentialVars qmap fml
   embedding env relevantVars consistency
+
+-- | 'instantiateConsAxioms' @env fml@ : If @fml@ contains constructor applications, return the set of instantiations of constructor axioms for those applications in the environment @env@
+instantiateConsAxioms :: Environment -> Maybe Formula -> Formula -> Set Formula
+instantiateConsAxioms env mVal fml = let inst = instantiateConsAxioms env mVal in  
+  case fml of
+    Cons resS@(DataS dtName _) ctor args -> Set.unions $ Set.fromList (map (measureAxiom resS ctor args) (Map.elems $ allMeasuresOf dtName env)) :
+                                                         map (instantiateConsAxioms env Nothing) args
+    Unary op e -> inst e
+    Binary op e1 e2 -> inst e1 `Set.union` inst e2
+    Ite e0 e1 e2 -> inst e0 `Set.union` inst e1 `Set.union` inst e2
+    SetLit _ elems -> Set.unions (map inst elems)
+    Pred _ p args -> Set.unions $ map inst args
+    _ -> Set.empty
+  where
+    measureAxiom resS ctor args (MeasureDef inSort _ defs constantArgs _) =
+      let
+        MeasureCase _ vars body = head $ filter (\(MeasureCase c _ _) -> c == ctor) defs
+        sParams = map varSortName (sortArgsOf inSort) -- sort parameters in the datatype declaration
+        sArgs = sortArgsOf resS -- actual sort argument in the constructor application
+        body' = noncaptureSortSubstFml sParams sArgs body -- measure definition with actual sorts for all subexpressions
+        newValue = fromMaybe (Cons resS ctor args) mVal
+        constArgNames = fmap fst constantArgs
+        prefixes = fmap (++ "D") constArgNames 
+        constVars = zipWith (somewhatFreshVar env) prefixes (fmap snd constantArgs)
+        subst = Map.fromList $ (valueVarName, newValue) : zip vars args ++ zip constArgNames constVars-- substitute formals for actuals and constructor application or provided value for _v
+        wrapForall xs f = foldl (flip All) f xs
+        qBody = wrapForall constVars body'
+      in substitute subst qBody
 
 bottomValuation :: QMap -> Formula -> Formula
 bottomValuation qmap fml = applySolution bottomSolution fml

@@ -55,12 +55,14 @@ import Debug.Trace
 -- | Solve @typingConstraints@: either strengthen the current candidates and return shapeless type constraints or fail
 solveTypeConstraints :: (MonadSMT s, MonadHorn s) => TCSolver s ()
 solveTypeConstraints = do
+
   simplifyAllConstraints
+  processAllPredicates
+  processAllConstraints
 
   scs <- use simpleConstraints
   writeLog 2 (text "Simple Constraints" $+$ nest 2 (vsep (map pretty scs)))
-  processAllPredicates
-  processAllConstraints
+
   generateAllHornClauses
 
   solveHornClauses
@@ -361,17 +363,19 @@ processConstraint c@(Subtype env syms (ScalarT baseTL l potl) (ScalarT baseTR r 
       simpleConstraints %= (c' :)
 
 
-processConstraint (WellFormed env t@(ScalarT baseT fml pot) _)
-  = case fml of
-      Unknown _ u -> do
-        qmap <- use qualifierMap
-        tass <- use typeAssignment
-        tq <- asks _typeQualsGen
-        -- Only add qualifiers if it's a new variable; multiple well-formedness constraints could have been added for constructors
-        let env' = typeSubstituteEnv tass env
-        let env'' = addVariable valueVarName t env'
-        unless (Map.member u qmap) $ addQuals u (tq env'' (Var (toSort baseT) valueVarName) (allScalars env'))
-      _ -> return ()
+processConstraint c@(WellFormed env t@(ScalarT baseT fml pot) _)
+  = do 
+      simpleConstraints %= (c :) 
+      case fml of
+        Unknown _ u -> do
+          qmap <- use qualifierMap
+          tass <- use typeAssignment
+          tq <- asks _typeQualsGen
+          -- Only add qualifiers if it's a new variable; multiple well-formedness constraints could have been added for constructors
+          let env' = typeSubstituteEnv tass env
+          let env'' = addVariable valueVarName t env'
+          unless (Map.member u qmap) $ addQuals u (tq env'' (Var (toSort baseT) valueVarName) (allScalars env'))
+        _ -> return ()
 processConstraint (WellFormedCond env (Unknown _ u))
   = do
       tass <- use typeAssignment
@@ -398,7 +402,7 @@ processConstraint (SharedType env (ScalarT base fml pot) (ScalarT baseL fmlL pot
       potR' = subst potR
   simpleConstraints %= (SharedType env (ScalarT base fml' pot') (ScalarT baseL fmlL' potL') (ScalarT baseR fmlR' potR') label :)
 processConstraint SharedType{}  = return ()
-processConstraint ConstantRes{} = return ()
+processConstraint c@ConstantRes{} = simpleConstraints %= (c :)
 processConstraint c = error $ show $ text "processConstraint: not a simple constraint" <+> pretty c
 
 generateHornClauses :: (MonadHorn s, MonadSMT s) => Constraint -> TCSolver s ()
@@ -412,9 +416,11 @@ generateHornClauses c@(Subtype env _syms (ScalarT baseTL l potl) (ScalarT baseTR
       emb <- embedEnv env (l |&| r) True
       clauses <- lift . lift . lift $ preprocessConstraint (conjunction (Set.insert l emb) |=>| r)
       hornClauses %= (clauses ++)
-generateHornClauses c@SharedType{}
+generateHornClauses WellFormed{}
   = return ()
-generateHornClauses c@ConstantRes{} 
+generateHornClauses SharedType{}
+  = return ()
+generateHornClauses ConstantRes{} 
   = return ()
 generateHornClauses c = error $ show $ text "generateHornClauses: not a simple subtyping constraint" <+> pretty c
 
@@ -519,34 +525,6 @@ setUnknownRecheck name valuation duals = do
       candidates .= map (\c -> c {
                                   validConstraints = Set.intersection liveClauses (validConstraints c),
                                   invalidConstraints = Set.intersection liveClauses (invalidConstraints c) }) cands'' -- Remove Horn clauses produced by now eliminated code
-
--- | 'instantiateConsAxioms' @env fml@ : If @fml@ contains constructor applications, return the set of instantiations of constructor axioms for those applications in the environment @env@
-instantiateConsAxioms :: Environment -> Maybe Formula -> Formula -> Set Formula
-instantiateConsAxioms env mVal fml = let inst = instantiateConsAxioms env mVal in  
-  case fml of
-    Cons resS@(DataS dtName _) ctor args -> Set.unions $ Set.fromList (map (measureAxiom resS ctor args) (Map.elems $ allMeasuresOf dtName env)) :
-                                                         map (instantiateConsAxioms env Nothing) args
-    Unary op e -> inst e
-    Binary op e1 e2 -> inst e1 `Set.union` inst e2
-    Ite e0 e1 e2 -> inst e0 `Set.union` inst e1 `Set.union` inst e2
-    SetLit _ elems -> Set.unions (map inst elems)
-    Pred _ p args -> Set.unions $ map inst args
-    _ -> Set.empty
-  where
-    measureAxiom resS ctor args (MeasureDef inSort _ defs constantArgs _) =
-      let
-        MeasureCase _ vars body = head $ filter (\(MeasureCase c _ _) -> c == ctor) defs
-        sParams = map varSortName (sortArgsOf inSort) -- sort parameters in the datatype declaration
-        sArgs = sortArgsOf resS -- actual sort argument in the constructor application
-        body' = noncaptureSortSubstFml sParams sArgs body -- measure definition with actual sorts for all subexpressions
-        newValue = fromMaybe (Cons resS ctor args) mVal
-        constArgNames = fmap fst constantArgs
-        prefixes = fmap (++ "D") constArgNames 
-        constVars = zipWith (somewhatFreshVar env) prefixes (fmap snd constantArgs)
-        subst = Map.fromList $ (valueVarName, newValue) : zip vars args ++ zip constArgNames constVars-- substitute formals for actuals and constructor application or provided value for _v
-        wrapForall xs f = foldl (flip All) f xs
-        qBody = wrapForall constVars body'
-      in substitute subst qBody
 
 -- | 'matchConsType' @formal@ @actual@ : unify constructor return type @formal@ with @actual@
 matchConsType formal@(ScalarT (DatatypeT d vars pVars) _ _) actual@(ScalarT (DatatypeT d' args pArgs) _ p) | d == d'

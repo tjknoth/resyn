@@ -116,8 +116,9 @@ embedAndProcessConstraint env c fmls relevantFml addTo = do
       let emb' = preprocessAssumptions $ addTo emb
       writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls) -- <+> text "from scalars" $+$ prettyScalars env)
       -- TODO: get universals from the assumptions as well!
-      --checkUniversals env fmls -- Throw error if any universally quantified expressions! (for now)
-      return $ conjunction emb' |=>| fmls
+      checkUniversals env fmls -- Throw error if any universally quantified expressions! (for now)
+      return fmls
+      --return $ conjunction emb' |=>| fmls
       --instantiateUniversals env fmls (conjunction emb')
 
 checkUniversals :: (MonadSMT s, MonadHorn s) => Environment -> Formula -> TCSolver s Formula
@@ -374,12 +375,12 @@ preprocessAssumptions fs = Set.map assumeUnknowns $ Set.filter (not . isUnknownF
 -- TODO: probably don't need as many cases
 assumeUnknowns :: Formula -> Formula
 assumeUnknowns (Unknown s id) = BoolLit True
-assumeUnknowns (SetLit s fs) = SetLit s (fmap assumeUnknowns fs)
+assumeUnknowns (SetLit s fs) = SetLit s (map assumeUnknowns fs)
 assumeUnknowns (Unary op f) = Unary op (assumeUnknowns f)
 assumeUnknowns (Binary op fl fr) = Binary op (assumeUnknowns fl) (assumeUnknowns fr)
 assumeUnknowns (Ite g t f) = Ite (assumeUnknowns g) (assumeUnknowns t) (assumeUnknowns f)
-assumeUnknowns (Pred s x fs) = Pred s x (fmap assumeUnknowns fs)
-assumeUnknowns (Cons s x fs) = Cons s x (fmap assumeUnknowns fs)
+assumeUnknowns (Pred s x fs) = Pred s x (map assumeUnknowns fs)
+assumeUnknowns (Cons s x fs) = Cons s x (map assumeUnknowns fs)
 assumeUnknowns (All f g) = All (assumeUnknowns f) (assumeUnknowns g)
 assumeUnknowns f = f
 

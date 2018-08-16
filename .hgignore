@@ -7,6 +7,7 @@ syntax: glob
 ./.cabal-sandbox
 ./cabal.sandbox.config
 .stack-work/
+.stack-work-profile/
 ./ui
 *.db-journal
 test/current/*.hs
@@ -33,3 +34,5 @@ debuglog*
 examples.*
 *.hp
 *.prof
+*.aux
+*.ps
