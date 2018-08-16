@@ -85,6 +85,7 @@ boundedSubsets n s
   | Set.null s = Set.singleton Set.empty
   | otherwise = let (x, xs) = Set.deleteFindMin s in
       Set.map (Set.insert x) (boundedSubsets (n - 1) xs) `Set.union` boundedSubsets n xs -- x is in or x is out
+
       
 -- | Partition a set-valued map into sub-maps where value non-disjoint value sets are grouped together
 toDisjointGroups :: (Ord k, Ord v) => Map k (Set v) -> [(Set k, Set v)]

@@ -456,7 +456,7 @@ botSolution :: QMap -> Solution
 botSolution qmap = Map.map (\(QSpace quals _) -> Set.fromList quals) qmap
 
 -- | 'valuation' @sol u@ : valuation of @u@ in @sol@
-valuation :: Solution -> Formula -> Valuation
+valuation :: Solution -> Formula -> Valuation 
 valuation sol (Unknown s u) = case Map.lookup u sol of
   Just quals -> Set.map (substitute s) quals
   Nothing -> error $ unwords ["valuation: no value for unknown", u]

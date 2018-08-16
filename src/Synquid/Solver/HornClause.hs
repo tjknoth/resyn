@@ -88,13 +88,13 @@ preprocess (Binary Implies lhs rhs) = ifM (asks isLeastFixpoint) (return preproc
     preprocessLFP = 
       -- ToDo: split conjuncts
       let 
-        rDisjuncts = Set.fromList $ uDNF rhs
-        (noUnknowns, withUnknowns) = Set.partition (Set.null . unknownsOf) rDisjuncts
-      in if Set.size withUnknowns > 1
+        rDisjuncts = uDNF rhs
+        (noUnknowns, withUnknowns) = partition (null . unknownsOf) rDisjuncts
+      in if length withUnknowns > 1
         then error $ unwords ["Least fixpoint solver got a disjunctive right-hand-side:", show rhs]
         else -- Only one disjuncts with unknowns: split into all conjuncts with unknowns into separate constraints
           let
-            lhs' = conjunction $ Set.insert lhs (Set.map fnot noUnknowns)
+            lhs' = conjunction $ lhs : map fnot noUnknowns
             rConjuncts = conjunctsOf (disjunction withUnknowns)
             (conjNoUnknowns, conjWithUnknowns) = Set.partition (Set.null . unknownsOf) rConjuncts
             rhss = (if Set.null conjNoUnknowns then [] else [conjunction conjNoUnknowns]) ++ Set.toList conjWithUnknowns
@@ -132,9 +132,9 @@ check :: MonadSMT s => Bool -> [Formula] ->  ExtractAssumptions -> [Candidate] -
 check consistency fmls extractAssumptions cands = do    
     writeLog 3 (vsep [
       nest 2 $ (if consistency then text "Checking consistency" else text "Checking validity") $+$ vsep (map pretty fmls), 
-      nest 2 $ text "Candidates" <+> parens (pretty $ length cands) $+$ (vsep $ map pretty cands)])
+      nest 2 $ text "Candidates" <+> parens (pretty $ length cands) $+$ vsep (map pretty cands)])
     cands' <- filterM checkCand cands
-    writeLog 3 (nest 2 $ text "Remaining Candidates" <+> parens (pretty $ length cands') $+$ (vsep $ map pretty cands'))
+    writeLog 3 (nest 2 $ text "Remaining Candidates" <+> parens (pretty $ length cands') $+$ vsep (map pretty cands'))
     return cands'
   where
     apply sol fml = let fml' = applySolution sol fml in fml' |&| conjunction (extractAssumptions fml')      
@@ -247,7 +247,7 @@ strengthen qmap extractAssumptions fml@(Binary Implies lhs rhs) sol = do
           max = lookupQuals qmap maxCount u
           used = valuation sol u
           n = Set.size used
-      in Set.toList $ boundedSubsets (max - n) $ (Set.fromList qs Set.\\ used) `Set.intersection` lhsVal
+      in Set.toList $ boundedSubsets (max - n) $ (Set.fromList qs Set.\\ used) `Set.intersection` lhsVal 
     
       -- | All valid partitions of @lhsVal@ into solutions for multiple unknowns.
     splitLhsValuation :: Valuation -> [Solution]
@@ -312,7 +312,7 @@ filterSubsets check n = go [] [Set.empty]
         in do
           results <- zip new <$> mapM check new
           let (valids, invalids) = partition snd results
-          go (solutions ++ map fst valids) (concatMap children (map fst invalids))      
+          go (solutions ++ map fst valids) (concatMap (children . fst) invalids)      
     children idxs = let lower = if Set.null idxs then 0 else Set.findMax idxs + 1
       in map (`Set.insert` idxs) [lower..(n - 1)]
 
@@ -386,7 +386,7 @@ pruneValuations assumption vals =
         let r = conjunction rs
         res1 <- isValidFml $ (assumption |&| l) |=>| r
         res2 <- isValidFml $ (assumption |&| r) |=>| l
-        return $ (res1 && (not res2 || (Set.size ls > Set.size rs)))
+        return (res1 && (not res2 || (Set.size ls > Set.size rs)))
       isSubsumed val vals = anyM (\v -> strictlyImplies val v) vals
   in prune isSubsumed vals
   
