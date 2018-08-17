@@ -136,6 +136,7 @@ def run_benchmark(name, opts, default_opts):
       print('{0:0.2f}'.format(end - start), end = ' ')
       if synthesis_res.returncode: # Synthesis failed
           print(Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL, end = ' ')
+          synthesis_output = ''
           results [name] = SynthesisResult(name, (end - start), '-', '-', '-', '-', '-')
       else: # Synthesis succeeded: code metrics from the output and record synthesis time
           logfile.write(synthesis_res.stdout)
@@ -187,7 +188,7 @@ def run_version(name, variant_id, variant_opts, logfile, with_res):
       print(Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL, end=' ')
       try:
           first = next(diff)
-          print(Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OPTIMIZED' + Style.RESET_ALL, end=' ')
+          if with_res != '': print(Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OPTIMIZED' + Style.RESET_ALL, end=' ')
           results[name].optimized = True
           results[name].nres_code_size = solution_size
       except StopIteration:

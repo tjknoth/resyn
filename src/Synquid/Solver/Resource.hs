@@ -116,9 +116,8 @@ embedAndProcessConstraint env c fmls relevantFml addTo = do
       let emb' = preprocessAssumptions $ addTo emb
       writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty (conjunction emb' |=>| fmls)) -- <+> text "from scalars" $+$ prettyScalars env)
       -- TODO: get universals from the assumptions as well!
-      --checkUniversals env fmls -- Throw error if any universally quantified expressions! (for now)
-      --return fmls
-      return $ conjunction emb' |=>| fmls
+      checkUniversals env fmls -- Throw error if any universally quantified expressions! (for now)
+      --return $ conjunction emb' |=>| fmls
       --instantiateUniversals env fmls (conjunction emb')
 
 checkUniversals :: (MonadSMT s, MonadHorn s) => Environment -> Formula -> TCSolver s Formula
