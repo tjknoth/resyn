@@ -17,7 +17,7 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0 
   Cons x xs -> 1 + len xs
 
-insert :: x: a -> xs: {List a| |numgt x _v} -> {List a | elems _v == elems xs + [x]}
+insert :: x: a -> xs: {List a| |numgt x _v} -> {List a | (elems _v == elems xs + [x]) && (numgt x _v == 1 + numgt x xs)}
 insert = \x. \xs. 
   match xs with 
     Nil -> Cons x Nil 

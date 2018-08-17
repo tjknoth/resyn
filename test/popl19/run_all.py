@@ -136,7 +136,7 @@ def run_benchmark(name, opts, default_opts):
       print('{0:0.2f}'.format(end - start), end = ' ')
       if synthesis_res.returncode: # Synthesis failed
           print(Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL, end = ' ')
-          results [name] = SynthesisResult(name, (end - start), '-', '-', '-', '-')
+          results [name] = SynthesisResult(name, (end - start), '-', '-', '-', '-', '-')
       else: # Synthesis succeeded: code metrics from the output and record synthesis time
           logfile.write(synthesis_res.stdout)
           lastLines = synthesis_res.stdout.split('\n')[-6:]

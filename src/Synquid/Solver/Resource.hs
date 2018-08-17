@@ -89,7 +89,7 @@ generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Constraint -> TCSolver s
 generateFormula checkMults c@(Subtype env syms tl tr variant label) = do
   tass <- use typeAssignment
   let fmls = conjunction $ filter (not . isTrivial) $ case variant of 
-        Nondeterministic -> assertSubtypes env syms tass checkMults tl tr
+        --Nondeterministic -> assertSubtypes env syms tass checkMults tl tr
         _                -> directSubtypes checkMults tl tr
   TaggedConstraint label <$> embedAndProcessConstraint env c fmls (conjunction (allFormulasOf checkMults tl `Set.union` allFormulasOf checkMults tr)) (Set.insert (refinementOf tl))
 generateFormula checkMults c@(WellFormed env t label) = do
@@ -114,11 +114,11 @@ embedAndProcessConstraint env c fmls relevantFml addTo = do
     then return ftrue
     else do 
       let emb' = preprocessAssumptions $ addTo emb
-      writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty fmls) -- <+> text "from scalars" $+$ prettyScalars env)
+      writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty (conjunction emb' |=>| fmls)) -- <+> text "from scalars" $+$ prettyScalars env)
       -- TODO: get universals from the assumptions as well!
-      checkUniversals env fmls -- Throw error if any universally quantified expressions! (for now)
-      return fmls
-      --return $ conjunction emb' |=>| fmls
+      --checkUniversals env fmls -- Throw error if any universally quantified expressions! (for now)
+      --return fmls
+      return $ conjunction emb' |=>| fmls
       --instantiateUniversals env fmls (conjunction emb')
 
 checkUniversals :: (MonadSMT s, MonadHorn s) => Environment -> Formula -> TCSolver s Formula
