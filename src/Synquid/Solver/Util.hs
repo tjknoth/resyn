@@ -119,6 +119,14 @@ freshVar env prefix = do
     then freshVar env prefix
     else return x
 
+freshValueVarId :: Monad s => TCSolver s String
+freshValueVarId = freshId valueVarName
+
+freshValueVars :: Monad s => Formula -> Sort -> TCSolver s Formula 
+freshValueVars fml sort = do 
+  newVar <- Var sort <$> freshValueVarId
+  return $ substitute (Map.singleton valueVarName newVar) fml
+
 -- | 'somewhatFreshVar' @env prefix sort@ : A variable of sort @sort@ not bound in @env@
 -- Exists to generate fresh variables for multi-argument measures without making all of the constructor axiom instantiation code monadic
 somewhatFreshVar :: Environment -> String -> Sort -> Formula

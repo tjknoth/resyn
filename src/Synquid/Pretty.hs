@@ -455,7 +455,7 @@ instance Pretty ErrorMessage where
 instance Show ErrorMessage where
   show = show . pretty
 
-{- AST node counting -}
+  {- AST node counting -}
 
 -- | 'fmlNodeCount' @fml@ : size of @fml@ (in AST nodes)
 fmlNodeCount :: Formula -> Int

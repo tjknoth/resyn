@@ -27,8 +27,7 @@ class (Monad s, Applicative s) => MonadSMT s where
   solveWithModel :: Formula -> s (Bool, String)                                  -- ^ 'solveWithModel' @fml@: if @fml@ is satisfiable, return a satisfying model
   solveAndGetAssignment :: Formula -> [String] -> s (Maybe (Map String Formula)) -- ^ 'solveAndGetAssignment' @fml v@ : if @fml@ is satisfiable, return the assignment for variable @v@ (and the string form of the AST node for debugging)
 
-  
-  
+
 class (Monad s, Applicative s) => MonadHorn s where
   initHornSolver :: Environment -> s Candidate                                                -- ^ Initial candidate solution
   preprocessConstraint :: Formula -> s [Formula]                                              -- ^ Convert a Horn clause to the format this solver can handle
