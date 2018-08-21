@@ -566,6 +566,14 @@ labelOf (WellFormed _ _ l)      = l
 labelOf (SharedType _ _ _ _ l)  = l
 labelOf _                       = ""
 
+envFrom :: Constraint -> Environment
+envFrom (Subtype e _ _ _ _ _)       = e
+envFrom (WellFormed e _ _)          = e
+envFrom (WellFormedCond e _)        = e
+envFrom (WellFormedPredicate e _ _) = e
+envFrom (SharedType e _ _ _ _)      = e
+envFrom (ConstantRes e _)           = e
+
 -- | Synthesis goal
 data Goal = Goal {
   gName :: Id,                  -- ^ Function name

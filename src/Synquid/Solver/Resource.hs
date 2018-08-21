@@ -2,7 +2,7 @@
 
 -- | Resource analysis
 module Synquid.Solver.Resource (
-  checkResources 
+  checkResources
 ) where
 
 import Synquid.Logic 
@@ -45,19 +45,22 @@ solveResourceConstraints oldConstraints constraints = do
     writeLog 3 $ linebreak <+> text "Generating resource constraints:"
     checkMults <- asks _checkMultiplicities
     -- Generate numerical resource-usage formulas from typing constraints:
-    constraintList <- mapM (generateFormula checkMults) constraints
+    constraintList <- mapM (generateFormula True checkMults) constraints
     let query = assembleQuery oldConstraints constraintList 
+    -- need an environment to check for universally quantified expressions, doesn't matter which environment is used
+    let tempEnv = case constraints of 
+          [] -> emptyEnv
+          cs -> envFrom $ head cs 
     -- Check satisfiability
-    (b, s) <- isSatWithModel query
+    --b <- satisfyResources tempEnv query
+    b <- fst <$> isSatWithModel query
     let result = if b then "SAT" else "UNSAT"
     writeLog 5 $ nest 4 $ text "Accumulated resource constraints:" 
       $+$ prettyConjuncts (filter (isInteresting . constraint) oldConstraints)
     writeLog 3 $ nest 4 $ text "Solved resource constraint after conjoining formulas:" <+> text result 
       $+$ prettyConjuncts (filter (isInteresting . constraint) constraintList)
     if b 
-      then do
-        writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text s) 
-        return $ Right constraintList
+      then return $ Right constraintList
       else Left <$> checkUnsatCause oldConstraints constraints 
 
 -- | Given lists of constraints (newly-generated and accumulated), construct the corresponding solver query
@@ -73,7 +76,7 @@ assembleQuery accConstraints constraints =
 checkUnsatCause :: (MonadHorn s, MonadSMT s) => [TaggedConstraint] -> [Constraint] -> TCSolver s String 
 checkUnsatCause oldConstraints constraints = do
   checkMults <- asks _checkMultiplicities
-  constraintList <- mapM (generateFormula checkMults) (filter (not . isCTConstraint) constraints)
+  constraintList <- mapM (generateFormula False checkMults) (filter (not . isCTConstraint) constraints)
   let query = assembleQuery oldConstraints constraintList 
   (b, _) <- isSatWithModel query 
   if b 
@@ -85,28 +88,28 @@ checkUnsatCause oldConstraints constraints = do
 
             
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
-generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Constraint -> TCSolver s TaggedConstraint 
-generateFormula checkMults c@(Subtype env syms tl tr variant label) = do
+generateFormula :: (MonadHorn s, MonadSMT s) => Bool -> Bool -> Constraint -> TCSolver s TaggedConstraint 
+generateFormula shouldLog checkMults c@(Subtype env syms tl tr variant label) = do
   tass <- use typeAssignment
   let fmls = conjunction $ filter (not . isTrivial) $ case variant of 
         Nondeterministic -> assertSubtypes env syms tass checkMults tl tr
         _                -> directSubtypes checkMults tl tr
-  TaggedConstraint label <$> embedAndProcessConstraint env c fmls (conjunction (allFormulasOf checkMults tl `Set.union` allFormulasOf checkMults tr)) (Set.insert (refinementOf tl))
-generateFormula checkMults c@(WellFormed env t label) = do
+  TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls (conjunction (allFormulasOf checkMults tl `Set.union` allFormulasOf checkMults tr)) (Set.insert (refinementOf tl))
+generateFormula shouldLog checkMults c@(WellFormed env t label) = do
   let fmls = conjunction $ filter (not . isTrivial) $ map (|>=| fzero) $ allRFormulas checkMults t
-  TaggedConstraint label <$> embedAndProcessConstraint env c fmls (conjunction (allFormulasOf checkMults t)) (Set.insert (refinementOf t))
-generateFormula checkMults c@(SharedType env t tl tr label) = do 
+  TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls (conjunction (allFormulasOf checkMults t)) (Set.insert (refinementOf t))
+generateFormula shouldLog checkMults c@(SharedType env t tl tr label) = do 
   let fmls = conjunction $ partition checkMults t tl tr
-  TaggedConstraint label <$> embedAndProcessConstraint env c fmls (conjunction (allFormulasOf checkMults t)) id
-generateFormula checkMults c@(ConstantRes env label) = do 
+  TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls (conjunction (allFormulasOf checkMults t)) id
+generateFormula shouldLog checkMults c@(ConstantRes env label) = do 
   tass <- use typeAssignment
   let fml = assertZeroPotential checkMults tass env 
-  TaggedConstraint ("CT: " ++ label) <$> embedAndProcessConstraint env c fml fzero id -- Use fzero since it has no free variables
-generateFormula _ c = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
+  TaggedConstraint ("CT: " ++ label) <$> embedAndProcessConstraint shouldLog env c fml fzero id -- Use fzero since it has no free variables
+generateFormula _ _ c = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
 
 -- | Embed the environment assumptions and preproess the constraint for solving 
-embedAndProcessConstraint :: (MonadSMT s, MonadHorn s) => Environment -> Constraint -> Formula -> Formula -> (Set Formula -> Set Formula) -> TCSolver s Formula
-embedAndProcessConstraint env c fmls relevantFml addTo = do 
+embedAndProcessConstraint :: (MonadSMT s, MonadHorn s) => Bool -> Environment -> Constraint -> Formula -> Formula -> (Set Formula -> Set Formula) -> TCSolver s Formula
+embedAndProcessConstraint shouldLog env c fmls relevantFml addTo = do 
   emb <- embedEnv env relevantFml True
   -- Check if embedding is singleton { false }
   let isFSingleton s = (Set.size s == 1) && (Set.findMin s == ffalse)
@@ -117,7 +120,8 @@ embedAndProcessConstraint env c fmls relevantFml addTo = do
       --  this is only temporary to develop CEGIS for numeric variables first. 
       let emb' = conjunction $ removeDTs (Map.keys (_measures env)) $ preprocessAssumptions $ addTo emb
       let finalFml = if emb' == ftrue then fmls else emb' |=>| fmls
-      writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty finalFml) -- <+> text "from scalars" $+$ prettyScalars env)
+      --let finalFml = fmls
+      when shouldLog $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty finalFml) -- <+> text "from scalars" $+$ prettyScalars env)
       return finalFml
       -- TODO: get universals from the assumptions as well!
       --checkUniversals env fmls -- Throw error if any universally quantified expressions! (for now)
@@ -136,7 +140,10 @@ satisfyResources env fml = do
   shouldInstantiate <- asks _instantiateUnivs 
   let universals = getUniversals env fml
   if null universals || not shouldInstantiate
-    then fst <$> isSatWithModel fml
+    then do 
+      (b, s) <- isSatWithModel fml
+      writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text s)
+      return b
     else do
       let maxIterations = length universals + 1 -- TODO: what about branching expressions?
       rVars <- Set.toList <$> use resourceVars
@@ -200,6 +207,7 @@ solveWithCEGIS numIters fml universals examples polynomials program = do
     Nothing -> return True -- No counterexamples exist, polynomials hold on all inputs
     Just cx ->  
      do 
+      writeLog 4 $ text "Counterexample:" <+> pretty (Map.assocs cx)
       -- Update example list
       let examples' = cx : examples
       -- For each example, substitute its value for the universally quantified expressions in each polynomial skeleton
@@ -415,6 +423,7 @@ unions = foldl union []
 
 -- | containsDT @ms f@ : return whether or not formula @f@ includes a measure (or a data type in general), the names of which are in @ms@
 containsDT :: [String] -> Formula -> Bool
+containsDT _  (Var _ x)          = x == valueVarName
 containsDT ms (Pred _ name args) = (name `elem` ms) || any (containsDT ms) args
 containsDT _  Cons{}             = True 
 containsDT ms (Unary _ f)        = containsDT ms f
