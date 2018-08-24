@@ -22,15 +22,22 @@ compare = \xs. \ys.
         Cons yh yt -> compare xt yt
 -}
 
+false :: {Bool | _v == False}
+true :: {Bool | _v == True}
+and :: x: Bool -> y: Bool -> {Bool | _v == (x && y)}
+
 -- Constant time version
-compare' :: xs: List {a| |1} -[1]-> ys: List {a| |1} -> {Bool | _v == (len xs == len ys)}
-compare' = \xs. \ys. 
+compare' :: xs: List {a| |1} -[1]-> ys: List a -> {Bool | _v == (len xs == len ys)}
+compare' = ??
+{- \xs. \ys. 
   match xs with 
     Nil ->
       match ys with
         Nil -> True
-        Cons yh yt -> False && (compare' Nil yt) 
+        Cons yh yt -> False
     Cons xh xt ->
       match ys with 
         Nil -> False && (compare' xt Nil)
         Cons yh yt -> compare' xt yt
+-}
+  

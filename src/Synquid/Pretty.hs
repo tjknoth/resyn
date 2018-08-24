@@ -352,8 +352,8 @@ prettyBindings env = commaSep (map pretty (Map.keys $ removeDomain (env ^. const
 -- prettyBindings env = hMapDoc pretty pretty (removeDomain (env ^. constants) (allSymbols env))
 -- prettyBindings env = empty
 
-prettyScalarTypes env = vsep $ pretty <$> Map.assocs (_symbols env Map.! 0)
-prettyScalars env = vsep $ pretty <$> Map.keys (_symbols env Map.! 0)
+prettyScalarTypes env = hsep $ pretty <$> Map.assocs (_symbols env Map.! 0)
+prettyScalars env = hsep $ pretty <$> Map.keys (_symbols env Map.! 0)
 
 instance Pretty Environment where
   pretty env = prettyBindings env <+> prettyAssumptions env

@@ -61,7 +61,7 @@ embedding env vars includeQuantified = do
                 Just sch -> addBindings env tass pass qmap fmls rest -- TODO: why did this work before?
     allSymbols env = symbolsOfArity 0 env
 
-embedEnv :: (MonadHorn s, MonadSMT s) => Environment -> Formula -> Bool -> TCSolver s (Set Formula)
+embedEnv :: Monad s => Environment -> Formula -> Bool -> TCSolver s (Set Formula)
 embedEnv env fml consistency = do 
   qmap <- use qualifierMap
   let relevantVars = potentialVars qmap fml
@@ -133,7 +133,7 @@ somewhatFreshVar :: Environment -> String -> Sort -> Formula
 somewhatFreshVar env prefix s = Var s name 
   where 
     name = unbound 0 (prefix ++ show 0)
-    unbound n v = if Set.member v (allUniversals env)
+    unbound n v = if Set.member v (universalSyms env)
                     then unbound (n + 1) (v ++ show n)
                     else v
 

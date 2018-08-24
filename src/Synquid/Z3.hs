@@ -20,6 +20,7 @@ import qualified Data.Map as Map
 import Data.Map (Map)
 import qualified Data.Bimap as Bimap
 import Data.Bimap (Bimap)
+import Debug.Trace
 
 import Control.Monad
 import Control.Monad.Trans.State
@@ -104,11 +105,10 @@ instance MonadSMT Z3State where
     (r, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
     case m of 
       Nothing  -> return Nothing 
-      -- Since satisfied, return a map from variable names to satisfying valuations:
       Just mod -> (Just . Map.fromList . catMaybes) <$> mapM (getAssignment mod) vals
     where
       -- Z3 AST function corresponding to a given variable 
-      varFun s = toAST (Var IntS s) 
+      varFun s = fmlToAST (Var IntS s) 
       -- Get the assignment for a variable @name@:
       getAssignment model name = do 
         vFun <- varFun name

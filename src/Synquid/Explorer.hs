@@ -277,7 +277,7 @@ caseSymbols env x (name : names) (FunctionT y tArg tRes _) = do
 
 -- | Generate a possibly conditional possibly match term, depending on which conditions are abduced
 generateMaybeMatchIf :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
-generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplus` (generateMatch env t) -- might need to backtrack a successful match due to match depth limitation
+generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplus` generateMatch env t -- might need to backtrack a successful match due to match depth limitation
   where
     -- | Guess an E-term and abduce a condition and a match-condition for it
     generateOneBranch = do
@@ -298,7 +298,7 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
         guard $ length matchConds <= d
         return (matchConds, conjunction condValuation, unknownName condUnknown, p0)
 
-    generateEOrError env typ = generateError env `mplus` fmap fst (generateIE env typ)
+    generateEOrError env typ = generateError env `mplus` (fst <$> generateIE env typ)
 
     -- | Proceed after solution @p0@ has been found under assumption @cond@ and match-assumption @matchCond@
     generateOtherBranches (matchConds, cond, condUnknown, p0) = do

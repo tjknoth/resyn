@@ -231,7 +231,10 @@ simplifyConstraint' _ _ c@(Subtype env _syms t (ScalarT (TypeVarT _ a _) _ _) _ 
 -- TODO: do something with potential?
 simplifyConstraint' _ _ (Subtype env syms (ScalarT (DatatypeT name (tArg:tArgs) pArgs) fml pot) (ScalarT (DatatypeT name' (tArg':tArgs') pArgs') fml' pot') variant label)
   = do
-      simplifyConstraint (Subtype env syms tArg tArg' variant label)
+      let variant' = case variant of 
+            Consistency -> Consistency
+            _           -> Simple
+      simplifyConstraint (Subtype env syms tArg tArg' variant' label)
       simplifyConstraint (Subtype env syms (ScalarT (DatatypeT name tArgs pArgs) fml pot) (ScalarT (DatatypeT name' tArgs' pArgs') fml' pot') variant label)
 simplifyConstraint' _ _ (Subtype env syms (ScalarT (DatatypeT name [] (pArg:pArgs)) fml pot) (ScalarT (DatatypeT name' [] (pArg':pArgs')) fml' pot') variant label)
   = do

@@ -11,6 +11,7 @@ import Synquid.Pretty
 import Synquid.Resolver
 import Synquid.Solver.Monad
 import Synquid.Solver.TypeConstraint hiding (freshId, freshVar)
+import Synquid.Solver.Resource (allUniversals)
 
 import qualified Data.Map as Map
 import Data.Map (Map)
@@ -19,14 +20,14 @@ import Control.Monad.Logic
 import Control.Monad.Reader
 import Control.Lens
 import qualified Data.Set as Set
-import Debug.Trace
 
 
 -- | 'reconstruct' @eParams tParams goal@ : reconstruct missing types and terms in the body of @goal@ so that it represents a valid type judgment;
 -- return a type error if that is impossible
 reconstruct :: (MonadSMT s, MonadHorn s) => ExplorerParams -> TypingParams -> Goal -> s (Either ErrorMessage [(RProgram, TypingState)])
 reconstruct eParams tParams goal = do
-    initTS <- initTypingState $ gEnvironment goal
+    let env = gEnvironment goal
+    initTS <- initTypingState env (allUniversals env (gSpec goal))
     runExplorer (eParams { _sourcePos = gSourcePos goal }) tParams (Reconstructor reconstructTopLevel) initTS go
   where
     go = do

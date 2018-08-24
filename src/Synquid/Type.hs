@@ -11,17 +11,19 @@ import Data.Map (Map)
 
 {- Type skeletons -}
 
-data BaseType r = BoolT | IntT | DatatypeT Id [TypeSkeleton r] [r] | TypeVarT Substitution Id Formula 
+data BaseType r = BoolT | 
+  IntT | 
+  DatatypeT !Id ![TypeSkeleton r] ![r] | 
+  TypeVarT !Substitution !Id !Formula 
   deriving (Show, Eq, Ord)
 
 -- | Type skeletons (parametrized by refinements)
 data TypeSkeleton r =
-  ScalarT (BaseType r) r Formula |
-  FunctionT Id (TypeSkeleton r) (TypeSkeleton r) Integer |
-  LetT Id (TypeSkeleton r) (TypeSkeleton r) |
+  ScalarT !(BaseType r) !r !Formula |
+  FunctionT !Id !(TypeSkeleton r) !(TypeSkeleton r) !Integer |
+  LetT !Id !(TypeSkeleton r) !(TypeSkeleton r) |
   AnyT
   deriving (Show, Eq, Ord)
-
 
 
 -- Ignore multiplicity and potential when comparing baseTypes
@@ -142,9 +144,9 @@ isVarRefinemnt _ = False
 
 -- | Polymorphic type skeletons (parametrized by refinements)
 data SchemaSkeleton r =
-  Monotype (TypeSkeleton r) |
-  ForallT Id (SchemaSkeleton r) |       -- Type-polymorphic
-  ForallP PredSig (SchemaSkeleton r)    -- Predicate-polymorphic
+  Monotype !(TypeSkeleton r) |
+  ForallT !Id !(SchemaSkeleton r) |       -- Type-polymorphic
+  ForallP !PredSig !(SchemaSkeleton r)    -- Predicate-polymorphic
   deriving (Show, Eq, Ord)
 
 

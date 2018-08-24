@@ -28,15 +28,15 @@ data Case t = Case {
 
 -- | Program skeletons parametrized by information stored symbols, conditionals, and by node types
 data BareProgram t =
-  PSymbol Id |                                -- ^ Symbol (variable or constant)
-  PApp (Program t) (Program t) |              -- ^ Function application
-  PFun Id (Program t) |                       -- ^ Lambda abstraction
-  PIf (Program t) (Program t) (Program t) |   -- ^ Conditional
-  PMatch (Program t) [Case t] |               -- ^ Pattern match on datatypes
-  PFix [Id] (Program t) |                     -- ^ Fixpoint
-  PLet Id (Program t) (Program t) |           -- ^ Let binding
-  PHole |                                     -- ^ Hole (program to fill in)
-  PErr                                        -- ^ Error
+  PSymbol !Id |                                -- ^ Symbol (variable or constant)
+  PApp !(Program t) !(Program t) |             -- ^ Function application
+  PFun !Id !(Program t) |                      -- ^ Lambda abstraction
+  PIf !(Program t) !(Program t) !(Program t) | -- ^ Conditional
+  PMatch !(Program t) ![Case t] |              -- ^ Pattern match on datatypes
+  PFix ![Id] !(Program t) |                    -- ^ Fixpoint
+  PLet !Id !(Program t) !(Program t) |         -- ^ Let binding
+  PHole |                                      -- ^ Hole (program to fill in)
+  PErr                                         -- ^ Error
   deriving (Show, Eq, Ord, Functor)
 
 -- | Programs annotated with types
@@ -280,9 +280,8 @@ allScalarsOfSort env s = Map.filter (isSort s) (symbolsOfArity 0 env)
     isSort s sch = (fromSort s) == (typeFromSchema sch)
 
 -- | All universally quantified symbols in an environment -- includes measures
-allUniversals :: Environment -> Set Id 
-allUniversals env = Set.fromList (Map.keys (allSymbols env) `union` Map.keys (env ^. measures))
-
+universalSyms :: Environment -> Set Id 
+universalSyms env = Map.keysSet (allSymbols env) `Set.union` Map.keysSet (env ^. measures)
 
 -- | 'lookupSymbol' @name env@ : type of symbol @name@ in @env@, including built-in constants
 lookupSymbol :: Id -> Int -> Bool -> Environment -> Maybe RSchema
@@ -573,6 +572,12 @@ envFrom (WellFormedCond e _)        = e
 envFrom (WellFormedPredicate e _ _) = e
 envFrom (SharedType e _ _ _ _)      = e
 envFrom (ConstantRes e _)           = e
+
+typesFrom :: Constraint -> [RType]
+typesFrom (Subtype _ _ tl tr _ _)   = [tl, tr]
+typesFrom (WellFormed _ t _)        = [t]
+typesFrom (SharedType _ t1 t2 t3 _) = [t1, t2, t3]
+typesFrom c                         = []
 
 -- | Synthesis goal
 data Goal = Goal {

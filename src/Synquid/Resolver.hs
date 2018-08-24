@@ -244,7 +244,6 @@ resolveSignatures (MeasureDecl measureName _ _ post defCases args _) = do
           defCases' <- mapM (\(MeasureCase n args body) -> do
             body' <- resolveMeasureFormula body
             return (MeasureCase n args body')) defCases
-          --traceM $ "UPDATED" ++ show (pretty defCases')
           let args' = fmap (\(Var s x) -> (x, s)) freshConsts
           environment %= addMeasure measureName (MeasureDef inSort outSort defs' args' post')
           checkingGoals %= (++ [(measureName, (impl (MeasureDef inSort outSort defCases' args post'), pos))])
@@ -255,7 +254,6 @@ resolveSignatures (MeasureDecl measureName _ _ post defCases args _) = do
       if ctorName `notElem` allCtors
         then throwResError $ text "Not in scope: data constructor" <+> text ctorName <+> text "used in definition of measure" <+> text measureName
         else do
-          --traceM $ "Resolving " ++ show (pretty body)
           consSch <- uses environment ((Map.! ctorName) . allSymbols)
           let consT = toMonotype consSch
           let n = arity consT
@@ -264,7 +262,6 @@ resolveSignatures (MeasureDecl measureName _ _ post defCases args _) = do
             else do
               let ctorParams = allArgs consT
               let subst = Map.fromList $ cSub ++ zip binders ctorParams
-              --traceM $ "SUBST " ++ show subst
               let fml = Pred AnyS measureName (fmap snd cSub ++ [Var AnyS valueVarName]) |=| substitute subst body
               fml' <- withLocalEnv $ do
                 environment . boundTypeVars .= boundVarsOf consSch

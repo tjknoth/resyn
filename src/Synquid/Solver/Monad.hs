@@ -42,13 +42,17 @@ data TypingParams = TypingParams {
   _typeQualsGen :: Environment -> Formula -> [Formula] -> QSpace,   -- ^ Qualifier generator for types
   _predQualsGen :: Environment -> [Formula] -> [Formula] -> QSpace, -- ^ Qualifier generator for bound predicates
   _tcSolverSplitMeasures :: Bool,
-  _tcSolverLogLevel :: Int,                                         -- ^     How verbose logging is
-  _checkResourceBounds :: Bool,                                     -- ^      Is resource checking enabled
-  _checkMultiplicities :: Bool,                                     -- ^   Should multiplicities be considered when generating resource constraints
-  _instantiateUnivs :: Bool                                         -- ^ When solving exists-forall constraints, instantiate universally quantified expressions
+  _tcSolverLogLevel :: Int,                                         -- ^ How verbose logging is
+  _checkResourceBounds :: Bool,                                     -- ^ Is resource checking enabled
+  _checkMultiplicities :: Bool,                                     -- ^ Should multiplicities be considered when generating resource constraints
+  _instantiateUnivs :: Bool,                                        -- ^ When solving exists-forall constraints, instantiate universally quantified expressions
+  _constantRes :: Bool                                              -- ^ Check constant-timedness or not
 }
 
 makeLenses ''TypingParams
+
+-- Store either the generated formulas or the entire constraint (if the resource bounds include universal quantifiers)
+type RConstraint = Either TaggedConstraint Constraint
 
 -- | State of type constraint solving
 data TypingState = TypingState {
@@ -61,13 +65,14 @@ data TypingState = TypingState {
   _initEnv :: Environment,                      -- ^ Initial environment
   _idCount :: Map String Int,                   -- ^ Number of unique identifiers issued so far
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
-  _resourceConstraints :: [TaggedConstraint],   -- ^ Constraints relevant to resource analysis
+  _resourceConstraints :: [RConstraint],        -- ^ Constraints relevant to resource analysis
   _resourceVars :: Set String,                  -- ^ Set of variables created to replace potential/multiplicity annotations
   -- Temporary state:
   _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
   _hornClauses :: [Formula],                    -- ^ Horn clauses generated from subtyping constraints
   _consistencyChecks :: [Formula],              -- ^ Formulas generated from type consistency constraints
-  _errorContext :: (SourcePos, Doc)             -- ^ Information to be added to all type errors
+  _errorContext :: (SourcePos, Doc),            -- ^ Information to be added to all type errors
+  _universalFmls :: Maybe (Set Formula)         -- ^ Set of universally quantified resource expressions, if there are any
 }
 
 makeLenses ''TypingState
@@ -80,8 +85,9 @@ runTCSolver :: TypingParams -> TypingState -> TCSolver s a -> s (Either ErrorMes
 runTCSolver params st go = runExceptT $ runReaderT (runStateT go st) params
 
 -- | Initial typing state in the initial environment @env@
-initTypingState :: MonadHorn s => Environment -> s TypingState
-initTypingState env = do
+initTypingState :: MonadHorn s => Environment -> Set Formula -> s TypingState
+initTypingState env univs = do
+  let mUnivs = if null univs then Nothing else Just univs
   initCand <- initHornSolver env
   return TypingState {
     _typingConstraints = [],
@@ -97,7 +103,8 @@ initTypingState env = do
     _hornClauses = [],
     _consistencyChecks = [],
     _errorContext = (noPos, empty),
-    _resourceVars = Set.empty
+    _resourceVars = Set.empty,
+    _universalFmls = mUnivs 
   }
 
 instance Eq TypingState where

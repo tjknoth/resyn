@@ -42,7 +42,8 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _tcSolverLogLevel = _explorerLogLevel explorerParams,
                         _checkResourceBounds = _checkResources explorerParams,
                         _checkMultiplicities = _useMultiplicity explorerParams,
-                        _instantiateUnivs = _instantiateForall explorerParams
+                        _instantiateUnivs = _instantiateForall explorerParams,
+                        _constantRes = _constantTime explorerParams
                       }
       in do cp0 <- lift $ lift startTiming  -- TODO time stats for this one as well?
             res <- reconstruct explorerParams typingParams goal
@@ -73,7 +74,7 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
       if null params  -- Parameter-less predicate: also include conditional qualifiers
         then concatMap (instantiateCondQualifier False env vars) cquals ++ concatMap (extractCondFromType env vars) (components ++ allArgTypes syntGoal)
         else []
-
+      
     components = componentsIn $ gEnvironment goal
     componentsIn = map toMonotype . Map.elems . allSymbols
     syntGoal = toMonotype $ gSpec goal

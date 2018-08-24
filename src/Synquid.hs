@@ -15,6 +15,8 @@ import Synquid.Synthesizer
 import Synquid.HtmlOutput
 import Synquid.Codegen
 import Synquid.Stats
+import Synquid.Solver.Resource (testCEGIS)
+import Synquid.Z3 (evalZ3State)
 
 import Control.Monad
 import System.Exit
@@ -25,6 +27,7 @@ import Data.Time.Calendar
 import Data.Map ((!))
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
+import qualified Data.Set as Set
 
 import Data.List.Split
 
@@ -284,6 +287,46 @@ data SynthesisResult = SynthesisResult {
   timeStats :: TimeStats,
   goal :: Goal
 } deriving (Eq, Ord)
+
+{-
+-- Test runner
+runCEGISTest :: String -> IO ()
+runCEGISTest fname = do 
+  f <- parseFmlFromFile fname
+  case f of 
+    Left err -> print err
+    Right fml -> do
+      res <- evalZ3State $ runTCSolver tParams initTS (testCEGIS fml)
+      case res of 
+        Left err -> print err
+        Right (b, _) -> 
+          if b 
+            then print $ "SAT: " ++ show (plain (pretty fml))
+            else print $ "UNSAT: " ++ show (plain (pretty fml)) 
+  where 
+    tParams = TypingParams {
+      _instantiateUnivs = True,
+      _constantRes = False,
+      _tcSolverLogLevel = 6
+    }
+    initTS = TypingState {
+      _typingConstraints = [],
+      _typeAssignment = Map.empty,
+      _predAssignment = Map.empty,
+      _qualifierMap = Map.empty,
+      _candidates = [],
+      _initEnv = emptyEnv,
+      _idCount = Map.empty,
+      _isFinal = False,
+      _resourceConstraints = [],
+      _simpleConstraints = [],
+      _hornClauses = [],
+      _consistencyChecks = [],
+      _errorContext = (noPos, empty),
+      _resourceVars = Set.empty,
+      _universalFmls = Just Set.empty
+    }
+-}
 
 -- | Parse and resolve file, then synthesize the specified goals
 runOnFile :: SynquidParams -> ExplorerParams -> HornSolverParams -> CodegenParams

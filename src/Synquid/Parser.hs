@@ -1,7 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 
 -- | The parser for Synquid's program specification DSL.
-module Synquid.Parser (parseFromFile, parseProgram, toErrorMessage) where
+module Synquid.Parser (parseFromFile, parseProgram, toErrorMessage, parseFmlFromFile) where
 
 import Synquid.Logic
 import Synquid.Type
@@ -36,6 +36,11 @@ parseFromFile :: Parser a -> String -> IO (Either ParseError a)
 parseFromFile aParser fname = do
   input <- readFile fname
   return $ runIndent fname $ runParserT aParser () fname input
+
+parseFmlFromFile :: String -> IO (Either ParseError Formula)
+parseFmlFromFile file = do 
+  input <- readFile file
+  return $ runIndent file $ runParserT parseFormula () file input
 
 toErrorMessage :: ParseError -> ErrorMessage
 toErrorMessage err = ErrorMessage ParseError (errorPos err)

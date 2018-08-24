@@ -115,18 +115,18 @@ type Substitution = Map Id Formula
 
 -- | Formulas of the refinement logic
 data Formula =
-  BoolLit Bool |                      -- ^ Boolean literal
-  IntLit Integer |                    -- ^ Integer literal
-  SetLit Sort [Formula] |             -- ^ Set literal ([1, 2, 3])
-  Var Sort Id |                       -- ^ Input variable (universally quantified first-order variable)
-  Unknown Substitution Id |           -- ^ Predicate unknown (with a pending substitution)
-  Unary UnOp Formula |                -- ^ Unary expression
-  Binary BinOp Formula Formula |      -- ^ Binary expression
-  Ite Formula Formula Formula |       -- ^ If-then-else expression
-  Pred Sort Id [Formula] |            -- ^ Logic function application
-  Cons Sort Id [Formula] |            -- ^ Constructor application
-  All Formula Formula |               -- ^ Universal quantification
-  ASTLit AST String                   -- ^ Z3 AST literal (only used to solve resource constraints), and its string version
+  BoolLit !Bool |                      -- ^ Boolean literal
+  IntLit !Integer |                    -- ^ Integer literal
+  SetLit !Sort ![Formula] |            -- ^ Set literal ([1, 2, 3])
+  Var !Sort !Id |                      -- ^ Input variable (universally quantified first-order variable)
+  Unknown !Substitution !Id |          -- ^ Predicate unknown (with a pending substitution)
+  Unary !UnOp !Formula |               -- ^ Unary expression
+  Binary !BinOp !Formula !Formula |    -- ^ Binary expression
+  Ite !Formula !Formula !Formula |     -- ^ If-then-else expression
+  Pred !Sort !Id ![Formula] |          -- ^ Logic function application
+  Cons !Sort !Id ![Formula] |          -- ^ Constructor application
+  All !Formula !Formula |              -- ^ Universal quantification
+  ASTLit !AST !String                  -- ^ Z3 AST literal (only used to solve resource constraints), and its string version
   deriving (Show, Eq, Ord)
 
 dontCare = "_"
@@ -516,6 +516,7 @@ isTrivial :: Formula -> Bool
 isTrivial (BoolLit True)    = True 
 isTrivial (Binary Eq f1 f2) = f1 == f2
 isTrivial (Binary Ge (IntLit x) (IntLit 0)) = x >= 0
+isTrivial (Binary Implies f g) = f == ffalse || g == ftrue
 isTrivial _                 = False 
 
 
