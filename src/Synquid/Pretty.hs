@@ -48,13 +48,15 @@ module Synquid.Pretty (
   -- * Counting
   typeNodeCount,
   programNodeCount,
-  prettyConjuncts,
   -- * Syntax Highlighting
   plain,
   errorDoc,
   special,
   operator,
-  keyword
+  keyword,
+  -- * Miscellaneous
+  prettyConjuncts,
+  prettyScalarTypes
 ) where
 
 import Synquid.Logic
@@ -352,7 +354,11 @@ prettyBindings env = commaSep (map pretty (Map.keys $ removeDomain (env ^. const
 -- prettyBindings env = hMapDoc pretty pretty (removeDomain (env ^. constants) (allSymbols env))
 -- prettyBindings env = empty
 
-prettyScalarTypes env = hsep $ pretty <$> Map.assocs (_symbols env Map.! 0)
+
+
+prettyScalarTypes env = hcat $ punctuate comma (prettyst <$> Map.assocs (_symbols env Map.! 0))
+  where
+    prettyst (x, t) = pretty x <+> operator ":" <+> pretty ((topPotentialOf . typeFromSchema) t)
 prettyScalars env = hsep $ pretty <$> Map.keys (_symbols env Map.! 0)
 
 instance Pretty Environment where
@@ -370,13 +376,14 @@ instance Show SortConstraint where
 
 prettyConstraint :: Constraint -> Doc
 prettyConstraint (Subtype env _syms t1 t2 Consistency label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "/\\" <+> pretty t2 
+prettyConstraint (Subtype env _syms t1 t2 Nondeterministic label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "~<:~" <+> pretty t2 
 prettyConstraint (Subtype env _syms t1 t2 _ label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "<:" <+> pretty t2 
 prettyConstraint (WellFormed env t label) = prettyBindings env <+> operator "|-" <+> pretty t 
 prettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 prettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 prettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
 prettyConstraint (SharedType _ t tl tr label) = pretty label <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr)
-prettyConstraint (ConstantRes env label) = text "CT expression:" <+> text label <+> text "from scalars:" <+> prettyScalars env 
+prettyConstraint (ConstantRes env label) = text "CT expression:" <+> text label <+> text "from scalars:" <+> prettyScalarTypes env 
 
 -- Do not show environment
 simplePrettyConstraint :: Constraint -> Doc

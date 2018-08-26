@@ -79,7 +79,7 @@ solveTypeConstraints = do
 solveCTConstraints :: (MonadSMT s, MonadHorn s) => TCSolver s ()
 solveCTConstraints = do 
   tcs <- use typingConstraints
-  writeLog 3 $ nest 2 $ text "Constant-time constraints:" $+$ vsep (map pretty tcs)
+  writeLog 3 $ nest 2 $ linebreak <+> text "Checking CT constraints:" $+$ vsep (map pretty tcs)
   typingConstraints .= []
   let tcs' = filter isCTConstraint tcs
   res <- asks _checkResourceBounds
@@ -335,36 +335,38 @@ processConstraint (Subtype env syms (ScalarT baseTL l potl) (ScalarT baseTR r po
       unless (l' == ftrue || r' == ftrue) $ simpleConstraints %= (Subtype env syms (ScalarT baseTL l' potl') (ScalarT baseTR r' potr') Consistency label :)
 
 processConstraint c@(Subtype env syms (ScalarT baseTL l potl) (ScalarT baseTR r potr) variant label) | equalShape baseTL baseTR
-  = unless (l == ffalse || r == ftrue) $ do
-      tass <- use typeAssignment
-      pass <- use predAssignment
-      let subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass
-      let l' = subst l
-      let r' = subst r
-      let potl' = subst potl
-      let potr' = subst potr
-      let c' = Subtype env syms (ScalarT baseTL l' potl') (ScalarT baseTR r' potr') variant label
-      if Set.null $ (predsOf l' `Set.union` predsOf r') Set.\\ Map.keysSet (allPredicates env)
-          then case baseTL of -- Subtyping of datatypes: try splitting into individual constraints between measures
-                DatatypeT dtName _ _ -> do
-                  let measures = Map.keysSet $ allMeasuresOf dtName env
-                  let isAbstract = null $ ((env ^. datatypes) Map.! dtName) ^. constructors
-                  let vals = filter (\v -> varName v == valueVarName) . Set.toList . varsOf $ r'
-                  let rConjuncts = conjunctsOf r'
-                  doSplit <- asks _tcSolverSplitMeasures
-                  if not doSplit || isAbstract || null vals || (not . Set.null . unknownsOf) (l' |&| r') -- TODO: unknowns can be split if we know their potential valuations
-                    then simpleConstraints %= (c' :) -- Constraint has unknowns (or RHS doesn't contain _v)
-                    else case splitByPredicate measures (head vals) (Set.toList rConjuncts) of
-                          Nothing -> simpleConstraints %= (c' :) -- RHS cannot be split, add whole thing
-                          Just mr -> if rConjuncts `Set.isSubsetOf` Set.unions (Map.elems mr)
-                                      then do
-                                        let lConjuncts = conjunctsOf $ instantiateCons (head vals) l'
-                                        case splitByPredicate measures (head vals) (Set.toList lConjuncts) of -- Every conjunct of RHS is about some `m _v` (where m in measures)
-                                            Nothing -> simpleConstraints %= (c' :) -- LHS cannot be split, add whole thing for now
-                                            Just ml -> mapM_ (addSplitConstraint ml) (toDisjointGroups mr)
-                                      else simpleConstraints %= (c' :) -- Some conjuncts of RHS are no covered (that is, do not contains _v), add whole thing
-                _ -> simpleConstraints %= (c' :)
-        else modify $ addTypingConstraint c -- Constraint contains free predicate: add back and wait until more type variables get unified, so predicate variables can be instantiated
+  = if l /= ffalse && r /= ftrue 
+      then simpleConstraints %= (c: ) 
+      else do 
+        tass <- use typeAssignment
+        pass <- use predAssignment
+        let subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass
+        let l' = subst l
+        let r' = subst r
+        let potl' = subst potl
+        let potr' = subst potr
+        let c' = Subtype env syms (ScalarT baseTL l' potl') (ScalarT baseTR r' potr') variant label
+        if Set.null $ (predsOf l' `Set.union` predsOf r') Set.\\ Map.keysSet (allPredicates env)
+            then case baseTL of -- Subtyping of datatypes: try splitting into individual constraints between measures
+                  DatatypeT dtName _ _ -> do
+                    let measures = Map.keysSet $ allMeasuresOf dtName env
+                    let isAbstract = null $ ((env ^. datatypes) Map.! dtName) ^. constructors
+                    let vals = filter (\v -> varName v == valueVarName) . Set.toList . varsOf $ r'
+                    let rConjuncts = conjunctsOf r'
+                    doSplit <- asks _tcSolverSplitMeasures
+                    if not doSplit || isAbstract || null vals || (not . Set.null . unknownsOf) (l' |&| r') -- TODO: unknowns can be split if we know their potential valuations
+                      then simpleConstraints %= (c' :) -- Constraint has unknowns (or RHS doesn't contain _v)
+                      else case splitByPredicate measures (head vals) (Set.toList rConjuncts) of
+                            Nothing -> simpleConstraints %= (c' :) -- RHS cannot be split, add whole thing
+                            Just mr -> if rConjuncts `Set.isSubsetOf` Set.unions (Map.elems mr)
+                                        then do
+                                          let lConjuncts = conjunctsOf $ instantiateCons (head vals) l'
+                                          case splitByPredicate measures (head vals) (Set.toList lConjuncts) of -- Every conjunct of RHS is about some `m _v` (where m in measures)
+                                              Nothing -> simpleConstraints %= (c' :) -- LHS cannot be split, add whole thing for now
+                                              Just ml -> mapM_ (addSplitConstraint ml) (toDisjointGroups mr)
+                                        else simpleConstraints %= (c' :) -- Some conjuncts of RHS are no covered (that is, do not contains _v), add whole thing
+                  _ -> simpleConstraints %= (c' :)
+          else modify $ addTypingConstraint c -- Constraint contains free predicate: add back and wait until more type variables get unified, so predicate variables can be instantiated
   where
     instantiateCons val fml@(Binary Eq v (Cons _ _ _)) | v == val = conjunction $ instantiateConsAxioms env (Just val) fml
     instantiateCons _ fml = fml

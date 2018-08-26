@@ -331,7 +331,7 @@ generateIE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s (R
 generateIE env t = do 
   (p, env') <- generateE env t
   addCTConstraint env' (show (pretty p))
-  --runInSolver solveCTConstraints
+  runInSolver solveCTConstraints
   return (p, env')
 
 -- | 'generateE' @env typ@ : explore all elimination terms of type @typ@ in environment @env@
@@ -368,6 +368,7 @@ checkE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> RProgram -> Explo
 checkE env typ p@(Program pTerm pTyp) = do
   ctx <- asks . view $ _1 . context
   writeLog 1 $ linebreak <+> linebreak <+> special "Checking" <+> pretty p <+> text "::" <+> pretty typ <+> text "in" $+$ pretty (ctx (untyped PHole))
+  writeLog 3 $ text "from env with top-level potentials:" <+> prettyScalarTypes env
 
   -- ifM (asks $ _symmetryReduction . fst) checkSymmetry (return ())
 
