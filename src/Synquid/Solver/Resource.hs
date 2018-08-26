@@ -32,17 +32,18 @@ import Debug.Trace
 
 -- | Check resource bounds: attempt to find satisfying expressions for multiplicity and potential annotations 
 checkResources :: (MonadHorn s, MonadSMT s) => [Constraint] -> TCSolver s ()
+checkResources [] = return ()
 checkResources constraints = do 
   tcParams <- ask 
   tcState <- get 
   oldConstraints <- use resourceConstraints 
   newC <- solveResourceConstraints oldConstraints (filter isResourceConstraint constraints)
   case newC of 
-    Left err -> throwError $ text err
-    Right f  -> resourceConstraints %= (++ f) 
+    Nothing -> throwError $ text "Insufficient resources"
+    Just f  -> resourceConstraints %= (++ f) 
 
 -- | 'solveResourceConstraints' @oldConstraints constraints@ : Transform @constraints@ into logical constraints and attempt to solve the complete system by conjoining with @oldConstraints@
-solveResourceConstraints :: MonadSMT s => [RConstraint] -> [Constraint] -> TCSolver s (Either String [RConstraint]) 
+solveResourceConstraints :: MonadSMT s => [RConstraint] -> [Constraint] -> TCSolver s (Maybe [RConstraint]) 
 solveResourceConstraints oldConstraints constraints = do
     writeLog 3 $ linebreak <+> text "Generating resource constraints:"
     checkMults <- asks _checkMultiplicities
@@ -68,12 +69,12 @@ solveResourceConstraints oldConstraints constraints = do
       <+> text result $+$ prettyConjuncts (filter (isInteresting . constraint) constraintList)
     if b 
       then 
-        return $ Right $ if containsUnivs 
+        return $ Just $ if containsUnivs 
           -- Store raw constraints
           then map Right constraints
           -- Otherwise, store TaggedConstraints with the appropriate formulas
           else map Left $ filter (not . isTrivialTC) constraintList
-      else return $ Left "Insufficient resources" -- Left <$> checkUnsatCause universals accFmls constraints 
+      else return Nothing
 
 
 -- | Given lists of constraints (newly-generated and accumulated), construct the corresponding solver query
@@ -84,23 +85,6 @@ assembleQuery accConstraints constraints =
   in conjunction $ accFmlList ++ fmlList 
 
 isTrivialTC (TaggedConstraint _ f) = isTrivial f
-
--- | checkUnsatCause : determine whether the constant-resource demands are the cause of unsatisfiability or not.
---     returns an appropriate error message
---   Only useful when using synquid as a verifier
-checkUnsatCause :: MonadSMT s => Set Formula -> [TaggedConstraint] -> [Constraint] -> TCSolver s String 
-checkUnsatCause universals oldConstraints constraints = do
-  checkMults <- asks _checkMultiplicities
-  constraintList <- mapM (generateFormula False checkMults universals . Right) (filter (not . isCTConstraint) constraints)
-  let query = assembleQuery oldConstraints constraintList 
-  constRes <- asks _constantRes
-  b <- fst <$> isSatWithModel query 
-  if constRes && b 
-    then return "Branching expression is not constant-time" 
-    else return "Insufficient resources" 
-    where 
-      isCTConstraint (ConstantRes _ _) = True
-      isCTConstraint _                 = False
 
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 --    If there are no universal quantifiers, we can cache the generated formulas (the Left case)

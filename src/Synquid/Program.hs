@@ -21,9 +21,9 @@ import Control.Lens as Lens
 
 -- | One case inside a pattern match expression
 data Case t = Case {
-  constructor :: Id,      -- ^ Constructor name
-  argNames :: [Id],       -- ^ Bindings for constructor arguments
-  expr :: Program t       -- ^ Result of the match in this case
+  constructor :: !Id,      -- ^ Constructor name
+  argNames :: ![Id],       -- ^ Bindings for constructor arguments
+  expr :: !(Program t)     -- ^ Result of the match in this case
 } deriving (Show, Eq, Ord, Functor)
 
 -- | Program skeletons parametrized by information stored symbols, conditionals, and by node types
@@ -192,7 +192,7 @@ data DatatypeDef = DatatypeDef {
   _predParams :: [PredSig],         -- ^ Signatures of predicate parameters
   _predVariances :: [Bool],         -- ^ For each predicate parameter, whether it is contravariant
   _constructors :: [Id],            -- ^ Constructor names
-  _wfMetric :: Maybe Id             -- ^ Name of the measure that serves as well founded termination metric
+  _wfMetric :: (Maybe Id)           -- ^ Name of the measure that serves as well founded termination metric
 } deriving (Show, Eq, Ord)
 
 makeLenses ''DatatypeDef
@@ -514,21 +514,21 @@ refineBot env (FunctionT x tArg tFun c) = FunctionT x (refineTop env tArg) (refi
 {- Input language declarations -}
 
 -- | Constructor signature: name and type
-data ConstructorSig = ConstructorSig Id RType
+data ConstructorSig = ConstructorSig !Id !RType
   deriving (Show, Eq)
 
 constructorName (ConstructorSig name _) = name
 
 data BareDeclaration =
-  TypeDecl Id [Id] RType |                                  -- ^ Type name, variables, and definition
-  FuncDecl Id RSchema |                                     -- ^ Function name and signature
-  DataDecl Id [Id] [(PredSig, Bool)] [ConstructorSig] |     -- ^ Datatype name, type parameters, predicate parameters, and constructor definitions
-  MeasureDecl Id Sort Sort Formula [MeasureCase] MeasureDefaults Bool |     -- ^ Measure name, input sort, output sort, postcondition, definition cases, constant arguments, and whether this is a termination metric
-  PredDecl PredSig |                                        -- ^ Module-level predicate
-  QualifierDecl [Formula] |                                 -- ^ Qualifiers
-  MutualDecl [Id] |                                         -- ^ Mutual recursion group
-  InlineDecl Id [Id] Formula |                              -- ^ Inline predicate
-  SynthesisGoal Id UProgram                                 -- ^ Name and template for the function to reconstruct
+  TypeDecl !Id ![Id] !RType |                                                   -- ^ Type name, variables, and definition
+  FuncDecl !Id !RSchema |                                                       -- ^ Function name and signature
+  DataDecl !Id ![Id] ![(PredSig, Bool)] ![ConstructorSig] |                     -- ^ Datatype name, type parameters, predicate parameters, and constructor definitions
+  MeasureDecl !Id !Sort !Sort !Formula ![MeasureCase] !MeasureDefaults !Bool |  -- ^ Measure name, input sort, output sort, postcondition, definition cases, constant arguments, and whether this is a termination metric
+  PredDecl !PredSig |                                                           -- ^ Module-level predicate
+  QualifierDecl ![Formula] |                                                    -- ^ Qualifiers
+  MutualDecl ![Id] |                                                            -- ^ Mutual recursion group
+  InlineDecl !Id ![Id] !Formula |                                               -- ^ Inline predicate
+  SynthesisGoal !Id !UProgram                                                   -- ^ Name and template for the function to reconstruct
   deriving (Show, Eq)
 
 type Declaration = Pos BareDeclaration 
@@ -545,13 +545,13 @@ data SubtypeVariant = Simple -- Consistency = False, Nondeterministic = False
 
 -- | Typing constraints
 data Constraint = 
-  Subtype Environment SymbolMap RType RType SubtypeVariant Id
-  | WellFormed Environment RType Id
-  | WellFormedCond Environment Formula
-  | WellFormedMatchCond Environment Formula
-  | WellFormedPredicate Environment [Sort] Id
-  | SharedType Environment RType RType RType Id
-  | ConstantRes Environment Id
+  Subtype !Environment !SymbolMap !RType !RType !SubtypeVariant !Id
+  | WellFormed !Environment !RType !Id
+  | WellFormedCond !Environment !Formula
+  | WellFormedMatchCond !Environment !Formula
+  | WellFormedPredicate !Environment ![Sort] !Id
+  | SharedType !Environment !RType !RType !RType !Id
+  | ConstantRes !Environment !Id
   deriving (Show, Eq, Ord)
 
 data TaggedConstraint = TaggedConstraint {
@@ -578,6 +578,9 @@ typesFrom (Subtype _ _ tl tr _ _)   = [tl, tr]
 typesFrom (WellFormed _ t _)        = [t]
 typesFrom (SharedType _ t1 t2 t3 _) = [t1, t2, t3]
 typesFrom c                         = []
+
+isCTConstraint (ConstantRes _ _) = True
+isCTConstraint _                 = False
 
 -- | Synthesis goal
 data Goal = Goal {

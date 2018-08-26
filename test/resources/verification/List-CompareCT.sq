@@ -7,9 +7,9 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs 
 
-{-
+
 -- Length comparison
-compare :: xs: List {a| |1} -[1]-> ys: List {a| |1} -> {Bool | _v == (len xs == len ys)}
+compare :: xs: List {a| |1} -[1]-> ys: List a -> {Bool | _v == (len xs == len ys)}
 compare = \xs. \ys. 
   match xs with 
     Nil ->
@@ -20,15 +20,15 @@ compare = \xs. \ys.
       match ys with 
         Nil -> False
         Cons yh yt -> compare xt yt
--}
 
-false :: {Bool | _v == False}
-true :: {Bool | _v == True}
-and :: x: Bool -> y: Bool -> {Bool | _v == (x && y)}
+
+--false :: {Bool | _v == False}
+--true :: {Bool | _v == True}
+--and :: x: Bool -> y: Bool -> {Bool | _v == (x && y)}
 
 -- Constant time version
-compare' :: xs: List {a| |1} -[1]-> ys: List a -> {Bool | _v == (len xs == len ys)}
-compare' = ??
+--compare' :: xs: List {a| |1} -[1]-> ys: List a -> {Bool | _v == (len xs == len ys)}
+--compare' = ??
 {- \xs. \ys. 
   match xs with 
     Nil ->

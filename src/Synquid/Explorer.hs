@@ -331,6 +331,7 @@ generateIE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s (R
 generateIE env t = do 
   (p, env') <- generateE env t
   addCTConstraint env' (show (pretty p))
+  --runInSolver solveCTConstraints
   return (p, env')
 
 -- | 'generateE' @env typ@ : explore all elimination terms of type @typ@ in environment @env@

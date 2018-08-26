@@ -215,6 +215,7 @@ reconstructIE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> UProgram -
 reconstructIE env t impl = do 
   (p, env') <- reconstructETopLevel env t impl
   addCTConstraint env' (show (pretty impl)) 
+  --runInSolver solveCTConstraints
   return (p, env')
 
 -- | 'reconstructE' @env t impl@ :: reconstruct unknown types and terms in a judgment @env@ |- @impl@ :: @t@ where @impl@ is an elimination term

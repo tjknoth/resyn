@@ -24,7 +24,8 @@ module Synquid.Solver.TypeConstraint (
   solveHornClauses,
   processAllPredicates,
   checkTypeConsistency,
-  solveTypeConstraints
+  solveTypeConstraints,
+  solveCTConstraints
 ) where
 
 import Synquid.Logic
@@ -73,6 +74,16 @@ solveTypeConstraints = do
 
   hornClauses .= []
   consistencyChecks .= []
+
+-- | Solve constant-timedness constraints, does not require all the work involved in the general constraint solver
+solveCTConstraints :: (MonadSMT s, MonadHorn s) => TCSolver s ()
+solveCTConstraints = do 
+  tcs <- use typingConstraints
+  writeLog 3 $ nest 2 $ text "Constant-time constraints:" $+$ vsep (map pretty tcs)
+  typingConstraints .= []
+  let tcs' = filter isCTConstraint tcs
+  res <- asks _checkResourceBounds
+  when res $ checkResources tcs
 
 -- | Impose typing constraint @c@ on the programs
 addTypingConstraint c = over typingConstraints (nub . (c :))
