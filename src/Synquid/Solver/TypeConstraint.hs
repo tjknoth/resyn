@@ -335,8 +335,11 @@ processConstraint (Subtype env syms (ScalarT baseTL l potl) (ScalarT baseTR r po
       unless (l' == ftrue || r' == ftrue) $ simpleConstraints %= (Subtype env syms (ScalarT baseTL l' potl') (ScalarT baseTR r' potr') Consistency label :)
 
 processConstraint c@(Subtype env syms (ScalarT baseTL l potl) (ScalarT baseTR r potr) variant label) | equalShape baseTL baseTR
-  = if l /= ffalse && r /= ftrue 
-      then simpleConstraints %= (c: ) 
+  = if l == ffalse || r == ftrue 
+      then do 
+        -- Implication on refinements is trivially true, add constraint with trivial refinements for resource analysis
+        let c' = Subtype env syms (ScalarT baseTL ffalse potl) (ScalarT baseTR r potr) variant label
+        simpleConstraints %= (c': ) 
       else do 
         tass <- use typeAssignment
         pass <- use predAssignment
