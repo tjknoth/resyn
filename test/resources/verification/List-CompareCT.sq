@@ -30,24 +30,5 @@ and :: x: Bool -> y: Bool -> {Bool | _v == (x && y)}
 
 -- Constant time version
 compare' :: xs: List {a| |1} -[1]-> ys: List a -> {Bool | _v == (len xs == len ys)}
-compare' = \xs. \ys.
-  match xs with 
-    Nil -> 
-      match ys with 
-        Nil -> ??
-        Cons yh yt -> ??
-    Cons xh xt ->
-      match ys with
-        Nil -> ??
-        Cons yh ys -> ??
-{-\xs. \ys. 
-  match xs with 
-    Nil ->
-      match ys with
-        Nil -> True
-        Cons yh yt -> False
-    Cons xh xt ->
-      match ys with 
-        Nil -> False && (compare' xt Nil)
-        Cons yh yt -> compare' xt yt
--}
+compare' = ??
+

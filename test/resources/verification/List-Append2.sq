@@ -24,4 +24,4 @@ append = \xs. \ys.
 -- append xs ys requires memory proportional to the length of xs
 append2 :: xs: List {2**a| |2} -> ys: List {1**a| |1} -> zs: List a -> {List a | len _v == len xs + len ys + len zs && elems _v == elems xs + elems ys + elems zs}
 append2 = \xs. \ys. \zs. 
-  append (append xs ys) zs
+  append xs (append ys zs) 

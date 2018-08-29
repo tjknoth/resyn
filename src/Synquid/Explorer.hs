@@ -435,10 +435,10 @@ enumerateAt env typ d = do
                     $ inContext (\p -> Program (PApp fun p) tRes')
                     $ mbCut (genArg env' tArg')
           writeLog 3 (text "Synthesized argument" <+> pretty arg <+> text "of type" <+> pretty (typeOf arg))
-          let tRes'' = appType newEnv arg x tRes' -- Probably doesn't matter which environment we use here, using newEnv for consistency 
+          let tRes'' = appType newEnv arg x tRes' 
           return (Program (PApp fun arg) tRes'', newEnv)
-      _ <- checkE env'' typ pApp
-      return (pApp, env'')
+      env3 <- checkE env'' typ pApp
+      return (pApp, env3)
 
 -- | Make environment inconsistent (if possible with current unknown assumptions)
 generateError :: (MonadSMT s, MonadHorn s) => Environment -> Explorer s RProgram
