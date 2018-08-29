@@ -102,7 +102,7 @@ generateFormula' shouldLog checkMults univs c@(Subtype env syms tl tr variant la
   let relevantFml = conjunction $ univs `Set.union` allFormulasOf checkMults tl `Set.union` allFormulasOf checkMults tr
   TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls relevantFml (Set.insert (refinementOf tl))
 generateFormula' shouldLog checkMults univs c@(WellFormed env t label) = do
-  let fmls = conjunction $ filter (not . isTrivial) $ map (|>=| fzero) $ allRFormulas checkMults t
+  let fmls = conjunction $ filter (not . isTrivial) $ map (|>=| fzero)  $ allRFormulas checkMults t
   let relevantFml = conjunction $ univs `Set.union` allFormulasOf checkMults t
   TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls relevantFml (Set.insert (refinementOf t))
 generateFormula' shouldLog checkMults univs c@(SharedType env t tl tr label) = do 
@@ -325,29 +325,35 @@ printParams prog polynomials = pretty $ map (\(rvar, poly) -> text rvar <+> oper
 -- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
 allRFormulas :: Bool -> RType -> [Formula]
 allRFormulas cm (FunctionT _ argT resT _) = allRFormulas cm argT ++ allRFormulas cm resT
-allRFormulas cm (ScalarT base _ p) = p : allRFormulasBase cm base
-allRFormulas _ _                   = [] 
+allRFormulas cm (ScalarT base _ Infty)    = allRFormulasBase cm base
+allRFormulas cm (ScalarT base _ (Fml p))  = p : allRFormulasBase cm base
+allRFormulas _ _                          = [] 
 
 allRFormulasBase :: Bool -> BaseType Formula -> [Formula]
-allRFormulasBase cm (DatatypeT _ ts _) = concatMap (allRFormulas cm) ts
-allRFormulasBase cm (TypeVarT _ _ m)   = [m | cm] 
-allRFormulasBase _ _                   = []
+allRFormulasBase cm (DatatypeT _ ts _)     = concatMap (allRFormulas cm) ts
+allRFormulasBase _  (TypeVarT _ _ Infty)   = []
+allRFormulasBase cm (TypeVarT _ _ (Fml m)) = [m | cm] 
+allRFormulasBase _ _                       = []
 
 -- | 'partition' @t tl tr@ : Generate numerical constraints referring to a partition of the resources associated with @t@ into types @tl@ and @tr@ 
 partition :: Bool -> RType -> RType -> RType -> [Formula]
-partition cm (ScalarT b _ f) (ScalarT bl _ fl) (ScalarT br _ fr) 
+partition cm (ScalarT b _ Infty) (ScalarT bl _ Infty) (ScalarT br _ Infty) 
+  = partitionBase cm b bl br
+partition cm (ScalarT b _ (Fml f)) (ScalarT bl _ (Fml fl)) (ScalarT br _ (Fml fr)) 
   = (f |=| (fl |+| fr)) : partitionBase cm b bl br
 partition _ _ _ _ = [] 
 
 partitionBase :: Bool -> BaseType Formula -> BaseType Formula -> BaseType Formula -> [Formula]
 partitionBase cm (DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _) 
   = concat $ zipWith3 (partition cm) ts tsl tsr
-partitionBase cm (TypeVarT _ _ m) (TypeVarT _ _ ml) (TypeVarT _ _ mr) 
+partitionBase _  (TypeVarT _ _ Infty) (TypeVarT _ _ Infty) (TypeVarT _ _ Infty)
+  = []
+partitionBase cm (TypeVarT _ _ (Fml m)) (TypeVarT _ _ (Fml ml)) (TypeVarT _ _ (Fml mr)) 
   = [m |=| (ml |+| mr) | cm] 
 partitionBase _ _ _ _ = [] 
 
 assertZeroPotential :: Bool -> TypeSubstitution -> Environment -> Formula
-assertZeroPotential cm tass env = sumFormulas (fmap (totalPotential cm) scalars) |=| fzero
+assertZeroPotential cm tass env = sumFormulas (fmap totalTopLevelPotential scalars) |=| fzero
   where 
     scalars = fmap (typeSubstitute tass . typeFromSchema) rawScalars
     rawScalars = Map.filterWithKey notEmptyCtor (symbolsOfArity 0 env) 
@@ -356,44 +362,61 @@ assertZeroPotential cm tass env = sumFormulas (fmap (totalPotential cm) scalars)
 -- | 'assertSubtypes' @env tl tr@ : Generate formulas partitioning potential appropriately amongst
 --    environment @env@ in order to check @tl@ <: @tr@
 assertSubtypes :: Environment -> SymbolMap -> TypeSubstitution -> Bool -> RType -> RType -> [Formula]
-assertSubtypes env syms tass cm (ScalarT bl _ fl) (ScalarT br _ fr) = 
-  subtypeAssertions ++ wellFormedAssertions
-    where
-      -- Get map of only scalar types (excluding empty type constructors) in environment:
+assertSubtypes env syms tass cm tl@(ScalarT bl _ pl) tr@(ScalarT br _ pr) = 
+  let -- Get map of only scalar types (excluding empty type constructors) in environment:
       scalarsOf smap = Map.filterWithKey notEmptyCtor $ fmap typeFromSchema $ fromMaybe Map.empty $ Map.lookup 0 smap
       -- Get top-level potentials from environment, after applying current type substitutions
-      topPotentials = Map.mapMaybe (topPotentialOf . typeSubstitute tass) 
+      topPotentials = Map.mapMaybe (topPotentialFml . typeSubstitute tass) 
       -- Sum all top-level potential in an environment:
-      envSum f smap = addFormulas f $ sumFormulas $ topPotentials $ scalarsOf smap
-      leftSum  = envSum fl (_symbols env)
-      rightSum = envSum fr syms      
+      envSum smap = sumFormulas $ topPotentials $ scalarsOf smap
       -- Assert that types in fresh context are well-formed (w.r.t top-level annotations)
       wellFormed smap = map (|>=| fzero) ((Map.elems . topPotentials) smap) 
-      subtypeAssertions = (leftSum `subtypeOp` rightSum) : directSubtypesBase cm bl br
       wellFormedAssertions = wellFormed $ scalarsOf syms
+      -- True if the given variable is not an empty constructor for some data type
       notEmptyCtor x _ = Set.notMember x (_emptyCtors env) 
+  in case (pl, pr) of 
+    -- Infinite potential on the left side is a subtype of everything
+    --   Still, assert that the left and right contexts have equal potential
+    (Infty, _)       -> 
+      let leftSum = envSum (_symbols env)
+          rightSum = envSum syms
+          subtypeAssertions = (leftSum `subtypeOp` rightSum) : directSubtypesBase cm bl br
+      in subtypeAssertions ++ wellFormedAssertions
+    -- Throw error if there is infinite potential on the right side without infinite potential on the left side
+    (_, Infty)       -> 
+      error $ show $ text "assertSubtypes: encountered infinite potential on the right side in type of a subtyping relation" 
+        <+> pretty tl <+> text "<:" <+> pretty tr 
+    -- Assert subtypes normally
+    (Fml fl, Fml fr) -> 
+      let leftSum = addFormulas fl (envSum (_symbols env)) 
+          rightSum = addFormulas fr (envSum syms)
+          subtypeAssertions = (leftSum `subtypeOp` rightSum) : directSubtypesBase cm bl br
+      in subtypeAssertions ++ wellFormedAssertions
 assertSubtypes _ _ _ _ _ _ = [] 
 
 -- | 'directSubtypes' @env tl tr@ : Generate the set of all formulas in types @tl@ and @tr@, zipped by a binary operation @op@ on formulas 
 directSubtypes :: Bool -> RType -> RType -> [Formula]
-directSubtypes cm (ScalarT bl _ fl) (ScalarT br _ fr) = (fl `subtypeOp` fr) : directSubtypesBase cm bl br
+directSubtypes cm (ScalarT bl _ Infty) (ScalarT br _ _) = []
+directSubtypes _  tl tr@(ScalarT _ _ Infty) =
+  error $ show $ text "directSubtypes: encountered infinite potential on the right side of the subtyping relation"
+                 <+> pretty tl <+> text "<:" <+> pretty tr
+directSubtypes cm (ScalarT bl _ (Fml fl)) (ScalarT br _ (Fml fr)) = (fl `subtypeOp` fr) : directSubtypesBase cm bl br
 directSubtypes _ _ _ = [] 
 
 directSubtypesBase :: Bool -> BaseType Formula -> BaseType Formula -> [Formula]
 directSubtypesBase cm (DatatypeT _ tsl _) (DatatypeT _ tsr _) = concat $ zipWith (directSubtypes cm) tsl tsr
-directSubtypesBase cm (TypeVarT _ _ ml) (TypeVarT _ _ mr) = [fml | cm && not (isTrivial fml)] 
+directSubtypesBase _  (TypeVarT _ _ Infty) _ = []
+directSubtypesBase _  tl tr@(TypeVarT _ _ Infty) = 
+  error $ show $ text "directSubtypesBase: encountered infinite potential on the right side of the subtyping relation"
+                 <+> pretty tl <+> text "<:" <+> pretty tr
+directSubtypesBase cm (TypeVarT _ _ (Fml ml)) (TypeVarT _ _ (Fml mr)) = [fml | cm && not (isTrivial fml)] 
     where fml = ml `subtypeOp` mr
 directSubtypesBase _ _ _ = []
 
-totalPotential :: Bool -> RType -> Formula
-totalPotential cm (ScalarT base _ p) = p -- |+| totalPotentialBase cm base
-totalPotential _ _                   = fzero
-
-totalPotentialBase :: Bool -> BaseType Formula -> Formula
-totalPotentialBase cm (DatatypeT _ ts _) = foldl addFormulas fzero (map (totalPotential cm) ts)
--- TODO: should we use the substitutions?
-totalPotentialBase cm (TypeVarT _ _ m) = if cm then m else fzero
-totalPotentialBase _ _ = fzero
+totalTopLevelPotential :: RType -> Formula
+totalTopLevelPotential (ScalarT base _ (Fml p)) = p 
+totalTopLevelPotential (ScalarT _ _ Infty)      = error "Encountered empty type constructor when computing totalPotential"
+totalTopLevelPotential _                        = fzero
 
 -- Is given constraint relevant for resource analysis
 isResourceConstraint :: Constraint -> Bool
@@ -423,15 +446,17 @@ universalToString (Cons _ x fs) = x ++ concatMap show fs ++ "_univ"
 -- Return a set of all formulas (potential, multiplicity, refinement) of a type. 
 --   Doesn't mean anything necesssarily, used to embed environment assumptions
 allFormulasOf :: Bool -> RType -> Set Formula
-allFormulasOf cm (ScalarT b f p) = Set.singleton f `Set.union` Set.singleton p `Set.union` allFormulasOfBase cm b
+allFormulasOf cm (ScalarT b f Infty)       = Set.singleton f `Set.union` allFormulasOfBase cm b 
+allFormulasOf cm (ScalarT b f (Fml p))     = Set.singleton f `Set.union` Set.singleton p `Set.union` allFormulasOfBase cm b
 allFormulasOf cm (FunctionT _ argT resT _) = allFormulasOf cm argT `Set.union` allFormulasOf cm resT
-allFormulasOf cm (LetT x s t) = allFormulasOf cm s `Set.union` allFormulasOf cm t
-allFormulasOf _ t = Set.empty
+allFormulasOf cm (LetT x s t)              = allFormulasOf cm s `Set.union` allFormulasOf cm t
+allFormulasOf _ t                          = Set.empty
 
 allFormulasOfBase :: Bool -> BaseType Formula -> Set Formula
-allFormulasOfBase cm (TypeVarT _ _ m) = if cm then Set.singleton m else Set.empty
-allFormulasOfBase cm (DatatypeT x ts ps) = Set.unions (map (allFormulasOf cm) ts)
-allFormulasOfBase _ b = Set.empty
+allFormulasOfBase _  (TypeVarT _ _ Infty)   = Set.empty
+allFormulasOfBase cm (TypeVarT _ _ (Fml m)) = if cm then Set.singleton m else Set.empty
+allFormulasOfBase cm (DatatypeT x ts ps)    = Set.unions (map (allFormulasOf cm) ts)
+allFormulasOfBase _ b                       = Set.empty
 
 -- Return refinement of scalar type
 refinementOf :: RType -> Formula 

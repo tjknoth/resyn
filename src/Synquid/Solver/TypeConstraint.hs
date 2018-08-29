@@ -330,8 +330,8 @@ processConstraint (Subtype env syms (ScalarT baseTL l potl) (ScalarT baseTR r po
       let subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass
       let l' = subst l
       let r' = subst r
-      let potl' = subst potl 
-      let potr' = subst potr
+      let potl' = liftFmlOp subst potl 
+      let potr' = liftFmlOp subst potr
       unless (l' == ftrue || r' == ftrue) $ simpleConstraints %= (Subtype env syms (ScalarT baseTL l' potl') (ScalarT baseTR r' potr') Consistency label :)
 
 processConstraint c@(Subtype env syms (ScalarT baseTL l potl) (ScalarT baseTR r potr) variant label) | equalShape baseTL baseTR
@@ -346,8 +346,8 @@ processConstraint c@(Subtype env syms (ScalarT baseTL l potl) (ScalarT baseTR r 
         let subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass
         let l' = subst l
         let r' = subst r
-        let potl' = subst potl
-        let potr' = subst potr
+        let potl' = liftFmlOp subst potl
+        let potr' = liftFmlOp subst potr
         let c' = Subtype env syms (ScalarT baseTL l' potl') (ScalarT baseTR r' potr') variant label
         if Set.null $ (predsOf l' `Set.union` predsOf r') Set.\\ Map.keysSet (allPredicates env)
             then case baseTL of -- Subtyping of datatypes: try splitting into individual constraints between measures
@@ -416,9 +416,9 @@ processConstraint (SharedType env (ScalarT base fml pot) (ScalarT baseL fmlL pot
       fml' = subst fml
       fmlL' = subst fmlL
       fmlR' = subst fmlR
-      pot' = subst pot
-      potL' = subst potL
-      potR' = subst potR
+      pot' = liftFmlOp subst pot
+      potL' = liftFmlOp subst potL
+      potR' = liftFmlOp subst potR
   simpleConstraints %= (SharedType env (ScalarT base fml' pot') (ScalarT baseL fmlL' potL') (ScalarT baseR fmlR' potR') label :)
 processConstraint SharedType{}  = return ()
 processConstraint c@ConstantRes{} = simpleConstraints %= (c :)

@@ -555,15 +555,15 @@ data Constraint =
   deriving (Show, Eq, Ord)
 
 data TaggedConstraint = TaggedConstraint {
-  tag :: Id,            -- Source info for debugging
-  constraint :: Formula -- Simplified Constraint
+  tag :: !Id,            -- Source info for debugging
+  constraint :: !Formula -- Simplified Constraint
 } deriving (Show, Eq, Ord)
 
 labelOf :: Constraint -> Id
-labelOf (Subtype _ _ _ _ _ l) = l
-labelOf (WellFormed _ _ l)      = l
-labelOf (SharedType _ _ _ _ l)  = l
-labelOf _                       = ""
+labelOf (Subtype _ _ _ _ _ l)  = l
+labelOf (WellFormed _ _ l)     = l
+labelOf (SharedType _ _ _ _ l) = l
+labelOf _                      = ""
 
 envFrom :: Constraint -> Environment
 envFrom (Subtype e _ _ _ _ _)       = e

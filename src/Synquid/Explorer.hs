@@ -467,7 +467,7 @@ toVar env (Program _ t) = do
 -- if @p@ is not a variable, instead of a literal substitution use the contextual type LET x : (typeOf p) IN tRes
 appType :: Environment -> RProgram -> Id -> RType -> RType
 appType env (Program (PSymbol name) t) x tRes = substituteInType (isBound env) (Map.singleton x $ symbolAsFormula env name t) tRes
-appType env (Program _ t) x tRes = contextual x (typeMultiply fzero t) tRes
+appType env (Program _ t) x tRes = contextual x (typeMultiply pzero t) tRes
 
 isPolyConstructor (Program (PSymbol name) t) = isTypeName name && (not . Set.null . typeVarsOf $ t)
 
@@ -617,17 +617,17 @@ shareType sch = do
   return (schl, schr)
 
 -- Variable formula with fresh variable id
-freshPot :: MonadHorn s => Explorer s Formula
+freshPot :: MonadHorn s => Explorer s Potential 
 freshPot = do 
   x <- freshId potentialPrefix
   (typingState . resourceVars) %= Set.insert x
-  return $ Var IntS x 
+  return $ Fml $ Var IntS x
 
-freshMul :: MonadHorn s => Explorer s Formula
+freshMul :: MonadHorn s => Explorer s Potential
 freshMul = do
   x <- freshId multiplicityPrefix
   (typingState . resourceVars) %= Set.insert x
-  return $ Var IntS x
+  return $ Fml $ Var IntS x
 
 -- | 'freshPotentials' @sch r@ : Replace potentials in schema @sch@ by unwrapping the foralls. If @r@, recursively replace potential annotations in the entire type. Otherwise, just replace top-level annotations.
 freshPotentials :: MonadHorn s => RSchema -> Bool -> Explorer s RSchema
@@ -643,7 +643,11 @@ freshPotentials (ForallP x t) replaceAll = do
 
 -- Replace potentials in a TypeSkeleton
 freshPotentials' :: MonadHorn s => RType -> Bool -> Explorer s RType
-freshPotentials' (ScalarT base fml pot) replaceAll = do 
+-- TODO: probably don't need to bother traversing the type here, since annotations on type vars should be Infty as well
+freshPotentials' (ScalarT base fml Infty) replaceAll = do 
+  base' <- if replaceAll then freshMultiplicities base replaceAll else return base
+  return $ ScalarT base' fml Infty
+freshPotentials' (ScalarT base fml (Fml pot)) replaceAll = do 
   pot' <- freshPot
   base' <- if replaceAll then freshMultiplicities base replaceAll else return base
   return $ ScalarT base' fml pot'
@@ -651,7 +655,8 @@ freshPotentials' t _ = return t
 
 -- Replace potentials in a BaseType
 freshMultiplicities :: MonadHorn s => BaseType Formula -> Bool -> Explorer s (BaseType Formula)
-freshMultiplicities (TypeVarT s name m) _ = do 
+freshMultiplicities t@(TypeVarT s name Infty) _ = return t
+freshMultiplicities (TypeVarT s name (Fml m)) _ = do 
   m' <- freshMul
   return $ TypeVarT s name m'
 freshMultiplicities (DatatypeT name ts ps) replaceAll = do
@@ -664,7 +669,7 @@ addScrutineeToEnv env pScr tScr = do
   checkres <- asks . view $ _1 . checkResources
   (x, env') <- toVar (addScrutinee pScr env) pScr
   varName <- freshId "x"
-  let tScr' = addPotential (typeMultiply fzero tScr) (fromMaybe fzero (topPotentialOf tScr))
+  let tScr' = addPotential (typeMultiply pzero tScr) (fromMaybe pzero (topPotentialOf tScr))
   let env'' = addVariable varName tScr' env'
   if checkres
     then return (x, env'')

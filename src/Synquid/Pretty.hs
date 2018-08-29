@@ -230,8 +230,8 @@ prettyBase prettyType base = case base of
                then empty 
                else hMapDoc pretty pretty s
       mult = case m of 
-        (IntLit 1) -> empty
-        m'         -> pretty m' <> operator "**"
+        (Fml (IntLit 1)) -> empty
+        m'               -> pretty m' <> operator "**"
   DatatypeT name tArgs pArgs -> text name <+> hsep (map prettyType tArgs) <+> hsep (map (hlAngles . pretty) pArgs)
 
 instance Pretty (BaseType ()) where
@@ -239,6 +239,10 @@ instance Pretty (BaseType ()) where
 
 instance Pretty (BaseType Formula) where
   pretty = prettyBase (prettyTypeAt 1)
+
+instance Pretty Potential where 
+  pretty Infty   = text "INFTY"
+  pretty (Fml f) = pretty f
 
 
 prettySType :: SType -> Doc

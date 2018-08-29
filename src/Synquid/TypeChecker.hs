@@ -184,7 +184,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
       Nothing -> throwErrorWithDescription $ text "Not in scope: data constructor" </> squotes (text consName)
       Just consSch -> do
                         consT <- instantiate env consSch True args -- Set argument names in constructor type to user-provided binders
-                        let consT' = typeMultiply fzero consT
+                        let consT' = typeMultiply pzero consT
                         case lastType consT' of
                           (ScalarT (DatatypeT dtName _ _) _ _) -> do
                             case mName of

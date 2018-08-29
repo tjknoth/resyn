@@ -105,7 +105,6 @@ throwResError descr = do
 
 resolveDeclaration :: BareDeclaration -> Resolver ()
 resolveDeclaration (TypeDecl typeName typeVars typeBody) = do
-  checkTypePotential typeBody
   typeBody' <- resolveType typeBody
   let extraTypeVars = typeVarsOf typeBody' Set.\\ Set.fromList typeVars
   if Set.null extraTypeVars
@@ -113,10 +112,8 @@ resolveDeclaration (TypeDecl typeName typeVars typeBody) = do
     else throwResError (text "Type variable(s)" <+> hsep (map text $ Set.toList extraTypeVars) <+>
               text "in the definition of type synonym" <+> text typeName <+> text "are undefined")
 resolveDeclaration (FuncDecl funcName typeSchema) = do 
-  checkSchemaPotential typeSchema
   addNewSignature funcName typeSchema
 resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
-  mapM_ (\(ConstructorSig _ t) -> checkTypePotential t) ctors
   ctors' <- mapM (\(ConstructorSig x t) -> ConstructorSig x <$> updateEmptyCtors x t) ctors 
   let
     (pParams, pVariances) = unzip pVarParams
@@ -136,10 +133,10 @@ resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
     updateEmptyCtors cname t@(ScalarT base ref pot) = do 
       environment %= addEmptyCtor cname
       base' <- updateBase cname base
-      return $ ScalarT base' ref bottomPotential 
+      return $ ScalarT base' ref Infty 
     updateEmptyCtors _ t = return t 
     updateBase :: Id -> BaseType Formula -> Resolver (BaseType Formula)
-    updateBase _ (TypeVarT subs name mult) = return $ TypeVarT subs name bottomMultiplicity
+    updateBase _ (TypeVarT subs name mult) = return $ TypeVarT subs name Infty 
     updateBase cname (DatatypeT dname ts ps) = do 
       ts' <- mapM (updateEmptyCtors cname) ts
       return $ DatatypeT dname ts' ps
@@ -438,7 +435,10 @@ resolveTypeAnnotation targetSort valueSort fml = do
   return resolvedFml
 
 resolveTypeRefinement = resolveTypeAnnotation BoolS 
-resolveTypePotential = resolveTypeAnnotation IntS 
+
+-- Resolve potential annotations: Check against integer sort
+resolveTypePotential vsort Infty   = return Infty
+resolveTypePotential vsort (Fml f) = Fml <$> resolveTypeAnnotation IntS vsort f
 
 -- Partially resolve formula describing measure case (just replace inline predicates)
 resolveMeasureFormula :: Formula -> Resolver Formula
@@ -684,31 +684,6 @@ substituteTypeSynonym name tArgs = do
     Just (tVars, t) -> do
       when (length tArgs /= length tVars) $ throwResError $ text "Type synonym" <+> text name <+> text "expected" <+> pretty (length tVars) <+> text "type arguments and got" <+> pretty (length tArgs)
       return $ noncaptureTypeSubst tVars tArgs t
-
--- | 'checkTypePotential' @t@ : ensure that type @t@ does not have potential or multiplicity exceeding a maximum given by bottomPotential and bottomMultiplicity, respectively
-checkTypePotential :: RType -> Resolver ()
-checkTypePotential t@(ScalarT base _ f) = do
-  checkBaseTypePotential base
-  when (f `fmlGe` bottomPotential) $ throwResError $ text "Potential annotation on" <+> pretty t <+> text "must be less than" <+> pretty bottomPotential
-  return ()
-checkTypePotential (FunctionT _ inT outT _) = do 
-  checkTypePotential inT 
-  checkTypePotential outT
-  return ()
-checkTypePotential t = return ()
-
-checkBaseTypePotential :: BaseType Formula -> Resolver ()
-checkBaseTypePotential t@(TypeVarT _ _ m) = do 
-  when (m `fmlGe` bottomMultiplicity) $ throwResError $ text "Multiplicity annotation on" <+> pretty t <+> text "must be less than" <+> pretty bottomMultiplicity
-  return ()
-checkBaseTypePotential (DatatypeT _ ts _) = mapM_ checkTypePotential ts
-checkBaseTypePotential b = return ()
-
--- | 'checkSchemaPotential' @s@ : unwrap schema @s@ to check its annotations
-checkSchemaPotential :: RSchema -> Resolver ()
-checkSchemaPotential (Monotype t) = checkTypePotential t
-checkSchemaPotential (ForallT _ s) = checkSchemaPotential s
-checkSchemaPotential (ForallP _ s) = checkSchemaPotential s
 
 -- | 'freshSort' : fresh variable sort 
 freshSort :: Resolver Sort
