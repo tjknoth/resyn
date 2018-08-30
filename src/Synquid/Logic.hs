@@ -135,6 +135,9 @@ unknownName (Unknown _ name) = name
 varName (Var _ name) = name
 varType (Var t _) = t
 
+maybeUnknownName (Unknown _ name) = Just name
+maybeUnknownName _                = Nothing
+
 isVar (Var _ _) = True
 isVar _ = False
 isCons (Cons _ _ _) = True

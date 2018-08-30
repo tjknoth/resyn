@@ -36,3 +36,5 @@ examples.*
 *.prof
 *.aux
 *.ps
+*.md
+*.orig

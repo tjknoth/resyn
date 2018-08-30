@@ -119,7 +119,7 @@ generateFormula' _ _ _ c = error $ show $ text "Constraint not relevant for reso
 -- | Embed the environment assumptions and preproess the constraint for solving 
 embedAndProcessConstraint :: MonadSMT s => Bool -> Environment -> Constraint -> Formula -> Formula -> (Set Formula -> Set Formula) -> TCSolver s Formula
 embedAndProcessConstraint shouldLog env c fmls relevantFml addTo = do 
-  emb <- embedEnv env relevantFml True
+  emb <- embedSynthesisEnv env relevantFml True
   -- Check if embedding is singleton { false }
   let isFSingleton s = (Set.size s == 1) && (Set.findMin s == ffalse)
   if isFSingleton emb  
@@ -548,12 +548,6 @@ substituteForFml new old p@(Pred s x fs) =
 substituteForFml new old (Cons s x fs) = Cons s x $ map (substituteForFml new old) fs
 substituteForFml new old (All f g) = All f (substituteForFml new old g)
 substituteForFml _ _ f = f
-
--- Variable name for example generation
-fmlVarName :: Monad s => Formula -> TCSolver s String
-fmlVarName (Var s x)     = return $ x ++ show s
-fmlVarName (Pred _ x fs) = freshId "F"
-fmlVarName f             = error $ "fmlVarName: Can only substitute fresh variables for variable or predicate, given " ++ show (pretty f)
 
 -- Filter away "uninteresting" constraints for logging. Specifically, well-formednes
 -- Definitely not complete, just "pretty good"

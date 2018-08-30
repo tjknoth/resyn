@@ -3,6 +3,7 @@
 -- Solver utilities
 module Synquid.Solver.Util (
     embedEnv,
+    embedSynthesisEnv,
     instantiateConsAxioms,
     potentialVars,
     freshId,
@@ -21,7 +22,7 @@ import Synquid.Pretty
 import Synquid.Error
 import Synquid.Solver.Monad
 
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, mapMaybe, catMaybes)
 import qualified Data.Set as Set 
 import Data.Set (Set)
 import qualified Data.Map as Map
@@ -38,8 +39,12 @@ embedding env vars includeQuantified = do
     tass <- use typeAssignment
     pass <- use predAssignment
     qmap <- use qualifierMap
+    --traceM $ "QMAP: " ++ show (plain (pretty (Map.assocs qmap)))
     let ass = Set.map (substitutePredicate pass) (env ^. assumptions)
+    --traceM $ "PASS: " ++ show pass
+    --traceM $ "ASS: " ++ show (plain (pretty ass))
     let allVars = vars `Set.union` potentialVars qmap (conjunction ass)
+    --traceM $ "VARS: " ++ show allVars
     return $ addBindings env tass pass qmap ass allVars
   where
     addBindings env tass pass qmap fmls vars =
@@ -50,7 +55,6 @@ embedding env vars includeQuantified = do
                 Nothing -> addBindings env tass pass qmap fmls rest -- Variable not found (useful to ignore value variables)
                 Just (Monotype t) -> case typeSubstitute tass t of
                   ScalarT baseT fml pot ->
-                    --let allPost = allMeasurePostconditions includeQuantified baseT env in
                     let fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x)) . substitutePredicate pass)
                                           (fml : allMeasurePostconditions includeQuantified baseT env) 
                         newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls' in 
@@ -66,6 +70,36 @@ embedEnv env fml consistency = do
   qmap <- use qualifierMap
   let relevantVars = potentialVars qmap fml
   embedding env relevantVars consistency
+
+embedSynthesisEnv :: Monad s => Environment -> Formula -> Bool -> TCSolver s (Set Formula)
+embedSynthesisEnv env fml consistency = do 
+  emb <- embedEnv env fml consistency
+  unknownEmb <- embedSingletonUnknowns env
+  return $ emb `Set.union` unknownEmb
+
+-- | When there is a single possible valuation for a condition unknown, assume it.
+embedSingletonUnknowns :: Monad s => Environment -> TCSolver s (Set Formula)
+embedSingletonUnknowns env = do
+    pass <- use predAssignment
+    qmap <- use qualifierMap
+    -- Do I need to substitute predicates?
+    let ass = Set.map (substitutePredicate pass) (env ^. assumptions)
+    let maybeAss = map (assignUnknown qmap) (Set.toList ass)
+    return $ Set.fromList $ catMaybes maybeAss
+  where 
+    -- TODO: rewrite this as a monad!!
+    assignUnknown qmap fml = 
+      case maybeUnknownName fml of
+        Nothing -> Nothing 
+        Just fname -> 
+          case Map.lookup fname qmap of 
+            Nothing -> Nothing
+            Just qspace -> 
+              case _qualifiers qspace of 
+                [f] -> Just f
+                _   -> Nothing
+
+
 
 -- | 'instantiateConsAxioms' @env fml@ : If @fml@ contains constructor applications, return the set of instantiations of constructor axioms for those applications in the environment @env@
 instantiateConsAxioms :: Environment -> Maybe Formula -> Formula -> Set Formula
