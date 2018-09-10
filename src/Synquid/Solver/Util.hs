@@ -29,6 +29,7 @@ import qualified Data.Map as Map
 import Control.Monad (when)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (throwE)
+import Control.Monad.Trans.Maybe (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (asks)
 import Control.Lens hiding (both)
 import Debug.Trace
@@ -84,20 +85,16 @@ embedSingletonUnknowns env = do
     qmap <- use qualifierMap
     -- Do I need to substitute predicates?
     let ass = Set.map (substitutePredicate pass) (env ^. assumptions)
-    let maybeAss = map (assignUnknown qmap) (Set.toList ass)
+    maybeAss <- lift . lift . lift $ mapM (assignUnknown qmap) (Set.toList ass)
     return $ Set.fromList $ catMaybes maybeAss
   where 
-    -- TODO: rewrite this as a monad!!
-    assignUnknown qmap fml = 
-      case maybeUnknownName fml of
-        Nothing -> Nothing 
-        Just fname -> 
-          case Map.lookup fname qmap of 
-            Nothing -> Nothing
-            Just qspace -> 
-              case _qualifiers qspace of 
-                [f] -> Just f
-                _   -> Nothing
+    -- I feel like this could be cleaner by removing MaybeTs but this works so
+    assignUnknown qmap fml = runMaybeT $ do 
+      fname <- MaybeT . return $ maybeUnknownName fml
+      qspace <- MaybeT . return $ Map.lookup fname qmap
+      case _qualifiers qspace of 
+        [f] -> MaybeT . return $ Just f
+        _   -> MaybeT . return $ Nothing
 
 
 

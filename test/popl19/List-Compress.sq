@@ -19,6 +19,6 @@ type CList a = PList a <{!(_0 in heads _1)}>
   
 qualifier {x == y, x != y}  
 
-compress :: xs: List a -> {CList a | elems _v == elems xs}
+compress :: xs: List a -[1]-> {CList a | elems _v == elems xs}
 compress = ??  
 

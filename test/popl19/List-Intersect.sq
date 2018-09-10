@@ -25,5 +25,5 @@ measure ielems :: IList a -> Set a where
 member :: x: a -> xs: IList {1 ** a | | 1} -> {Bool | _v == (x in ielems xs)}
 qualifier { x < y }
 
-intersect :: l1: IList a -> l2: IList a -> {List a | elems _v == (ielems l1 * ielems l2)}
+intersect :: l1: IList a -[1]-> l2: IList a -> {List a | elems _v == (ielems l1 * ielems l2)}
 intersect = ??
