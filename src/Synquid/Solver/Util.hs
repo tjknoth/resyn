@@ -9,6 +9,7 @@ module Synquid.Solver.Util (
     freshId,
     freshVar,
     somewhatFreshVar,
+    freshValueVars,
     isSatWithModel,
     throwError,
     writeLog
@@ -85,17 +86,15 @@ embedSingletonUnknowns env = do
     qmap <- use qualifierMap
     -- Do I need to substitute predicates?
     let ass = Set.map (substitutePredicate pass) (env ^. assumptions)
-    maybeAss <- lift . lift . lift $ mapM (assignUnknown qmap) (Set.toList ass)
+    let maybeAss = map (assignUnknown qmap) (Set.toList ass)
     return $ Set.fromList $ catMaybes maybeAss
   where 
-    -- I feel like this could be cleaner by removing MaybeTs but this works so
-    assignUnknown qmap fml = runMaybeT $ do 
-      fname <- MaybeT . return $ maybeUnknownName fml
-      qspace <- MaybeT . return $ Map.lookup fname qmap
+    assignUnknown qmap fml = do 
+      fname <- maybeUnknownName fml
+      qspace <- Map.lookup fname qmap
       case _qualifiers qspace of 
-        [f] -> MaybeT . return $ Just f
-        _   -> MaybeT . return $ Nothing
-
+        [f] -> Just f
+        _   -> Nothing
 
 
 -- | 'instantiateConsAxioms' @env fml@ : If @fml@ contains constructor applications, return the set of instantiations of constructor axioms for those applications in the environment @env@
@@ -153,6 +152,7 @@ freshVar env prefix = do
 freshValueVarId :: Monad s => TCSolver s String
 freshValueVarId = freshId valueVarName
 
+-- | Replace occurrences of _v with a fresh variable in a given formula 
 freshValueVars :: Monad s => Formula -> Sort -> TCSolver s Formula 
 freshValueVars fml sort = do 
   newVar <- Var sort <$> freshValueVarId

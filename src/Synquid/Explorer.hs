@@ -58,12 +58,9 @@ data ExplorerParams = ExplorerParams {
   _symmetryReduction :: Bool,             -- ^ Should partial applications be memoized to check for redundancy?
   _sourcePos :: SourcePos,                -- ^ Source position of the current goal
   _explorerLogLevel :: Int,               -- ^ How verbose logging is
-  _checkResources :: Bool,                -- ^ Should we check resources usage?
-  _useMultiplicity :: Bool,               -- ^ Should we generate constraints on multiplicities? Useful for modeling memory usage.
-  _instantiateForall :: Bool,             -- ^ Solve exists-forall constraints by instantiating universally quantified expressions
   _shouldCut :: Bool,                     -- ^ Should cut the search upon synthesizing a functionally correct branch
   _numPrograms :: Int,                    -- ^ Number of programs to search for
-  _constantTime :: Bool                   -- ^ Demand that all resources are used at all branching terms
+  _resourceArgs :: ResourceArgs           -- ^ Arguments relevant to resource analysis
 }
 
 makeLenses ''ExplorerParams
@@ -343,7 +340,7 @@ generateE env typ = do
 
 generateE' env typ d = do
   (Program pTerm pTyp, env') <- generateEUpTo env typ d                      -- Generate the E-term
-  runInSolver $ isFinal .= True >> solveTypeConstraints >> isFinal .= False  -- Final type checking pass that eliminates all free type variables
+  runInSolver $ isFinal .= True >> solveTypeConstraints pTyp >> isFinal .= False  -- Final type checking pass that eliminates all free type variables
   newGoals <- uses auxGoals (map gName)                                      -- Remember unsolved auxiliary goals
   generateAuxGoals                                                           -- Solve auxiliary goals
   pTyp' <- runInSolver $ currentAssignment pTyp                              -- Finalize the type of the synthesized term
@@ -384,7 +381,7 @@ checkE env typ p@(Program pTerm pTyp) = do
   fTyp <- runInSolver $ finalizeType typ
   pos <- asks . view $ _1 . sourcePos
   typingState . errorContext .= (pos, text "when checking" </> pretty p </> text "::" </> pretty fTyp </> text "in" $+$ pretty (ctx p))
-  runInSolver solveTypeConstraints
+  runInSolver $ solveTypeConstraints pTyp
   typingState . errorContext .= (noPos, empty)
   return env'
   
@@ -450,7 +447,7 @@ generateError env = do
   addSubtypeConstraint env (int $ conjunction $ map trivial (allScalars env')) (int ffalse) False "Generate Error"
   pos <- asks . view $ _1 . sourcePos
   typingState . errorContext .= (pos, text "when checking" </> pretty errorProgram </> text "in" $+$ pretty (ctx errorProgram))
-  runInSolver solveTypeConstraints
+  runInSolver $ solveTypeConstraints AnyT
   typingState . errorContext .= (noPos, empty)
   return errorProgram
   where
@@ -496,7 +493,7 @@ addConstraint c = typingState %= addTypingConstraint c
 -- | When constant-time flag is set, add the appropriate constraint 
 addCTConstraint :: MonadHorn s => Environment -> Id -> Explorer s ()
 addCTConstraint env tag = do 
-  checkCT <- asks . view $ _1 . constantTime
+  checkCT <- asks . view $ _1 . resourceArgs . constantTime
   let c = ConstantRes env tag
   when checkCT $ addConstraint c
 
@@ -666,7 +663,7 @@ freshMultiplicities t _ = return t
 
 addScrutineeToEnv :: (MonadHorn s, MonadSMT s) => Environment -> RProgram -> RType -> Explorer s (Formula, Environment)
 addScrutineeToEnv env pScr tScr = do 
-  checkres <- asks . view $ _1 . checkResources
+  checkres <- asks . view $ _1 . resourceArgs . checkRes
   (x, env') <- toVar (addScrutinee pScr env) pScr
   varName <- freshId "x"
   let tScr' = addPotential (typeMultiply pzero tScr) (fromMaybe pzero (topPotentialOf tScr))

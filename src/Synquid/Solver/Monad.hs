@@ -46,10 +46,22 @@ data TypingParams = TypingParams {
   _checkResourceBounds :: Bool,                                     -- ^ Is resource checking enabled
   _checkMultiplicities :: Bool,                                     -- ^ Should multiplicities be considered when generating resource constraints
   _instantiateUnivs :: Bool,                                        -- ^ When solving exists-forall constraints, instantiate universally quantified expressions
-  _constantRes :: Bool                                              -- ^ Check constant-timedness or not
+  _constantRes :: Bool,                                             -- ^ Check constant-timedness or not
+  _cegisMax :: Int                                                  -- ^ Maximum number of iterations through the CEGIS loop
 }
 
 makeLenses ''TypingParams
+
+-- | Command line arguments relevant to resource analysis
+data ResourceArgs = ResourceArgs {
+  _checkRes :: Bool,
+  _checkMults :: Bool,
+  _instantiateForall :: Bool,
+  _constantTime :: Bool,
+  _cegisBound :: Int 
+} 
+
+makeLenses ''ResourceArgs
 
 -- Store either the generated formulas or the entire constraint (if the resource bounds include universal quantifiers)
 type RConstraint = Either TaggedConstraint Constraint

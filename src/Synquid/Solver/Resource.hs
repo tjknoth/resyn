@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, TemplateHaskell #-}
 
 -- | Resource analysis
 module Synquid.Solver.Resource (
@@ -13,7 +13,7 @@ import Synquid.Program
 import Synquid.Solver.Monad
 import Synquid.Pretty
 import Synquid.Error
-import Synquid.Solver.Util
+import Synquid.Solver.Util hiding (writeLog)
 
 import Data.Maybe
 import Data.List hiding (partition)
@@ -28,40 +28,41 @@ import Control.Monad.Reader
 import Control.Lens
 import Debug.Trace
 
+-- Read current type under consideration
+type RSolver s = ReaderT RType (TCSolver s) 
+
 {- Implementation -}
 
 -- | Check resource bounds: attempt to find satisfying expressions for multiplicity and potential annotations 
-checkResources :: (MonadHorn s, MonadSMT s) => [Constraint] -> TCSolver s ()
-checkResources [] = return ()
-checkResources constraints = do 
-  tcParams <- ask 
-  tcState <- get 
+checkResources :: (MonadHorn s, MonadSMT s) => RType -> [Constraint] -> TCSolver s ()
+checkResources _ [] = return ()
+checkResources typ constraints = do 
   oldConstraints <- use resourceConstraints 
-  newC <- solveResourceConstraints oldConstraints (filter isResourceConstraint constraints)
+  tparams <- ask
+  let solve = solveResourceConstraints oldConstraints (filter isResourceConstraint constraints)
+  newC <- runReaderT solve typ 
   case newC of 
     Nothing -> throwError $ text "Insufficient resources"
     Just f  -> resourceConstraints %= (++ f) 
 
 -- | 'solveResourceConstraints' @oldConstraints constraints@ : Transform @constraints@ into logical constraints and attempt to solve the complete system by conjoining with @oldConstraints@
-solveResourceConstraints :: MonadSMT s => [RConstraint] -> [Constraint] -> TCSolver s (Maybe [RConstraint]) 
+solveResourceConstraints :: MonadSMT s => [RConstraint] -> [Constraint] -> RSolver s (Maybe [RConstraint]) 
 solveResourceConstraints oldConstraints constraints = do
     writeLog 3 $ linebreak <+> text "Generating resource constraints:"
-    checkMults <- asks _checkMultiplicities
+    checkMults <- lift $ asks _checkMultiplicities
     containsUnivs <- isNothing <$> use universalFmls 
     -- Need environment to determine which annotation formulas are universally quantified
     let tempEnv = case constraints of
           [] -> emptyEnv 
           cs -> envFrom $ head cs
-    let allRForms = concatMap (concatMap (allRFormulas checkMults) . typesFrom) constraints
     -- Check for new universally quantified expressions
     universals <- updateUniversals tempEnv $ conjunction $ concatMap (concatMap (allRFormulas checkMults) . typesFrom) constraints
     -- Generate numerical resource-usage formulas from typing constraints:
-    constraintList <- mapM (generateFormula True checkMults universals . Right) constraints
-    accFmls <- mapM (generateFormula False checkMults universals) oldConstraints
+    constraintList <- mapM (generateFormula True universals . Right) constraints
+    accFmls <- mapM (generateFormula False universals) oldConstraints
     let query = assembleQuery accFmls constraintList 
     -- Check satisfiability
     b <- satisfyResources (Set.toList universals) query
-    --b <- fst <$> isSatWithModel query
     let result = if b then "SAT" else "UNSAT"
     writeLog 5 $ nest 4 $ text "Accumulated resource constraints:" 
       $+$ prettyConjuncts (filter (isInteresting . constraint) accFmls)
@@ -89,11 +90,16 @@ isTrivialTC (TaggedConstraint _ f) = isTrivial f
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 --    If there are no universal quantifiers, we can cache the generated formulas (the Left case)
 --    Otherwise, we must re-generate every time
-generateFormula :: MonadSMT s => Bool -> Bool -> Set Formula -> RConstraint -> TCSolver s TaggedConstraint
-generateFormula _ _ _ (Left tc) = return tc
-generateFormula shouldLog checkMults univs (Right c) = generateFormula' shouldLog checkMults univs c
+generateFormula :: MonadSMT s => Bool -> Set Formula -> RConstraint -> RSolver s TaggedConstraint
+generateFormula _ _ (Left tc)                      = return tc
+generateFormula shouldLog univs (Right c) = do 
+  -- After generating the formula, generate fresh names for _v to avoid name clashes in large accumulated conjunctions
+  checkMults <- lift $ asks _checkMultiplicities
+  valueVarSort <- toSort . baseTypeOf <$> ask 
+  (TaggedConstraint x fml) <- generateFormula' shouldLog checkMults univs c
+  TaggedConstraint x <$> lift (freshValueVars fml valueVarSort)
 
-generateFormula' :: MonadSMT s => Bool -> Bool -> Set Formula -> Constraint -> TCSolver s TaggedConstraint 
+generateFormula' :: MonadSMT s => Bool -> Bool -> Set Formula -> Constraint -> RSolver s TaggedConstraint 
 generateFormula' shouldLog checkMults univs c@(Subtype env syms tl tr variant label) = do
   tass <- use typeAssignment
   let fmls = conjunction $ filter (not . isTrivial) $ case variant of 
@@ -117,9 +123,9 @@ generateFormula' shouldLog checkMults univs c@(ConstantRes env label) = do
 generateFormula' _ _ _ c = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
 
 -- | Embed the environment assumptions and preproess the constraint for solving 
-embedAndProcessConstraint :: MonadSMT s => Bool -> Environment -> Constraint -> Formula -> Formula -> (Set Formula -> Set Formula) -> TCSolver s Formula
+embedAndProcessConstraint :: MonadSMT s => Bool -> Environment -> Constraint -> Formula -> Formula -> (Set Formula -> Set Formula) -> RSolver s Formula
 embedAndProcessConstraint shouldLog env c fmls relevantFml addTo = do 
-  emb <- embedSynthesisEnv env relevantFml True
+  emb <- lift $ embedSynthesisEnv env relevantFml True
   -- Check if embedding is singleton { false }
   let isFSingleton s = (Set.size s == 1) && (Set.findMin s == ffalse)
   if isFSingleton emb  
@@ -136,12 +142,12 @@ embedAndProcessConstraint shouldLog env c fmls relevantFml addTo = do
 
 -- | Check the satisfiability of the generated resource constraints, instantiating universally 
 --     quantified expressions as necessary.
-satisfyResources :: MonadSMT s => [Formula] -> Formula -> TCSolver s Bool
+satisfyResources :: MonadSMT s => [Formula] -> Formula -> RSolver s Bool
 satisfyResources universals fml = do 
-  shouldInstantiate <- asks _instantiateUnivs 
+  shouldInstantiate <- lift $ asks _instantiateUnivs
   if null universals || not shouldInstantiate
     then do 
-      (b, s) <- isSatWithModel fml
+      (b, s) <- lift $ isSatWithModel fml
       writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text s)
       return b
     else do
@@ -166,7 +172,7 @@ satisfyResources universals fml = do
       solveWithCEGIS maxIterations fml universalsWithVars [] (Map.fromList allPolynomials) initialProgram 
 
 -- CEGIS test harness
-testCEGIS :: MonadSMT s => Formula -> TCSolver s Bool
+testCEGIS :: MonadSMT s => Formula -> RSolver s Bool
 testCEGIS fml = do 
   let fml' = adjustSorts fml
   let universals = map (Var IntS) ["n", "x11"]
@@ -220,7 +226,7 @@ type ExampleSet = [Example]
 data QueryType = Counterexample | Param 
 
 -- | Solve formula containing universally quantified expressions with counterexample-guided inductive synthesis
-solveWithCEGIS :: MonadSMT s => Int -> Formula -> [Universal] -> ExampleSet -> PolynomialSkeletons -> ResourceSolution -> TCSolver s Bool
+solveWithCEGIS :: MonadSMT s => Int -> Formula -> [Universal] -> ExampleSet -> PolynomialSkeletons -> ResourceSolution -> RSolver s Bool
 solveWithCEGIS 0 fml universals _ polynomials program = do
   -- Base case: If there is a counterexample, @fml@ is UNSAT, SAT otherwise
   counterexample <- getCounterexample fml universals polynomials program 
@@ -235,30 +241,30 @@ solveWithCEGIS numIters fml universals examples polynomials program = do
   case counterexample of 
     Nothing -> return True -- No counterexamples exist, polynomials hold on all inputs
     Just cx ->  
-     do 
-      writeLog 4 $ text "Counterexample:" <+> pretty (Map.assocs cx)
-      -- Update example list
-      let examples' = cx : examples
-      -- For each example, substitute its value for the universally quantified expressions in each polynomial skeleton
-      let paramPolynomials = map (\ex -> fmap (polynomialToFml Param ex) polynomials) examples' 
-      -- For each example, substitute its value for the universally quantified expressions in the actual resource constraint
-      let fmls' = map (`substitute` fml) examples' 
-      -- Assert that any set of params must hold on all examples
-      let paramQuery = conjunction $ zipWith applyPolynomials paramPolynomials fmls'
-      -- Collect all parameters
-      let allCoefficients = concatMap coefficientsOf (Map.elems polynomials)
-      -- Query solver for an assignment to the polynomial coefficients
-      writeLog 7 $ text "CEGIS param query:" </> pretty paramQuery
-      params <- lift . lift . lift $ solveAndGetAssignment paramQuery allCoefficients
-      case params of
-        Nothing -> return False -- No parameters exist, formula is unsatisfiable
-        Just p  -> do 
-          writeLog 6 $ text "Params:" <+> printParams p polynomials
-          solveWithCEGIS (numIters - 1) fml universals examples' polynomials p
+      do 
+        writeLog 4 $ text "Counterexample:" <+> pretty (Map.assocs cx)
+        -- Update example list
+        let examples' = cx : examples
+        -- For each example, substitute its value for the universally quantified expressions in each polynomial skeleton
+        let paramPolynomials = map (\ex -> fmap (polynomialToFml Param ex) polynomials) examples' 
+        -- For each example, substitute its value for the universally quantified expressions in the actual resource constraint
+        let fmls' = map (`substitute` fml) examples' 
+        -- Assert that any set of params must hold on all examples
+        let paramQuery = conjunction $ zipWith applyPolynomials paramPolynomials fmls'
+        -- Collect all parameters
+        let allCoefficients = concatMap coefficientsOf (Map.elems polynomials)
+        -- Query solver for an assignment to the polynomial coefficients
+        writeLog 7 $ text "CEGIS param query:" </> pretty paramQuery
+        params <- lift . lift . lift . lift $ solveAndGetAssignment paramQuery allCoefficients
+        case params of
+          Nothing -> return False -- No parameters exist, formula is unsatisfiable
+          Just p  -> do 
+            writeLog 6 $ text "Params:" <+> printParams p polynomials
+            solveWithCEGIS (numIters - 1) fml universals examples' polynomials p
 
 -- | 'getCounterexample' @fml universals polynomials program@ 
 --    Find a valuation for @universals@ such that (not @formula@) holds, under parameter valuation @program@
-getCounterexample :: MonadSMT s => Formula -> [Universal] -> PolynomialSkeletons -> ResourceSolution -> TCSolver s (Maybe (Map String Formula))
+getCounterexample :: MonadSMT s => Formula -> [Universal] -> PolynomialSkeletons -> ResourceSolution -> RSolver s (Maybe (Map String Formula))
 getCounterexample fml universals polynomials program = do 
   -- Generate polynomials by substituting parameter valuations for coefficients
   let cxPolynomials = fmap (polynomialToFml Counterexample program) polynomials
@@ -266,7 +272,7 @@ getCounterexample fml universals polynomials program = do
   let cxQuery = fnot $ applyPolynomials cxPolynomials fml 
   writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
   -- Query solver for a counterexample
-  lift . lift . lift $ solveAndGetAssignment cxQuery (map universalVar universals)
+  lift . lift . lift . lift $ solveAndGetAssignment cxQuery (map universalVar universals)
     
 -- | Convert an abstract polynomial into a formula
 polynomialToFml :: QueryType -> Map String Formula -> Polynomial -> Formula
@@ -484,7 +490,7 @@ assumeUnknowns (All f g)         = All (assumeUnknowns f) (assumeUnknowns g)
 assumeUnknowns f                 = f
 
 -- | Check for new universally quantified expressions, persisting the update
-updateUniversals :: Monad s => Environment -> Formula -> TCSolver s (Set Formula)
+updateUniversals :: Monad s => Environment -> Formula -> RSolver s (Set Formula)
 updateUniversals env fml = do 
   accUnivs <- use universalFmls
   case accUnivs of 
@@ -561,3 +567,7 @@ isInteresting _                        = True
 
 -- Maybe this will change? idk
 subtypeOp = (|=|)
+
+writeLog level msg = do 
+  maxLevel <- lift $ asks _tcSolverLogLevel
+  when (level <= maxLevel) $ traceShow (plain msg) $ return ()

@@ -28,6 +28,7 @@ import Data.Map ((!))
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 import qualified Data.Set as Set
+import Control.Lens ((.~), (^.), (%~))
 
 import Data.List.Split
 
@@ -43,7 +44,14 @@ main = do
                appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency symmetry
                lfp bfs
                out_file out_module outFormat resolve 
-               print_spec print_stats log_ resources mult forall cut nump constTime) -> do
+               print_spec print_stats log_ resources mult forall cut nump constTime cegisMax) -> do
+                  let resArgs = defaultResourceArgs {
+                    _checkRes = resources,
+                    _checkMults = mult,
+                    _instantiateForall = forall,
+                    _constantTime = constTime,
+                    _cegisBound = cegisMax
+                  }
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
                     _scrutineeDepth = scrutineeMax,
@@ -58,18 +66,15 @@ main = do
                     _consistencyChecking = consistency,
                     _symmetryReduction = symmetry,
                     _explorerLogLevel = log_,
-                    _checkResources = resources,
-                    _useMultiplicity = mult,
-                    _instantiateForall = forall,
                     _shouldCut = cut,
                     _numPrograms = nump,
-                    _constantTime = constTime
-                    }
+                    _resourceArgs = resArgs
+                  }
                   let solverParams = defaultHornSolverParams {
                     isLeastFixpoint = lfp,
                     optimalValuationsStrategy = if bfs then BFSValuations else MarcoValuations,
                     solverLogLevel = log_
-                    }
+                  }
                   let synquidParams = defaultSynquidParams {
                     goalFilter = liftM (splitOn ",") onlyGoals,
                     outputFormat = outFormat,
@@ -130,7 +135,8 @@ data CommandLineArgs
         instantiate_foralls :: Bool,
         cut_branches :: Bool,
         num_programs :: Int,
-        ct :: Bool
+        ct :: Bool,
+        cegis_max :: Int
       }
   deriving (Data, Typeable, Show, Eq)
 
@@ -164,7 +170,8 @@ synt = Synthesis {
   instantiate_foralls = True            &= help ("Solve exists-forall constraints by instantiating universally quantified expressions (default: True)"),
   cut_branches        = True            &= help ("Do not backtrack past successfully synthesized branches (default: True)"),
   num_programs        = 1               &= help ("Number of programs to produce if possible (default: 1)"),
-  ct                  = False           &= help ("Require that all branching expressions consume a constant amount of resources (default: False)")
+  ct                  = False           &= help ("Require that all branching expressions consume a constant amount of resources (default: False)"),
+  cegis_max           = 10              &= help ("Maximum number of iterations through the CEGIS loop (default: 10)")
   } &= auto &= help "Synthesize goals specified in the input file"
     where
       defaultFormat = outputFormat defaultSynquidParams
@@ -194,12 +201,17 @@ defaultExplorerParams = ExplorerParams {
   _context = id,
   _sourcePos = noPos,
   _explorerLogLevel = 0,
-  _checkResources = True,
-  _useMultiplicity = True,
-  _instantiateForall = True,
   _shouldCut = True,
   _numPrograms = 1,
-  _constantTime = False
+  _resourceArgs = defaultResourceArgs 
+}
+
+defaultResourceArgs = ResourceArgs {
+  _checkRes = True,
+  _checkMults = True,
+  _instantiateForall = True,
+  _constantTime = False,
+  _cegisBound = 10
 }
 
 -- | Parameters for constraint solving
@@ -373,8 +385,10 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
           return result
     assembleResult stats goal ps = SynthesisResult (fst (head ps)) (snd (head ps)) (tail ps) stats goal
     updateLogLevel goal orig = if gSynthesize goal then orig else 0 -- prevent logging while type checking measures
-
-    updateExplorerParams eParams goal = eParams { _checkResources = (gSynthesize goal) && (_checkResources eParams), _explorerLogLevel = updateLogLevel goal (_explorerLogLevel eParams)}
+    
+    updateExplorerParams eParams goal = 
+      let eParams' = explorerLogLevel %~ updateLogLevel goal $ eParams 
+      in resourceArgs . checkRes .~ ((gSynthesize goal) && (eParams ^. (resourceArgs . checkRes))) $ eParams'
 
     updateSolverParams sParams goal = sParams { solverLogLevel = (updateLogLevel goal (solverLogLevel sParams))}
     

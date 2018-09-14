@@ -54,8 +54,8 @@ import Debug.Trace
 {- Top-level constraint solving interface -}
 
 -- | Solve @typingConstraints@: either strengthen the current candidates and return shapeless type constraints or fail
-solveTypeConstraints :: (MonadSMT s, MonadHorn s) => TCSolver s ()
-solveTypeConstraints = do
+solveTypeConstraints :: (MonadSMT s, MonadHorn s) => RType -> TCSolver s ()
+solveTypeConstraints typ = do
 
   simplifyAllConstraints
   processAllPredicates
@@ -70,7 +70,7 @@ solveTypeConstraints = do
   checkTypeConsistency
 
   res <- asks _checkResourceBounds
-  when res $ checkResources scs 
+  when res $ checkResources typ scs 
 
   hornClauses .= []
   consistencyChecks .= []
@@ -83,7 +83,7 @@ solveCTConstraints = do
   typingConstraints .= []
   let tcs' = filter isCTConstraint tcs
   res <- asks _checkResourceBounds
-  when res $ checkResources tcs
+  when res $ checkResources AnyT tcs 
 
 -- | Impose typing constraint @c@ on the programs
 addTypingConstraint c = over typingConstraints (nub . (c :))
