@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 -- | Resource analysis
 module Synquid.Solver.Resource (
@@ -14,6 +14,7 @@ import Synquid.Solver.Monad
 import Synquid.Pretty
 import Synquid.Error
 import Synquid.Solver.Util hiding (writeLog)
+import Synquid.Solver.CEGIS 
 
 import Data.Maybe
 import Data.List hiding (partition)
@@ -93,11 +94,16 @@ isTrivialTC (TaggedConstraint _ f) = isTrivial f
 generateFormula :: MonadSMT s => Bool -> Set Formula -> RConstraint -> RSolver s TaggedConstraint
 generateFormula _ _ (Left tc)                      = return tc
 generateFormula shouldLog univs (Right c) = do 
-  -- After generating the formula, generate fresh names for _v to avoid name clashes in large accumulated conjunctions
+  currentType <- ask
   checkMults <- lift $ asks _checkMultiplicities
-  valueVarSort <- toSort . baseTypeOf <$> ask 
-  (TaggedConstraint x fml) <- generateFormula' shouldLog checkMults univs c
-  TaggedConstraint x <$> lift (freshValueVars fml valueVarSort)
+  if isScalarType currentType
+    -- Scalar type: potential name clashes with _v, rename instances
+    then do 
+      let valueVarSort = toSort $ baseTypeOf currentType
+      (TaggedConstraint x fml) <- generateFormula' shouldLog checkMults univs c
+      TaggedConstraint x <$> lift (freshValueVars fml valueVarSort)
+    -- Function type: proceed as usual
+    else generateFormula' shouldLog checkMults univs c
 
 generateFormula' :: MonadSMT s => Bool -> Bool -> Set Formula -> Constraint -> RSolver s TaggedConstraint 
 generateFormula' shouldLog checkMults univs c@(Subtype env syms tl tr variant label) = do
@@ -151,8 +157,7 @@ satisfyResources universals fml = do
       writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text s)
       return b
     else do
-      -- TODO: make this bit principled
-      let maxIterations = length universals + 5 -- TODO: what about branching expressions?
+      maxIterations <- lift $ asks _cegisMax
       rVars <- Set.toList <$> use resourceVars
       -- Generate list of polynomial coefficients, 1 for each universally quantified expression and a constant term
       let constantTerm s = PolynomialTerm (constPolynomialVar s) Nothing
@@ -169,7 +174,7 @@ satisfyResources universals fml = do
       writeLog 3 $ text "Solving resource constraint with CEGIS:" 
       writeLog 5 $ pretty fml
       writeLog 3 $ text "Over universally quantified expressions:" <+> pretty (map universalFml universalsWithVars)
-      solveWithCEGIS maxIterations fml universalsWithVars [] (Map.fromList allPolynomials) initialProgram 
+      lift $ solveWithCEGIS maxIterations fml universalsWithVars [] (Map.fromList allPolynomials) initialProgram 
 
 -- CEGIS test harness
 testCEGIS :: MonadSMT s => Formula -> RSolver s Bool
@@ -187,146 +192,16 @@ testCEGIS fml = do
   let universalsWithVars = map Universal $ zip (map universalToString universals) universals
   writeLog 3 $ linebreak </> text "Solving resource constraint with CEGIS:" <+> pretty fml' 
     <+> text "Over universally quantified expressions:" <+> pretty (map universalFml universalsWithVars)
-  solveWithCEGIS maxIterations fml' universalsWithVars [] (Map.fromList allPolynomials) initialProgram
+  lift $ solveWithCEGIS maxIterations fml' universalsWithVars [] (Map.fromList allPolynomials) initialProgram
 
+-- constant term in resource polynomial    
+constPolynomialVar s = s ++ "CONST"
 
 adjustSorts (BoolLit b) = BoolLit b
 adjustSorts (IntLit b) = IntLit b
 adjustSorts (Var _ x) = Var IntS x
 adjustSorts (Binary op f g) = Binary op (adjustSorts f) (adjustSorts g)
 adjustSorts (Unary op f) = Unary op (adjustSorts f)
-
-{- Data structures for CEGIS solver -}
-
-newtype Universal = Universal (String, Formula)
-  deriving (Eq, Show, Ord)
-
-data PolynomialTerm = PolynomialTerm {
-  coefficient :: String,
-  universal :: Maybe Universal 
-} deriving (Eq, Show, Ord)
-
--- Polynomial represented as a list of coefficient-variable pairs (where a Nothing in the coefficient position indicates the constant term)
-type Polynomial = [PolynomialTerm]
-
--- Map from resource variable name to its corresponding polynomial
-type PolynomialSkeletons = Map String Polynomial
--- Map from resource variable name to its corresponding polynomial (as a formula)
-type RPolynomials = Map String Formula
-
--- Map from universally quantified expression (in string form) to its valuation
-type Example = Map String Formula
-
--- Coefficient valuations in a valid program
-type ResourceSolution = Map String Formula
-
--- Set of all counterexamples
-type ExampleSet = [Example]
-
-data QueryType = Counterexample | Param 
-
--- | Solve formula containing universally quantified expressions with counterexample-guided inductive synthesis
-solveWithCEGIS :: MonadSMT s => Int -> Formula -> [Universal] -> ExampleSet -> PolynomialSkeletons -> ResourceSolution -> RSolver s Bool
-solveWithCEGIS 0 fml universals _ polynomials program = do
-  -- Base case: If there is a counterexample, @fml@ is UNSAT, SAT otherwise
-  counterexample <- getCounterexample fml universals polynomials program 
-  case counterexample of 
-    Nothing -> return True
-    Just cx -> do 
-      writeLog 4 $ text "Last counterexample:" <+> pretty (Map.assocs cx) </> linebreak
-      return False
-
-solveWithCEGIS numIters fml universals examples polynomials program = do
-  counterexample <- getCounterexample fml universals polynomials program 
-  case counterexample of 
-    Nothing -> return True -- No counterexamples exist, polynomials hold on all inputs
-    Just cx ->  
-      do 
-        writeLog 4 $ text "Counterexample:" <+> pretty (Map.assocs cx)
-        -- Update example list
-        let examples' = cx : examples
-        -- For each example, substitute its value for the universally quantified expressions in each polynomial skeleton
-        let paramPolynomials = map (\ex -> fmap (polynomialToFml Param ex) polynomials) examples' 
-        -- For each example, substitute its value for the universally quantified expressions in the actual resource constraint
-        let fmls' = map (`substitute` fml) examples' 
-        -- Assert that any set of params must hold on all examples
-        let paramQuery = conjunction $ zipWith applyPolynomials paramPolynomials fmls'
-        -- Collect all parameters
-        let allCoefficients = concatMap coefficientsOf (Map.elems polynomials)
-        -- Query solver for an assignment to the polynomial coefficients
-        writeLog 7 $ text "CEGIS param query:" </> pretty paramQuery
-        params <- lift . lift . lift . lift $ solveAndGetAssignment paramQuery allCoefficients
-        case params of
-          Nothing -> return False -- No parameters exist, formula is unsatisfiable
-          Just p  -> do 
-            writeLog 6 $ text "Params:" <+> printParams p polynomials
-            solveWithCEGIS (numIters - 1) fml universals examples' polynomials p
-
--- | 'getCounterexample' @fml universals polynomials program@ 
---    Find a valuation for @universals@ such that (not @formula@) holds, under parameter valuation @program@
-getCounterexample :: MonadSMT s => Formula -> [Universal] -> PolynomialSkeletons -> ResourceSolution -> RSolver s (Maybe (Map String Formula))
-getCounterexample fml universals polynomials program = do 
-  -- Generate polynomials by substituting parameter valuations for coefficients
-  let cxPolynomials = fmap (polynomialToFml Counterexample program) polynomials
-  -- Replace resource variables with appropriate polynomials and negate the resource constraint
-  let cxQuery = fnot $ applyPolynomials cxPolynomials fml 
-  writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
-  -- Query solver for a counterexample
-  lift . lift . lift . lift $ solveAndGetAssignment cxQuery (map universalVar universals)
-    
--- | Convert an abstract polynomial into a formula
-polynomialToFml :: QueryType -> Map String Formula -> Polynomial -> Formula
-polynomialToFml Counterexample coeffMap poly = sumFormulas $ map (pTermForCX coeffMap) poly
-polynomialToFml Param univMap poly           = sumFormulas $ map (pTermForProg univMap) poly
-
--- | Assemble a polynomial term, given a variable prefix and a universally quantified expression
-makePTerm :: String -> Formula -> PolynomialTerm
-makePTerm prefix fml = PolynomialTerm coeff (Just univ)
-  where 
-    coeff  = makePolynomialVar prefix fml
-    univ   = Universal (fmlStr, fml)
-    fmlStr = universalToString fml
-
-universalVar (Universal (name, _)) = name
-universalFml (Universal (_, fml))  = fml
-
-coefficientsOf = map coefficient
-
--- | Convert PolynomialTerm into a formula for use in the counterexample query (ie instantiate the coefficients)
-pTermForCX :: ResourceSolution -> PolynomialTerm -> Formula
-pTermForCX coeffVals (PolynomialTerm coeff Nothing)  = exprValue coeffVals coeff 
-pTermForCX coeffVals (PolynomialTerm coeff (Just u)) = exprValue coeffVals coeff |*| universalFml u 
-
--- | Convert PolynomialTerm into a formula for use in the program query (ie instantiate the universals)
-pTermForProg :: Example -> PolynomialTerm -> Formula
-pTermForProg univVals (PolynomialTerm coeff Nothing)  = Var IntS coeff
-pTermForProg univVals (PolynomialTerm coeff (Just u)) = Var IntS coeff |*| exprValue univVals (universalVar u)
-
--- | Get the value of some expression from a map of valuations (either Example or ResourceSolution)
-exprValue :: Map String Formula -> String -> Formula
-exprValue coeffVals coeff = 
-  case Map.lookup coeff coeffVals of 
-    Nothing -> error $ "exprValue: valuation not found for expression" ++ coeff
-    Just f  -> f
-
--- | Replace resource variables in a formula with the appropriate polynomial
-applyPolynomials :: RPolynomials -> Formula -> Formula
-applyPolynomials poly v@(Var _ name)   = fromMaybe v (Map.lookup name poly)
-applyPolynomials poly (Unary op f)     = Unary op (applyPolynomials poly f)
-applyPolynomials poly (Binary op f g)  = Binary op (applyPolynomials poly f) (applyPolynomials poly g)
-applyPolynomials poly (Ite f g h)      = Ite (applyPolynomials poly f) (applyPolynomials poly g) (applyPolynomials poly h)
-applyPolynomials poly (Pred s name fs) = Pred s name $ map (applyPolynomials poly) fs
-applyPolynomials poly (Cons s name fs) = Cons s name $ map (applyPolynomials poly) fs
-applyPolynomials poly (SetLit s fs)    = SetLit s $ map (applyPolynomials poly) fs
-applyPolynomials _ f@(Unknown _ _)     = error $ show $ text "applyPolynomials: predicate unknown in resource expression:" <+> pretty f
-applyPolynomials _ f@(All _ _)         = error $ show $ text "applyPolynomials: universal quantifier in resource expression:" <+> pretty f
-applyPolynomials _ f                   = f
-
--- | Helper to print the parameters alongside the actual resource polynomial
-printParams :: ResourceSolution -> PolynomialSkeletons -> Doc
-printParams prog polynomials = pretty $ map (\(rvar, poly) -> text rvar <+> operator "=" <+> printPolynomial poly) (Map.assocs polynomials)
-  where 
-    printPolynomial p = pretty $ polynomialToFml Counterexample prog p 
 
 -- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
 allRFormulas :: Bool -> RType -> [Formula]
@@ -432,22 +307,6 @@ isResourceConstraint WellFormed{}  = True
 isResourceConstraint SharedType{}  = True
 isResourceConstraint ConstantRes{} = True
 isResourceConstraint _             = False
-
--- Coefficient variables for resource polynomial
-makePolynomialVar :: String -> Formula -> String 
-makePolynomialVar annotation f = textFrom f ++ "_" ++ toText annotation
-  where 
-    textFrom (Var _ x) = x
-    textFrom (Pred _ x fs) = x ++ show (pretty fs)
-    toText f = show (pretty f)
-    
--- constant term in resource polynomial    
-constPolynomialVar s = s ++ "CONST"
-
-universalToString :: Formula -> String
-universalToString (Var _ x) = x -- ++ "_univ"
-universalToString (Pred _ x fs) = x ++ concatMap show fs ++ "_univ"
-universalToString (Cons _ x fs) = x ++ concatMap show fs ++ "_univ"
 
 -- Return a set of all formulas (potential, multiplicity, refinement) of a type. 
 --   Doesn't mean anything necesssarily, used to embed environment assumptions
