@@ -106,16 +106,7 @@ instantiateConsAxioms env mVal fml = let inst = instantiateConsAxioms env mVal i
     Pred _ p args -> Set.unions $ map inst args
     _ -> Set.empty
   where
-    measureAxiom resS ctor args (_, (MeasureDef inSort _ defs [] _)) = 
-      let 
-        MeasureCase _ vars body = head $ filter (\(MeasureCase c _ _) -> c == ctor) defs
-        sParams = map varSortName (sortArgsOf inSort) -- sort parameters in the datatype declaration
-        sArgs = sortArgsOf resS -- actual sort argument in the constructor application
-        body' = noncaptureSortSubstFml sParams sArgs body -- measure definition with actual sorts for all subexpressions
-        newValue = fromMaybe (Cons resS ctor args) mVal
-        subst = Map.fromList $ (valueVarName, newValue) : zip vars args 
-      in Set.singleton $ substitute subst body'
-    measureAxiom resS ctor args (mname, (MeasureDef inSort _ defs constantArgs _)) =
+    measureAxiom resS ctor args (mname, MeasureDef inSort _ defs constantArgs _) =
       let
         MeasureCase _ vars body = head $ filter (\(MeasureCase c _ _) -> c == ctor) defs
         sParams = map varSortName (sortArgsOf inSort) -- sort parameters in the datatype declaration
@@ -125,20 +116,23 @@ instantiateConsAxioms env mVal fml = let inst = instantiateConsAxioms env mVal i
         subst = Map.fromList $ (valueVarName, newValue) : zip vars args 
         -- Body of measure with constructor application (newValue) substituted for _v:
         vSubstBody = substitute subst body'
-        -- For each constant argument in the measure definition,
-        --   assemble a list of tuples mapping the formal name to all possible variables in scope of the relevant sort
-        varsOfSort = Map.assocs $ symbolsOfArity 0 env -- map (\(_, s) -> {-Map.keys (allScalarsOfSort env s)-}) constantArgs
-        constArgList = Map.lookup mname (_measureConstArgs env)
-      in 
-        case constArgList of 
-          Nothing -> Set.empty
-          Just constArgs -> 
-            let 
-              possibleArgs = map Set.toList constArgs
-              possibleSubsts = zipWith (\(x, s) vars -> zip (repeat x) vars) constantArgs possibleArgs  
-              -- Nondeterministically choose one concrete argument from all lists of possible arguments
-              allArgLists = sequence possibleSubsts
-            in Set.fromList $ map ((`substitute` vSubstBody) . Map.fromList) allArgLists
+      in if null constantArgs
+        then Set.singleton vSubstBody
+        else let
+          -- For each constant argument in the measure definition,
+          --   assemble a list of tuples mapping the formal name to all possible variables in scope of the relevant sort
+          varsOfSort = Map.assocs $ symbolsOfArity 0 env -- map (\(_, s) -> {-Map.keys (allScalarsOfSort env s)-}) constantArgs
+          constArgList = Map.lookup mname (_measureConstArgs env)
+        in 
+          case constArgList of 
+            Nothing -> Set.empty
+            Just constArgs -> 
+              let 
+                possibleArgs = map Set.toList constArgs
+                possibleSubsts = zipWith (\(x, s) vars -> zip (repeat x) vars) constantArgs possibleArgs  
+                -- Nondeterministically choose one concrete argument from all lists of possible arguments
+                allArgLists = sequence possibleSubsts
+              in Set.fromList $ map ((`substitute` vSubstBody) . Map.fromList) allArgLists
 
 bottomValuation :: QMap -> Formula -> Formula
 bottomValuation qmap fml = applySolution bottomSolution fml

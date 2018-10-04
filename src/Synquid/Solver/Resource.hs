@@ -159,18 +159,14 @@ satisfyResources universals fml = do
     else do
       maxIterations <- lift $ asks _cegisMax
       rVars <- Set.toList <$> use resourceVars
-      -- Generate list of polynomial coefficients, 1 for each universally quantified expression and a constant term
-      let constantTerm s = PolynomialTerm (constPolynomialVar s) Nothing
-      -- Initialize all coefficients to zero (shouldn't matter what value is used)
-      let polynomial s = constantTerm s : map (makePTerm s) universals
       -- Initialize polynomials for each resource variable
-      let allPolynomials = zip rVars (map polynomial rVars)
+      let allPolynomials = zip rVars (map (initializePolynomial universals) rVars)
       -- List of all coefficients in the list of all polynomials
       let allCoefficients = concatMap (coefficientsOf . snd) allPolynomials
       -- Initialize all coefficient values -- the starting value should not matter
-      let initialProgram = Map.fromList $ zip allCoefficients (repeat (IntLit 0))
+      let initialProgram = Map.fromList $ zip allCoefficients initialCoefficients 
       -- Construct list of universally quantified expressions, storing the formula with a string representation
-      let universalsWithVars = map Universal $ zip (map universalToString universals) universals
+      let universalsWithVars = formatUniversals universals 
       writeLog 3 $ text "Solving resource constraint with CEGIS:" 
       writeLog 5 $ pretty fml
       writeLog 3 $ text "Over universally quantified expressions:" <+> pretty (map universalFml universalsWithVars)
@@ -186,18 +182,14 @@ testCEGIS fml = do
   let rVars = ["p0", "p1"]
   -- max number of iterations through the CEGIS loop
   let maxIterations = length universals + 10
-  let constantTerm s = PolynomialTerm (constPolynomialVar s) Nothing
-  let polynomial s = constantTerm s : map (makePTerm s) universals
-  let allPolynomials = zip rVars (map polynomial rVars)
+  let allPolynomials = zip rVars (map (initializePolynomial universals) rVars)
   let allCoefficients = concatMap (coefficientsOf . snd) allPolynomials
-  let initialProgram = Map.fromList $ zip allCoefficients (repeat (IntLit 0))
-  let universalsWithVars = map Universal $ zip (map universalToString universals) universals
+  let initialProgram = Map.fromList $ zip allCoefficients initialCoefficients 
+  let universalsWithVars = formatUniversals universals 
   writeLog 3 $ linebreak </> text "Solving resource constraint with CEGIS:" <+> pretty fml' 
     <+> text "Over universally quantified expressions:" <+> pretty (map universalFml universalsWithVars)
   lift $ solveWithCEGIS maxIterations fml' universalsWithVars [] (Map.fromList allPolynomials) initialProgram
 
--- constant term in resource polynomial    
-constPolynomialVar s = s ++ "CONST"
 
 adjustSorts (BoolLit b) = BoolLit b
 adjustSorts (IntLit b) = IntLit b

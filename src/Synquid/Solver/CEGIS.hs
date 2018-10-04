@@ -3,10 +3,12 @@ module Synquid.Solver.CEGIS (
   PolynomialTerm(..),
   solveWithCEGIS,
   coefficientsOf,
-  universalToString,
+  formatUniversals,
   makePTerm,
   universalVar,
-  universalFml
+  universalFml,
+  initializePolynomial,
+  initialCoefficients
 ) where 
 
 import Synquid.Logic
@@ -175,6 +177,21 @@ makePolynomialVar annotation f = textFrom f ++ "_" ++ toText annotation
     textFrom (Var _ x) = x
     textFrom (Pred _ x fs) = x ++ show (pretty fs)
     toText f = show (pretty f)
+
+-- Turn a list of universally quantified formulas into a list of Universal 
+--   data structures (formula-string pairs)
+formatUniversals univs = map Universal $ zip (map universalToString univs) univs
+
+-- Initialize polynomial over universally quantified @fmls@, using variable prefix @s@
+initializePolynomial fmls s = constantPTerm s : map (makePTerm s) fmls
+
+-- Constant term in a polynomial, using variable prefix @s@
+constantPTerm s = PolynomialTerm (constPolynomialVar s) Nothing
+
+constPolynomialVar s = s ++ "CONST"
+
+-- Initialize all coefficients to zero when starting CEGIS
+initialCoefficients = repeat $ IntLit 0
 
 universalToString :: Formula -> String
 universalToString (Var _ x) = x -- ++ "_univ"

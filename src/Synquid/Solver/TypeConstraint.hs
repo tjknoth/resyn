@@ -52,7 +52,6 @@ import Control.Monad.Trans.Except
 import Control.Lens hiding (both)
 import Debug.Trace
 
-
 -- | Initial typing state in the initial environment @env@
 initTypingState :: MonadHorn s => Environment -> RSchema -> s TypingState
 initTypingState env schema = do
