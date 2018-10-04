@@ -25,7 +25,8 @@ module Synquid.Solver.TypeConstraint (
   processAllPredicates,
   checkTypeConsistency,
   solveTypeConstraints,
-  solveCTConstraints
+  solveCTConstraints,
+  initTypingState
 ) where
 
 import Synquid.Logic
@@ -50,6 +51,32 @@ import Control.Monad.State
 import Control.Monad.Trans.Except
 import Control.Lens hiding (both)
 import Debug.Trace
+
+
+-- | Initial typing state in the initial environment @env@
+initTypingState :: MonadHorn s => Environment -> RSchema -> s TypingState
+initTypingState env schema = do
+  let univs = allUniversals env schema 
+  let mUnivs = if null univs then Nothing else Just univs
+  let argmap = getAllCArgsFromSchema env schema
+  initCand <- initHornSolver env
+  return TypingState {
+    _typingConstraints = [],
+    _typeAssignment = Map.empty,
+    _predAssignment = Map.empty,
+    _qualifierMap = Map.empty,
+    _candidates = [initCand],
+    _initEnv = env { _measureConstArgs = argmap },
+    _idCount = Map.empty,
+    _isFinal = False,
+    _resourceConstraints = [],
+    _simpleConstraints = [],
+    _hornClauses = [],
+    _consistencyChecks = [],
+    _errorContext = (noPos, empty),
+    _resourceVars = Set.empty,
+    _universalFmls = mUnivs 
+  }
 
 {- Top-level constraint solving interface -}
 

@@ -94,7 +94,7 @@ instance MonadSMT Z3State where
     let r' = case r of 
               Unsat -> False 
               Sat   -> True
-              _     -> error $ "solveWithModel: Z3 returned Unknown for AST " ++ astStr -- show (pretty fml)
+              _     -> error $ "solveWithModel: Z3 returned Unknown for AST " ++ astStr 
     case m of 
       Nothing -> return (r', "")
       Just mod -> do 

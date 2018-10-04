@@ -177,6 +177,8 @@ satisfyResources universals fml = do
       lift $ solveWithCEGIS maxIterations fml universalsWithVars [] (Map.fromList allPolynomials) initialProgram 
 
 -- CEGIS test harness
+-- If this is going to work with measures, need a way to parse measures, etc
+--   or just manually instantiate cons axioms
 testCEGIS :: MonadSMT s => Formula -> RSolver s Bool
 testCEGIS fml = do 
   let fml' = adjustSorts fml
@@ -360,9 +362,8 @@ updateUniversals env fml = do
       universalFmls .= Just universals'
       return universals'
 
--- | 'hasUniversals' @env sch@ : Indicates existence of universally quantified resource formulas in the potential
+-- | 'allUniversals' @env sch@ : set of all universally quantified resource formulas in the potential
 --    annotations of the type @sch@
--- Could be done more efficiently by returning as soon as a universal is found
 allUniversals :: Environment -> RSchema -> Set Formula
 allUniversals env sch = getUniversals univSyms $ conjunction $ allRFormulas True $ typeFromSchema sch 
   where

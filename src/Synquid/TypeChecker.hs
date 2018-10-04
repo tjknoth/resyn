@@ -27,7 +27,7 @@ import qualified Data.Set as Set
 reconstruct :: (MonadSMT s, MonadHorn s) => ExplorerParams -> TypingParams -> Goal -> s (Either ErrorMessage [(RProgram, TypingState)])
 reconstruct eParams tParams goal = do
     let env = gEnvironment goal
-    initTS <- initTypingState env (allUniversals env (gSpec goal))
+    initTS <- initTypingState env (gSpec goal) 
     runExplorer (eParams { _sourcePos = gSourcePos goal }) tParams (Reconstructor reconstructTopLevel) initTS go
   where
     go = do

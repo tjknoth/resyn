@@ -96,28 +96,6 @@ type TCSolver s = StateT TypingState (ReaderT TypingParams (ExceptT ErrorMessage
 runTCSolver :: TypingParams -> TypingState -> TCSolver s a -> s (Either ErrorMessage (a, TypingState))
 runTCSolver params st go = runExceptT $ runReaderT (runStateT go st) params
 
--- | Initial typing state in the initial environment @env@
-initTypingState :: MonadHorn s => Environment -> Set Formula -> s TypingState
-initTypingState env univs = do
-  let mUnivs = if null univs then Nothing else Just univs
-  initCand <- initHornSolver env
-  return TypingState {
-    _typingConstraints = [],
-    _typeAssignment = Map.empty,
-    _predAssignment = Map.empty,
-    _qualifierMap = Map.empty,
-    _candidates = [initCand],
-    _initEnv = env,
-    _idCount = Map.empty,
-    _isFinal = False,
-    _resourceConstraints = [],
-    _simpleConstraints = [],
-    _hornClauses = [],
-    _consistencyChecks = [],
-    _errorContext = (noPos, empty),
-    _resourceVars = Set.empty,
-    _universalFmls = mUnivs 
-  }
 
 instance Eq TypingState where
   (==) st1 st2 = (restrictDomain (Set.fromList ["a", "u"]) (_idCount st1) == restrictDomain (Set.fromList ["a", "u"]) (_idCount st2)) &&
