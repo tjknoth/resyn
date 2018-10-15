@@ -1,11 +1,8 @@
 module Synquid.Solver.CEGIS (
-  Universal(..),
-  PolynomialTerm(..),
   solveWithCEGIS,
   coefficientsOf,
   formatUniversals,
   makePTerm,
-  universalVar,
   universalFml,
   initializePolynomial,
   initialCoefficients
@@ -15,6 +12,8 @@ import Synquid.Logic
 import Synquid.Pretty
 import Synquid.Solver.Monad
 import Synquid.Solver.Util
+import Synquid.Program (MeasureDef(..), measureDefs)
+import Synquid.Z3 
 
 import Control.Monad.State
 import Data.Maybe
@@ -23,17 +22,22 @@ import Data.Map (Map)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import Data.List
+import Control.Lens as Lens
+import Debug.Trace
 
 {- Data structures for CEGIS solver -}
 
 -- Universally quantified variable
-newtype Universal = Universal (String, Formula)
+newtype UVar = UVar { unUVar :: (String, Formula) }
   deriving (Eq, Show, Ord)
+
+-- Uninterpreted function (measure) relevant for constraint solving
+type UMeasure = (String, MeasureDef)
 
 -- Term of a polynomial: coefficient * universal
 data PolynomialTerm = PolynomialTerm {
   coefficient :: String,
-  universal :: Maybe Universal 
+  universal :: Maybe UVar 
 } deriving (Eq, Show, Ord)
 
 -- Polynomial represented as a list of coefficient-variable pairs (where a Nothing in the coefficient position indicates the constant term)
@@ -44,40 +48,53 @@ type PolynomialSkeletons = Map String Polynomial
 -- Map from resource variable name to its corresponding polynomial (as a formula)
 type RPolynomials = Map String Formula
 
--- Map from universally quantified expression (in string form) to its valuation
-type Example = Map String Formula
-
 -- Coefficient valuations in a valid program
 type ResourceSolution = Map String Formula
 
 -- Set of all counterexamples
-type ExampleSet = [Example]
+type ExampleSet = [Counterexample]
 
 -- Solver queries are either asking for counterexamples or 
 --   a parameterization of the program
 data QueryType = Counterexample | Param 
 
+-- Map from universally quantified expression (in string form) to its valuation
+data Counterexample = CX {
+  measureInterps :: Map String Z3Measure,
+  vars :: Map String Formula,
+  model :: SMTModel
+} deriving (Eq)
+
 {- Top-level interface -}
 
 -- | Solve formula containing universally quantified expressions with counterexample-guided inductive synthesis
-solveWithCEGIS :: MonadSMT s => Int -> Formula -> [Universal] -> ExampleSet -> PolynomialSkeletons -> ResourceSolution -> TCSolver s Bool
-solveWithCEGIS 0 fml universals _ polynomials program = do
+solveWithCEGIS :: MonadSMT s 
+               => Int 
+               -> Formula 
+               -> [UVar] 
+               -> [UMeasure] 
+               -> ExampleSet 
+               -> PolynomialSkeletons 
+               -> ResourceSolution 
+               -> TCSolver s Bool
+solveWithCEGIS 0 fml universals measures _ polynomials program = do
   -- Base case: If there is a counterexample, @fml@ is UNSAT, SAT otherwise
-  counterexample <- getCounterexample fml universals polynomials program 
+  counterexample <- getCounterexample fml universals measures polynomials program 
   case counterexample of 
     Nothing -> return True
     Just cx -> do 
-      writeLog 4 $ text "Last counterexample:" <+> pretty (Map.assocs cx) </> linebreak
+      writeLog 4 $ text "Last counterexample:" <+> pretty (Map.assocs (vars cx)) </> linebreak
       return False
 
-solveWithCEGIS numIters fml universals examples polynomials program = do
+solveWithCEGIS n fml universals measures examples polynomials program = do
   -- Attempt to find point for which current parameterization fails
-  counterexample <- getCounterexample fml universals polynomials program 
+  counterexample <- getCounterexample fml universals measures polynomials program 
   case counterexample of 
     Nothing -> return True -- No counterexamples exist, polynomials hold on all inputs
     Just cx ->  
       do 
-        writeLog 4 $ text "Counterexample:" <+> pretty (Map.assocs cx)
+        writeLog 4 $ text "Counterexample:" <+> pretty (Map.assocs (vars cx))
+        writeLog 4 $ text "      measures:" <+> pretty (Map.keys (measureInterps cx))
         -- Update example list
         let examples' = cx : examples
         -- Attempt to find parameterization holding on all examples
@@ -86,51 +103,86 @@ solveWithCEGIS numIters fml universals examples polynomials program = do
           Nothing -> return False -- No parameters exist, formula is unsatisfiable
           Just p  -> do 
             writeLog 6 $ text "Params:" <+> printParams p polynomials
-            solveWithCEGIS (numIters - 1) fml universals examples' polynomials p
+            solveWithCEGIS (n - 1) fml universals measures examples' polynomials p
 
 -- | 'getCounterexample' @fml universals polynomials program@ 
 --    Find a valuation for @universals@ such that (not @formula@) holds, under parameter valuation @program@
-getCounterexample :: MonadSMT s => Formula -> [Universal] -> PolynomialSkeletons -> ResourceSolution -> TCSolver s (Maybe (Map String Formula))
-getCounterexample fml universals polynomials program = do 
+getCounterexample :: MonadSMT s 
+                  => Formula 
+                  -> [UVar] 
+                  -> [UMeasure] 
+                  -> PolynomialSkeletons 
+                  -> ResourceSolution 
+                  -> TCSolver s (Maybe Counterexample)
+getCounterexample fml universals measures polynomials program = do 
   -- Generate polynomials by substituting parameter valuations for coefficients
-  let cxPolynomials = fmap (polynomialToFml Counterexample program) polynomials
+  let cxPolynomials = fmap (mkCXPolynomial program) polynomials
   -- Replace resource variables with appropriate polynomials and negate the resource constraint
   let cxQuery = fnot $ applyPolynomials cxPolynomials fml 
   writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
   -- Query solver for a counterexample
-  lift . lift . lift $ solveAndGetAssignment cxQuery (map universalVar universals)
+  let runInSolver = lift . lift . lift
+  model <- runInSolver $ solveAndGetModel cxQuery 
+  ass <- runInSolver . sequence 
+    $ (modelGetAssignment (map universalVar universals) <$> model)
+  interps <- runInSolver . sequence 
+    $ (modelGetMeasures measures <$> model)
+  return $ ((CX <$> interps) <*> join ass) <*> model
+  
 
 -- | 'getParameters' @fml polynomials examples@
 --   Find a valuation for all coefficients such that @fml@ holds on all @examples@
-getParameters :: MonadSMT s => Formula -> PolynomialSkeletons -> ExampleSet -> TCSolver s (Maybe (Map String Formula))
+getParameters :: MonadSMT s 
+              => Formula 
+              -> PolynomialSkeletons 
+              -> ExampleSet 
+              -> TCSolver s (Maybe (Map String Formula))
 getParameters fml polynomials examples = do
   -- For each example, substitute its value for the universally quantified expressions in each polynomial skeleton
-  let paramPolynomials = map (\ex -> fmap (polynomialToFml Param ex) polynomials) examples
+  let paramPolynomials = map (\ex -> fmap (mkParamPolynomial ex) polynomials) examples
   -- For each example, substitute its value for the universally quantified expressions in the actual resource constraint
-  let fmls' = map (`substitute` fml) examples
+  let fmls' = map ((`substitute` fml) . vars) examples
+  -- Evaluate the measure applications within the model from the counterexample
+  fmls'' <- lift . lift . lift $ zipWithM evalMeasures examples fmls' 
   -- Assert that any parameterization must hold for all examples
   let paramQuery = conjunction $ zipWith applyPolynomials paramPolynomials fmls'
   -- Collect all parameters
   let allCoefficients = concatMap coefficientsOf (Map.elems polynomials)
   writeLog 7 $ text "CEGIS param query:" </> pretty paramQuery
-  lift . lift . lift $ solveAndGetAssignment paramQuery allCoefficients
+  let runInSolver = lift . lift . lift
+  model <- runInSolver $ solveAndGetModel paramQuery 
+  join <$> (runInSolver . sequence $ (modelGetAssignment allCoefficients <$> model))
 
-    
--- | Convert an abstract polynomial into a formula
-polynomialToFml :: QueryType -> Map String Formula -> Polynomial -> Formula
-polynomialToFml Counterexample coeffMap poly = sumFormulas $ map (pTermForCX coeffMap) poly
-polynomialToFml Param univMap poly           = sumFormulas $ map (pTermForProg univMap) poly
+evalMeasures :: MonadSMT s => Counterexample -> Formula -> s Formula
+evalMeasures cx fml = case fml of 
+  Pred s x args -> do 
+    let ms = measureInterps cx
+    fml' <- evalInModel args (model cx) `mapM` Map.lookup x ms
+    case fml' of 
+      Nothing -> error $ "Error: evaluating " ++ show (pretty fml) ++ " fails " 
+      Just f -> return f
+  Var{}         -> return fml
+  SetLit b xs   ->  SetLit b <$> mapM (evalMeasures cx) xs
+  Unary op e    ->  Unary op <$> evalMeasures cx e
+  Binary op f g ->  Binary op <$> evalMeasures cx f <*> evalMeasures cx g
+  Ite g t f     ->  Ite <$> evalMeasures cx g <*> evalMeasures cx t <*> evalMeasures cx f
+  Cons s x as   ->  Cons s x <$> mapM (evalMeasures cx) as
+  All{}         -> return fml
+  otherwise     -> return fml
+
+mkCXPolynomial coeffMap poly = sumFormulas $ map (pTermForCX coeffMap) poly
+mkParamPolynomial cx poly = sumFormulas $ map (pTermForProg cx) poly
 
 -- | Assemble a polynomial term, given a variable prefix and a universally quantified expression
 makePTerm :: String -> Formula -> PolynomialTerm
 makePTerm prefix fml = PolynomialTerm coeff (Just univ)
   where 
     coeff  = makePolynomialVar prefix fml
-    univ   = Universal (fmlStr, fml)
+    univ   = UVar (fmlStr, fml)
     fmlStr = universalToString fml
 
-universalVar (Universal (name, _)) = name
-universalFml (Universal (_, fml))  = fml
+universalVar = fst . unUVar 
+universalFml = snd . unUVar 
 
 coefficientsOf = map coefficient
 
@@ -140,9 +192,9 @@ pTermForCX coeffVals (PolynomialTerm coeff Nothing)  = exprValue coeffVals coeff
 pTermForCX coeffVals (PolynomialTerm coeff (Just u)) = exprValue coeffVals coeff |*| universalFml u 
 
 -- | Convert PolynomialTerm into a formula for use in the program query (ie instantiate the universals)
-pTermForProg :: Example -> PolynomialTerm -> Formula
-pTermForProg univVals (PolynomialTerm coeff Nothing)  = Var IntS coeff
-pTermForProg univVals (PolynomialTerm coeff (Just u)) = Var IntS coeff |*| exprValue univVals (universalVar u)
+pTermForProg :: Counterexample -> PolynomialTerm -> Formula
+pTermForProg cx (PolynomialTerm coeff Nothing)  = Var IntS coeff
+pTermForProg cx (PolynomialTerm coeff (Just u)) = Var IntS coeff |*| exprValue (vars cx) (universalVar u)
 
 -- | Get the value of some expression from a map of valuations (either Example or ResourceSolution)
 exprValue :: Map String Formula -> String -> Formula
@@ -168,7 +220,7 @@ applyPolynomials _ f                   = f
 printParams :: ResourceSolution -> PolynomialSkeletons -> Doc
 printParams prog polynomials = pretty $ map (\(rvar, poly) -> text rvar <+> operator "=" <+> printPolynomial poly) (Map.assocs polynomials)
   where 
-    printPolynomial p = pretty $ polynomialToFml Counterexample prog p 
+    printPolynomial p = pretty $ mkCXPolynomial prog p 
 
 -- Coefficient variables for resource polynomial
 makePolynomialVar :: String -> Formula -> String 
@@ -180,7 +232,7 @@ makePolynomialVar annotation f = textFrom f ++ "_" ++ toText annotation
 
 -- Turn a list of universally quantified formulas into a list of Universal 
 --   data structures (formula-string pairs)
-formatUniversals univs = map Universal $ zip (map universalToString univs) univs
+formatUniversals univs = map UVar $ zip (map universalToString univs) univs
 
 -- Initialize polynomial over universally quantified @fmls@, using variable prefix @s@
 initializePolynomial fmls s = constantPTerm s : map (makePTerm s) fmls
@@ -191,7 +243,7 @@ constantPTerm s = PolynomialTerm (constPolynomialVar s) Nothing
 constPolynomialVar s = s ++ "CONST"
 
 -- Initialize all coefficients to zero when starting CEGIS
-initialCoefficients = repeat $ IntLit 0
+initialCoefficients = repeat $ IntLit 1
 
 universalToString :: Formula -> String
 universalToString (Var _ x) = x -- ++ "_univ"

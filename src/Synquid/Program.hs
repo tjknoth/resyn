@@ -235,7 +235,7 @@ data Environment = Environment {
   _constants :: Set Id,                    -- ^ Subset of symbols that are constants
   _datatypes :: Map Id DatatypeDef,        -- ^ Datatype definitions
   _globalPredicates :: Map Id [Sort],      -- ^ Signatures (resSort:argSorts) of module-level logic functions (measures, predicates)
-  _measures :: Map Id MeasureDef,          -- ^ Measure definitions
+  _measureDefs :: Map Id MeasureDef,       -- ^ Measure definitions
   _typeSynonyms :: Map Id ([Id], RType),   -- ^ Type synonym definitions
   _unresolvedConstants :: Map Id RSchema,  -- ^ Unresolved types of components (used for reporting specifications with macros)
   _emptyCtors :: Set Id,                   -- ^ Empty constructors for data types 
@@ -263,7 +263,7 @@ emptyEnv = Environment {
   _constants = Set.empty,
   _globalPredicates = Map.empty,
   _datatypes = Map.empty,
-  _measures = Map.empty,
+  _measureDefs = Map.empty,
   _typeSynonyms = Map.empty,
   _unresolvedConstants = Map.empty,
   _emptyCtors = Set.empty,
@@ -285,7 +285,7 @@ allScalarsOfSort env s = Map.filter (hasSort s) (symbolsOfArity 0 env)
 
 -- | All universally quantified symbols in an environment -- includes measures
 universalSyms :: Environment -> Set Id 
-universalSyms env = Map.keysSet (allSymbols env) `Set.union` Map.keysSet (env ^. measures)
+universalSyms env = Map.keysSet (allSymbols env) `Set.union` Map.keysSet (env ^. measureDefs)
 
 -- | 'lookupSymbol' @name env@ : type of symbol @name@ in @env@, including built-in constants
 lookupSymbol :: Id -> Int -> Bool -> Environment -> Maybe RSchema
@@ -398,7 +398,7 @@ embedContext env t = (env, t)
 unfoldAllVariables env = over unfoldedVars (Set.union (Map.keysSet (symbolsOfArity 0 env) Set.\\ (env ^. constants))) env
 
 addMeasure :: Id -> MeasureDef -> Environment -> Environment
-addMeasure measureName m = over measures (Map.insert measureName m)
+addMeasure measureName m = over measureDefs (Map.insert measureName m)
 
 addBoundPredicate :: PredSig -> Environment -> Environment
 addBoundPredicate sig = over boundPredicates (sig :)
@@ -443,7 +443,7 @@ addScrutinee p = usedScrutinees %~ (p :)
 allPredicates env = Map.fromList (map (\(PredSig pName argSorts resSort) -> (pName, resSort:argSorts)) (env ^. boundPredicates)) `Map.union` (env ^. globalPredicates)
 
 -- | 'allMeasuresOf' @dtName env@ : all measure of datatype with name @dtName@ in @env@
-allMeasuresOf dtName env = Map.filter (\(MeasureDef (DataS sName _) _ _ _ _) -> dtName == sName) $ env ^. measures
+allMeasuresOf dtName env = Map.filter (\(MeasureDef (DataS sName _) _ _ _ _) -> dtName == sName) $ env ^. measureDefs
 
 -- | 'allMeasurePostconditions' @baseT env@ : all nontrivial postconditions of measures of @baseT@ in case it is a datatype
 allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env =
@@ -603,7 +603,7 @@ unresolvedSpec goal = unresolvedType (gEnvironment goal) (gName goal)
 
 -- Remove measure being typechecked from environment
 filterEnv :: Environment -> Id -> Environment
-filterEnv e m = Lens.set measures (Map.filterWithKey (\k _ -> k == m) (e ^. measures)) e
+filterEnv e m = Lens.set measureDefs (Map.filterWithKey (\k _ -> k == m) (e ^. measureDefs)) e
 
 -- Transform a resolved measure into a program
 measureProg :: Id -> MeasureDef -> UProgram
@@ -663,13 +663,22 @@ genSkeleton name preds inSorts outSort post = Monotype $ uncurry 0 inSorts
     pforms = fmap predform preds
     predform x = Pred AnyS x []
 
+getAllPreds :: Formula -> Set Id
+getAllPreds (Binary _ l r) = getAllPreds l `Set.union` getAllPreds r
+getAllPreds (Unary _ f)    = getAllPreds f
+getAllPreds (Ite g t f)    = getAllPreds g `Set.union` getAllPreds t `Set.union` getAllPreds f 
+getAllPreds (All _ f)      = getAllPreds f
+getAllPreds (Pred _ x fs)  = Set.insert x (Set.unions (map getAllPreds fs))
+getAllPreds _              = Set.empty 
 
 -- Return a map from the IDs of multi-argument measures to a list of sets of possible 
 --   instantiations of those constant arguments by scraping the schema annotations
 getAllCArgsFromSchema :: Environment -> RSchema -> ArgMap
 getAllCArgsFromSchema env sch = Map.filter (not . null) $
+-- Should I maybe use refinements AND resource annotations to check for arguments?
+--   Or are resource annotations redundant?
   let allRefs = allRefinementsOf sch 
-      measures = Map.keys (_measures env)
+      measures = Map.keys (env ^. measureDefs)
   in Map.unionsWith combineArgLists $ map (getAllCArgs measures) allRefs
 
 combineArgLists = zipWith Set.union

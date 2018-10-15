@@ -394,7 +394,7 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
     
     printStats results declsByFile = do
       let env = gEnvironment $ goal (head results)
-      let measureCount = Map.size $ _measures $ env
+      let measureCount = Map.size $ env^.measureDefs
       let namesOfConstants decls = mapMaybe (\decl ->
            case decl of
              Pos { node = FuncDecl name _ } -> Just name

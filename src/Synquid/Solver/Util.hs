@@ -178,8 +178,8 @@ somewhatFreshVar env prefix s = Var s name
                     else v
 
 -- | 'isSatWithModel' : check satisfiability and return the model accordingly
-isSatWithModel :: MonadSMT s => Formula -> TCSolver s (Bool, String)
-isSatWithModel = lift . lift . lift . solveWithModel
+isSatWithModel :: MonadSMT s => Formula -> TCSolver s (Maybe SMTModel)
+isSatWithModel = lift . lift . lift . solveAndGetModel
 
 
 -- | Signal type error

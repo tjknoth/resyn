@@ -126,7 +126,7 @@ data Formula =
   Pred !Sort !Id ![Formula] |          -- ^ Logic function application
   Cons !Sort !Id ![Formula] |          -- ^ Constructor application
   All !Formula !Formula |              -- ^ Universal quantification
-  ASTLit !AST !String                  -- ^ Z3 AST literal (only used to solve resource constraints), and its string version
+  ASTLit !Sort !AST !String            -- ^ Z3 AST literal (only used to solve resource constraints), and its string version
   deriving (Show, Eq, Ord)
 
 dontCare = "_"
@@ -277,6 +277,7 @@ sortOf (Ite _ e1 _)                              = sortOf e1
 sortOf (Pred s _ _)                              = s
 sortOf (Cons s _ _)                              = s
 sortOf (All _ _)                                 = BoolS
+sortOf (ASTLit s _ _)                            = s
 
 isExecutable :: Formula -> Bool
 isExecutable (SetLit _ _) = False

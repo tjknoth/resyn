@@ -58,6 +58,7 @@ initTypingState env schema = do
   let univs = allUniversals env schema 
   let mUnivs = if null univs then Nothing else Just univs
   let argmap = getAllCArgsFromSchema env schema
+  let ms = allRMeasures schema $ env^.measureDefs
   initCand <- initHornSolver env
   return TypingState {
     _typingConstraints = [],
@@ -69,11 +70,12 @@ initTypingState env schema = do
     _idCount = Map.empty,
     _isFinal = False,
     _resourceConstraints = [],
+    _resourceVars = Set.empty,
+    _resourceMeasures = ms,
     _simpleConstraints = [],
     _hornClauses = [],
     _consistencyChecks = [],
     _errorContext = (noPos, empty),
-    _resourceVars = Set.empty,
     _universalFmls = mUnivs 
   }
 

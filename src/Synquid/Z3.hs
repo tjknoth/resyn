@@ -1,7 +1,11 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, TemplateHaskell #-}
 
 -- | Interface to Z3
-module Synquid.Z3 (Z3State, evalZ3State) where
+module Synquid.Z3 (
+    Z3State
+  , evalZ3State
+  , modelGetAssignment
+  ) where
 
 import Synquid.Logic
 import Synquid.Type
@@ -20,12 +24,11 @@ import qualified Data.Map as Map
 import Data.Map (Map)
 import qualified Data.Bimap as Bimap
 import Data.Bimap (Bimap)
-import Debug.Trace
-
 import Control.Monad
+import Control.Monad.Extra (mapMaybeM)
 import Control.Monad.Trans.State
 import Control.Lens hiding (both)
-
+import Debug.Trace
 
 -- | Z3 state while building constraints
 data Z3Data = Z3Data {
@@ -85,7 +88,7 @@ instance MonadSMT Z3State where
 
   allUnsatCores = getAllMUSs
 
-  solveWithModel fml = do 
+  solveAndGetModel fml = do 
     (r, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
     setASTPrintMode Z3_PRINT_SMTLIB_FULL
     fmlAst <- fmlToAST fml
@@ -95,29 +98,101 @@ instance MonadSMT Z3State where
               Unsat -> False 
               Sat   -> True
               _     -> error $ "solveWithModel: Z3 returned Unknown for AST " ++ astStr 
-    case m of 
-      Nothing -> return (r', "")
-      Just mod -> do 
-        str <- modelToString mod 
-        return (r', str)
+    case m of  
+      Nothing -> return Nothing
+      Just md -> do 
+        mdStr <- modelToString md 
+        return $ Just (md, mdStr)
 
   solveAndGetAssignment fml vals = do 
-    (r, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
+    (_, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
     case m of 
-      Nothing  -> return Nothing 
-      Just mod -> (Just . Map.fromList . catMaybes) <$> mapM (getAssignment mod) vals
-    where
-      -- Z3 AST function corresponding to a given variable 
-      varFun s = fmlToAST (Var IntS s) 
-      -- Get the assignment for a variable @name@:
+      Nothing -> return Nothing 
+      Just md -> do 
+        mstr <- modelToString md 
+        modelGetAssignment vals (md, mstr)
+
+  modelGetAssignment vals (m, mstr) = 
+    (Just . Map.fromList . catMaybes) <$> mapM (getAssignment m) vals
+    where 
+      astS = IntS -- TODO: maybe be smarter about this!
+      varFun s = fmlToAST (Var astS s) -- Z3 AST node for variable 
       getAssignment model name = do 
         vFun <- varFun name
         c <- modelEval model vFun True
         case c of 
           Nothing -> return Nothing 
           Just ast -> do 
-            vstr <- astToString ast
-            return $ Just (name, ASTLit ast vstr)
+            astLit <- mkASTLit astS ast
+            return $ Just (name, astLit)
+
+  modelGetMeasures ms model = do 
+    interps <- getMeasureInterps ms (fst model)
+    return $ Map.fromList $ zip (map fst ms) interps
+
+  evalInModel fs (model, modelStr) measure = do 
+    let eval x = modelEval model x True
+    -- Attempt to evaluate all arguments
+    maybeArgs <- mapM (fmlToAST >=> eval) fs
+    -- Construct list of AST literals (if all were evaluated successfully)
+    args <- mapM (\a -> sequence (mkASTLit IntS <$> a)) maybeArgs
+    case sequence args of 
+      Nothing -> error $ "Error evaluating arguments to " ++ modelStr ++ " " ++ show (pretty fs)
+      Just as -> 
+        case Map.lookup as (_entries measure) of 
+          Nothing -> return $ measure^.defaultVal
+          Just res -> return res
+
+-- Get interpretations of a set of measures in a given model
+getMeasureInterps :: [(String, MeasureDef)] -> Model -> Z3State [Z3Measure]
+getMeasureInterps ms model = mapMaybeM (`getMInterp` model) ms
+
+-- Get interpretation of a given measure in a given model
+getMInterp (mname, mdef) model = do 
+  let targs = map snd (_constantArgs mdef) ++ [_inSort mdef]
+  fun <- function (_outSort mdef) mname targs
+  hasI <- hasInterp model fun
+  if not hasI 
+    then return Nothing
+    else do 
+      interp <- getFuncInterp model fun
+      case interp of 
+        Nothing -> return Nothing
+        Just intp -> do  
+          -- TODO: be smarter about the sort here as well!
+          elseVal <- funcInterpGetElse intp >>= mkASTLit IntS
+          entries <- getFuncEntries mname model intp
+          return $ Just Z3Measure {
+            _measureName = mname,
+            _measureDef = mdef,
+            _entries = entries, 
+            _defaultVal = elseVal
+          }
+
+-- Given a function interpretation, get a map from arguments to interpretations
+--   If the function takes multiple arguments, we treat their sum as a single argument
+getFuncEntries :: String -> Model -> FuncInterp -> Z3State (Map [Formula] Formula)
+getFuncEntries mname mod interp = do 
+  numE <- funcInterpGetNumEntries interp
+  entries <- mapM (getIndexedEntry mname mod interp) [0..(numE - 1)] 
+  return $ Map.fromList entries
+
+-- Get the argument-result pair at the ith entry of a given function interpretation
+getIndexedEntry :: String -> Model -> FuncInterp -> Int -> Z3State ([Formula], Formula)
+getIndexedEntry mname mod interp i = do 
+  entry <- funcInterpGetEntry interp i
+  numA <- funcEntryGetNumArgs entry
+  let eval x = modelEval mod x True
+  args <- sequence <$> mapM (funcEntryGetArg entry >=> eval) [0..(numA - 1)] 
+  case args of 
+    Nothing -> error $ "Error evaluating function entry in measure " ++ mname
+    Just as -> do
+      args' <- mapM (mkASTLit IntS) as
+      res <- funcEntryGetValue entry >>= mkASTLit IntS
+      return (args', res)
+
+mkASTLit :: Sort -> AST -> Z3State Formula
+mkASTLit s ast = ASTLit s ast <$> astToString ast
 
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
 convertDatatypes _ [] = return ()
@@ -126,9 +201,8 @@ convertDatatypes symbols ((dtName, DatatypeDef [] _ _ ctors@(_:_) _):rest) = do
     (return ()) -- This datatype has already been processed as a dependency
     (do
       z3ctorsMb <- mapM convertCtor ctors
-      if any isNothing z3ctorsMb
-        then return ()
-        else do
+      unless (any isNothing z3ctorsMb) $
+        do
           dtSymb <- mkStringSymbol dtName
           z3dt <- mkDatatype dtSymb (map fromJust z3ctorsMb)
           sorts %= Map.insert dataSort z3dt
@@ -255,7 +329,7 @@ toAST expr = case expr of
     decl <- constructor s name tArgs
     mapM toAST args >>= mkApp decl
   All v e -> accumAll [v] e
-  ASTLit a _ -> return a
+  ASTLit _ a _ -> return a
   where
     setLiteral el xs = do
       emp <- toZ3Sort el >>= mkEmptySet
@@ -325,22 +399,9 @@ toAST expr = case expr of
           vars %= Map.insert ident' v
           return v
 
-    -- | Lookup or create a function declaration with name `name', return type `resT', and argument types `argTypes'
-    function resT name argTypes = do
-      let name' = name ++ concatMap (show . asZ3Sort) (resT : argTypes)
-      declMb <- uses functions (Map.lookup name')
-      case declMb of
-        Just d -> return d
-        Nothing -> do
-          symb <- mkStringSymbol name'
-          argSorts <- mapM toZ3Sort argTypes
-          resSort <- toZ3Sort resT
-          decl <- mkFuncDecl symb argSorts resSort
-          functions %= Map.insert name' decl
-          -- return $ traceShow (text "DECLARE" <+> text name <+> pretty argTypes <+> pretty resT) decl
-          return decl
 
-    constructor resT cName argTypes = do
+
+    constructor resT cName argTypes = 
       case resT of
         DataS dtName [] ->
           ifM (uses storedDatatypes (Set.member dtName))
@@ -355,12 +416,27 @@ toAST expr = case expr of
       declNames <- mapM (\d -> getDeclName d >>= getSymbolString) decls
       return $ decls !! fromJust (elemIndex cName declNames)
 
-    -- | Sort as Z3 sees it
-    asZ3Sort s = case s of
-      VarS _ -> IntS
-      DataS _ (_:_) -> IntS
-      SetS el -> SetS (asZ3Sort el)
-      _ -> s
+-- | Sort as Z3 sees it
+asZ3Sort s = case s of
+  VarS _ -> IntS
+  DataS _ (_:_) -> IntS
+  SetS el -> SetS (asZ3Sort el)
+  _ -> s
+
+-- | Lookup or create a function declaration with name `name', return type `resT', and argument types `argTypes'
+function resT name argTypes = do
+  let name' = name ++ concatMap (show . asZ3Sort) (resT : argTypes)
+  declMb <- uses functions (Map.lookup name')
+  case declMb of
+    Just d -> return d
+    Nothing -> do
+      symb <- mkStringSymbol name'
+      argSorts <- mapM toZ3Sort argTypes
+      resSort <- toZ3Sort resT
+      decl <- mkFuncDecl symb argSorts resSort
+      functions %= Map.insert name' decl
+      -- return $ traceShow (text "DECLARE" <+> text name <+> pretty argTypes <+> pretty resT) decl
+      return decl
 
 
 -- | 'getAllMUSs' @assumption mustHave fmls@ : find all minimal unsatisfiable subsets of @fmls@ with @mustHave@, which contain @mustHave@, assuming @assumption@

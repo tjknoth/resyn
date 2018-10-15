@@ -48,6 +48,7 @@ executable synquid
                     , split
                     , tuple >= 0.3
                     , keys >= 3.11
+                    , extra >= 1.4
 
   ghc-options: -O2 
 

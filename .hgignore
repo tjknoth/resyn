@@ -38,3 +38,4 @@ examples.*
 *.ps
 *.md
 *.orig
+experiments/*

@@ -4,6 +4,8 @@
 module Synquid.Solver.Resource (
   checkResources,
   allUniversals,
+  allRFormulas,
+  allRMeasures,
   testCEGIS
 ) where
 
@@ -39,9 +41,9 @@ checkResources :: (MonadHorn s, MonadSMT s) => RType -> [Constraint] -> TCSolver
 checkResources _ [] = return ()
 checkResources typ constraints = do 
   oldConstraints <- use resourceConstraints 
-  tparams <- ask
+  tparams <- ask 
   let solve = solveResourceConstraints oldConstraints (filter isResourceConstraint constraints)
-  newC <- runReaderT solve typ 
+  newC <- runReaderT solve typ
   case newC of 
     Nothing -> throwError $ text "Insufficient resources"
     Just f  -> resourceConstraints %= (++ f) 
@@ -51,19 +53,20 @@ solveResourceConstraints :: MonadSMT s => [RConstraint] -> [Constraint] -> RSolv
 solveResourceConstraints oldConstraints constraints = do
     writeLog 3 $ linebreak <+> text "Generating resource constraints:"
     checkMults <- lift $ asks _checkMultiplicities
-    containsUnivs <- isNothing <$> use universalFmls 
     -- Need environment to determine which annotation formulas are universally quantified
     let tempEnv = case constraints of
           [] -> emptyEnv 
           cs -> envFrom $ head cs
     -- Check for new universally quantified expressions
-    universals <- updateUniversals tempEnv $ conjunction $ concatMap (concatMap (allRFormulas checkMults) . typesFrom) constraints
+    universals <- fromMaybe Set.empty <$> use universalFmls
     -- Generate numerical resource-usage formulas from typing constraints:
     constraintList <- mapM (generateFormula True universals . Right) constraints
     accFmls <- mapM (generateFormula False universals) oldConstraints
+    universals' <- updateUniversals tempEnv $ conjunction (map constraint constraintList) 
+    --traceM $ "Univerally quantified vars: " ++ show universals'
     let query = assembleQuery accFmls constraintList 
     -- Check satisfiability
-    b <- satisfyResources (Set.toList universals) query
+    b <- satisfyResources (Set.toList universals') query
     let result = if b then "SAT" else "UNSAT"
     writeLog 5 $ nest 4 $ text "Accumulated resource constraints:" 
       $+$ prettyConjuncts (filter (isInteresting . constraint) accFmls)
@@ -71,7 +74,7 @@ solveResourceConstraints oldConstraints constraints = do
       <+> text result $+$ prettyConjuncts (filter (isInteresting . constraint) constraintList)
     if b 
       then 
-        return $ Just $ if containsUnivs 
+        return $ Just $ if null universals
           -- Store raw constraints
           then map Right constraints
           -- Otherwise, store TaggedConstraints with the appropriate formulas
@@ -139,7 +142,7 @@ embedAndProcessConstraint shouldLog env c fmls relevantFml addTo = do
     else do 
       -- As well as preprocessing to assume all unknowns, remove anything containing a datatype
       --  this is only temporary to develop CEGIS for numeric variables first. 
-      let emb' = conjunction $ removeDTs (Map.keys (_measures env)) $ preprocessAssumptions $ addTo emb
+      let emb' = conjunction $ removeDTs (Map.keys (env^.measureDefs)) $ preprocessAssumptions $ addTo emb
       needsEmb <- isJust <$> use universalFmls
       -- Only include implication if its nontrivial and there are no universally quantified expressions
       let finalFml = if (emb' == ftrue) || not needsEmb then fmls else emb' |=>| fmls
@@ -153,9 +156,12 @@ satisfyResources universals fml = do
   shouldInstantiate <- lift $ asks _instantiateUnivs
   if null universals || not shouldInstantiate
     then do 
-      (b, s) <- lift $ isSatWithModel fml
-      writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text s)
-      return b
+      model <- lift $ isSatWithModel fml
+      case model of 
+        Nothing -> return False
+        Just m' -> do 
+          writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (snd m'))
+          return True 
     else do
       maxIterations <- lift $ asks _cegisMax
       rVars <- Set.toList <$> use resourceVars
@@ -167,10 +173,11 @@ satisfyResources universals fml = do
       let initialProgram = Map.fromList $ zip allCoefficients initialCoefficients 
       -- Construct list of universally quantified expressions, storing the formula with a string representation
       let universalsWithVars = formatUniversals universals 
+      uMeasures <- Map.assocs <$> use resourceMeasures
       writeLog 3 $ text "Solving resource constraint with CEGIS:" 
       writeLog 5 $ pretty fml
-      writeLog 3 $ text "Over universally quantified expressions:" <+> pretty (map universalFml universalsWithVars)
-      lift $ solveWithCEGIS maxIterations fml universalsWithVars [] (Map.fromList allPolynomials) initialProgram 
+      writeLog 3 $ text "Over universally quantified expressions:" <+> pretty (show (map universalFml universalsWithVars))
+      lift $ solveWithCEGIS maxIterations fml universalsWithVars uMeasures [] (Map.fromList allPolynomials) initialProgram 
 
 -- CEGIS test harness
 -- If this is going to work with measures, need a way to parse measures, etc
@@ -188,7 +195,7 @@ testCEGIS fml = do
   let universalsWithVars = formatUniversals universals 
   writeLog 3 $ linebreak </> text "Solving resource constraint with CEGIS:" <+> pretty fml' 
     <+> text "Over universally quantified expressions:" <+> pretty (map universalFml universalsWithVars)
-  lift $ solveWithCEGIS maxIterations fml' universalsWithVars [] (Map.fromList allPolynomials) initialProgram
+  lift $ solveWithCEGIS maxIterations fml' universalsWithVars [] [] (Map.fromList allPolynomials) initialProgram
 
 
 adjustSorts (BoolLit b) = BoolLit b
@@ -196,6 +203,14 @@ adjustSorts (IntLit b) = IntLit b
 adjustSorts (Var _ x) = Var IntS x
 adjustSorts (Binary op f g) = Binary op (adjustSorts f) (adjustSorts g)
 adjustSorts (Unary op f) = Unary op (adjustSorts f)
+
+allRMeasures sch = allRMeasures' (typeFromSchema sch) 
+
+allRMeasures' :: RType -> Map String MeasureDef -> Map String MeasureDef
+allRMeasures' typ measures = 
+  let rforms = allRFormulas True typ
+      allPreds = Set.unions $ map getAllPreds rforms
+  in  Map.filterWithKey (\x _ -> x `Set.member` allPreds) measures
 
 -- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
 allRFormulas :: Bool -> RType -> [Formula]
@@ -366,15 +381,18 @@ allUniversals env sch = getUniversals univSyms $ conjunction $ allRFormulas True
 
 -- | 'getUniversals' @env f@ : return the set of universally quantified terms in formula @f@ given set of universally quantified symbols @syms@ 
 getUniversals :: Set String -> Formula -> Set Formula
-getUniversals syms (SetLit s fs)   = Set.unions $ map (getUniversals syms) fs
-getUniversals syms v@(Var s x)     = Set.fromList [v | Set.member x syms] 
-getUniversals syms (Unary _ f)     = getUniversals syms f
-getUniversals syms (Binary _ f g)  = getUniversals syms f `Set.union` getUniversals syms g
-getUniversals syms (Ite f g h)     = getUniversals syms f `Set.union` getUniversals syms g `Set.union` getUniversals syms h
-getUniversals syms p@(Pred s x fs) = Set.fromList [p | Set.member x syms]
-getUniversals syms (Cons _ x fs)   = Set.unions $ map (getUniversals syms) fs
-getUniversals syms (All f g)       = getUniversals syms g
-getUniversals _ _                  = Set.empty 
+getUniversals syms (SetLit s fs)  = Set.unions $ map (getUniversals syms) fs
+getUniversals syms v@(Var s x)    = Set.fromList [v | Set.member x syms || isValueVar x] 
+  where 
+    isValueVar ('_':'v':_) = True
+    isValueVar _           = False
+getUniversals syms (Unary _ f)    = getUniversals syms f
+getUniversals syms (Binary _ f g) = getUniversals syms f `Set.union` getUniversals syms g
+getUniversals syms (Ite f g h)    = getUniversals syms f `Set.union` getUniversals syms g `Set.union` getUniversals syms h
+getUniversals syms (Pred _ _ fs)  = Set.unions $ map (getUniversals syms) fs 
+getUniversals syms (Cons _ _ fs)  = Set.unions $ map (getUniversals syms) fs
+getUniversals syms (All f g)      = getUniversals syms g
+getUniversals _ _                 = Set.empty 
 
 -- | containsDT @ms f@ : return whether or not formula @f@ includes a measure (or a data type in general), the names of which are in @ms@
 containsDT :: [String] -> Formula -> Bool
