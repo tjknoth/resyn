@@ -56,7 +56,7 @@ class BenchmarkGroup:
 
 MICRO_BENCHMARKS = [
     Benchmark('List-Insert', 'Annotated with uninterpreted functions', '$<$'),
-    Benchmark('List-CompareCT', 'Constant-time length comparison', 'true, false, &&'),
+    Benchmark('List-CompareCT', 'Constant-time length comparison', 'true, false, &&', ['--ct', 'f=AllArguments']),
 ]
 
 ALL_BENCHMARKS = [

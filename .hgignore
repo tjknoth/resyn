@@ -38,4 +38,4 @@ examples.*
 *.ps
 *.md
 *.orig
-experiments/*||||||| base
+experiments/*
