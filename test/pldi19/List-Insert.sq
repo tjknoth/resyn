@@ -1,3 +1,7 @@
+data IList a where
+	INil :: IList a
+	ICons :: x: a -> xs: IList {a | x <= _v} -> IList a
+
 qualifier {x <= y, x != y}
   
 termination measure ilen :: IList a -> {Int | _v >= 0} where
