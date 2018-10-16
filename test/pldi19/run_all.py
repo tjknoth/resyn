@@ -166,7 +166,7 @@ def run_benchmark(name, opts, default_opts):
 
       # Run each variant: (now there's only one, should probably change this...)
       for (variant_id, opts) in variant_options:
-          run_version(name, variant_id, opts, logfile, str(synthesis_output))
+          run_version(name, variant_id, opts, logfile, str(synthesis_output), results)
 
       print()
 
@@ -204,11 +204,11 @@ def run_micro_benchmark(name, opts, default_opts):
 
       # Run each variant: (now there's only one, should probably change this...)
       for (variant_id, opts) in variant_options:
-          run_version(name, variant_id, opts, logfile, str(synthesis_output))
+          run_version(name, variant_id, opts, logfile, str(synthesis_output), micro_results)
 
       print()
 
-def run_version(name, variant_id, variant_opts, logfile, with_res):
+def run_version(name, variant_id, variant_opts, logfile, with_res, results_file):
     '''Run benchmark name using command-line options variant_opts and record it as a Synquid variant variant_id in the results dictionary'''
     start = time.time()
     logfile.seek(0, os.SEEK_END)
@@ -222,12 +222,12 @@ def run_version(name, variant_id, variant_opts, logfile, with_res):
     print('{0:0.2f}'.format(end - start), end = ' ')
     if synthesis_res.returncode == 124:  # Timeout: record timeout
       print(Back.RED + Fore.RED + Style.BRIGHT + 'TIMEOUT' + Style.RESET_ALL, end = ' ')
-      results[name].nres_time = -1
+      results_file[name].nres_time = -1
     elif synthesis_res.returncode: # Synthesis failed: record failure
       print(Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL, end = ' ')
-      results[name].nres_time = -2
+      results_file[name].nres_time = -2
     else: # Synthesis succeeded: record time for variant
-      results[name].nres_time = (end - start)
+      results_file[name].nres_time = (end - start)
       without_res = synthesis_res.stdout.split('\n')[:-6]
       # Compare outputs to see if resources led to any optimization
       diff = difflib.unified_diff(with_res, str(without_res))
@@ -235,8 +235,8 @@ def run_version(name, variant_id, variant_opts, logfile, with_res):
       try:
           first = next(diff)
           if with_res != '': print(Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OPTIMIZED' + Style.RESET_ALL, end=' ')
-          results[name].optimized = True
-          results[name].nres_code_size = solution_size
+          results_file[name].optimized = True
+          results_file[name].nres_code_size = solution_size
       except StopIteration:
           print('Unchanged', end=' ')
       
@@ -385,7 +385,7 @@ if __name__ == '__main__':
         results = dict()
 
     if os.path.isfile(MICRO_DUMPFILE):
-        micro_results = pick.load(open(MICRO_DUMPFILE, 'rb'))
+        micro_results = pickle.load(open(MICRO_DUMPFILE, 'rb'))
     else:
         micro_results = dict()
 
@@ -409,14 +409,14 @@ if __name__ == '__main__':
                 with open(DUMPFILE, 'wb') as data_dump:
                     pickle.dump(results, data_dump)    
 
-    for b in MICRO_BENCHMARKS 
+    for b in MICRO_BENCHMARKS:
         if b.name in micro_results:
             print(b.str() + Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'SKIPPED' + Style.RESET_ALL)
         else:
             print(b.str())
             run_micro_benchmark(b.name, b.options, group.default_options)
-                with open(MICRO_DUMPFILE, 'wb') as data_dump:
-                    pickle.dump(micro_results, data_dump)    
+            with open(MICRO_DUMPFILE, 'wb') as data_dump:
+                pickle.dump(micro_results, data_dump)    
 
             
     # Generate CSV

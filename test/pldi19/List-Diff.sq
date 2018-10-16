@@ -26,4 +26,4 @@ member :: x: a -> xs: IList {1 ** a | | 1} -> {Bool | _v == (x in ielems xs)}
 qualifier { x < y }
 
 diff :: l1: IList a -> l2: IList a -> {List a | elems _v == (ielems l1 - ielems l2)}
-diff = ??
+diff = ?? 
