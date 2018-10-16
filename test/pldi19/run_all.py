@@ -56,7 +56,9 @@ class BenchmarkGroup:
 
 MICRO_BENCHMARKS = [
     Benchmark('List-Insert', 'Annotated with uninterpreted functions', '$<$'),
-    Benchmark('List-CompareCT', 'Constant-time length comparison', 'true, false, &&', ['--ct', 'f=AllArguments']),
+    Benchmark('List-CompareCT', 'Constant-time length comparison', 'true, false, and', ['--ct', 'f=AllArguments']),
+    Benchmark('List-Replicate', 'Program variables in annotations', 'zero, inc, dec'),
+    Benchmark('List-Append3', 'Compositional bounds')
 ]
 
 ALL_BENCHMARKS = [
@@ -216,8 +218,6 @@ def run_version(name, variant_id, variant_opts, logfile, with_res, results_file)
     synthesis_res = run(TIMEOUT_CMD + TIMEOUT + SYNQUID_CMD + COMMON_OPTS +
         variant_opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
     end = time.time()
-    lastLines = synthesis_res.stdout.split('\n')[-6:]
-    solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)   
 
     print('{0:0.2f}'.format(end - start), end = ' ')
     if synthesis_res.returncode == 124:  # Timeout: record timeout
@@ -227,6 +227,8 @@ def run_version(name, variant_id, variant_opts, logfile, with_res, results_file)
       print(Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL, end = ' ')
       results_file[name].nres_time = -2
     else: # Synthesis succeeded: record time for variant
+      lastLines = synthesis_res.stdout.split('\n')[-6:]
+      solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)   
       results_file[name].nres_time = (end - start)
       without_res = synthesis_res.stdout.split('\n')[:-6]
       # Compare outputs to see if resources led to any optimization
@@ -249,20 +251,19 @@ def format_time(t):
 def write_micro_csv():
     '''Generate CSV file for micro benchmark'''
     with open(MICRO_CSV_FILE, 'w') as outfile:
-        for group in groups:
-            for b in group.benchmarks:
-                outfile.write (b.name + ',')
-                result = micro_results [b.name]
-                optstr = 'True' if result.optimized else '-'
-                outfile.write (result.spec_size + ',')
-                outfile.write (result.code_size + ',')
-                outfile.write (format_time(result.time) + ',')
-                outfile.write (format_time(result.nres_time) + ',')
-                outfile.write (result.nres_code_size + ',')
-                outfile.write (str(b.num_programs) + ',')
-                outfile.write (result.eac_time + ',')
-                #outfile.write (optstr + ',')
-                outfile.write ('\n')
+        for b in MICRO_BENCHMARKS:
+            outfile.write (b.name + ',')
+            result = micro_results [b.name]
+            optstr = 'True' if result.optimized else '-'
+            outfile.write (result.spec_size + ',')
+            outfile.write (result.code_size + ',')
+            outfile.write (format_time(result.time) + ',')
+            outfile.write (format_time(result.nres_time) + ',')
+            outfile.write (result.nres_code_size + ',')
+            outfile.write (str(b.num_programs) + ',')
+            outfile.write (result.eac_time + ',')
+            #outfile.write (optstr + ',')
+            outfile.write ('\n')
 
 def write_csv():
     '''Generate CSV file from the results dictionary'''
@@ -290,36 +291,28 @@ def write_micro_latex():
     to_nres = 0
 
     with open(MICRO_LATEX_FILE, 'w') as outfile:
-        for group in groups:
-            outfile.write ('\multirow{')
-            outfile.write (str(group.benchmarks.__len__()))
-            outfile.write ('}{*}{\\parbox{1cm}{\\vspace{-0.85\\baselineskip}\center{')
-            outfile.write (group.name)
-            outfile.write ('}}}')            
-
-            for b in group.benchmarks:
-                result = micro_results [b.name]                
-                optstr = 'Yes' if result.optimized else '-'
-                row = \
-                    ' & ' + b.description +\
-                    ' & ' + result.goal_count +\
-                    ' & ' + b.components + \
-                    ' & ' + result.measure_count + \
-                    ' & ' + result.code_size + \
-                    ' & ' + format_time(result.time) + \
-                    ' & ' + format_time(result.nres_time) + \
-                    ' & ' + result.nres_code_size + \
-                    ' & ' + str(b.num_programs) + \
-                    ' & ' + str(result.eac_time) + ' \\\\'
-                    #' & ' + optstr + ' \\\\'
-                outfile.write (row)
-                outfile.write ('\n')
+        for b in MICRO_BENCHMARKS:
+            result = micro_results [b.name]                
+            optstr = 'Yes' if result.optimized else '-'
+            row = \
+                b.description +\
+                ' & ' + result.goal_count +\
+                ' & ' + b.components + \
+                ' & ' + result.measure_count + \
+                ' & ' + result.code_size + \
+                ' & ' + format_time(result.time) + \
+                ' & ' + format_time(result.nres_time) + \
+                ' & ' + result.nres_code_size + \
+                ' & ' + str(b.num_programs) + \
+                ' & ' + str(result.eac_time) + ' \\\\'
+                #' & ' + optstr + ' \\\\'
+            outfile.write (row)
+            outfile.write ('\n')
+            
+            total_count = total_count + 1
+            if result.nres_time < 0.0:
+                to_nres = to_nres + 1 
                 
-                total_count = total_count + 1
-                if result.nres_time < 0.0:
-                   to_nres = to_nres + 1 
-                
-            outfile.write ('\\hline')
             
     print('Total:', total_count)
     print('TO nres:', to_nres)
