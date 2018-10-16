@@ -68,10 +68,13 @@ class BenchmarkGroup:
         self.benchmarks = benchmarks            # List of benchmarks in this group
 
 MICRO_BENCHMARKS = [
-    MBenchmark('List-Insert', 'insert', 'Annotated with uninterpreted functions', '$<$'),
-    MBenchmark('List-LenCompareCT', 'length comparison', 'Constant-time', 'true, false, and', ['--ct', 'f=AllArguments']),
+    MBenchmark('List-Insert', 'insert', 'Overapproximate bound', '$<$'),
+    MBenchmark('List-Insert-Fine', 'insert', 'Annotated with uninterpreted functions', '$<$'),
+    MBenchmark('List-InsertCT', 'insert', 'Constant-time', '$<$', ['--ct']),
+    MBenchmark('List-LenCompareCT', 'length comparison', '', 'true, false, and', ['-f=AllArguments', '-a=2', '--ct']),
+    MBenchmark('List-LenCompare', 'length comparison', 'Constant-time', 'true, false, and', ['f=AllArguments', '-a=2']),
     MBenchmark('List-Replicate', 'replicate', 'Program variables in annotations', 'zero, inc, dec'),
-    MBenchmark('List-Append3', 'append 3 lists', 'Compositional bounds')
+    MBenchmark('List-Append3', 'append 3 lists', 'Compositional bounds'),
 ]
 
 ALL_BENCHMARKS = [

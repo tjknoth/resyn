@@ -1,4 +1,7 @@
 List-Insert,-,-,0.31,0.52,82,-,-,
+List-Insert-Fine,-,-,0.18,0.61,82,-,-,
+List-InsertCT,11,57,1.22,0.45,57,-,-,
 List-LenCompareCT,-,-,0.11,-,-,-,-,
+List-LenCompare,-,-,0.11,-,-,-,-,
 List-Replicate,-,-,1.20,0.19,31,-,-,
 List-Append3,26,36,0.17,0.14,-,-,-,

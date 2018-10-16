@@ -107,11 +107,11 @@ solveTypeConstraints typ = do
 solveCTConstraints :: (MonadSMT s, MonadHorn s) => TCSolver s ()
 solveCTConstraints = do 
   tcs <- use typingConstraints
-  writeLog 3 $ nest 2 $ linebreak <+> text "Checking CT constraints:" $+$ vsep (map pretty tcs)
   typingConstraints .= []
   let tcs' = filter isCTConstraint tcs
   res <- asks _checkResourceBounds
-  when res $ checkResources AnyT tcs 
+  unless (null tcs') $ writeLog 3 $ nest 2 $ linebreak <+> text "Checking CT constraints:" $+$ vsep (map pretty tcs)
+  when res $ checkResources AnyT tcs'
 
 -- | Impose typing constraint @c@ on the programs
 addTypingConstraint c = over typingConstraints (nub . (c :))
