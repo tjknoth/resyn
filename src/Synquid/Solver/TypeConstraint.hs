@@ -279,8 +279,11 @@ simplifyConstraint' _ _ (Subtype env syms (ScalarT (DatatypeT name [] (pArg:pArg
   = do
       let variances = _predVariances ((env ^. datatypes) Map.! name)
       let isContra = variances !! (length variances - length pArgs - 1) -- Is pArg contravariant?
+      let variant' = case variant of 
+            Consistency -> Consistency
+            _           -> Simple
       if isContra
-        then simplifyConstraint (Subtype env syms (int pArg') (int pArg) variant label)
+        then simplifyConstraint (Subtype env syms (int pArg') (int pArg) variant' label)
         else simplifyConstraint (Subtype env syms (int pArg) (int pArg') variant label)
       simplifyConstraint (Subtype env syms (ScalarT (DatatypeT name [] pArgs) fml pot) (ScalarT (DatatypeT name' [] pArgs') fml' pot') variant label)
 simplifyConstraint' _ _ (Subtype env syms (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) Consistency label)

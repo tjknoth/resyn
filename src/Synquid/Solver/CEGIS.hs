@@ -159,8 +159,8 @@ evalMeasures cx fml = case fml of
     let ms = measureInterps cx
     fml' <- evalInModel args (model cx) `mapM` Map.lookup x ms
     case fml' of 
-      Nothing -> error $ "Error: evaluating " ++ show (pretty fml) ++ " fails " 
-      Just f -> return f
+      Nothing   -> error $ "Error: evaluating " ++ show (pretty fml) ++ " fails " 
+      Just f    -> return f
   Var{}         -> return fml
   SetLit b xs   ->  SetLit b <$> mapM (evalMeasures cx) xs
   Unary op e    ->  Unary op <$> evalMeasures cx e
@@ -243,7 +243,7 @@ constantPTerm s = PolynomialTerm (constPolynomialVar s) Nothing
 constPolynomialVar s = s ++ "CONST"
 
 -- Initialize all coefficients to zero when starting CEGIS
-initialCoefficients = repeat $ IntLit 1
+initialCoefficients = repeat $ IntLit 0
 
 universalToString :: Formula -> String
 universalToString (Var _ x) = x -- ++ "_univ"

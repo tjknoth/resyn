@@ -162,14 +162,12 @@ def run_benchmark(name, opts, default_opts):
 
 def run_version(name, variant_id, variant_opts, logfile, with_res):
     '''Run benchmark name using command-line options variant_opts and record it as a Synquid variant variant_id in the results dictionary'''
-
     start = time.time()
     logfile.seek(0, os.SEEK_END)
     # Run Synquid on the benchmark, mute output:
     synthesis_res = run(TIMEOUT_CMD + TIMEOUT + SYNQUID_CMD + COMMON_OPTS +
         variant_opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
     end = time.time()
-
     lastLines = synthesis_res.stdout.split('\n')[-6:]
     solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)   
 

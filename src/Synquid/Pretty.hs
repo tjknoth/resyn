@@ -360,7 +360,7 @@ prettyBindings env = commaSep (map pretty (Map.keys $ removeDomain (env ^. const
 
 
 
-prettyScalarTypes env = hcat $ punctuate comma (prettyst <$> Map.assocs (_symbols env Map.! 0))
+prettyScalarTypes syms = hcat $ punctuate comma (prettyst <$> Map.assocs (syms Map.! 0))
   where
     prettyst (x, t) = pretty x <+> operator ":" <+> pretty ((topPotentialOf . typeFromSchema) t)
 prettyScalars env = hsep $ pretty <$> Map.keys (_symbols env Map.! 0)
@@ -379,15 +379,15 @@ instance Show SortConstraint where
   show = show . pretty
 
 prettyConstraint :: Constraint -> Doc
-prettyConstraint (Subtype env _syms t1 t2 Consistency label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "/\\" <+> pretty t2 
-prettyConstraint (Subtype env _syms t1 t2 Nondeterministic label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "~<:~" <+> pretty t2 
-prettyConstraint (Subtype env _syms t1 t2 _ label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "<:" <+> pretty t2 
-prettyConstraint (WellFormed env t label) = prettyBindings env <+> operator "|-" <+> pretty t 
+prettyConstraint (Subtype env _syms t1 t2 Consistency label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "/\\" <+> pretty t2 -- <+> text "src:" <+> pretty label
+prettyConstraint (Subtype env _syms t1 t2 Nondeterministic label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "~<:~" <+> pretty t2 -- <+> text "src:" <+> pretty label
+prettyConstraint (Subtype env _syms t1 t2 _ label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "<:" <+> pretty t2 -- <+> text "src:" <+> pretty label
+prettyConstraint (WellFormed env t label) = prettyBindings env <+> operator "|-" <+> pretty t -- <+> text "src:" <+> pretty label
 prettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 prettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 prettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
-prettyConstraint (SharedType _ t tl tr label) = pretty label <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr)
-prettyConstraint (ConstantRes env label) = text "CT expression:" <+> text label <+> text "from scalars:" <+> prettyScalarTypes env 
+prettyConstraint (SharedType _ t tl tr label) = pretty label <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr) -- <+> text "src:" <+> pretty label
+prettyConstraint (ConstantRes env label) = text "CT expression:" <+> text label <+> text "from scalars:" <+> prettyScalarTypes (_symbols env) -- <+> text "src:" <+> pretty label
 
 -- Do not show environment
 simplePrettyConstraint :: Constraint -> Doc

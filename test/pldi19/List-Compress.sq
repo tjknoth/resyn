@@ -19,6 +19,16 @@ type CList a = PList a <{!(_0 in heads _1)}>
   
 qualifier {x == y, x != y}  
 
-compress :: xs: List a -[1]-> {CList a | elems _v == elems xs}
-compress = ??  
+compress :: xs: List {a| |1} -[1]-> {CList a | elems _v == elems xs}
+compress = \xs . 
+  match xs with
+    Nil -> Nil
+    Cons x3 x4 -> 
+      match compress x4 with
+        Nil -> Cons x3 Nil
+        Cons x11 x12 -> 
+          if x3 == x11
+            then Cons x11 x12
+            else Cons x3 (Cons x11 x12)
+
 
