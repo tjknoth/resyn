@@ -1,15 +1,11 @@
 -- Constant time (# of recursive calls) length comparison
-data SList a where
-	Nil :: SList a
-	Cons :: x: a -> xs: SList {a | x <= _v} -> SList a
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
   
-termination measure len :: SList a -> {Int | _v >= 0} where
+termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs 
-
-measure elems :: SList a -> Set a where 
-  Nil -> [] 
-  Cons x xs -> [x] + elems xs
 
 
 -- Length comparison
@@ -31,10 +27,9 @@ compare = \xs. \ys.
 false :: {Bool | _v == False}
 true :: {Bool | _v == True}
 and :: x: Bool -> y: Bool -> {Bool | _v == (x && y)}
-qualifier { x == y, x < y }
 
 
 -- Constant time version
-compare' :: xs: SList {a| |1} -> ys: SList {a| |1} -[1]-> {Bool | _v == ((len xs == len ys) && (elems xs == elems ys))}
-compare' = ?? 
+compare' :: xs: List {a| |1} -> ys: List {a| |1} -[1]-> {Bool | _v == (len xs == len ys)}
+compare' = \xs. 
 

@@ -48,6 +48,19 @@ class Benchmark:
     def str(self):
         return self.name + ': ' + self.description + ' ' + str(self.options)
 
+# Micro benchmark
+class MBenchmark:
+    def __init__(self, name, description, feature, components='', options=[], np = '-'):
+        self.name = name                # Id
+        self.description = description  # Description (in the table)
+        self.feature = feature          # Relevant ReSyn feature
+        self.components = components    # Description of components used (in the table)
+        self.options = options          # Command-line options to use for this benchmark when running in individual context
+        self.num_programs = np          # Number of programs generated in the enumerate-and-check process
+
+    def str(self):
+        return self.name + ': ' + self.description + ' ' + str(self.options)
+
 class BenchmarkGroup:
     def __init__(self, name, default_options, benchmarks):
         self.name = name                        # Id
@@ -55,10 +68,10 @@ class BenchmarkGroup:
         self.benchmarks = benchmarks            # List of benchmarks in this group
 
 MICRO_BENCHMARKS = [
-    Benchmark('List-Insert', 'Annotated with uninterpreted functions', '$<$'),
-    Benchmark('List-CompareCT', 'Constant-time length comparison', 'true, false, and', ['--ct', 'f=AllArguments']),
-    Benchmark('List-Replicate', 'Program variables in annotations', 'zero, inc, dec'),
-    Benchmark('List-Append3', 'Compositional bounds')
+    MBenchmark('List-Insert', 'insert', 'Annotated with uninterpreted functions', '$<$'),
+    MBenchmark('List-LenCompareCT', 'length comparison', 'Constant-time', 'true, false, and', ['--ct', 'f=AllArguments']),
+    MBenchmark('List-Replicate', 'replicate', 'Program variables in annotations', 'zero, inc, dec'),
+    MBenchmark('List-Append3', 'append 3 lists', 'Compositional bounds')
 ]
 
 ALL_BENCHMARKS = [
@@ -102,6 +115,9 @@ ALL_BENCHMARKS = [
     BenchmarkGroup("Tree",  [], [
         Benchmark('Tree-Count', 'node count', '0, 1, +'),
         Benchmark('Tree-Flatten', 'preorder', 'append'),
+        Benchmark('Tree-ToList', 'to list'),
+        Benchmark('Tree-Elem', 'member', '', ['--multiplicities=false'] ),
+        Benchmark('Tree-Count', 'size')
         ]),
     BenchmarkGroup("BST", [], [
         Benchmark('BST-Member', 'member', 'true, false, $\\leq$, $\\neq$'),
@@ -111,6 +127,7 @@ ALL_BENCHMARKS = [
         ]),
     BenchmarkGroup("Binary Heap", [], [
         Benchmark('BinHeap-Insert', 'insert', '$\\leq$, $\\neq$'),
+        Benchmark('BinHeap-Member', 'member', '', ['--multiplicities=false']),
         Benchmark('BinHeap-Singleton', '1-element constructor', '$\\leq$, $\\neq$'),
         Benchmark('BinHeap-Doubleton', '2-element constructor', '$\\leq$, $\\neq$'),
         Benchmark('BinHeap-Tripleton', '3-element constructor', '$\\leq$, $\\neq$')
@@ -296,15 +313,16 @@ def write_micro_latex():
             optstr = 'Yes' if result.optimized else '-'
             row = \
                 b.description +\
+                ' & ' + b.feature +\
                 ' & ' + result.goal_count +\
                 ' & ' + b.components + \
                 ' & ' + result.measure_count + \
                 ' & ' + result.code_size + \
                 ' & ' + format_time(result.time) + \
                 ' & ' + format_time(result.nres_time) + \
-                ' & ' + result.nres_code_size + \
-                ' & ' + str(b.num_programs) + \
-                ' & ' + str(result.eac_time) + ' \\\\'
+                ' & ' + result.nres_code_size + ' \\\\'
+                #' & ' + str(b.num_programs) + \
+                #' & ' + str(result.eac_time) + ' \\\\'
                 #' & ' + optstr + ' \\\\'
             outfile.write (row)
             outfile.write ('\n')
