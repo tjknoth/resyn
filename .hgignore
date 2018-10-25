@@ -39,3 +39,4 @@ examples.*
 *.md
 *.orig
 experiments/*
+*.pdf

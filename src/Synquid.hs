@@ -10,13 +10,11 @@ import Synquid.Parser
 import Synquid.Resolver (resolveDecls)
 import Synquid.Solver.Monad 
 import Synquid.Solver.HornClause
-import Synquid.Explorer
-import Synquid.Synthesizer
+import Synquid.Synthesis.Synthesizer
+import Synquid.Synthesis.Util
 import Synquid.HtmlOutput
 import Synquid.Codegen
 import Synquid.Stats
-import Synquid.Solver.Resource (testCEGIS)
-import Synquid.Z3 (evalZ3State)
 
 import Control.Monad
 import System.Exit
@@ -27,7 +25,6 @@ import Data.Time.Calendar
 import Data.Map ((!))
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
-import qualified Data.Set as Set
 import Control.Lens ((.~), (^.), (%~))
 
 import Data.List.Split

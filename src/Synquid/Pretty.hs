@@ -386,7 +386,7 @@ prettyConstraint (WellFormed env t label) = prettyBindings env <+> operator "|-"
 prettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 prettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 prettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
-prettyConstraint (SharedType _ t tl tr label) = pretty label <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr) -- <+> text "src:" <+> pretty label
+prettyConstraint (SharedEnv e e' e'' label) = text "Shared scalars:" <+> prettyScalarTypes (_symbols e) <+> operator "\\/" </> prettyScalarTypes e' <+> operator "||" <+> prettyScalarTypes e''
 prettyConstraint (ConstantRes env label) = text "CT expression:" <+> text label <+> text "from scalars:" <+> prettyScalarTypes (_symbols env) -- <+> text "src:" <+> pretty label
 
 -- Do not show environment
@@ -397,7 +397,7 @@ simplePrettyConstraint (WellFormed env t label) = prettyBindings env <+> operato
 simplePrettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 simplePrettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 simplePrettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
-simplePrettyConstraint (SharedType _ t tl tr label) = pretty label <+> operator ":" <+> pretty t <+> operator "\\/" <+> parens (pretty tl <+> operator "," <+> pretty tr) 
+simplePrettyConstraint (SharedEnv e e' e'' label) = text "Shared scalars:" <+> prettyScalarTypes (_symbols e) <+> operator "\\/" </> prettyScalarTypes e' <+> operator "||" <+> prettyScalarTypes e''
 simplePrettyConstraint (ConstantRes env label) = text "CT Expression:" <+> text label <+> text "from scalars:" <+> prettyScalars env 
 
 detailedPrettyConstraint :: Constraint -> Doc

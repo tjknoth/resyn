@@ -23,14 +23,13 @@ import Synquid.Pretty
 import Synquid.Error
 import Synquid.Solver.Monad
 
-import Data.Maybe (fromMaybe, mapMaybe, catMaybes)
+import Data.Maybe (fromMaybe, catMaybes)
 import qualified Data.Set as Set 
 import Data.Set (Set)
 import qualified Data.Map as Map
 import Control.Monad (when)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (throwE)
-import Control.Monad.Trans.Maybe (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (asks)
 import Control.Lens hiding (both)
 import Debug.Trace

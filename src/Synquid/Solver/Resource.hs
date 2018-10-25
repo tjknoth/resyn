@@ -6,7 +6,8 @@ module Synquid.Solver.Resource (
   allUniversals,
   allRFormulas,
   allRMeasures,
-  testCEGIS
+  testCEGIS,
+  shareEnv
 ) where
 
 import Synquid.Logic 
@@ -14,19 +15,15 @@ import Synquid.Type hiding (set)
 import Synquid.Program
 import Synquid.Solver.Monad
 import Synquid.Pretty
-import Synquid.Error
 import Synquid.Solver.Util hiding (writeLog)
 import Synquid.Solver.CEGIS 
 
 import Data.Maybe
-import Data.List hiding (partition)
 import qualified Data.Set as Set 
 import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Control.Monad.Logic
-import Control.Monad.State
-import Control.Monad.Trans.Except
 import Control.Monad.Reader
 import Control.Lens
 import Debug.Trace
@@ -63,7 +60,6 @@ solveResourceConstraints oldConstraints constraints = do
     constraintList <- mapM (generateFormula True universals . Right) constraints
     accFmls <- mapM (generateFormula False universals) oldConstraints
     universals' <- updateUniversals tempEnv $ conjunction (map constraint constraintList) 
-    --traceM $ "Univerally quantified vars: " ++ show universals'
     let query = assembleQuery accFmls constraintList 
     -- Check satisfiability
     b <- satisfyResources (Set.toList universals') query
@@ -108,31 +104,47 @@ generateFormula shouldLog univs (Right c) = do
     -- Function type: proceed as usual
     else generateFormula' shouldLog checkMults univs c
 
-generateFormula' :: MonadSMT s => Bool -> Bool -> Set Formula -> Constraint -> RSolver s TaggedConstraint 
-generateFormula' shouldLog checkMults univs c@(Subtype env syms tl tr variant label) = do
-  tass <- use typeAssignment
-  let fmls = conjunction $ filter (not . isTrivial) $ case variant of 
-        Nondeterministic -> assertSubtypes env syms tass checkMults tl tr
-        _                -> directSubtypes checkMults tl tr
-  let relevantFml = conjunction $ univs `Set.union` allFormulasOf checkMults tl `Set.union` allFormulasOf checkMults tr
-  TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls relevantFml (Set.insert (refinementOf tl))
-generateFormula' shouldLog checkMults univs c@(WellFormed env t label) = do
-  let fmls = conjunction $ filter (not . isTrivial) $ map (|>=| fzero)  $ allRFormulas checkMults t
-  let relevantFml = conjunction $ univs `Set.union` allFormulasOf checkMults t
-  TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls relevantFml (Set.insert (refinementOf t))
-generateFormula' shouldLog checkMults univs c@(SharedType env t tl tr label) = do 
-  let fmls = conjunction $ partition checkMults t tl tr
-  let relevantFml = conjunction $ univs `Set.union` allFormulasOf checkMults t 
-  TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls relevantFml id
-generateFormula' shouldLog checkMults univs c@(ConstantRes env label) = do 
-  tass <- use typeAssignment
-  let fml = assertZeroPotential checkMults tass env
-  let relevantFml = conjunction univs 
-  TaggedConstraint ("CT: " ++ label) <$> embedAndProcessConstraint shouldLog env c fml relevantFml id 
-generateFormula' _ _ _ c = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
+generateFormula' :: MonadSMT s 
+                 => Bool 
+                 -> Bool 
+                 -> Set Formula 
+                 -> Constraint 
+                 -> RSolver s TaggedConstraint 
+generateFormula' shouldLog checkMults univs c = 
+  case c of 
+    (Subtype env syms tl tr variant label) -> do
+      tass <- use typeAssignment
+      let fmls = assemble $ case variant of 
+            Nondeterministic -> assertSubtypes env syms tass checkMults tl tr
+            _                -> directSubtypes checkMults tl tr
+      let relevantFml = conjunction $ univs `Set.union` allFormulasOf checkMults tl `Set.union` allFormulasOf checkMults tr
+      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls relevantFml (Set.insert (refinementOf tl))
+    (WellFormed env t label) -> do
+      let fmls = assemble $ map (|>=| fzero)  $ allRFormulas checkMults t
+      let relevantFml = conjunction $ univs `Set.union` allFormulasOf checkMults t
+      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls relevantFml (Set.insert (refinementOf t))
+    (SharedEnv env syms' syms'' label) -> do 
+      let fmls = assemble $ shareEnv checkMults (_symbols env) syms' syms''
+      let relevantFml = conjunction univs -- TODO: need more stuff here?
+      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls relevantFml id
+    (ConstantRes env label) -> do 
+      tass <- use typeAssignment
+      let fml = assertZeroPotential checkMults tass env
+      let relevantFml = conjunction univs 
+      TaggedConstraint ("CT: " ++ label) <$> embedAndProcessConstraint shouldLog env c fml relevantFml id 
+    _ -> error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
+  where 
+    assemble fs = conjunction $ filter (not . isTrivial) fs
 
 -- | Embed the environment assumptions and preproess the constraint for solving 
-embedAndProcessConstraint :: MonadSMT s => Bool -> Environment -> Constraint -> Formula -> Formula -> (Set Formula -> Set Formula) -> RSolver s Formula
+embedAndProcessConstraint :: MonadSMT s 
+                          => Bool 
+                          -> Environment 
+                          -> Constraint 
+                          -> Formula 
+                          -> Formula 
+                          -> (Set Formula -> Set Formula) 
+                          -> RSolver s Formula
 embedAndProcessConstraint shouldLog env c fmls relevantFml addTo = do 
   emb <- lift $ embedSynthesisEnv env relevantFml True
   -- Check if embedding is singleton { false }
@@ -225,6 +237,21 @@ allRFormulasBase _  (TypeVarT _ _ Infty)   = []
 allRFormulasBase cm (TypeVarT _ _ (Fml m)) = [m | cm] 
 allRFormulasBase _ _                       = []
 
+-- Generate sharing constraints between a 3-tuple of contexts
+shareEnv :: Bool -> SymbolMap -> SymbolMap -> SymbolMap -> [Formula]
+shareEnv checkMults syms symsl symsr = 
+  let fmlMap = Map.mapWithKey (\arity schs -> partitionAll arity schs symsl symsr) syms
+  in wf ++ concat (Map.elems fmlMap)
+  where 
+    partitionAll n schs symsl symsr = 
+      let schsl = map typeFromSchema $ Map.elems $ symsl Map.! n
+          schsr = map typeFromSchema $ Map.elems $ symsr Map.! n
+          schs' = map typeFromSchema $ Map.elems schs
+      in concat $ zipWith3 (partition checkMults) schs' schsl schsr
+    allRFormsL = concatMap (allRFormulas True . typeFromSchema) (Map.elems (symsl Map.! 0))
+    allRFormsR = concatMap (allRFormulas True . typeFromSchema) (Map.elems (symsr Map.! 0))
+    wf = map (|>=| fzero) (allRFormsL ++ allRFormsR)
+
 -- | 'partition' @t tl tr@ : Generate numerical constraints referring to a partition of the resources associated with @t@ into types @tl@ and @tr@ 
 partition :: Bool -> RType -> RType -> RType -> [Formula]
 partition cm (ScalarT b _ Infty) (ScalarT bl _ Infty) (ScalarT br _ Infty) 
@@ -251,7 +278,13 @@ assertZeroPotential cm tass env = sumFormulas (fmap totalTopLevelPotential scala
 
 -- | 'assertSubtypes' @env tl tr@ : Generate formulas partitioning potential appropriately amongst
 --    environment @env@ in order to check @tl@ <: @tr@
-assertSubtypes :: Environment -> SymbolMap -> TypeSubstitution -> Bool -> RType -> RType -> [Formula]
+assertSubtypes :: Environment 
+               -> SymbolMap 
+               -> TypeSubstitution 
+               -> Bool 
+               -> RType 
+               -> RType 
+               -> [Formula]
 assertSubtypes env syms tass cm tl@(ScalarT bl _ pl) tr@(ScalarT br _ pr) = 
   let -- Get map of only scalar types (excluding empty type constructors) in environment:
       scalarsOf smap = Map.filterWithKey notEmptyCtor $ fmap typeFromSchema $ fromMaybe Map.empty $ Map.lookup 0 smap
@@ -313,7 +346,7 @@ isResourceConstraint :: Constraint -> Bool
 isResourceConstraint (Subtype _ _ _ _ Consistency _) = False
 isResourceConstraint (Subtype _ _ ScalarT{} ScalarT{} _variant _label) = True
 isResourceConstraint WellFormed{}  = True
-isResourceConstraint SharedType{}  = True
+isResourceConstraint SharedEnv{}   = True
 isResourceConstraint ConstantRes{} = True
 isResourceConstraint _             = False
 

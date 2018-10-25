@@ -243,6 +243,11 @@ typeVarsOf _ = Set.empty
 updateAnnotations :: RType -> Potential -> Potential -> RType
 updateAnnotations t@ScalarT{} mult = addPotential (typeMultiply mult t)
 
+schemaMultiply :: Potential -> RSchema -> RSchema
+schemaMultiply p (ForallP x s) = ForallP x (schemaMultiply p s)
+schemaMultiply p (ForallT x s) = ForallT x (schemaMultiply p s)
+schemaMultiply p (Monotype t) = Monotype $ typeMultiply p t
+
 typeMultiply :: Potential -> RType -> RType
 typeMultiply fml (ScalarT t ref pot) = ScalarT (baseTypeMultiply fml t) ref (multiplyPotentials fml pot)
 typeMultiply fml t = t

@@ -48,7 +48,6 @@ import qualified Data.Map as Map
 import Data.Map (Map)
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Trans.Except
 import Control.Lens hiding (both)
 import Debug.Trace
 
@@ -206,9 +205,6 @@ simplifyConstraint c = do
 simplifyConstraint' _ _ (Subtype _ _ _ AnyT _ _) = return ()
 simplifyConstraint' _ _ (Subtype _ _ AnyT _ _ _) = return ()
 simplifyConstraint' _ _ (WellFormed _ AnyT _) = return ()
-simplifyConstraint' _ _ (SharedType _ AnyT _ _ _) = return ()
-simplifyConstraint' _ _ (SharedType _ _ AnyT _ _) = return ()
-simplifyConstraint' _ _ (SharedType _ _ _ AnyT _) = return ()
 -- Any datatype: drop only if lhs is a datatype
 simplifyConstraint' _ _ (Subtype _ _ (ScalarT (DatatypeT _ _ _) _ _) t _ _) | t == anyDatatype = return ()
 -- Well-formedness of a known predicate drop
@@ -224,15 +220,14 @@ simplifyConstraint' tass _ (Subtype env syms t tv@(ScalarT (TypeVarT _ a _) _ _)
 simplifyConstraint' tass _ (WellFormed env tv@(ScalarT (TypeVarT _ a _) _ _) l) 
   | a `Map.member` tass
     = simplifyConstraint (WellFormed env (typeSubstitute tass tv) l)
-simplifyConstraint' tass _ (SharedType env tv@(ScalarT (TypeVarT _ a _) _ _) t2 t3 l) 
-  | a `Map.member` tass 
-    = simplifyConstraint (SharedType env (typeSubstitute tass tv) t2 t3 l)
-simplifyConstraint' tass _ (SharedType env t1 tv@(ScalarT (TypeVarT _ a _) _ _) t3 l) 
-  | a `Map.member` tass 
-    = simplifyConstraint (SharedType env t1 (typeSubstitute tass tv) t3 l)
-simplifyConstraint' tass _ (SharedType env t1 t2 tv@(ScalarT (TypeVarT _ a _) _ _) l) 
-  | a `Map.member` tass 
-    = simplifyConstraint (SharedType env t1 t2 (typeSubstitute tass tv) l)
+
+-- Substitute all scalars in environment  
+--simplifyConstraint' tass _ (Subtype env syms t t' Nondeterministic l) = 
+simplifyConstraint' tass _ (SharedEnv env symsl symsr l) = do
+  let env' = over symbols (scalarSubstituteEnv tass) env
+  let symsl' = scalarSubstituteEnv tass symsl
+  let symsr' = scalarSubstituteEnv tass symsr
+  simpleConstraints %= (SharedEnv env' symsl' symsr' l :)
 
 -- Two unknown free variables: nothing can be done for now
 simplifyConstraint' _ _ c@(Subtype env _syms (ScalarT (TypeVarT _ a _) _ _) (ScalarT (TypeVarT _ b _) _ _) _ _) | not (isBound env a) && not (isBound env b)
@@ -253,12 +248,6 @@ simplifyConstraint' _ _ (Subtype env syms (LetT x tDef tBody) t variant label)
   = simplifyConstraint (Subtype (addVariable x tDef env) syms tBody t variant label) -- ToDo: make x unique?
 simplifyConstraint' _ _ (Subtype env syms t (LetT x tDef tBody) variant label)
   = simplifyConstraint (Subtype (addVariable x tDef env) syms t tBody variant label) -- ToDo: make x unique?
-simplifyConstraint' _ _ (SharedType env (LetT x tDef tBody) tl tr label) 
-  = simplifyConstraint (SharedType (addVariable x tDef env) tBody tl tr label)
-simplifyConstraint' _ _ (SharedType env t (LetT x tDef tBody) tr label) 
-  = simplifyConstraint (SharedType (addVariable x tDef env) t tBody tr label)
-simplifyConstraint' _ _ (SharedType env t tl (LetT x tDef tBody) label) 
-  = simplifyConstraint (SharedType (addVariable x tDef env) t tl tBody label)
 
 -- Unknown free variable and a type: extend type assignment
 simplifyConstraint' _ _ c@(Subtype env _syms (ScalarT (TypeVarT _ a _) _ _) t _ _) | not (isBound env a)
@@ -267,7 +256,6 @@ simplifyConstraint' _ _ c@(Subtype env _syms t (ScalarT (TypeVarT _ a _) _ _) _ 
   = unify env a t >> simplifyConstraint c
 
 -- Compound types: decompose
--- TODO: do something with potential?
 simplifyConstraint' _ _ (Subtype env syms (ScalarT (DatatypeT name (tArg:tArgs) pArgs) fml pot) (ScalarT (DatatypeT name' (tArg':tArgs') pArgs') fml' pot') variant label)
   = do
       let variant' = case variant of 
@@ -316,8 +304,6 @@ simplifyConstraint' _ _ c@(WellFormedMatchCond _ _) = simpleConstraints %= (c :)
 -- Otherwise (shape mismatch): fail
 simplifyConstraint' _ _ (Subtype _ _ t t' _ _) = 
   throwError $ text  "Cannot match shape" <+> squotes (pretty $ shape t) $+$ text "with shape" <+> squotes (pretty $ shape t')
--- TODO: actually simplify! -- need to check that shapes are equal and drop any splitting constraints from non-scalar types.
-simplifyConstraint' _ _ c@SharedType{} = simpleConstraints %= (c :)
 
 -- Constant resource constraints are already simplified
 simplifyConstraint' _ _ c@(ConstantRes _ _) = simpleConstraints %= (c :)
@@ -438,21 +424,8 @@ processConstraint (WellFormedMatchCond env (Unknown _ u))
       mq <- asks _matchQualsGen
       let env' = typeSubstituteEnv tass env
       addQuals u (mq env' (allPotentialScrutinees env'))
-processConstraint (SharedType env (ScalarT base fml pot) (ScalarT baseL fmlL potL) (ScalarT baseR fmlR potR) label) 
-  | equalShape base baseL && equalShape baseL baseR = do 
-  tass <- use typeAssignment
-  pass <- use predAssignment
-  let env' = typeSubstituteEnv tass env
-      subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass
-      fml' = subst fml
-      fmlL' = subst fmlL
-      fmlR' = subst fmlR
-      pot' = liftFmlOp subst pot
-      potL' = liftFmlOp subst potL
-      potR' = liftFmlOp subst potR
-  simpleConstraints %= (SharedType env (ScalarT base fml' pot') (ScalarT baseL fmlL' potL') (ScalarT baseR fmlR' potR') label :)
-processConstraint SharedType{}  = return ()
 processConstraint c@ConstantRes{} = simpleConstraints %= (c :)
+processConstraint c@SharedEnv{}   = simpleConstraints %= (c :)
 processConstraint c = error $ show $ text "processConstraint: not a simple constraint" <+> pretty c
 
 generateHornClauses :: (MonadHorn s, MonadSMT s) => Constraint -> TCSolver s ()
@@ -468,14 +441,13 @@ generateHornClauses c@(Subtype env _syms (ScalarT baseTL l potl) (ScalarT baseTR
       hornClauses %= (clauses ++)
 generateHornClauses WellFormed{}
   = return ()
-generateHornClauses SharedType{}
+generateHornClauses SharedEnv{}
   = return ()
 generateHornClauses ConstantRes{} 
   = return ()
 generateHornClauses c = error $ show $ text "generateHornClauses: not a simple subtyping constraint" <+> pretty c
 
 -- | 'allScalars' @env@ : logic terms for all scalar symbols in @env@
--- TODO: do something with potentials?
 allScalars :: Environment -> [Formula]
 allScalars env = mapMaybe toFormula $ Map.toList $ symbolsOfArity 0 env
   where
@@ -505,8 +477,6 @@ hasPotentialScrutinees :: Monad s => Environment -> TCSolver s Bool
 hasPotentialScrutinees env = do
   tass <- use typeAssignment
   return $ not $ null $ allPotentialScrutinees (typeSubstituteEnv tass env)
-
-
 
 addTypeAssignment tv t = typeAssignment %= Map.insert tv t
 addPredAssignment p fml = predAssignment %= Map.insert p fml

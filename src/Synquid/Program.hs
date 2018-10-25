@@ -493,6 +493,12 @@ allMeasurePostconditions _ _ _ = []
 typeSubstituteEnv :: TypeSubstitution -> Environment -> Environment
 typeSubstituteEnv tass = over symbols (Map.map (Map.map (schemaSubstitute tass)))
 
+-- Apply type substitution to all scalars in environment
+scalarSubstituteEnv :: TypeSubstitution -> SymbolMap -> SymbolMap
+scalarSubstituteEnv tass syms = 
+  let scalars = (fromMaybe Map.empty $ Map.lookup 0 syms) :: Map Id RSchema
+  in  Map.insert 0 (Map.map (schemaSubstitute tass) scalars) syms
+
 -- | Insert weakest refinement
 refineTop :: Environment -> SType -> RType
 refineTop env (ScalarT (DatatypeT name tArgs pArgs) _ _) =
@@ -554,7 +560,7 @@ data Constraint =
   | WellFormedCond !Environment !Formula
   | WellFormedMatchCond !Environment !Formula
   | WellFormedPredicate !Environment ![Sort] !Id
-  | SharedType !Environment !RType !RType !RType !Id
+  | SharedEnv !Environment !SymbolMap !SymbolMap !Id
   | ConstantRes !Environment !Id
   deriving (Show, Eq, Ord)
 
@@ -566,7 +572,7 @@ data TaggedConstraint = TaggedConstraint {
 labelOf :: Constraint -> Id
 labelOf (Subtype _ _ _ _ _ l)  = l
 labelOf (WellFormed _ _ l)     = l
-labelOf (SharedType _ _ _ _ l) = l
+labelOf (SharedEnv _ _ _ l) = l
 labelOf _                      = ""
 
 envFrom :: Constraint -> Environment
@@ -574,14 +580,8 @@ envFrom (Subtype e _ _ _ _ _)       = e
 envFrom (WellFormed e _ _)          = e
 envFrom (WellFormedCond e _)        = e
 envFrom (WellFormedPredicate e _ _) = e
-envFrom (SharedType e _ _ _ _)      = e
+envFrom (SharedEnv e _ _ _)         = e
 envFrom (ConstantRes e _)           = e
-
-typesFrom :: Constraint -> [RType]
-typesFrom (Subtype _ _ tl tr _ _)   = [tl, tr]
-typesFrom (WellFormed _ t _)        = [t]
-typesFrom (SharedType _ t1 t2 t3 _) = [t1, t2, t3]
-typesFrom c                         = []
 
 isCTConstraint (ConstantRes _ _) = True
 isCTConstraint _                 = False

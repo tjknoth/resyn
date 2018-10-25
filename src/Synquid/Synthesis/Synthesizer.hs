@@ -1,5 +1,8 @@
 -- | Top-level synthesizer interface
-module Synquid.Synthesizer (synthesize, SynthPhase(..)) where
+module Synquid.Synthesis.Synthesizer (
+  synthesize, 
+  SynthPhase(..)
+) where
 
 import Synquid.Util
 import Synquid.Logic
@@ -7,8 +10,8 @@ import Synquid.Type
 import Synquid.Program
 import Synquid.Z3
 import Synquid.Resolver
-import Synquid.Explorer
-import Synquid.TypeChecker
+import Synquid.Synthesis.TypeChecker
+import Synquid.Synthesis.Util
 import Synquid.Stats
 import Synquid.Solver.Monad
 import Synquid.Solver.HornClause

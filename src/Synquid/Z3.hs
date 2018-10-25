@@ -28,7 +28,6 @@ import Control.Monad
 import Control.Monad.Extra (mapMaybeM)
 import Control.Monad.Trans.State
 import Control.Lens hiding (both)
-import Debug.Trace
 
 -- | Z3 state while building constraints
 data Z3Data = Z3Data {

@@ -10,7 +10,6 @@ import Synquid.Pretty
 import Synquid.Util
 import Synquid.Error
 
-import qualified Data.Map as Map
 import Data.Map (Map)
 import qualified Data.Set as Set
 import Data.Set (Set)
@@ -18,7 +17,7 @@ import Control.Lens
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Trans.Except
-import Z3.Monad (AST, Model, modelToString)
+import Z3.Monad (Model)
 
 
 -- | Wrapper for Z3 Model data structure

@@ -12,18 +12,12 @@ import Synquid.Logic
 import Synquid.Pretty
 import Synquid.Solver.Monad
 import Synquid.Solver.Util
-import Synquid.Program (MeasureDef(..), measureDefs)
-import Synquid.Z3 
+import Synquid.Program (MeasureDef(..))
 
 import Control.Monad.State
 import Data.Maybe
 import qualified Data.Map as Map
 import Data.Map (Map)
-import qualified Data.Set as Set
-import Data.Set (Set)
-import Data.List
-import Control.Lens as Lens
-import Debug.Trace
 
 {- Data structures for CEGIS solver -}
 
