@@ -106,7 +106,7 @@ ALL_BENCHMARKS = [
         Benchmark('List-Compress', 'remove adjacent dupl.', '$=$, $\\neq$', np = 3),
         Benchmark('UniqueList-Range', 'integer range', '0, inc, dec, $\\leq$, $\\neq$'),
         Benchmark('List-Partition', 'partition', '$\\leq$'),
-        Benchmark('IncList-Pivot', 'append with pivot'),
+        #Benchmark('IncList-Pivot', 'append with pivot'),
         ]),
     BenchmarkGroup("Sorted list", ['-f=AllArguments'], [
         Benchmark('StrictIncList-Insert', 'insert', '$<$'),

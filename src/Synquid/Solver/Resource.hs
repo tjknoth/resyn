@@ -468,8 +468,7 @@ isInteresting (BoolLit True)           = False
 isInteresting (Binary And f g)         = isInteresting f || isInteresting g 
 isInteresting _                        = True
 
--- Maybe this will change? idk
-subtypeOp = (|=|)
+subtypeOp = (|>=|)
 
 writeLog level msg = do 
   maxLevel <- lift $ asks _tcSolverLogLevel

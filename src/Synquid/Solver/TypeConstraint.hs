@@ -222,7 +222,6 @@ simplifyConstraint' tass _ (WellFormed env tv@(ScalarT (TypeVarT _ a _) _ _) l)
     = simplifyConstraint (WellFormed env (typeSubstitute tass tv) l)
 
 -- Substitute all scalars in environment  
---simplifyConstraint' tass _ (Subtype env syms t t' Nondeterministic l) = 
 simplifyConstraint' tass _ (SharedEnv env symsl symsr l) = do
   let env' = over symbols (scalarSubstituteEnv tass) env
   let symsl' = scalarSubstituteEnv tass symsl
@@ -272,7 +271,7 @@ simplifyConstraint' _ _ (Subtype env syms (ScalarT (DatatypeT name [] (pArg:pArg
             _           -> Simple
       if isContra
         then simplifyConstraint (Subtype env syms (int pArg') (int pArg) variant' label)
-        else simplifyConstraint (Subtype env syms (int pArg) (int pArg') variant label)
+        else simplifyConstraint (Subtype env syms (int pArg) (int pArg') variant' label)
       simplifyConstraint (Subtype env syms (ScalarT (DatatypeT name [] pArgs) fml pot) (ScalarT (DatatypeT name' [] pArgs') fml' pot') variant label)
 simplifyConstraint' _ _ (Subtype env syms (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) Consistency label)
   = if isScalarType tArg1

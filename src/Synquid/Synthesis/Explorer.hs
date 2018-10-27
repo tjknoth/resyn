@@ -21,6 +21,7 @@ import Control.Monad.Logic
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Lens
+import Debug.Trace
 
 
 -- | 'runExplorer' @eParams tParams initTS go@ : execute exploration @go@ with explorer parameters @eParams@, typing parameters @tParams@ in typing state @initTS@
@@ -54,27 +55,31 @@ exploreFunction _ t _ = throwErrorWithDescription $ text "exploreFunction: calle
 
 -- | Generate a possibly conditional term type @t@, depending on whether a condition is abduced
 generateMaybeIf :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
-generateMaybeIf env t = ifte generateThen (uncurry3 (generateElse env t)) (generateMatch env t) -- If at least one solution without a match exists, go with it and continue with the else branch; otherwise try to match
+generateMaybeIf env t = ifte generateThen (uncurry6 generateElse) (generateMatch env t) -- If at least one solution without a match exists, go with it and continue with the else branch; otherwise try to match
   where
     -- | Guess an E-term and abduce a condition for it
     generateThen = do
+      (cEnv, bEnv) <- shareContext env $ show $ text "generateMaybeIf :: " <+> pretty t
       cUnknown <- Unknown Map.empty <$> freshId "C"
-      addConstraint $ WellFormedCond env cUnknown
-      pThen <- cut $ generateIE (addAssumption cUnknown env) t -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
+      addConstraint $ WellFormedCond bEnv cUnknown
+      -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
+      pThen <- cut $ generateIE (addAssumption cUnknown bEnv) t 
       cond <- conjunction <$> currentValuation cUnknown
-      return (cond, unknownName cUnknown, pThen)
+      return (cEnv, bEnv, t, cond, unknownName cUnknown, pThen)
 
 -- | Proceed after solution @pThen@ has been found under assumption @cond@
-generateElse :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Formula -> Id -> RProgram -> Explorer s RProgram
-generateElse env t cond condUnknown pThen = if cond == ftrue
+generateElse :: (MonadSMT s, MonadHorn s) => Environment -> Environment -> RType -> Formula -> Id -> RProgram -> Explorer s RProgram
+generateElse cEnv bEnv t cond condUnknown pThen = if cond == ftrue
   then return 
   pThen -- @pThen@ is valid under no assumptions: return it
   else do -- @pThen@ is valid under a nontrivial assumption, proceed to look for the solution for the rest of the inputs
-    pCond <- inContext (\p -> Program (PIf p uHole uHole) t) $ generateConditionFromFml env cond
+    pCond <- inContext (\p -> Program (PIf p uHole uHole) t) 
+      $ generateConditionFromFml cEnv cond
 
     cUnknown <- Unknown Map.empty <$> freshId "C"
     runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton $ fnot cond) -- Create a fixed-valuation unknown to assume @!cond@
-    pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) $ generateI (addAssumption cUnknown env) t
+    pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) 
+      $ generateI (addAssumption cUnknown bEnv) t
     ifM (tryEliminateBranching pElse (runInSolver $ setUnknownRecheck (unknownName cUnknown) Set.empty (Set.singleton condUnknown)))
       (return pElse)
       (return $ Program (PIf pCond pThen pElse) t)
@@ -86,6 +91,7 @@ tryEliminateBranching branch recheck =
             recheck -- Re-check Horn constraints after retracting the branch guard
             (const $ return True) -- constraints still hold: @branch@ is a valid solution overall
             (return False) -- constraints don't hold: the guard is essential
+
 generateConditionFromFml :: (MonadHorn s, MonadSMT s) => Environment -> Formula -> Explorer s RProgram
 generateConditionFromFml env fml = do
   conjuncts <- genConjuncts env allConjuncts
@@ -97,9 +103,9 @@ generateConditionFromFml env fml = do
       p <- genConjunct env c
       (p :) <$> genConjuncts env cs
     genConjunct env c = if isExecutable c
-                      -- TODO: this is wrong! guard's resource aren't analyzed if formula is executable 
-                            then return $ fmlToProgram c
-                            else cut $ generateE' env (ScalarT BoolT (valBool |=| c) defPotential) 1
+                          -- TODO: this is wrong! guard's resource aren't analyzed if formula is executable 
+                          then return $ fmlToProgram c
+                          else cut $ generateE' env (ScalarT BoolT (valBool |=| c) defPotential) 1
     andSymb = Program (PSymbol $ binOpTokens Map.! And) (toMonotype $ binOpType And)
     conjoin p1 p2 = Program (PApp (Program (PApp andSymb p1) boolAll) p2) boolAll
 
@@ -113,10 +119,15 @@ generateMatch env t = do
   if d == 0
     then mzero
     else do
+      -- guard, and branch environments (if-abduction)
+      (ifCEnv, ifBEnv) <- shareContext env "generateMatch -- then branch "
+      -- scrutinee, case environments (match expression)
+      (matchCEnv, matchBEnv) <- shareContext ifBEnv $ show 
+        $ text "generateMatch ::" <+> pretty t
       (Program p tScr) <- local (over _1 (\params -> set eGuessDepth (view scrutineeDepth params) params))
                       $ inContext (\p -> Program (PMatch p []) t)
-                      $ generateE env anyDatatype -- Generate a scrutinee of an arbitrary type
-      let (env', tScr') = embedContext env tScr
+                      $ generateE matchCEnv anyDatatype -- Generate a scrutinee of an arbitrary type
+      let (matchBEnv', tScr') = embedContext matchBEnv tScr
       let pScrutinee = Program p tScr'
 
       case tScr of
@@ -129,11 +140,13 @@ generateMatch env t = do
                                 (not $ head scrutineeSymbols `elem` ctors) &&                     -- Is not a value
                                 (any (not . flip Set.member (env ^. constants)) scrutineeSymbols) -- Has variables (not just constants)
           guard isGoodScrutinee
-          (x, env'') <- addScrutineeToEnv env' pScrutinee tScr
-          (pCase, cond, condUnknown) <- cut $ generateFirstCase env'' x pScrutinee t (head ctors)            -- First case generated separately in an attempt to abduce a condition for the whole match
-          pCases <- map fst <$> mapM (cut . generateCase (addAssumption cond env'') x pScrutinee t) (tail ctors)  -- Generate a case for each of the remaining constructors under the assumption
+          (x, matchBEnv'') <- addScrutineeToEnv matchBEnv' pScrutinee tScr
+          -- First case generated separately in an attempt to abduce a condition for the whole match
+          (pCase, cond, condUnknown) <- cut $ generateFirstCase matchBEnv'' x pScrutinee t (head ctors)            
+          -- Generate a case for each of the remaining constructors under the assumption
+          pCases <- map fst <$> mapM (cut . generateCase (addAssumption cond matchBEnv'') x pScrutinee t) (tail ctors) 
           let pThen = Program (PMatch pScrutinee (pCase : pCases)) t
-          generateElse env t cond condUnknown pThen                                                               -- Generate the else branch
+          generateElse ifCEnv ifBEnv t cond condUnknown pThen                                                               -- Generate the else branch
 
         _ -> mzero -- Type of the scrutinee is not a datatype: it cannot be used in a match
 
@@ -202,13 +215,19 @@ generateMaybeMatchIf :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Exp
 generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplus` generateMatch env t -- might need to backtrack a successful match due to match depth limitation
   where
     -- | Guess an E-term and abduce a condition and a match-condition for it
+    -- For resource analysis: there's no need to share the environment here
+    --   because the match scrutinee can only be a variable 
+    --   (which will not cost resources under the current model)
     generateOneBranch = do
+      (ifCEnv, ifBEnv) <- shareContext env $ show 
+        $ text "generateMaybeMatchIf ::" <+> pretty t
+      -- TODO: hopefully not an issue that we use env here?
       matchUnknown <- Unknown Map.empty <$> freshId "M"
       addConstraint $ WellFormedMatchCond env matchUnknown
       condUnknown <- Unknown Map.empty <$> freshId "C"
       addConstraint $ WellFormedCond env condUnknown
       cut $ do
-        p0 <- generateEOrError (addAssumption matchUnknown . addAssumption condUnknown $ env) t
+        p0 <- generateEOrError (addAssumption matchUnknown . addAssumption condUnknown $ ifBEnv) t
         matchValuation <- Set.toList <$> currentValuation matchUnknown
         let matchVars = Set.toList $ Set.unions (map varsOf matchValuation)
         condValuation <- currentValuation condUnknown
@@ -218,14 +237,17 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
         let matchConds = map (conjunction . (\var -> filter (Set.member var . varsOf) matchValuation)) matchVars -- group by vars
         d <- asks . view $ _1 . matchDepth -- Backtrack if too many matches, maybe we can find a solution with fewer
         guard $ length matchConds <= d
-        return (matchConds, conjunction condValuation, unknownName condUnknown, p0)
+        return (ifCEnv, ifBEnv, matchConds, conjunction condValuation, unknownName condUnknown, p0)
 
     generateEOrError env typ = generateError env `mplus` generateIE env typ
 
     -- | Proceed after solution @p0@ has been found under assumption @cond@ and match-assumption @matchCond@
-    generateOtherBranches (matchConds, cond, condUnknown, p0) = do
-      pThen <- cut $ generateMatchesFor (addAssumption cond env) matchConds p0 t
-      generateElse env t cond condUnknown pThen
+    generateOtherBranches (ifCEnv, ifBEnv, matchConds, cond, condUnknown, p0) = do
+      pThen <- cut $ generateMatchesFor (addAssumption cond ifBEnv) matchConds p0 t
+      generateElse ifCEnv ifBEnv t cond condUnknown pThen
+
+    -- TODO: do the constraints generated by the scrutinee (which is only a variable)
+    --   matter? should they?
 
     generateMatchesFor env [] pBaseCase t = return pBaseCase
     generateMatchesFor env (matchCond : rest) pBaseCase t = do
@@ -234,14 +256,15 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
       let pScrutinee = Program (PSymbol x) scrT
       let ctors = ((env ^. datatypes) Map.! scrDT) ^. constructors
       let env' = addScrutinee pScrutinee env
-      pBaseCase' <- cut $ inContext (\p -> Program (PMatch pScrutinee [Case c [] p]) t) $
-                            generateMatchesFor (addAssumption matchCond env') rest pBaseCase t
+      pBaseCase' <- cut $ inContext (\p -> Program (PMatch pScrutinee [Case c [] p]) t) 
+                            $ generateMatchesFor (addAssumption matchCond env') rest pBaseCase t
 
       let genOtherCases previousCases ctors =
             case ctors of
               [] -> return $ Program (PMatch pScrutinee previousCases) t
               (ctor:rest) -> do
-                (c, recheck) <- cut $ generateCase env' matchVar pScrutinee t ctor
+                (c, recheck) <- cut 
+                  $ generateCase env' matchVar pScrutinee t ctor
                 ifM (tryEliminateBranching (expr c) recheck)
                   (return $ expr c)
                   (genOtherCases (previousCases ++ [c]) rest)
@@ -250,11 +273,7 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
 
 -- | Transition from I-terms to E-terms
 generateIE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
-generateIE env t = do 
-  p <- generateE env t
-  --addCTConstraint env (show (pretty p))
-  --runInSolver solveCTConstraints
-  return p
+generateIE = generateE 
 
 -- | 'generateE' @env typ@ : explore all elimination terms of type @typ@ in environment @env@
 -- (bottom-up phase of bidirectional typechecking)
@@ -265,7 +284,9 @@ generateE env typ = do
 
 generateE' env typ d = do
   (Program pTerm pTyp) <- generateEUpTo env typ d                      -- Generate the E-term
-  runInSolver $ isFinal .= True >> solveTypeConstraints pTyp >> isFinal .= False  -- Final type checking pass that eliminates all free type variables
+  runInSolver $ isFinal .= True 
+             >> solveTypeConstraints pTyp 
+             >> isFinal .= False  -- Final type checking pass that eliminates all free type variables
   newGoals <- uses auxGoals (map gName)                                      -- Remember unsolved auxiliary goals
   generateAuxGoals                                                           -- Solve auxiliary goals
   pTyp' <- runInSolver $ currentAssignment pTyp                              -- Finalize the type of the synthesized term
@@ -339,8 +360,7 @@ enumerateAt env typ d = do
 
     generateApp genFun genArg = do
       x <- freshId "X"
-      -- env1, env2 <- split 
-      -- env1:
+      (env1, env2) <- shareContext env $ show $ text "fun :: " <+> pretty typ
       fun <- inContext (\p -> Program (PApp p uHole) typ)
              $ genFun env (FunctionT x AnyT typ defCost) -- Find all functions that unify with (? -> typ)
       let tp@(FunctionT x tArg tRes _) = typeOf fun
@@ -349,15 +369,13 @@ enumerateAt env typ d = do
         then do -- Higher-order argument: its value is not required for the function type, return a placeholder and enqueue an auxiliary goal
           d <- asks . view $ _1 . auxDepth
           when (d <= 0) $ writeLog 2 (text "Cannot synthesize higher-order argument: no auxiliary functions allowed") >> mzero
-          -- env2:
-          arg <- enqueueGoal env tArg' (untyped PHole) (d - 1)
+          arg <- enqueueGoal env2 tArg' (untyped PHole) (d - 1)
           return (Program (PApp fun arg) tRes)
         else do -- First-order argument: generate now
           let mbCut = id -- if Set.member x (varsOfType tRes) then id else cut
-          -- env2:
           arg <- local (over (_1 . eGuessDepth) (-1 +))
                  $ inContext (\p -> Program (PApp fun p) tRes')
-                 $ mbCut (genArg env tArg')
+                 $ mbCut (genArg env2 tArg')
           writeLog 3 (text "Synthesized argument" <+> pretty arg <+> text "of type" <+> pretty (typeOf arg))
           let tRes'' = appType env arg x tRes' 
           return (Program (PApp fun arg) tRes'') 
