@@ -112,10 +112,10 @@ generateFormula' :: MonadSMT s
                  -> RSolver s TaggedConstraint 
 generateFormula' shouldLog checkMults univs c = 
   case c of 
-    (Subtype env syms tl tr variant label) -> do
+    (Subtype env fp tl tr variant label) -> do
       tass <- use typeAssignment
       let fmls = assemble $ case variant of 
-            Nondeterministic -> assertSubtypes env syms tass checkMults tl tr
+            Nondeterministic -> assertSubtypes env fp tass checkMults tl tr
             _                -> directSubtypes checkMults tl tr
       let relevantFml = conjunction $ univs `Set.union` allFormulasOf checkMults tl `Set.union` allFormulasOf checkMults tr
       TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls relevantFml (Set.insert (refinementOf tl))
@@ -279,13 +279,15 @@ assertZeroPotential cm tass env = sumFormulas (fmap totalTopLevelPotential scala
 -- | 'assertSubtypes' @env tl tr@ : Generate formulas partitioning potential appropriately amongst
 --    environment @env@ in order to check @tl@ <: @tr@
 assertSubtypes :: Environment 
-               -> SymbolMap 
+               -> Maybe Formula 
                -> TypeSubstitution 
                -> Bool 
                -> RType 
                -> RType 
                -> [Formula]
-assertSubtypes env syms tass cm tl@(ScalarT bl _ pl) tr@(ScalarT br _ pr) = 
+assertSubtypes _env Nothing _tass _cm _tl _tr = 
+  error "assertSubtypes: free potential is Nothing"
+assertSubtypes env (Just fp) tass cm tl@(ScalarT bl _ pl) tr@(ScalarT br _ pr) = 
   let -- Get map of only scalar types (excluding empty type constructors) in environment:
       scalarsOf smap = Map.filterWithKey notEmptyCtor $ fmap typeFromSchema $ fromMaybe Map.empty $ Map.lookup 0 smap
       -- Get top-level potentials from environment, after applying current type substitutions
@@ -293,18 +295,12 @@ assertSubtypes env syms tass cm tl@(ScalarT bl _ pl) tr@(ScalarT br _ pr) =
       -- Sum all top-level potential in an environment:
       envSum smap = sumFormulas $ topPotentials $ scalarsOf smap
       -- Assert that types in fresh context are well-formed (w.r.t top-level annotations)
-      wellFormed smap = map (|>=| fzero) ((Map.elems . topPotentials) smap) 
-      wellFormedAssertions = wellFormed $ scalarsOf syms
+      wfFP = fp |>=| fzero
       -- True if the given variable is not an empty constructor for some data type
       notEmptyCtor x _ = Set.notMember x (_emptyCtors env) 
   in case (pl, pr) of 
     -- Infinite potential on the left side is a subtype of everything
-    --   Still, assert that the left and right contexts have equal potential
-    (Infty, _)       -> 
-      let leftSum = envSum (_symbols env)
-          rightSum = envSum syms
-          subtypeAssertions = (leftSum `subtypeOp` rightSum) : directSubtypesBase cm bl br
-      in subtypeAssertions ++ wellFormedAssertions
+    (Infty, _) -> [ftrue] 
     -- Throw error if there is infinite potential on the right side without infinite potential on the left side
     (_, Infty)       -> 
       error $ show $ text "assertSubtypes: encountered infinite potential on the right side in type of a subtyping relation" 
@@ -312,9 +308,9 @@ assertSubtypes env syms tass cm tl@(ScalarT bl _ pl) tr@(ScalarT br _ pr) =
     -- Assert subtypes normally
     (Fml fl, Fml fr) -> 
       let leftSum = addFormulas fl (envSum (_symbols env)) 
-          rightSum = addFormulas fr (envSum syms)
+          rightSum = addFormulas fr fp 
           subtypeAssertions = (leftSum `subtypeOp` rightSum) : directSubtypesBase cm bl br
-      in subtypeAssertions ++ wellFormedAssertions
+      in wfFP : subtypeAssertions 
 assertSubtypes _ _ _ _ _ _ = [] 
 
 -- | 'directSubtypes' @env tl tr@ : Generate the set of all formulas in types @tl@ and @tr@, zipped by a binary operation @op@ on formulas 
@@ -435,15 +431,10 @@ containsDT _  Cons{}             = True
 containsDT ms (Unary _ f)        = containsDT ms f
 containsDT ms (Binary _ f g)     = containsDT ms f || containsDT ms g
 containsDT ms (Ite f g h)        = containsDT ms f || containsDT ms g || containsDT ms h
-containsDT ms (SetLit _ fs)      = any (containsDT ms) fs
 containsDT ms (All f g)          = containsDT ms f || containsDT ms g
+containsDT ms (SetLit _ fs)      = any (containsDT ms) fs
 containsDT _ _                   = False
         
--- | Apply a list of substitutions to a formula
-substituteManyInFml :: [(Formula, Formula)] -> Formula -> Formula
-substituteManyInFml [] f       = f
-substituteManyInFml xs fml = foldl (\f (g, ex) -> substituteForFml ex g f) fml xs
-
 -- Substitute variable for a formula (predicate application or variable) in given formula @fml@
 substituteForFml :: Formula -> Formula -> Formula -> Formula
 substituteForFml new old v@Var{} = if v == old then new else v

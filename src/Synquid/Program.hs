@@ -555,7 +555,7 @@ data SubtypeVariant = Simple -- Consistency = False, Nondeterministic = False
 
 -- | Typing constraints
 data Constraint = 
-  Subtype !Environment !SymbolMap !RType !RType !SubtypeVariant !Id
+  Subtype !Environment !(Maybe Formula) !RType !RType !SubtypeVariant !Id
   | WellFormed !Environment !RType !Id
   | WellFormedCond !Environment !Formula
   | WellFormedMatchCond !Environment !Formula

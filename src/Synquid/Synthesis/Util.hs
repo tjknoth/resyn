@@ -315,7 +315,7 @@ addSubtypeConstraint :: (MonadHorn s, MonadSMT s)
                      -> Explorer s ()
 addSubtypeConstraint env ltyp rtyp consistency tag = 
   let variant = if consistency then Consistency else Simple in
-  addConstraint $ Subtype env (_symbols env) ltyp rtyp variant tag
+  addConstraint $ Subtype env Nothing ltyp rtyp variant tag
 
 -- | Generate nondeterministic subtyping constraint -- attempt to re-partition "free" potential between variables in context
 checkNDSubtype :: (MonadHorn s, MonadSMT s) 
@@ -323,24 +323,17 @@ checkNDSubtype :: (MonadHorn s, MonadSMT s)
                -> RType 
                -> RType 
                -> Id 
-               -> Explorer s Environment
-checkNDSubtype env ltyp@ScalarT{} rtyp@ScalarT{} tag = do 
-  syms' <- freshFreePotential env
-  addConstraint $ Subtype env syms' ltyp rtyp Nondeterministic tag
-  return $ env { _symbols = syms' }
--- Should never be called with non-scalar contextual types
-checkNDSubtype env ltyp rtyp@LetT{} tag = do 
-  syms' <- freshFreePotential env
-  addConstraint $ Subtype env syms' ltyp rtyp Nondeterministic tag
-  return $ env { _symbols = syms' }
-checkNDSubtype env ltyp@LetT{} rtyp tag = do 
-  syms' <- freshFreePotential env
-  addConstraint $ Subtype env syms' ltyp rtyp Nondeterministic tag
-  return $ env { _symbols = syms' }
--- Do not re-partition potential when checking non-scalar types
-checkNDSubtype env ltyp rtyp tag = do 
-  addSubtypeConstraint env ltyp rtyp False tag
-  return env
+               -> Explorer s ()
+checkNDSubtype env ltyp rtyp tag = 
+  if sc ltyp || sc rtyp 
+    then do 
+      fp <- Var IntS <$> freshId freePotentialPrefix 
+      addConstraint $ Subtype env (Just fp) ltyp rtyp Nondeterministic tag
+    else addSubtypeConstraint env ltyp rtyp False tag
+  where 
+    sc ScalarT{} = True
+    sc LetT{}    = True 
+    sc _         = False
 
 -- Split a context and generate sharing constraints
 shareContext :: (MonadHorn s, MonadSMT s) 
@@ -364,11 +357,7 @@ toVar env (Program _ t) = do
   g <- freshId "G"
   return (Var (toSort $ baseTypeOf t) g, addLetBound g t env)
 
--- | Fresh top-level potential annotations for all scalar symbols in an environment
-freshFreePotential :: MonadHorn s => Environment -> Explorer s SymbolMap
-freshFreePotential env = do
-  let freshen = mapM (`freshPotentials` False) 
-  mapWithKeyM (\arity vars -> if arity == 0 then freshen vars else return vars) (_symbols env)
+freePotentialPrefix = "fp"
 
 writeLog level msg = do
   maxLevel <- asks . view $ _1 . explorerLogLevel

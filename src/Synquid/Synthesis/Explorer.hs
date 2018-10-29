@@ -25,7 +25,13 @@ import Debug.Trace
 
 
 -- | 'runExplorer' @eParams tParams initTS go@ : execute exploration @go@ with explorer parameters @eParams@, typing parameters @tParams@ in typing state @initTS@
-runExplorer :: (MonadSMT s, MonadHorn s) => ExplorerParams -> TypingParams -> Reconstructor s -> TypingState -> Explorer s a -> s (Either ErrorMessage [a])
+runExplorer :: (MonadSMT s, MonadHorn s) 
+            => ExplorerParams 
+            -> TypingParams 
+            -> Reconstructor s 
+            -> TypingState 
+            -> Explorer s a 
+            -> s (Either ErrorMessage [a])
 runExplorer eParams tParams topLevel initTS go = do
   let n = _numPrograms eParams
   (ress, PersistentState errs) <- runStateT (observeManyT n (runReaderT (evalStateT go initExplorerState) (eParams, tParams, topLevel))) (PersistentState [])
@@ -37,7 +43,10 @@ runExplorer eParams tParams topLevel initTS go = do
 
 -- | 'generateI' @env t@ : explore all terms that have refined type @t@ in environment @env@
 -- (top-down phase of bidirectional typechecking)
-generateI :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
+generateI :: (MonadSMT s, MonadHorn s) 
+          => Environment 
+          -> RType 
+          -> Explorer s RProgram
 generateI env t@(FunctionT x tArg tRes _) = exploreFunction env t generateI 
 generateI env t@ScalarT{} = do
   maEnabled <- asks . view $ _1 . abduceScrutinees -- Is match abduction enabled?
@@ -46,7 +55,11 @@ generateI env t@ScalarT{} = do
   if maEnabled && d > 0 && maPossible then generateMaybeMatchIf env t else generateMaybeIf env t
 
 -- | Either generate lambda expression or reconstruct type of existing implementation
-exploreFunction :: (MonadSMT s, MonadHorn s) => Environment -> RType -> TypeExplorer s -> Explorer s RProgram
+exploreFunction :: (MonadSMT s, MonadHorn s) 
+                => Environment 
+                -> RType 
+                -> TypeExplorer s 
+                -> Explorer s RProgram
 exploreFunction env t@(FunctionT x tArg tRes _) explore = do 
   let ctx p = Program (PFun x p) t
   pBody <- inContext ctx $ explore (unfoldAllVariables $ addVariable x tArg env) tRes
@@ -54,7 +67,10 @@ exploreFunction env t@(FunctionT x tArg tRes _) explore = do
 exploreFunction _ t _ = throwErrorWithDescription $ text "exploreFunction: called with non-function type" <+> pretty t
 
 -- | Generate a possibly conditional term type @t@, depending on whether a condition is abduced
-generateMaybeIf :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
+generateMaybeIf :: (MonadSMT s, MonadHorn s) 
+                => Environment 
+                -> RType 
+                -> Explorer s RProgram
 generateMaybeIf env t = ifte generateThen (uncurry6 generateElse) (generateMatch env t) -- If at least one solution without a match exists, go with it and continue with the else branch; otherwise try to match
   where
     -- | Guess an E-term and abduce a condition for it
@@ -68,7 +84,14 @@ generateMaybeIf env t = ifte generateThen (uncurry6 generateElse) (generateMatch
       return (cEnv, bEnv, t, cond, unknownName cUnknown, pThen)
 
 -- | Proceed after solution @pThen@ has been found under assumption @cond@
-generateElse :: (MonadSMT s, MonadHorn s) => Environment -> Environment -> RType -> Formula -> Id -> RProgram -> Explorer s RProgram
+generateElse :: (MonadSMT s, MonadHorn s) 
+             => Environment 
+             -> Environment 
+             -> RType 
+             -> Formula 
+             -> Id 
+             -> RProgram 
+             -> Explorer s RProgram
 generateElse cEnv bEnv t cond condUnknown pThen = if cond == ftrue
   then return 
   pThen -- @pThen@ is valid under no assumptions: return it
@@ -92,7 +115,10 @@ tryEliminateBranching branch recheck =
             (const $ return True) -- constraints still hold: @branch@ is a valid solution overall
             (return False) -- constraints don't hold: the guard is essential
 
-generateConditionFromFml :: (MonadHorn s, MonadSMT s) => Environment -> Formula -> Explorer s RProgram
+generateConditionFromFml :: (MonadHorn s, MonadSMT s) 
+                         => Environment 
+                         -> Formula 
+                         -> Explorer s RProgram
 generateConditionFromFml env fml = do
   conjuncts <- genConjuncts env allConjuncts
   return $ fmap (`addRefinement` (valBool |=| fml)) (foldl1 conjoin conjuncts)
@@ -176,7 +202,13 @@ generateFirstCase env scrVar pScrutinee t consName =
               return (Case consName binders pCaseExpr, ftrue, dontCare))
 
 -- | Generate the @consName@ case of a match term with scrutinee variable @scrName@ and scrutinee type @scrType@
-generateCase :: (MonadSMT s, MonadHorn s) => Environment -> Formula -> RProgram -> RType -> Id -> Explorer s (Case RType, Explorer s ())
+generateCase :: (MonadSMT s, MonadHorn s) 
+             => Environment 
+             -> Formula 
+             -> RProgram 
+             -> RType 
+             -> Id 
+             -> Explorer s (Case RType, Explorer s ())
 generateCase env scrVar pScrutinee t consName = 
   case Map.lookup consName (allSymbols env) of
     Nothing -> error $ show $ text "Datatype constructor" <+> text consName <+> text "not found in the environment" <+> pretty env
@@ -211,7 +243,10 @@ caseSymbols env x (name : names) (FunctionT y tArg tRes _) = do
   return ((name, tArg) : syms, ass)
 
 -- | Generate a possibly conditional possibly match term, depending on which conditions are abduced
-generateMaybeMatchIf :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
+generateMaybeMatchIf :: (MonadSMT s, MonadHorn s) 
+                     => Environment 
+                     -> RType 
+                     -> Explorer s RProgram
 generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplus` generateMatch env t -- might need to backtrack a successful match due to match depth limitation
   where
     -- | Guess an E-term and abduce a condition and a match-condition for it
@@ -300,13 +335,21 @@ generateE' env typ d = do
         else addLambdaLets t body gs
 
 -- | 'generateEUpTo' @env typ d@ : explore all applications of type shape @shape typ@ in environment @env@ of depth up to @d@
-generateEUpTo :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Int -> Explorer s RProgram
+generateEUpTo :: (MonadSMT s, MonadHorn s) 
+              => Environment 
+              -> RType 
+              -> Int 
+              -> Explorer s RProgram
 generateEUpTo env typ d = msum $ map (enumerateAt env typ) [0..d]
 
 -- | Perform a gradual check that @p@ has type @typ@ in @env@:
 -- if @p@ is a scalar, perform a full subtyping check;
 -- if @p@ is a (partially applied) function, check as much as possible with unknown arguments
-checkE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> RProgram -> Explorer s Environment
+checkE :: (MonadSMT s, MonadHorn s) 
+       => Environment 
+       -> RType 
+       -> RProgram 
+       -> Explorer s ()
 checkE env typ p@(Program pTerm pTyp) = do
   ctx <- asks . view $ _1 . context
   writeLog 1 $ linebreak <+> linebreak <+> special "Checking" <+> pretty p <+> text "::" <+> pretty typ <+> text "in" $+$ pretty (ctx (untyped PHole))
@@ -318,9 +361,8 @@ checkE env typ p@(Program pTerm pTyp) = do
   consistency <- asks . view $ _1 . consistencyChecking -- Is consistency checking enabled?
   
   -- Add nondeterministic subtyping check, unless it's a function type and incremental checking is diasbled:
-  env' <- if incremental || arity typ == 0
-            then checkNDSubtype env pTyp typ (show (pretty pTerm))
-            else return env
+  when (incremental || arity typ == 0) 
+    $ checkNDSubtype env pTyp typ (show (pretty pTerm))
   -- Add consistency constraint for function types:
   when (consistency && arity typ > 0) (addSubtypeConstraint env pTyp typ True (show (pretty pTerm))) 
   fTyp <- runInSolver $ finalizeType typ
@@ -328,10 +370,13 @@ checkE env typ p@(Program pTerm pTyp) = do
   typingState . errorContext .= (pos, text "when checking" </> pretty p </> text "::" </> pretty fTyp </> text "in" $+$ pretty (ctx p))
   runInSolver $ solveTypeConstraints pTyp
   typingState . errorContext .= (noPos, empty)
-  return env'
   
 
-enumerateAt :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Int -> Explorer s RProgram
+enumerateAt :: (MonadSMT s, MonadHorn s) 
+            => Environment 
+            -> RType 
+            -> Int 
+            -> Explorer s RProgram
 enumerateAt env typ 0 = do
     let symbols = Map.toList $ symbolsOfArity (arity typ) env
     useCounts <- use symbolUseCount

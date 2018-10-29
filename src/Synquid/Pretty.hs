@@ -379,9 +379,9 @@ instance Show SortConstraint where
   show = show . pretty
 
 prettyConstraint :: Constraint -> Doc
-prettyConstraint (Subtype env _syms t1 t2 Consistency label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "/\\" <+> pretty t2 -- <+> text "src:" <+> pretty label
-prettyConstraint (Subtype env _syms t1 t2 Nondeterministic label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "~<:~" <+> pretty t2 -- <+> text "src:" <+> pretty label
-prettyConstraint (Subtype env _syms t1 t2 _ label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "<:" <+> pretty t2 -- <+> text "src:" <+> pretty label
+prettyConstraint (Subtype env _fp t1 t2 Consistency label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "/\\" <+> pretty t2 -- <+> text "src:" <+> pretty label
+prettyConstraint (Subtype env _fp t1 t2 Nondeterministic label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "~<:~" <+> pretty t2 -- <+> text "src:" <+> pretty label
+prettyConstraint (Subtype env _fp t1 t2 _ label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "<:" <+> pretty t2 -- <+> text "src:" <+> pretty label
 prettyConstraint (WellFormed env t label) = prettyBindings env <+> operator "|-" <+> pretty t -- <+> text "src:" <+> pretty label
 prettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 prettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
@@ -391,8 +391,8 @@ prettyConstraint (ConstantRes env label) = text "CT expression:" <+> text label 
 
 -- Do not show environment
 simplePrettyConstraint :: Constraint -> Doc
-simplePrettyConstraint (Subtype _env _syms t1 t2 Consistency label) = pretty t1 <+> operator "/\\" <+> pretty t2 
-simplePrettyConstraint (Subtype _env _syms t1 t2 _ label) = pretty t1 <+> operator "<:" <+> pretty t2
+simplePrettyConstraint (Subtype _env _fp t1 t2 Consistency label) = pretty t1 <+> operator "/\\" <+> pretty t2 
+simplePrettyConstraint (Subtype _env _fp t1 t2 _ label) = pretty t1 <+> operator "<:" <+> pretty t2
 simplePrettyConstraint (WellFormed env t label) = prettyBindings env <+> operator "|-" <+> pretty t 
 simplePrettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 simplePrettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
@@ -401,8 +401,8 @@ simplePrettyConstraint (SharedEnv e e' e'' label) = text "Shared scalars:" <+> p
 simplePrettyConstraint (ConstantRes env label) = text "CT Expression:" <+> text label <+> text "from scalars:" <+> prettyScalars env 
 
 detailedPrettyConstraint :: Constraint -> Doc
-detailedPrettyConstraint c@(Subtype _env _syms _t1 _t2 Consistency _label) = prettyConstraint c
-detailedPrettyConstraint c@(Subtype env syms t1 t2 _ label) = prettyConstraint c $+$ text "ENV" <+> prettyScalars env $+$ text "ENV'" <+> prettyScalars (env {_symbols = syms}) 
+detailedPrettyConstraint c@(Subtype _env _fp _t1 _t2 Consistency _label) = prettyConstraint c
+detailedPrettyConstraint c@(Subtype env fp t1 t2 _ label) = prettyConstraint c $+$ text "ENV" <+> prettyScalars env $+$ text "FP'" <+> pretty fp 
 detailedPrettyConstraint c = prettyConstraint c
 
 instance Pretty Constraint where

@@ -118,9 +118,6 @@ instantiateConsAxioms env mVal fml = let inst = instantiateConsAxioms env mVal i
       in if null constantArgs
         then Set.singleton vSubstBody
         else let
-          -- For each constant argument in the measure definition,
-          --   assemble a list of tuples mapping the formal name to all possible variables in scope of the relevant sort
-          varsOfSort = Map.assocs $ symbolsOfArity 0 env -- map (\(_, s) -> {-Map.keys (allScalarsOfSort env s)-}) constantArgs
           constArgList = Map.lookup mname (_measureConstArgs env)
         in 
           case constArgList of 
