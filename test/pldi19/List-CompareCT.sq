@@ -26,8 +26,6 @@ compare = \xs. \ys.
         Cons yh yt -> compare xt yt
 -}
 
-
-
 false :: {Bool | _v == False}
 true :: {Bool | _v == True}
 and :: x: Bool -> y: Bool -> {Bool | _v == (x && y)}

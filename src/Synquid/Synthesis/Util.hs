@@ -226,8 +226,8 @@ generateAuxGoals = do
     etaContract' [] f@(PSymbol _)                                            = Just f
     etaContract' binders p                                                   = Nothing
 
--- Variable formula with fresh variable id
-freshPot :: MonadHorn s => Explorer s Potential 
+-- Variable formula with fresh variable idfreshPot :: MonadHorn s => Explorer s Potential 
+freshPot :: MonadHorn s => Explorer s Potential
 freshPot = do 
   x <- freshId potentialPrefix
   (typingState . resourceVars) %= Set.insert x
@@ -347,8 +347,51 @@ shareContext env label = do
   scalars2 <- mapM (`freshPotentials` True) scalars
   let syms1 = Map.insert 0 scalars1 syms 
   let syms2 = Map.insert 0 scalars2 syms
+  --let scalars  = Map.assocs $ fromMaybe Map.empty $ Map.lookup 0 (_symbols env)
+  --let share (x, sch) = do 
+  --      (sch1, sch2) <- shareType sch
+  --      return ((x, sch1), (x, sch2))
+  --(scalars1, scalars2) <- unzip <$> mapM share scalars
+  --let syms1 = Map.insert 0 (Map.fromList scalars1) syms 
+  --let syms2 = Map.insert 0 (Map.fromList scalars2) syms
   addConstraint $ SharedEnv env syms1 syms2 label
   return (env { _symbols = syms1 }, env { _symbols = syms2 })
+
+mapTuple f (x, y) = (f x, f y)
+
+shareType :: (MonadHorn s, MonadSMT s)
+          => RSchema
+          -> Explorer s (RSchema, RSchema)
+shareType (Monotype t) = do 
+  ts <- shareType' t
+  return $ mapTuple Monotype ts
+shareType (ForallT x t) = do 
+  ts <- shareType t
+  return $ mapTuple (ForallT x) ts
+shareType (ForallP x t) = do 
+  ts <- shareType t
+  return $ mapTuple (ForallP x) ts
+
+shareType' :: (MonadHorn s, MonadSMT s)
+           => RType 
+           -> Explorer s (RType, RType)
+shareType' t@(ScalarT base r Infty) = return (t, t)
+shareType' (ScalarT base r (Fml p)) = do 
+  (base1, base2) <- shareTypeBase base
+  (Fml p') <- freshPot
+  return (ScalarT base1 r (Fml p'), ScalarT base2 r (Fml (p |-| p')))
+
+shareTypeBase :: (MonadHorn s, MonadSMT s)
+              => BaseType Formula 
+              -> Explorer s (BaseType Formula, BaseType Formula)
+shareTypeBase (DatatypeT x ts ps) = do 
+  (ts1, ts2) <- unzip <$> mapM shareType' ts
+  return (DatatypeT x ts1 ps, DatatypeT x ts2 ps)
+shareTypeBase t@(TypeVarT s x Infty) = return (t, t)
+shareTypeBase (TypeVarT s x (Fml m)) = do 
+  (Fml m') <- freshMul
+  return (TypeVarT s x (Fml m'), TypeVarT s x (Fml (m |-| m')))
+shareTypeBase b = return (b, b)
 
 -- | 'toVar' @p env@: a variable representing @p@ (can be @p@ itself or a fresh ghost)
 toVar :: (MonadSMT s, MonadHorn s) => Environment -> RProgram -> Explorer s (Formula, Environment)
