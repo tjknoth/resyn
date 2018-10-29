@@ -192,7 +192,7 @@ RESOURCE_SYNTHESIS_BENCHMARKS = [
     ('Int-Add',             []),
     ('List-Append',         []),
     # Without AllArguments it'll synthesize different slow implementations
-    ('List-Intersect',      ['-f=AllArguments', '--cut-branches=false']),
+    ('List-Intersect',      ['-f=AllArguments', '--backtrack']),
     #('List-Compare',        []),
     ('List-Compress',       []),
     ('List-Concat',         []),

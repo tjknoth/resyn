@@ -19,7 +19,7 @@ import Z3.Monad (AST)
 {- Sorts -}
 
 -- | Sorts
-data Sort = BoolS | IntS | VarS Id | DataS Id [Sort] | SetS Sort | AnyS
+data Sort = BoolS | IntS | VarS !Id | DataS !Id ![Sort] | SetS !Sort | AnyS
   deriving (Show, Eq, Ord)
 
 isSetS (SetS _) = True
@@ -89,9 +89,9 @@ data SortConstraint = SameSort Sort Sort  -- Two sorts must be the same
 
 -- | Predicate signature: name and argument sorts
 data PredSig = PredSig {
-  predSigName :: Id,
-  predSigArgSorts :: [Sort],
-  predSigResSort :: Sort
+  predSigName :: !Id,
+  predSigArgSorts :: ![Sort],
+  predSigResSort :: !Sort
 } deriving (Show, Eq, Ord)
 
 {- Formulas of the refinement logic -}
@@ -126,7 +126,7 @@ data Formula =
   Pred !Sort !Id ![Formula] |          -- ^ Logic function application
   Cons !Sort !Id ![Formula] |          -- ^ Constructor application
   All !Formula !Formula |              -- ^ Universal quantification
-  ASTLit !AST !String                  -- ^ Z3 AST literal (only used to solve resource constraints), and its string version
+  ASTLit !Sort !AST !String            -- ^ Z3 AST literal (only used to solve resource constraints), and its string version
   deriving (Show, Eq, Ord)
 
 dontCare = "_"
@@ -134,6 +134,9 @@ valueVarName = "_v"
 unknownName (Unknown _ name) = name
 varName (Var _ name) = name
 varType (Var t _) = t
+
+maybeUnknownName (Unknown _ name) = Just name
+maybeUnknownName _                = Nothing
 
 isVar (Var _ _) = True
 isVar _ = False
@@ -274,6 +277,7 @@ sortOf (Ite _ e1 _)                              = sortOf e1
 sortOf (Pred s _ _)                              = s
 sortOf (Cons s _ _)                              = s
 sortOf (All _ _)                                 = BoolS
+sortOf (ASTLit s _ _)                            = s
 
 isExecutable :: Formula -> Bool
 isExecutable (SetLit _ _) = False
@@ -409,8 +413,8 @@ setToPredicate x s = Binary Member x s
 
 -- | Search space for valuations of a single unknown
 data QSpace = QSpace {
-    _qualifiers :: [Formula],         -- ^ Qualifiers
-    _maxCount :: Int                  -- ^ Maximum number of qualifiers in a valuation
+    _qualifiers :: ![Formula],         -- ^ Qualifiers
+    _maxCount :: !Int                  -- ^ Maximum number of qualifiers in a valuation
   } deriving (Show, Eq, Ord)
 
 makeLenses ''QSpace
@@ -481,10 +485,10 @@ merge sol sol' = Map.unionWith Set.union sol sol'
 
 -- | Solution candidate
 data Candidate = Candidate {
-    solution :: Solution,
-    validConstraints :: Set Formula,
-    invalidConstraints :: Set Formula,
-    label :: String
+    solution :: !Solution,
+    validConstraints :: !(Set Formula),
+    invalidConstraints :: !(Set Formula),
+    label :: !String
   } deriving (Show)
 
 initialCandidate = Candidate Map.empty Set.empty Set.empty "0"
@@ -499,18 +503,38 @@ instance Ord Candidate where
                validConstraints c1 <= validConstraints c2 &&
                invalidConstraints c1 <= invalidConstraints c2
 
+---------------------------------------
+---------------------------------------
+-- Utilities and potential-related code
+---------------------------------------
+---------------------------------------
 
------------------------
--- Utilities
------------------------
+-- Potential annotations are either bottom (infinity) or a logical formula
+data Potential = Infty | Fml !Formula 
+  deriving (Eq, Ord, Show)
 
--- Empty datatype constructors should have "infinite" potential 
---   and multiplicity to be a subtype of everything
--- For now, we just use a pretty big number
--- TODO: this will no longer work once we are correctly solving 
---   exists-forall constraints!
-bottomPotential = IntLit 10000
-bottomMultiplicity = IntLit 10000
+pzero = Fml (IntLit 0)
+pone  = Fml (IntLit 1)
+
+pFormula (Fml f) = f
+
+intFml x = Fml (IntLit x)
+
+-- Generalized infinity-preserving unary formula operations
+-- Only preserves infinity if the result of (fn infty) should be infty
+liftFmlOp :: (Formula -> Formula) -> Potential -> Potential
+liftFmlOp fn Infty   = Infty
+liftFmlOp fn (Fml f) = Fml $ fn f
+
+-- Same, but for binary operations
+-- Only preserves infinity if the result of (fn infty x) = infty for all x
+--   For example, lifting min won't work
+liftFmlBOp :: (Formula -> Formula -> Formula) -> Potential -> Potential -> Potential
+liftFmlBOp fn p q = 
+  case (p, q) of 
+    (Infty, _)     -> Infty 
+    (_, Infty)     -> Infty
+    (Fml f, Fml g) -> Fml $ f `fn` g
 
 isTrivial :: Formula -> Bool
 isTrivial (BoolLit True)    = True 
@@ -518,7 +542,6 @@ isTrivial (Binary Eq f1 f2) = f1 == f2
 isTrivial (Binary Ge (IntLit x) (IntLit 0)) = x >= 0
 isTrivial (Binary Implies f g) = f == ffalse || g == ftrue
 isTrivial _                 = False 
-
 
 isUnknownForm :: Formula -> Bool
 isUnknownForm (Unknown _ _) = True
@@ -540,6 +563,9 @@ simpleMultiply f g =
 
 isZero (IntLit 0) = True 
 isZero _          = False
+
+sumPotentials = liftFmlBOp addFormulas
+multiplyPotentials = liftFmlBOp multiplyFormulas
 
 multiplyFormulas = simpleFormulaBOp simpleMultiply isMultiplicativeId
 addFormulas = simpleFormulaBOp (|+|) isAdditiveId

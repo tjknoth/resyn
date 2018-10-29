@@ -10,7 +10,6 @@ import Synquid.Pretty
 import Synquid.Util
 import Synquid.Error
 
-import qualified Data.Map as Map
 import Data.Map (Map)
 import qualified Data.Set as Set
 import Data.Set (Set)
@@ -18,15 +17,34 @@ import Control.Lens
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Trans.Except
-import Z3.Monad (AST)
+import Z3.Monad (Model)
+
+
+-- | Wrapper for Z3 Model data structure
+type SMTModel = (Model, String)
+
+-- Interpretation of a measure in a Z3 model
+data Z3Measure = Z3Measure {
+  _measureName :: String,
+  _measureDef :: MeasureDef,
+  _entries :: Map [Formula] Formula,
+  _defaultVal :: Formula
+} deriving (Show, Eq)
+
+makeLenses ''Z3Measure
 
 class (Monad s, Applicative s) => MonadSMT s where  
-  initSolver :: Environment -> s ()                                              -- ^ Initialize solver  
-  isSat :: Formula -> s Bool                                                     -- ^ 'isSat' @fml@: is @fml@ satisfiable?
-  allUnsatCores :: Formula -> Formula -> [Formula] -> s [[Formula]]              -- ^ 'allUnsatCores' @assumption@ @mustHave@ @fmls@: all minimal unsatisfiable subsets of @fmls@ with @mustHave@, which contain @mustHave@, assuming @assumption@
-  solveWithModel :: Formula -> s (Bool, String)                                  -- ^ 'solveWithModel' @fml@: if @fml@ is satisfiable, return a satisfying model
-  solveAndGetAssignment :: Formula -> [String] -> s (Maybe (Map String Formula)) -- ^ 'solveAndGetAssignment' @fml v@ : if @fml@ is satisfiable, return the assignment for variable @v@ (and the string form of the AST node for debugging)
+  initSolver :: Environment -> s ()                                                  -- ^ Initialize solver  
+  isSat :: Formula -> s Bool                                                         -- ^ 'isSat' @fml@: is @fml@ satisfiable?
+  allUnsatCores :: Formula -> Formula -> [Formula] -> s [[Formula]]                  -- ^ 'allUnsatCores' @assumption@ @mustHave@ @fmls@: all minimal unsatisfiable subsets of @fmls@ with @mustHave@, which contain @mustHave@, assuming @assumption@
 
+class (Monad s, Applicative s) => RMonad s where
+  solveAndGetModel :: Formula -> s (Maybe SMTModel)                                  -- ^ 'solveAndGetModel' @fml@: Evaluate @fml@ and, if satisfiable, return the model object
+  solveAndGetAssignment :: Formula -> [String] -> s (Maybe (Map String Formula))     -- ^ 'solveAndGetAssignment' @fml@ @vars@: If @fml@ is satsiable, return the assignments of variables @vars@
+  modelGetAssignment :: [String] -> SMTModel -> s (Maybe (Map String Formula))       -- ^ 'modelGetAssignment' @vals@ @m@: Get assignments of all variables @vals@ in model @m@
+  modelGetMeasures :: [(String, MeasureDef)] -> SMTModel -> s (Map String Z3Measure) -- ^ 'modelGetMeasures' @ms model@: Get interpretations of all measures @ms@ given @model@
+  evalInModel :: [Formula] -> SMTModel -> Z3Measure -> s Formula
+  
 
 class (Monad s, Applicative s) => MonadHorn s where
   initHornSolver :: Environment -> s Candidate                                                -- ^ Initial candidate solution
@@ -46,10 +64,22 @@ data TypingParams = TypingParams {
   _checkResourceBounds :: Bool,                                     -- ^ Is resource checking enabled
   _checkMultiplicities :: Bool,                                     -- ^ Should multiplicities be considered when generating resource constraints
   _instantiateUnivs :: Bool,                                        -- ^ When solving exists-forall constraints, instantiate universally quantified expressions
-  _constantRes :: Bool                                              -- ^ Check constant-timedness or not
+  _constantRes :: Bool,                                             -- ^ Check constant-timedness or not
+  _cegisMax :: Int                                                  -- ^ Maximum number of iterations through the CEGIS loop
 }
 
 makeLenses ''TypingParams
+
+-- | Command line arguments relevant to resource analysis
+data ResourceArgs = ResourceArgs {
+  _checkRes :: Bool,
+  _checkMults :: Bool,
+  _instantiateForall :: Bool,
+  _constantTime :: Bool,
+  _cegisBound :: Int 
+} 
+
+makeLenses ''ResourceArgs
 
 -- Store either the generated formulas or the entire constraint (if the resource bounds include universal quantifiers)
 type RConstraint = Either TaggedConstraint Constraint
@@ -67,6 +97,7 @@ data TypingState = TypingState {
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
   _resourceConstraints :: [RConstraint],        -- ^ Constraints relevant to resource analysis
   _resourceVars :: Set String,                  -- ^ Set of variables created to replace potential/multiplicity annotations
+  _resourceMeasures :: Map String MeasureDef,   -- ^ List of measure definitions used in resource annotations
   -- Temporary state:
   _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
   _hornClauses :: [Formula],                    -- ^ Horn clauses generated from subtyping constraints
@@ -84,28 +115,6 @@ type TCSolver s = StateT TypingState (ReaderT TypingParams (ExceptT ErrorMessage
 runTCSolver :: TypingParams -> TypingState -> TCSolver s a -> s (Either ErrorMessage (a, TypingState))
 runTCSolver params st go = runExceptT $ runReaderT (runStateT go st) params
 
--- | Initial typing state in the initial environment @env@
-initTypingState :: MonadHorn s => Environment -> Set Formula -> s TypingState
-initTypingState env univs = do
-  let mUnivs = if null univs then Nothing else Just univs
-  initCand <- initHornSolver env
-  return TypingState {
-    _typingConstraints = [],
-    _typeAssignment = Map.empty,
-    _predAssignment = Map.empty,
-    _qualifierMap = Map.empty,
-    _candidates = [initCand],
-    _initEnv = env,
-    _idCount = Map.empty,
-    _isFinal = False,
-    _resourceConstraints = [],
-    _simpleConstraints = [],
-    _hornClauses = [],
-    _consistencyChecks = [],
-    _errorContext = (noPos, empty),
-    _resourceVars = Set.empty,
-    _universalFmls = mUnivs 
-  }
 
 instance Eq TypingState where
   (==) st1 st2 = (restrictDomain (Set.fromList ["a", "u"]) (_idCount st1) == restrictDomain (Set.fromList ["a", "u"]) (_idCount st2)) &&

@@ -1,5 +1,8 @@
 -- | Top-level synthesizer interface
-module Synquid.Synthesizer (synthesize, SynthPhase(..)) where
+module Synquid.Synthesis.Synthesizer (
+  synthesize, 
+  SynthPhase(..)
+) where
 
 import Synquid.Util
 import Synquid.Logic
@@ -7,8 +10,8 @@ import Synquid.Type
 import Synquid.Program
 import Synquid.Z3
 import Synquid.Resolver
-import Synquid.Explorer
-import Synquid.TypeChecker
+import Synquid.Synthesis.TypeChecker
+import Synquid.Synthesis.Util
 import Synquid.Stats
 import Synquid.Solver.Monad
 import Synquid.Solver.HornClause
@@ -33,6 +36,7 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
     -- | Stream of programs that satisfy the specification or type error
     reconstruction :: HornSolver (Either ErrorMessage [(RProgram, TypingState)], TimeStats)
     reconstruction = let
+        rArgs = _resourceArgs explorerParams
         typingParams = TypingParams {
                         _condQualsGen = condQuals,
                         _matchQualsGen = matchQuals,
@@ -40,10 +44,11 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _predQualsGen = predQuals,
                         _tcSolverSplitMeasures = _splitMeasures explorerParams,
                         _tcSolverLogLevel = _explorerLogLevel explorerParams,
-                        _checkResourceBounds = _checkResources explorerParams,
-                        _checkMultiplicities = _useMultiplicity explorerParams,
-                        _instantiateUnivs = _instantiateForall explorerParams,
-                        _constantRes = _constantTime explorerParams
+                        _checkResourceBounds = _checkRes rArgs,
+                        _checkMultiplicities = _checkMults rArgs,
+                        _instantiateUnivs = _instantiateForall rArgs,
+                        _constantRes = _constantTime rArgs,
+                        _cegisMax = _cegisBound rArgs
                       }
       in do cp0 <- lift $ lift startTiming  -- TODO time stats for this one as well?
             res <- reconstruct explorerParams typingParams goal

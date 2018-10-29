@@ -48,6 +48,19 @@ class Benchmark:
     def str(self):
         return self.name + ': ' + self.description + ' ' + str(self.options)
 
+# Micro benchmark
+class MBenchmark:
+    def __init__(self, name, description, feature, components='', options=[], np = '-'):
+        self.name = name                # Id
+        self.description = description  # Description (in the table)
+        self.feature = feature          # Relevant ReSyn feature
+        self.components = components    # Description of components used (in the table)
+        self.options = options          # Command-line options to use for this benchmark when running in individual context
+        self.num_programs = np          # Number of programs generated in the enumerate-and-check process
+
+    def str(self):
+        return self.name + ': ' + self.description + ' ' + str(self.options)
+
 class BenchmarkGroup:
     def __init__(self, name, default_options, benchmarks):
         self.name = name                        # Id
@@ -55,8 +68,13 @@ class BenchmarkGroup:
         self.benchmarks = benchmarks            # List of benchmarks in this group
 
 MICRO_BENCHMARKS = [
-    Benchmark('List-Insert', 'Annotated with uninterpreted functions', '$<$'),
-    Benchmark('List-CompareCT', 'Constant-time length comparison', 'true, false, &&'),
+    MBenchmark('List-Insert', 'insert', 'Overapproximate bound', '$<$'),
+    MBenchmark('List-Insert-Fine', 'insert', 'Annotated with uninterpreted functions', '$<$'),
+    MBenchmark('List-InsertCT', 'insert', 'Constant-time', '$<$', ['--ct']),
+    MBenchmark('List-LenCompareCT', 'length comparison', '', 'true, false, and', ['-f=AllArguments', '-a=2', '--ct']),
+    MBenchmark('List-LenCompare', 'length comparison', 'Constant-time', 'true, false, and', ['f=AllArguments', '-a=2']),
+    MBenchmark('List-Replicate', 'replicate', 'Program variables in annotations', 'zero, inc, dec'),
+    MBenchmark('List-Append3', 'append 3 lists', 'Compositional bounds'),
 ]
 
 ALL_BENCHMARKS = [
@@ -76,7 +94,7 @@ ALL_BENCHMARKS = [
         Benchmark('List-Snoc', 'insert at end'),
         Benchmark('List-Reverse', 'reverse', 'insert at end'),
         #Benchmark('IncList-Insert', 'insert (sorted)', '$\\leq$, $\\neq$'),
-        Benchmark('List-Intersect', 'intersection', '$<$, member', ['--cut-branches=false', '-f=AllArguments', '-a=2']),
+        Benchmark('List-Intersect', 'intersection', '$<$, member', ['--backtrack', '-f=AllArguments', '-a=2']),
         Benchmark('List-ExtractMin', 'extract minimum', '$\\leq$, $\\neq$', ['-a=2', '-m 3']),
         # Try it by hand!
         #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member', ['-f=AllArguments', '-m=3'])
@@ -88,18 +106,21 @@ ALL_BENCHMARKS = [
         Benchmark('List-Compress', 'remove adjacent dupl.', '$=$, $\\neq$', np = 3),
         Benchmark('UniqueList-Range', 'integer range', '0, inc, dec, $\\leq$, $\\neq$'),
         Benchmark('List-Partition', 'partition', '$\\leq$'),
-        Benchmark('IncList-Pivot', 'append with pivot'),
+        #Benchmark('IncList-Pivot', 'append with pivot'),
         ]),
     BenchmarkGroup("Sorted list", ['-f=AllArguments'], [
         Benchmark('StrictIncList-Insert', 'insert', '$<$'),
         Benchmark('StrictIncList-Delete', 'delete', '$<$'),
-        Benchmark('List-Diff', 'difference', 'member, $<$', ['--cut-branches=false', '-f=AllArguments', '-a=2']),
-        #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member',['-f=AllArguments','--cut-branches=false','-m=3'])
-        #Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments', '--cut-branches=false']),
+        Benchmark('List-Diff', 'difference', 'member, $<$', ['--backtrack', '-f=AllArguments', '-a=2']),
+        #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member',['-f=AllArguments','--backtrack','-m=3'])
+        #Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments', '--backtrack']),
         ]),
     BenchmarkGroup("Tree",  [], [
         Benchmark('Tree-Count', 'node count', '0, 1, +'),
         Benchmark('Tree-Flatten', 'preorder', 'append'),
+        Benchmark('Tree-ToList', 'to list'),
+        Benchmark('Tree-Elem', 'member', '', ['--multiplicities=false'] ),
+        Benchmark('Tree-Count', 'size')
         ]),
     BenchmarkGroup("BST", [], [
         Benchmark('BST-Member', 'member', 'true, false, $\\leq$, $\\neq$'),
@@ -109,6 +130,7 @@ ALL_BENCHMARKS = [
         ]),
     BenchmarkGroup("Binary Heap", [], [
         Benchmark('BinHeap-Insert', 'insert', '$\\leq$, $\\neq$'),
+        Benchmark('BinHeap-Member', 'member', '', ['--multiplicities=false']),
         Benchmark('BinHeap-Singleton', '1-element constructor', '$\\leq$, $\\neq$'),
         Benchmark('BinHeap-Doubleton', '2-element constructor', '$\\leq$, $\\neq$'),
         Benchmark('BinHeap-Tripleton', '3-element constructor', '$\\leq$, $\\neq$')
@@ -216,8 +238,6 @@ def run_version(name, variant_id, variant_opts, logfile, with_res, results_file)
     synthesis_res = run(TIMEOUT_CMD + TIMEOUT + SYNQUID_CMD + COMMON_OPTS +
         variant_opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
     end = time.time()
-    lastLines = synthesis_res.stdout.split('\n')[-6:]
-    solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)   
 
     print('{0:0.2f}'.format(end - start), end = ' ')
     if synthesis_res.returncode == 124:  # Timeout: record timeout
@@ -227,6 +247,8 @@ def run_version(name, variant_id, variant_opts, logfile, with_res, results_file)
       print(Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL, end = ' ')
       results_file[name].nres_time = -2
     else: # Synthesis succeeded: record time for variant
+      lastLines = synthesis_res.stdout.split('\n')[-6:]
+      solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)   
       results_file[name].nres_time = (end - start)
       without_res = synthesis_res.stdout.split('\n')[:-6]
       # Compare outputs to see if resources led to any optimization
@@ -249,20 +271,19 @@ def format_time(t):
 def write_micro_csv():
     '''Generate CSV file for micro benchmark'''
     with open(MICRO_CSV_FILE, 'w') as outfile:
-        for group in groups:
-            for b in group.benchmarks:
-                outfile.write (b.name + ',')
-                result = micro_results [b.name]
-                optstr = 'True' if result.optimized else '-'
-                outfile.write (result.spec_size + ',')
-                outfile.write (result.code_size + ',')
-                outfile.write (format_time(result.time) + ',')
-                outfile.write (format_time(result.nres_time) + ',')
-                outfile.write (result.nres_code_size + ',')
-                outfile.write (str(b.num_programs) + ',')
-                outfile.write (result.eac_time + ',')
-                #outfile.write (optstr + ',')
-                outfile.write ('\n')
+        for b in MICRO_BENCHMARKS:
+            outfile.write (b.name + ',')
+            result = micro_results [b.name]
+            optstr = 'True' if result.optimized else '-'
+            outfile.write (result.spec_size + ',')
+            outfile.write (result.code_size + ',')
+            outfile.write (format_time(result.time) + ',')
+            outfile.write (format_time(result.nres_time) + ',')
+            outfile.write (result.nres_code_size + ',')
+            outfile.write (str(b.num_programs) + ',')
+            outfile.write (result.eac_time + ',')
+            #outfile.write (optstr + ',')
+            outfile.write ('\n')
 
 def write_csv():
     '''Generate CSV file from the results dictionary'''
@@ -290,36 +311,29 @@ def write_micro_latex():
     to_nres = 0
 
     with open(MICRO_LATEX_FILE, 'w') as outfile:
-        for group in groups:
-            outfile.write ('\multirow{')
-            outfile.write (str(group.benchmarks.__len__()))
-            outfile.write ('}{*}{\\parbox{1cm}{\\vspace{-0.85\\baselineskip}\center{')
-            outfile.write (group.name)
-            outfile.write ('}}}')            
-
-            for b in group.benchmarks:
-                result = micro_results [b.name]                
-                optstr = 'Yes' if result.optimized else '-'
-                row = \
-                    ' & ' + b.description +\
-                    ' & ' + result.goal_count +\
-                    ' & ' + b.components + \
-                    ' & ' + result.measure_count + \
-                    ' & ' + result.code_size + \
-                    ' & ' + format_time(result.time) + \
-                    ' & ' + format_time(result.nres_time) + \
-                    ' & ' + result.nres_code_size + \
-                    ' & ' + str(b.num_programs) + \
-                    ' & ' + str(result.eac_time) + ' \\\\'
-                    #' & ' + optstr + ' \\\\'
-                outfile.write (row)
-                outfile.write ('\n')
+        for b in MICRO_BENCHMARKS:
+            result = micro_results [b.name]                
+            optstr = 'Yes' if result.optimized else '-'
+            row = \
+                b.description +\
+                ' & ' + b.feature +\
+                ' & ' + result.goal_count +\
+                ' & ' + b.components + \
+                ' & ' + result.measure_count + \
+                ' & ' + result.code_size + \
+                ' & ' + format_time(result.time) + \
+                ' & ' + format_time(result.nres_time) + \
+                ' & ' + result.nres_code_size + ' \\\\'
+                #' & ' + str(b.num_programs) + \
+                #' & ' + str(result.eac_time) + ' \\\\'
+                #' & ' + optstr + ' \\\\'
+            outfile.write (row)
+            outfile.write ('\n')
+            
+            total_count = total_count + 1
+            if result.nres_time < 0.0:
+                to_nres = to_nres + 1 
                 
-                total_count = total_count + 1
-                if result.nres_time < 0.0:
-                   to_nres = to_nres + 1 
-                
-            outfile.write ('\\hline')
             
     print('Total:', total_count)
     print('TO nres:', to_nres)

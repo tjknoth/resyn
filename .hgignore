@@ -36,5 +36,9 @@ examples.*
 *.prof
 *.aux
 *.ps
+*.md
+*.orig
 experiments/*
-scratch.md
+*.pdf
+micro
+results

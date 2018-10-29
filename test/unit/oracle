@@ -27,7 +27,7 @@ clientBad :: xs:{List {Int||0}||0} -> ys:{List {Nat||0}||0} -> {List {Int|_v == 
   \xs . \ys . filterLE1 0 xs ??
 
 ./Instantiation.sq:12: Resolution Error:
-  Constructor Zero must return type {Natural {1**n||0}||0}, got {Natural {Z||0}||0}
+  Constructor Zero must return type {Natural {1**n||0}||0}, got {Natural {Z||INFTY}||INFTY}
 
 ./Measure.sq:6: Error:
   Cannot find sufficiently strong refinements

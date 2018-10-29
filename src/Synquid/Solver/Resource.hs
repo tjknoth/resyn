@@ -4,7 +4,10 @@
 module Synquid.Solver.Resource (
   checkResources,
   allUniversals,
-  testCEGIS
+  allRFormulas,
+  allRMeasures,
+  testCEGIS,
+  shareEnv
 ) where
 
 import Synquid.Logic 
@@ -12,56 +15,57 @@ import Synquid.Type hiding (set)
 import Synquid.Program
 import Synquid.Solver.Monad
 import Synquid.Pretty
-import Synquid.Error
-import Synquid.Solver.Util
+import Synquid.Solver.Util hiding (writeLog)
+import Synquid.Solver.CEGIS 
 
 import Data.Maybe
-import Data.List hiding (partition)
 import qualified Data.Set as Set 
 import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Control.Monad.Logic
-import Control.Monad.State
-import Control.Monad.Trans.Except
 import Control.Monad.Reader
 import Control.Lens
 import Debug.Trace
 
+-- Read current type under consideration
+type RSolver s = ReaderT RType (TCSolver s) 
+
 {- Implementation -}
 
 -- | Check resource bounds: attempt to find satisfying expressions for multiplicity and potential annotations 
-checkResources :: (MonadHorn s, MonadSMT s) => [Constraint] -> TCSolver s ()
-checkResources [] = return ()
-checkResources constraints = do 
-  tcParams <- ask 
-  tcState <- get 
+checkResources :: (MonadHorn s, MonadSMT s, RMonad s) 
+               => RType 
+               -> [Constraint] 
+               -> TCSolver s ()
+checkResources _ [] = return ()
+checkResources typ constraints = do 
   oldConstraints <- use resourceConstraints 
-  newC <- solveResourceConstraints oldConstraints (filter isResourceConstraint constraints)
+  tparams <- ask 
+  let solve = solveResourceConstraints oldConstraints (filter isResourceConstraint constraints)
+  newC <- runReaderT solve typ
   case newC of 
     Nothing -> throwError $ text "Insufficient resources"
     Just f  -> resourceConstraints %= (++ f) 
 
 -- | 'solveResourceConstraints' @oldConstraints constraints@ : Transform @constraints@ into logical constraints and attempt to solve the complete system by conjoining with @oldConstraints@
-solveResourceConstraints :: MonadSMT s => [RConstraint] -> [Constraint] -> TCSolver s (Maybe [RConstraint]) 
+solveResourceConstraints :: RMonad s => [RConstraint] -> [Constraint] -> RSolver s (Maybe [RConstraint]) 
 solveResourceConstraints oldConstraints constraints = do
     writeLog 3 $ linebreak <+> text "Generating resource constraints:"
-    checkMults <- asks _checkMultiplicities
-    containsUnivs <- isNothing <$> use universalFmls 
+    checkMults <- lift $ asks _checkMultiplicities
     -- Need environment to determine which annotation formulas are universally quantified
     let tempEnv = case constraints of
           [] -> emptyEnv 
           cs -> envFrom $ head cs
-    let allRForms = concatMap (concatMap (allRFormulas checkMults) . typesFrom) constraints
     -- Check for new universally quantified expressions
-    universals <- updateUniversals tempEnv $ conjunction $ concatMap (concatMap (allRFormulas checkMults) . typesFrom) constraints
+    universals <- fromMaybe Set.empty <$> use universalFmls
     -- Generate numerical resource-usage formulas from typing constraints:
-    constraintList <- mapM (generateFormula True checkMults universals . Right) constraints
-    accFmls <- mapM (generateFormula False checkMults universals) oldConstraints
+    constraintList <- mapM (generateFormula True universals . Right) constraints
+    accFmls <- mapM (generateFormula False universals) oldConstraints
+    universals' <- updateUniversals tempEnv $ conjunction (map constraint constraintList) 
     let query = assembleQuery accFmls constraintList 
     -- Check satisfiability
-    b <- satisfyResources (Set.toList universals) query
-    --b <- fst <$> isSatWithModel query
+    b <- satisfyResources (Set.toList universals') query
     let result = if b then "SAT" else "UNSAT"
     writeLog 5 $ nest 4 $ text "Accumulated resource constraints:" 
       $+$ prettyConjuncts (filter (isInteresting . constraint) accFmls)
@@ -69,7 +73,7 @@ solveResourceConstraints oldConstraints constraints = do
       <+> text result $+$ prettyConjuncts (filter (isInteresting . constraint) constraintList)
     if b 
       then 
-        return $ Just $ if containsUnivs 
+        return $ Just $ if null universals
           -- Store raw constraints
           then map Right constraints
           -- Otherwise, store TaggedConstraints with the appropriate formulas
@@ -89,37 +93,63 @@ isTrivialTC (TaggedConstraint _ f) = isTrivial f
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 --    If there are no universal quantifiers, we can cache the generated formulas (the Left case)
 --    Otherwise, we must re-generate every time
-generateFormula :: MonadSMT s => Bool -> Bool -> Set Formula -> RConstraint -> TCSolver s TaggedConstraint
-generateFormula _ _ _ (Left tc) = return tc
-generateFormula shouldLog checkMults univs (Right c) = generateFormula' shouldLog checkMults univs c
+generateFormula :: RMonad s => Bool -> Set Formula -> RConstraint -> RSolver s TaggedConstraint
+generateFormula _ _ (Left tc)                      = return tc
+generateFormula shouldLog univs (Right c) = do 
+  currentType <- ask
+  checkMults <- lift $ asks _checkMultiplicities
+  if isScalarType currentType
+    -- Scalar type: potential name clashes with _v, rename instances
+    then do 
+      let valueVarSort = toSort $ baseTypeOf currentType
+      (TaggedConstraint x fml) <- generateFormula' shouldLog checkMults univs c
+      TaggedConstraint x <$> lift (freshValueVars fml valueVarSort)
+    -- Function type: proceed as usual
+    else generateFormula' shouldLog checkMults univs c
 
-generateFormula' :: MonadSMT s => Bool -> Bool -> Set Formula -> Constraint -> TCSolver s TaggedConstraint 
-generateFormula' shouldLog checkMults univs c@(Subtype env syms tl tr variant label) = do
-  tass <- use typeAssignment
-  let fmls = conjunction $ filter (not . isTrivial) $ case variant of 
-        Nondeterministic -> assertSubtypes env syms tass checkMults tl tr
-        _                -> directSubtypes checkMults tl tr
-  let relevantFml = conjunction $ univs `Set.union` allFormulasOf checkMults tl `Set.union` allFormulasOf checkMults tr
-  TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls relevantFml (Set.insert (refinementOf tl))
-generateFormula' shouldLog checkMults univs c@(WellFormed env t label) = do
-  let fmls = conjunction $ filter (not . isTrivial) $ map (|>=| fzero) $ allRFormulas checkMults t
-  let relevantFml = conjunction $ univs `Set.union` allFormulasOf checkMults t
-  TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls relevantFml (Set.insert (refinementOf t))
-generateFormula' shouldLog checkMults univs c@(SharedType env t tl tr label) = do 
-  let fmls = conjunction $ partition checkMults t tl tr
-  let relevantFml = conjunction $ univs `Set.union` allFormulasOf checkMults t 
-  TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls relevantFml id
-generateFormula' shouldLog checkMults univs c@(ConstantRes env label) = do 
-  tass <- use typeAssignment
-  let fml = assertZeroPotential checkMults tass env
-  let relevantFml = conjunction univs 
-  TaggedConstraint ("CT: " ++ label) <$> embedAndProcessConstraint shouldLog env c fml relevantFml id 
-generateFormula' _ _ _ c = error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
+generateFormula' :: RMonad s 
+                 => Bool 
+                 -> Bool 
+                 -> Set Formula 
+                 -> Constraint 
+                 -> RSolver s TaggedConstraint 
+generateFormula' shouldLog checkMults univs c = 
+  case c of 
+    (Subtype env fp tl tr variant label) -> do
+      tass <- use typeAssignment
+      let fmls = assemble $ case variant of 
+            Nondeterministic -> assertSubtypes env fp tass checkMults tl tr
+            _                -> directSubtypes checkMults tl tr
+      let relevantFml = conjunction $ univs `Set.union` allFormulasOf checkMults tl `Set.union` allFormulasOf checkMults tr
+      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls relevantFml (Set.insert (refinementOf tl))
+    (WellFormed env t label) -> do
+      let fmls = assemble $ map (|>=| fzero)  $ allRFormulas checkMults t
+      let relevantFml = conjunction $ univs `Set.union` allFormulasOf checkMults t
+      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls relevantFml (Set.insert (refinementOf t))
+    (SharedEnv env syms' syms'' label) -> do 
+      let fmls = assemble $ shareEnv checkMults (_symbols env) syms' syms''
+      let relevantFml = conjunction univs -- TODO: need more stuff here?
+      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls relevantFml id
+    (ConstantRes env label) -> do 
+      tass <- use typeAssignment
+      let fml = assertZeroPotential checkMults tass env
+      let relevantFml = conjunction univs 
+      TaggedConstraint ("CT: " ++ label) <$> embedAndProcessConstraint shouldLog env c fml relevantFml id 
+    _ -> error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
+  where 
+    assemble fs = conjunction $ filter (not . isTrivial) fs
 
 -- | Embed the environment assumptions and preproess the constraint for solving 
-embedAndProcessConstraint :: MonadSMT s => Bool -> Environment -> Constraint -> Formula -> Formula -> (Set Formula -> Set Formula) -> TCSolver s Formula
+embedAndProcessConstraint :: RMonad s 
+                          => Bool 
+                          -> Environment 
+                          -> Constraint 
+                          -> Formula 
+                          -> Formula 
+                          -> (Set Formula -> Set Formula) 
+                          -> RSolver s Formula
 embedAndProcessConstraint shouldLog env c fmls relevantFml addTo = do 
-  emb <- embedEnv env relevantFml True
+  emb <- lift $ embedSynthesisEnv env relevantFml True
   -- Check if embedding is singleton { false }
   let isFSingleton s = (Set.size s == 1) && (Set.findMin s == ffalse)
   if isFSingleton emb  
@@ -127,7 +157,7 @@ embedAndProcessConstraint shouldLog env c fmls relevantFml addTo = do
     else do 
       -- As well as preprocessing to assume all unknowns, remove anything containing a datatype
       --  this is only temporary to develop CEGIS for numeric variables first. 
-      let emb' = conjunction $ removeDTs (Map.keys (_measures env)) $ preprocessAssumptions $ addTo emb
+      let emb' = conjunction $ removeDTs (Map.keys (env^.measureDefs)) $ preprocessAssumptions $ addTo emb
       needsEmb <- isJust <$> use universalFmls
       -- Only include implication if its nontrivial and there are no universally quantified expressions
       let finalFml = if (emb' == ftrue) || not needsEmb then fmls else emb' |=>| fmls
@@ -136,52 +166,51 @@ embedAndProcessConstraint shouldLog env c fmls relevantFml addTo = do
 
 -- | Check the satisfiability of the generated resource constraints, instantiating universally 
 --     quantified expressions as necessary.
-satisfyResources :: MonadSMT s => [Formula] -> Formula -> TCSolver s Bool
+satisfyResources :: RMonad s => [Formula] -> Formula -> RSolver s Bool
 satisfyResources universals fml = do 
-  shouldInstantiate <- asks _instantiateUnivs 
+  shouldInstantiate <- lift $ asks _instantiateUnivs
   if null universals || not shouldInstantiate
     then do 
-      (b, s) <- isSatWithModel fml
-      writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text s)
-      return b
+      model <- lift $ isSatWithModel fml
+      case model of 
+        Nothing -> return False
+        Just m' -> do 
+          writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (snd m'))
+          return True 
     else do
-      -- TODO: make this bit principled
-      let maxIterations = length universals + 5 -- TODO: what about branching expressions?
+      maxIterations <- lift $ asks _cegisMax
       rVars <- Set.toList <$> use resourceVars
-      -- Generate list of polynomial coefficients, 1 for each universally quantified expression and a constant term
-      let constantTerm s = PolynomialTerm (constPolynomialVar s) Nothing
-      -- Initialize all coefficients to zero (shouldn't matter what value is used)
-      let polynomial s = constantTerm s : map (makePTerm s) universals
       -- Initialize polynomials for each resource variable
-      let allPolynomials = zip rVars (map polynomial rVars)
+      let allPolynomials = zip rVars (map (initializePolynomial universals) rVars)
       -- List of all coefficients in the list of all polynomials
       let allCoefficients = concatMap (coefficientsOf . snd) allPolynomials
       -- Initialize all coefficient values -- the starting value should not matter
-      let initialProgram = Map.fromList $ zip allCoefficients (repeat (IntLit 0))
+      let initialProgram = Map.fromList $ zip allCoefficients initialCoefficients 
       -- Construct list of universally quantified expressions, storing the formula with a string representation
-      let universalsWithVars = map Universal $ zip (map universalToString universals) universals
+      let universalsWithVars = formatUniversals universals 
+      uMeasures <- Map.assocs <$> use resourceMeasures
       writeLog 3 $ text "Solving resource constraint with CEGIS:" 
       writeLog 5 $ pretty fml
-      writeLog 3 $ text "Over universally quantified expressions:" <+> pretty (map universalFml universalsWithVars)
-      solveWithCEGIS maxIterations fml universalsWithVars [] (Map.fromList allPolynomials) initialProgram 
+      writeLog 3 $ text "Over universally quantified expressions:" <+> pretty (show (map universalFml universalsWithVars))
+      lift $ solveWithCEGIS maxIterations fml universalsWithVars uMeasures [] (Map.fromList allPolynomials) initialProgram 
 
 -- CEGIS test harness
-testCEGIS :: MonadSMT s => Formula -> TCSolver s Bool
+-- If this is going to work with measures, need a way to parse measures, etc
+--   or just manually instantiate cons axioms
+testCEGIS :: RMonad s => Formula -> RSolver s Bool
 testCEGIS fml = do 
   let fml' = adjustSorts fml
   let universals = map (Var IntS) ["n", "x11"]
   let rVars = ["p0", "p1"]
   -- max number of iterations through the CEGIS loop
   let maxIterations = length universals + 10
-  let constantTerm s = PolynomialTerm (constPolynomialVar s) Nothing
-  let polynomial s = constantTerm s : map (makePTerm s) universals
-  let allPolynomials = zip rVars (map polynomial rVars)
+  let allPolynomials = zip rVars (map (initializePolynomial universals) rVars)
   let allCoefficients = concatMap (coefficientsOf . snd) allPolynomials
-  let initialProgram = Map.fromList $ zip allCoefficients (repeat (IntLit 0))
-  let universalsWithVars = map Universal $ zip (map universalToString universals) universals
+  let initialProgram = Map.fromList $ zip allCoefficients initialCoefficients 
+  let universalsWithVars = formatUniversals universals 
   writeLog 3 $ linebreak </> text "Solving resource constraint with CEGIS:" <+> pretty fml' 
     <+> text "Over universally quantified expressions:" <+> pretty (map universalFml universalsWithVars)
-  solveWithCEGIS maxIterations fml' universalsWithVars [] (Map.fromList allPolynomials) initialProgram
+  lift $ solveWithCEGIS maxIterations fml' universalsWithVars [] [] (Map.fromList allPolynomials) initialProgram
 
 
 adjustSorts (BoolLit b) = BoolLit b
@@ -190,164 +219,61 @@ adjustSorts (Var _ x) = Var IntS x
 adjustSorts (Binary op f g) = Binary op (adjustSorts f) (adjustSorts g)
 adjustSorts (Unary op f) = Unary op (adjustSorts f)
 
-{- Data structures for CEGIS solver -}
+allRMeasures sch = allRMeasures' (typeFromSchema sch) 
 
-newtype Universal = Universal (String, Formula)
-  deriving (Eq, Show, Ord)
-
-data PolynomialTerm = PolynomialTerm {
-  coefficient :: String,
-  universal :: Maybe Universal 
-} deriving (Eq, Show, Ord)
-
--- Polynomial represented as a list of coefficient-variable pairs (where a Nothing in the coefficient position indicates the constant term)
-type Polynomial = [PolynomialTerm]
-
--- Map from resource variable name to its corresponding polynomial
-type PolynomialSkeletons = Map String Polynomial
--- Map from resource variable name to its corresponding polynomial (as a formula)
-type RPolynomials = Map String Formula
-
--- Map from universally quantified expression (in string form) to its valuation
-type Example = Map String Formula
-
--- Coefficient valuations in a valid program
-type ResourceSolution = Map String Formula
-
--- Set of all counterexamples
-type ExampleSet = [Example]
-
-data QueryType = Counterexample | Param 
-
--- | Solve formula containing universally quantified expressions with counterexample-guided inductive synthesis
-solveWithCEGIS :: MonadSMT s => Int -> Formula -> [Universal] -> ExampleSet -> PolynomialSkeletons -> ResourceSolution -> TCSolver s Bool
-solveWithCEGIS 0 fml universals _ polynomials program = do
-  -- Base case: If there is a counterexample, @fml@ is UNSAT, SAT otherwise
-  counterexample <- getCounterexample fml universals polynomials program 
-  case counterexample of 
-    Nothing -> return True
-    Just cx -> do 
-      writeLog 4 $ text "Last counterexample:" <+> pretty (Map.assocs cx) </> linebreak
-      return False
-
-solveWithCEGIS numIters fml universals examples polynomials program = do
-  counterexample <- getCounterexample fml universals polynomials program 
-  case counterexample of 
-    Nothing -> return True -- No counterexamples exist, polynomials hold on all inputs
-    Just cx ->  
-     do 
-      writeLog 4 $ text "Counterexample:" <+> pretty (Map.assocs cx)
-      -- Update example list
-      let examples' = cx : examples
-      -- For each example, substitute its value for the universally quantified expressions in each polynomial skeleton
-      let paramPolynomials = map (\ex -> fmap (polynomialToFml Param ex) polynomials) examples' 
-      -- For each example, substitute its value for the universally quantified expressions in the actual resource constraint
-      let fmls' = map (`substitute` fml) examples' 
-      -- Assert that any set of params must hold on all examples
-      let paramQuery = conjunction $ zipWith applyPolynomials paramPolynomials fmls'
-      -- Collect all parameters
-      let allCoefficients = concatMap coefficientsOf (Map.elems polynomials)
-      -- Query solver for an assignment to the polynomial coefficients
-      writeLog 7 $ text "CEGIS param query:" </> pretty paramQuery
-      params <- lift . lift . lift $ solveAndGetAssignment paramQuery allCoefficients
-      case params of
-        Nothing -> return False -- No parameters exist, formula is unsatisfiable
-        Just p  -> do 
-          writeLog 6 $ text "Params:" <+> printParams p polynomials
-          solveWithCEGIS (numIters - 1) fml universals examples' polynomials p
-
--- | 'getCounterexample' @fml universals polynomials program@ 
---    Find a valuation for @universals@ such that (not @formula@) holds, under parameter valuation @program@
-getCounterexample :: MonadSMT s => Formula -> [Universal] -> PolynomialSkeletons -> ResourceSolution -> TCSolver s (Maybe (Map String Formula))
-getCounterexample fml universals polynomials program = do 
-  -- Generate polynomials by substituting parameter valuations for coefficients
-  let cxPolynomials = fmap (polynomialToFml Counterexample program) polynomials
-  -- Replace resource variables with appropriate polynomials and negate the resource constraint
-  let cxQuery = fnot $ applyPolynomials cxPolynomials fml 
-  writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
-  -- Query solver for a counterexample
-  lift . lift . lift $ solveAndGetAssignment cxQuery (map universalVar universals)
-    
--- | Convert an abstract polynomial into a formula
-polynomialToFml :: QueryType -> Map String Formula -> Polynomial -> Formula
-polynomialToFml Counterexample coeffMap poly = sumFormulas $ map (pTermForCX coeffMap) poly
-polynomialToFml Param univMap poly           = sumFormulas $ map (pTermForProg univMap) poly
-
--- | Assemble a polynomial term, given a variable prefix and a universally quantified expression
-makePTerm :: String -> Formula -> PolynomialTerm
-makePTerm prefix fml = PolynomialTerm coeff (Just univ)
-  where 
-    coeff  = makePolynomialVar prefix fml
-    univ   = Universal (fmlStr, fml)
-    fmlStr = universalToString fml
-
-universalVar (Universal (name, _)) = name
-universalFml (Universal (_, fml))  = fml
-
-coefficientsOf = map coefficient
-
--- | Convert PolynomialTerm into a formula for use in the counterexample query (ie instantiate the coefficients)
-pTermForCX :: ResourceSolution -> PolynomialTerm -> Formula
-pTermForCX coeffVals (PolynomialTerm coeff Nothing)  = exprValue coeffVals coeff 
-pTermForCX coeffVals (PolynomialTerm coeff (Just u)) = exprValue coeffVals coeff |*| universalFml u 
-
--- | Convert PolynomialTerm into a formula for use in the program query (ie instantiate the universals)
-pTermForProg :: Example -> PolynomialTerm -> Formula
-pTermForProg univVals (PolynomialTerm coeff Nothing)  = Var IntS coeff
-pTermForProg univVals (PolynomialTerm coeff (Just u)) = Var IntS coeff |*| exprValue univVals (universalVar u)
-
--- | Get the value of some expression from a map of valuations (either Example or ResourceSolution)
-exprValue :: Map String Formula -> String -> Formula
-exprValue coeffVals coeff = 
-  case Map.lookup coeff coeffVals of 
-    Nothing -> error $ "exprValue: valuation not found for expression" ++ coeff
-    Just f  -> f
-
--- | Replace resource variables in a formula with the appropriate polynomial
-applyPolynomials :: RPolynomials -> Formula -> Formula
-applyPolynomials poly v@(Var _ name)   = fromMaybe v (Map.lookup name poly)
-applyPolynomials poly (Unary op f)     = Unary op (applyPolynomials poly f)
-applyPolynomials poly (Binary op f g)  = Binary op (applyPolynomials poly f) (applyPolynomials poly g)
-applyPolynomials poly (Ite f g h)      = Ite (applyPolynomials poly f) (applyPolynomials poly g) (applyPolynomials poly h)
-applyPolynomials poly (Pred s name fs) = Pred s name $ map (applyPolynomials poly) fs
-applyPolynomials poly (Cons s name fs) = Cons s name $ map (applyPolynomials poly) fs
-applyPolynomials poly (SetLit s fs)    = SetLit s $ map (applyPolynomials poly) fs
-applyPolynomials _ f@(Unknown _ _)     = error $ show $ text "applyPolynomials: predicate unknown in resource expression:" <+> pretty f
-applyPolynomials _ f@(All _ _)         = error $ show $ text "applyPolynomials: universal quantifier in resource expression:" <+> pretty f
-applyPolynomials _ f                   = f
-
--- | Helper to print the parameters alongside the actual resource polynomial
-printParams :: ResourceSolution -> PolynomialSkeletons -> Doc
-printParams prog polynomials = pretty $ map (\(rvar, poly) -> text rvar <+> operator "=" <+> printPolynomial poly) (Map.assocs polynomials)
-  where 
-    printPolynomial p = pretty $ polynomialToFml Counterexample prog p 
+allRMeasures' :: RType -> Map String MeasureDef -> Map String MeasureDef
+allRMeasures' typ measures = 
+  let rforms = allRFormulas True typ
+      allPreds = Set.unions $ map getAllPreds rforms
+  in  Map.filterWithKey (\x _ -> x `Set.member` allPreds) measures
 
 -- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
 allRFormulas :: Bool -> RType -> [Formula]
 allRFormulas cm (FunctionT _ argT resT _) = allRFormulas cm argT ++ allRFormulas cm resT
-allRFormulas cm (ScalarT base _ p) = p : allRFormulasBase cm base
-allRFormulas _ _                   = [] 
+allRFormulas cm (ScalarT base _ Infty)    = allRFormulasBase cm base
+allRFormulas cm (ScalarT base _ (Fml p))  = p : allRFormulasBase cm base
+allRFormulas _ _                          = [] 
 
 allRFormulasBase :: Bool -> BaseType Formula -> [Formula]
-allRFormulasBase cm (DatatypeT _ ts _) = concatMap (allRFormulas cm) ts
-allRFormulasBase cm (TypeVarT _ _ m)   = [m | cm] 
-allRFormulasBase _ _                   = []
+allRFormulasBase cm (DatatypeT _ ts _)     = concatMap (allRFormulas cm) ts
+allRFormulasBase _  (TypeVarT _ _ Infty)   = []
+allRFormulasBase cm (TypeVarT _ _ (Fml m)) = [m | cm] 
+allRFormulasBase _ _                       = []
+
+-- Generate sharing constraints between a 3-tuple of contexts
+shareEnv :: Bool -> SymbolMap -> SymbolMap -> SymbolMap -> [Formula]
+shareEnv checkMults syms symsl symsr = 
+  let fmlMap = Map.mapWithKey (\arity schs -> partitionAll arity schs symsl symsr) syms
+  in wf ++ concat (Map.elems fmlMap)
+  where 
+    partitionAll n schs symsl symsr = 
+      let schsl = map typeFromSchema $ Map.elems $ symsl Map.! n
+          schsr = map typeFromSchema $ Map.elems $ symsr Map.! n
+          schs' = map typeFromSchema $ Map.elems schs
+      in concat $ zipWith3 (partition checkMults) schs' schsl schsr
+    allRFormsL = concatMap (allRFormulas True . typeFromSchema) (Map.elems (symsl Map.! 0))
+    allRFormsR = concatMap (allRFormulas True . typeFromSchema) (Map.elems (symsr Map.! 0))
+    wf = map (|>=| fzero) (allRFormsL ++ allRFormsR)
 
 -- | 'partition' @t tl tr@ : Generate numerical constraints referring to a partition of the resources associated with @t@ into types @tl@ and @tr@ 
 partition :: Bool -> RType -> RType -> RType -> [Formula]
-partition cm (ScalarT b _ f) (ScalarT bl _ fl) (ScalarT br _ fr) 
+partition cm (ScalarT b _ Infty) (ScalarT bl _ Infty) (ScalarT br _ Infty) 
+  = partitionBase cm b bl br
+partition cm (ScalarT b _ (Fml f)) (ScalarT bl _ (Fml fl)) (ScalarT br _ (Fml fr)) 
   = (f |=| (fl |+| fr)) : partitionBase cm b bl br
 partition _ _ _ _ = [] 
 
 partitionBase :: Bool -> BaseType Formula -> BaseType Formula -> BaseType Formula -> [Formula]
 partitionBase cm (DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _) 
   = concat $ zipWith3 (partition cm) ts tsl tsr
-partitionBase cm (TypeVarT _ _ m) (TypeVarT _ _ ml) (TypeVarT _ _ mr) 
+partitionBase _  (TypeVarT _ _ Infty) (TypeVarT _ _ Infty) (TypeVarT _ _ Infty)
+  = []
+partitionBase cm (TypeVarT _ _ (Fml m)) (TypeVarT _ _ (Fml ml)) (TypeVarT _ _ (Fml mr)) 
   = [m |=| (ml |+| mr) | cm] 
 partitionBase _ _ _ _ = [] 
 
 assertZeroPotential :: Bool -> TypeSubstitution -> Environment -> Formula
-assertZeroPotential cm tass env = sumFormulas (fmap (totalPotential cm) scalars) |=| fzero
+assertZeroPotential cm tass env = sumFormulas (fmap totalTopLevelPotential scalars) |=| fzero
   where 
     scalars = fmap (typeSubstitute tass . typeFromSchema) rawScalars
     rawScalars = Map.filterWithKey notEmptyCtor (symbolsOfArity 0 env) 
@@ -355,83 +281,88 @@ assertZeroPotential cm tass env = sumFormulas (fmap (totalPotential cm) scalars)
 
 -- | 'assertSubtypes' @env tl tr@ : Generate formulas partitioning potential appropriately amongst
 --    environment @env@ in order to check @tl@ <: @tr@
-assertSubtypes :: Environment -> SymbolMap -> TypeSubstitution -> Bool -> RType -> RType -> [Formula]
-assertSubtypes env syms tass cm (ScalarT bl _ fl) (ScalarT br _ fr) = 
-  subtypeAssertions ++ wellFormedAssertions
-    where
-      -- Get map of only scalar types (excluding empty type constructors) in environment:
+assertSubtypes :: Environment 
+               -> Maybe Formula 
+               -> TypeSubstitution 
+               -> Bool 
+               -> RType 
+               -> RType 
+               -> [Formula]
+assertSubtypes _env Nothing _tass _cm _tl _tr = 
+  error "assertSubtypes: free potential is Nothing"
+assertSubtypes env (Just fp) tass cm tl@(ScalarT bl _ pl) tr@(ScalarT br _ pr) = 
+  let -- Get map of only scalar types (excluding empty type constructors) in environment:
       scalarsOf smap = Map.filterWithKey notEmptyCtor $ fmap typeFromSchema $ fromMaybe Map.empty $ Map.lookup 0 smap
       -- Get top-level potentials from environment, after applying current type substitutions
-      topPotentials = Map.mapMaybe (topPotentialOf . typeSubstitute tass) 
+      topPotentials = Map.mapMaybe (topPotentialFml . typeSubstitute tass) 
       -- Sum all top-level potential in an environment:
-      envSum f smap = addFormulas f $ sumFormulas $ topPotentials $ scalarsOf smap
-      leftSum  = envSum fl (_symbols env)
-      rightSum = envSum fr syms      
+      envSum smap = sumFormulas $ topPotentials $ scalarsOf smap
       -- Assert that types in fresh context are well-formed (w.r.t top-level annotations)
-      wellFormed smap = map (|>=| fzero) ((Map.elems . topPotentials) smap) 
-      subtypeAssertions = (leftSum `subtypeOp` rightSum) : directSubtypesBase cm bl br
-      wellFormedAssertions = wellFormed $ scalarsOf syms
+      wfFP = fp |>=| fzero
+      -- True if the given variable is not an empty constructor for some data type
       notEmptyCtor x _ = Set.notMember x (_emptyCtors env) 
+  in case (pl, pr) of 
+    -- Infinite potential on the left side is a subtype of everything
+    (Infty, _) -> [ftrue] 
+    -- Throw error if there is infinite potential on the right side without infinite potential on the left side
+    (_, Infty)       -> 
+      error $ show $ text "assertSubtypes: encountered infinite potential on the right side in type of a subtyping relation" 
+        <+> pretty tl <+> text "<:" <+> pretty tr 
+    -- Assert subtypes normally
+    (Fml fl, Fml fr) -> 
+      let leftSum = addFormulas fl (envSum (_symbols env)) 
+          rightSum = addFormulas fr fp 
+          subtypeAssertions = (leftSum `subtypeOp` rightSum) : directSubtypesBase cm bl br
+      in wfFP : subtypeAssertions 
 assertSubtypes _ _ _ _ _ _ = [] 
 
 -- | 'directSubtypes' @env tl tr@ : Generate the set of all formulas in types @tl@ and @tr@, zipped by a binary operation @op@ on formulas 
 directSubtypes :: Bool -> RType -> RType -> [Formula]
-directSubtypes cm (ScalarT bl _ fl) (ScalarT br _ fr) = (fl `subtypeOp` fr) : directSubtypesBase cm bl br
+directSubtypes cm (ScalarT bl _ Infty) (ScalarT br _ _) = []
+directSubtypes _  tl tr@(ScalarT _ _ Infty) =
+  error $ show $ text "directSubtypes: encountered infinite potential on the right side of the subtyping relation"
+                 <+> pretty tl <+> text "<:" <+> pretty tr
+directSubtypes cm (ScalarT bl _ (Fml fl)) (ScalarT br _ (Fml fr)) = (fl `subtypeOp` fr) : directSubtypesBase cm bl br
 directSubtypes _ _ _ = [] 
 
 directSubtypesBase :: Bool -> BaseType Formula -> BaseType Formula -> [Formula]
 directSubtypesBase cm (DatatypeT _ tsl _) (DatatypeT _ tsr _) = concat $ zipWith (directSubtypes cm) tsl tsr
-directSubtypesBase cm (TypeVarT _ _ ml) (TypeVarT _ _ mr) = [fml | cm && not (isTrivial fml)] 
+directSubtypesBase _  (TypeVarT _ _ Infty) _ = []
+directSubtypesBase _  tl tr@(TypeVarT _ _ Infty) = 
+  error $ show $ text "directSubtypesBase: encountered infinite potential on the right side of the subtyping relation"
+                 <+> pretty tl <+> text "<:" <+> pretty tr
+directSubtypesBase cm (TypeVarT _ _ (Fml ml)) (TypeVarT _ _ (Fml mr)) = [fml | cm && not (isTrivial fml)] 
     where fml = ml `subtypeOp` mr
 directSubtypesBase _ _ _ = []
 
-totalPotential :: Bool -> RType -> Formula
-totalPotential cm (ScalarT base _ p) = p -- |+| totalPotentialBase cm base
-totalPotential _ _                   = fzero
-
-totalPotentialBase :: Bool -> BaseType Formula -> Formula
-totalPotentialBase cm (DatatypeT _ ts _) = foldl addFormulas fzero (map (totalPotential cm) ts)
--- TODO: should we use the substitutions?
-totalPotentialBase cm (TypeVarT _ _ m) = if cm then m else fzero
-totalPotentialBase _ _ = fzero
+totalTopLevelPotential :: RType -> Formula
+totalTopLevelPotential (ScalarT base _ (Fml p)) = p 
+totalTopLevelPotential (ScalarT _ _ Infty)      = error "Encountered empty type constructor when computing totalPotential"
+totalTopLevelPotential _                        = fzero
 
 -- Is given constraint relevant for resource analysis
 isResourceConstraint :: Constraint -> Bool
 isResourceConstraint (Subtype _ _ _ _ Consistency _) = False
 isResourceConstraint (Subtype _ _ ScalarT{} ScalarT{} _variant _label) = True
 isResourceConstraint WellFormed{}  = True
-isResourceConstraint SharedType{}  = True
+isResourceConstraint SharedEnv{}   = True
 isResourceConstraint ConstantRes{} = True
 isResourceConstraint _             = False
-
--- Coefficient variables for resource polynomial
-makePolynomialVar :: String -> Formula -> String 
-makePolynomialVar annotation f = textFrom f ++ "_" ++ toText annotation
-  where 
-    textFrom (Var _ x) = x
-    textFrom (Pred _ x fs) = x ++ show (pretty fs)
-    toText f = show (pretty f)
-    
--- constant term in resource polynomial    
-constPolynomialVar s = s ++ "CONST"
-
-universalToString :: Formula -> String
-universalToString (Var _ x) = x -- ++ "_univ"
-universalToString (Pred _ x fs) = x ++ concatMap show fs ++ "_univ"
-universalToString (Cons _ x fs) = x ++ concatMap show fs ++ "_univ"
 
 -- Return a set of all formulas (potential, multiplicity, refinement) of a type. 
 --   Doesn't mean anything necesssarily, used to embed environment assumptions
 allFormulasOf :: Bool -> RType -> Set Formula
-allFormulasOf cm (ScalarT b f p) = Set.singleton f `Set.union` Set.singleton p `Set.union` allFormulasOfBase cm b
+allFormulasOf cm (ScalarT b f Infty)       = Set.singleton f `Set.union` allFormulasOfBase cm b 
+allFormulasOf cm (ScalarT b f (Fml p))     = Set.singleton f `Set.union` Set.singleton p `Set.union` allFormulasOfBase cm b
 allFormulasOf cm (FunctionT _ argT resT _) = allFormulasOf cm argT `Set.union` allFormulasOf cm resT
-allFormulasOf cm (LetT x s t) = allFormulasOf cm s `Set.union` allFormulasOf cm t
-allFormulasOf _ t = Set.empty
+allFormulasOf cm (LetT x s t)              = allFormulasOf cm s `Set.union` allFormulasOf cm t
+allFormulasOf _ t                          = Set.empty
 
 allFormulasOfBase :: Bool -> BaseType Formula -> Set Formula
-allFormulasOfBase cm (TypeVarT _ _ m) = if cm then Set.singleton m else Set.empty
-allFormulasOfBase cm (DatatypeT x ts ps) = Set.unions (map (allFormulasOf cm) ts)
-allFormulasOfBase _ b = Set.empty
+allFormulasOfBase _  (TypeVarT _ _ Infty)   = Set.empty
+allFormulasOfBase cm (TypeVarT _ _ (Fml m)) = if cm then Set.singleton m else Set.empty
+allFormulasOfBase cm (DatatypeT x ts ps)    = Set.unions (map (allFormulasOf cm) ts)
+allFormulasOfBase _ b                       = Set.empty
 
 -- Return refinement of scalar type
 refinementOf :: RType -> Formula 
@@ -459,7 +390,7 @@ assumeUnknowns (All f g)         = All (assumeUnknowns f) (assumeUnknowns g)
 assumeUnknowns f                 = f
 
 -- | Check for new universally quantified expressions, persisting the update
-updateUniversals :: Monad s => Environment -> Formula -> TCSolver s (Set Formula)
+updateUniversals :: Monad s => Environment -> Formula -> RSolver s (Set Formula)
 updateUniversals env fml = do 
   accUnivs <- use universalFmls
   case accUnivs of 
@@ -470,9 +401,8 @@ updateUniversals env fml = do
       universalFmls .= Just universals'
       return universals'
 
--- | 'hasUniversals' @env sch@ : Indicates existence of universally quantified resource formulas in the potential
+-- | 'allUniversals' @env sch@ : set of all universally quantified resource formulas in the potential
 --    annotations of the type @sch@
--- Could be done more efficiently by returning as soon as a universal is found
 allUniversals :: Environment -> RSchema -> Set Formula
 allUniversals env sch = getUniversals univSyms $ conjunction $ allRFormulas True $ typeFromSchema sch 
   where
@@ -483,15 +413,18 @@ allUniversals env sch = getUniversals univSyms $ conjunction $ allRFormulas True
 
 -- | 'getUniversals' @env f@ : return the set of universally quantified terms in formula @f@ given set of universally quantified symbols @syms@ 
 getUniversals :: Set String -> Formula -> Set Formula
-getUniversals syms (SetLit s fs)   = Set.unions $ map (getUniversals syms) fs
-getUniversals syms v@(Var s x)     = Set.fromList [v | Set.member x syms] 
-getUniversals syms (Unary _ f)     = getUniversals syms f
-getUniversals syms (Binary _ f g)  = getUniversals syms f `Set.union` getUniversals syms g
-getUniversals syms (Ite f g h)     = getUniversals syms f `Set.union` getUniversals syms g `Set.union` getUniversals syms h
-getUniversals syms p@(Pred s x fs) = Set.fromList [p | Set.member x syms]
-getUniversals syms (Cons _ x fs)   = Set.unions $ map (getUniversals syms) fs
-getUniversals syms (All f g)       = getUniversals syms g
-getUniversals _ _                  = Set.empty 
+getUniversals syms (SetLit s fs)  = Set.unions $ map (getUniversals syms) fs
+getUniversals syms v@(Var s x)    = Set.fromList [v | Set.member x syms || isValueVar x] 
+  where 
+    isValueVar ('_':'v':_) = True
+    isValueVar _           = False
+getUniversals syms (Unary _ f)    = getUniversals syms f
+getUniversals syms (Binary _ f g) = getUniversals syms f `Set.union` getUniversals syms g
+getUniversals syms (Ite f g h)    = getUniversals syms f `Set.union` getUniversals syms g `Set.union` getUniversals syms h
+getUniversals syms (Pred _ _ fs)  = Set.unions $ map (getUniversals syms) fs 
+getUniversals syms (Cons _ _ fs)  = Set.unions $ map (getUniversals syms) fs
+getUniversals syms (All f g)      = getUniversals syms g
+getUniversals _ _                 = Set.empty 
 
 -- | containsDT @ms f@ : return whether or not formula @f@ includes a measure (or a data type in general), the names of which are in @ms@
 containsDT :: [String] -> Formula -> Bool
@@ -501,15 +434,10 @@ containsDT _  Cons{}             = True
 containsDT ms (Unary _ f)        = containsDT ms f
 containsDT ms (Binary _ f g)     = containsDT ms f || containsDT ms g
 containsDT ms (Ite f g h)        = containsDT ms f || containsDT ms g || containsDT ms h
-containsDT ms (SetLit _ fs)      = any (containsDT ms) fs
 containsDT ms (All f g)          = containsDT ms f || containsDT ms g
+containsDT ms (SetLit _ fs)      = any (containsDT ms) fs
 containsDT _ _                   = False
         
--- | Apply a list of substitutions to a formula
-substituteManyInFml :: [(Formula, Formula)] -> Formula -> Formula
-substituteManyInFml [] f       = f
-substituteManyInFml xs fml = foldl (\f (g, ex) -> substituteForFml ex g f) fml xs
-
 -- Substitute variable for a formula (predicate application or variable) in given formula @fml@
 substituteForFml :: Formula -> Formula -> Formula -> Formula
 substituteForFml new old v@Var{} = if v == old then new else v
@@ -524,12 +452,6 @@ substituteForFml new old (Cons s x fs) = Cons s x $ map (substituteForFml new ol
 substituteForFml new old (All f g) = All f (substituteForFml new old g)
 substituteForFml _ _ f = f
 
--- Variable name for example generation
-fmlVarName :: Monad s => Formula -> TCSolver s String
-fmlVarName (Var s x)     = return $ x ++ show s
-fmlVarName (Pred _ x fs) = freshId "F"
-fmlVarName f             = error $ "fmlVarName: Can only substitute fresh variables for variable or predicate, given " ++ show (pretty f)
-
 -- Filter away "uninteresting" constraints for logging. Specifically, well-formednes
 -- Definitely not complete, just "pretty good"
 isInteresting :: Formula -> Bool
@@ -540,5 +462,8 @@ isInteresting (BoolLit True)           = False
 isInteresting (Binary And f g)         = isInteresting f || isInteresting g 
 isInteresting _                        = True
 
--- Maybe this will change? idk
-subtypeOp = (|=|)
+subtypeOp = (|>=|)
+
+writeLog level msg = do 
+  maxLevel <- lift $ asks _tcSolverLogLevel
+  when (level <= maxLevel) $ traceShow (plain msg) $ return ()

@@ -12,7 +12,7 @@ measure elems :: List a -> Set a where
   Nil -> []
   Cons x xs -> [x] + elems xs
 	
-delete :: x: a -> xs: List a -> {List a | elems _v == elems xs - [x]}
+delete :: x: a -> xs: List {a| |1} -[1]-> {List a | elems _v == elems xs - [x]}
 delete = ??
 
 	

@@ -10,7 +10,14 @@ measure ielems :: IList a -> Set a where
   INil -> []
   ICons x xs -> [x] + ielems xs
 
+measure numgt :: x: a -> IList a -> {Int | _v >= 0} where 
+  INil -> 0
+  ICons y ys -> 
+    if x > y 
+      then 1 + numgt x ys
+      else numgt x ys
+	
 qualifier {x <= y, x != y}
 
-insert :: x: a -> xs: IList {a| |1} -[1]-> {IList a | ielems _v == ielems xs + [x]}
+insert :: x: a -> xs: {IList a| |numgt x _v} -[1]-> {IList a | ielems _v == ielems xs + [x]}
 insert = ?? 

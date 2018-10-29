@@ -19,6 +19,11 @@ type Id = String
 uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
 uncurry3 f (x, y, z) = f x y z
 
+uncurry6 :: (a -> b -> c -> d -> e -> f -> g) 
+         -> (a, b, c, d, e, f)
+         -> g
+uncurry6 f (u, v, w, x, y, z) = f u v w x y z
+
 fromRight (Right x) = x
 fromLeft (Left x) = x
 

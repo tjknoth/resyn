@@ -1,0 +1,18 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+  
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+  
+measure elems :: List a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs  
+
+append :: xs: List {a| |2} -> ys: List a -> {List a | len _v == len xs + len ys && elems _v == elems xs + elems ys}
+
+
+append3 :: xs: List {a| |3} -> ys: List {a| |2} -[1]-> zs: List a -> {List a | len _v == len xs + len ys + len zs && elems _v == elems xs + elems ys + elems zs}
+append3 = \xs. \ys. \zs.
+  append ys (append xs zs) 

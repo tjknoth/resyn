@@ -1,0 +1,16 @@
+-- Constant time (# of recursive calls) length comparison
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+  
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs 
+
+false :: {Bool | _v == False}
+true :: {Bool | _v == True}
+and :: x: Bool -> y: Bool -> {Bool | _v == (x && y)}
+
+-- Constant time version
+compare' :: xs: List {a| |1} -> ys: List a -[1]-> {Bool | _v == (len xs == len ys)}
+compare' = ?? 

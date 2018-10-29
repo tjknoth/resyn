@@ -3,11 +3,13 @@
 -- Solver utilities
 module Synquid.Solver.Util (
     embedEnv,
+    embedSynthesisEnv,
     instantiateConsAxioms,
     potentialVars,
     freshId,
     freshVar,
     somewhatFreshVar,
+    freshValueVars,
     isSatWithModel,
     throwError,
     writeLog
@@ -21,7 +23,7 @@ import Synquid.Pretty
 import Synquid.Error
 import Synquid.Solver.Monad
 
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, catMaybes)
 import qualified Data.Set as Set 
 import Data.Set (Set)
 import qualified Data.Map as Map
@@ -50,7 +52,6 @@ embedding env vars includeQuantified = do
                 Nothing -> addBindings env tass pass qmap fmls rest -- Variable not found (useful to ignore value variables)
                 Just (Monotype t) -> case typeSubstitute tass t of
                   ScalarT baseT fml pot ->
-                    --let allPost = allMeasurePostconditions includeQuantified baseT env in
                     let fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x)) . substitutePredicate pass)
                                           (fml : allMeasurePostconditions includeQuantified baseT env) 
                         newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls' in 
@@ -67,12 +68,36 @@ embedEnv env fml consistency = do
   let relevantVars = potentialVars qmap fml
   embedding env relevantVars consistency
 
+embedSynthesisEnv :: Monad s => Environment -> Formula -> Bool -> TCSolver s (Set Formula)
+embedSynthesisEnv env fml consistency = do 
+  emb <- embedEnv env fml consistency
+  unknownEmb <- embedSingletonUnknowns env
+  return $ emb `Set.union` unknownEmb
+
+-- | When there is a single possible valuation for a condition unknown, assume it.
+embedSingletonUnknowns :: Monad s => Environment -> TCSolver s (Set Formula)
+embedSingletonUnknowns env = do
+    pass <- use predAssignment
+    qmap <- use qualifierMap
+    -- Do I need to substitute predicates?
+    let ass = Set.map (substitutePredicate pass) (env ^. assumptions)
+    let maybeAss = map (assignUnknown qmap) (Set.toList ass)
+    return $ Set.fromList $ catMaybes maybeAss
+  where 
+    assignUnknown qmap fml = do 
+      fname <- maybeUnknownName fml
+      qspace <- Map.lookup fname qmap
+      case _qualifiers qspace of 
+        [f] -> Just f
+        _   -> Nothing
+
+
 -- | 'instantiateConsAxioms' @env fml@ : If @fml@ contains constructor applications, return the set of instantiations of constructor axioms for those applications in the environment @env@
 instantiateConsAxioms :: Environment -> Maybe Formula -> Formula -> Set Formula
 instantiateConsAxioms env mVal fml = let inst = instantiateConsAxioms env mVal in  
   case fml of
-    Cons resS@(DataS dtName _) ctor args -> Set.unions $ Set.fromList (map (measureAxiom resS ctor args) (Map.elems $ allMeasuresOf dtName env)) :
-                                                         map (instantiateConsAxioms env Nothing) args
+    Cons resS@(DataS dtName _) ctor args -> Set.unions $ Set.unions (map (measureAxiom resS ctor args) (Map.assocs $ allMeasuresOf dtName env)) :
+                                                          map (instantiateConsAxioms env Nothing) args
     Unary op e -> inst e
     Binary op e1 e2 -> inst e1 `Set.union` inst e2
     Ite e0 e1 e2 -> inst e0 `Set.union` inst e1 `Set.union` inst e2
@@ -80,20 +105,30 @@ instantiateConsAxioms env mVal fml = let inst = instantiateConsAxioms env mVal i
     Pred _ p args -> Set.unions $ map inst args
     _ -> Set.empty
   where
-    measureAxiom resS ctor args (MeasureDef inSort _ defs constantArgs _) =
+    measureAxiom resS ctor args (mname, MeasureDef inSort _ defs constantArgs _) =
       let
         MeasureCase _ vars body = head $ filter (\(MeasureCase c _ _) -> c == ctor) defs
         sParams = map varSortName (sortArgsOf inSort) -- sort parameters in the datatype declaration
         sArgs = sortArgsOf resS -- actual sort argument in the constructor application
         body' = noncaptureSortSubstFml sParams sArgs body -- measure definition with actual sorts for all subexpressions
         newValue = fromMaybe (Cons resS ctor args) mVal
-        constArgNames = fmap fst constantArgs
-        prefixes = fmap (++ "D") constArgNames 
-        constVars = zipWith (somewhatFreshVar env) prefixes (fmap snd constantArgs)
-        subst = Map.fromList $ (valueVarName, newValue) : zip vars args ++ zip constArgNames constVars-- substitute formals for actuals and constructor application or provided value for _v
-        wrapForall xs f = foldl (flip All) f xs
-        qBody = wrapForall constVars body'
-      in substitute subst qBody
+        subst = Map.fromList $ (valueVarName, newValue) : zip vars args 
+        -- Body of measure with constructor application (newValue) substituted for _v:
+        vSubstBody = substitute subst body'
+      in if null constantArgs
+        then Set.singleton vSubstBody
+        else let
+          constArgList = Map.lookup mname (_measureConstArgs env)
+        in 
+          case constArgList of 
+            Nothing -> Set.empty
+            Just constArgs -> 
+              let 
+                possibleArgs = map Set.toList constArgs
+                possibleSubsts = zipWith (\(x, s) vars -> zip (repeat x) vars) constantArgs possibleArgs  
+                -- Nondeterministically choose one concrete argument from all lists of possible arguments
+                allArgLists = sequence possibleSubsts
+              in Set.fromList $ map ((`substitute` vSubstBody) . Map.fromList) allArgLists
 
 bottomValuation :: QMap -> Formula -> Formula
 bottomValuation qmap fml = applySolution bottomSolution fml
@@ -122,6 +157,7 @@ freshVar env prefix = do
 freshValueVarId :: Monad s => TCSolver s String
 freshValueVarId = freshId valueVarName
 
+-- | Replace occurrences of _v with a fresh variable in a given formula 
 freshValueVars :: Monad s => Formula -> Sort -> TCSolver s Formula 
 freshValueVars fml sort = do 
   newVar <- Var sort <$> freshValueVarId
@@ -138,8 +174,8 @@ somewhatFreshVar env prefix s = Var s name
                     else v
 
 -- | 'isSatWithModel' : check satisfiability and return the model accordingly
-isSatWithModel :: MonadSMT s => Formula -> TCSolver s (Bool, String)
-isSatWithModel = lift . lift . lift . solveWithModel
+isSatWithModel :: RMonad s => Formula -> TCSolver s (Maybe SMTModel)
+isSatWithModel = lift . lift . lift . solveAndGetModel
 
 
 -- | Signal type error

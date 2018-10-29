@@ -218,6 +218,8 @@ makeLenses ''MeasureDef
 
 type SymbolMap = Map Int (Map Id RSchema)  -- Variables and constants indexed by arity
 
+type ArgMap = Map Id [Set Formula] -- All possible constant arguments of measures with multiple arguments
+
 -- | Typing environment
 data Environment = Environment {
   -- | Variable part:
@@ -233,10 +235,11 @@ data Environment = Environment {
   _constants :: Set Id,                    -- ^ Subset of symbols that are constants
   _datatypes :: Map Id DatatypeDef,        -- ^ Datatype definitions
   _globalPredicates :: Map Id [Sort],      -- ^ Signatures (resSort:argSorts) of module-level logic functions (measures, predicates)
-  _measures :: Map Id MeasureDef,          -- ^ Measure definitions
+  _measureDefs :: Map Id MeasureDef,       -- ^ Measure definitions
   _typeSynonyms :: Map Id ([Id], RType),   -- ^ Type synonym definitions
   _unresolvedConstants :: Map Id RSchema,  -- ^ Unresolved types of components (used for reporting specifications with macros)
-  _emptyCtors :: Set Id                    -- ^ Empty constructors for data types 
+  _emptyCtors :: Set Id,                   -- ^ Empty constructors for data types 
+  _measureConstArgs :: ArgMap              -- ^ Map from measure names to possible valuations of each constant argument in the measure
 } deriving (Show)
 
 makeLenses ''Environment
@@ -260,10 +263,11 @@ emptyEnv = Environment {
   _constants = Set.empty,
   _globalPredicates = Map.empty,
   _datatypes = Map.empty,
-  _measures = Map.empty,
+  _measureDefs = Map.empty,
   _typeSynonyms = Map.empty,
   _unresolvedConstants = Map.empty,
-  _emptyCtors = Set.empty
+  _emptyCtors = Set.empty,
+  _measureConstArgs = Map.empty
 }
 
 -- | 'symbolsOfArity' @n env@: all symbols of arity @n@ in @env@
@@ -275,13 +279,13 @@ allSymbols env = Map.unions $ Map.elems (env ^. symbols)
 
 -- | All symbols of a given sort in an environment
 allScalarsOfSort :: Environment -> Sort -> Map Id RSchema
-allScalarsOfSort env s = Map.filter (isSort s) (symbolsOfArity 0 env)
+allScalarsOfSort env s = Map.filter (hasSort s) (symbolsOfArity 0 env)
   where 
-    isSort s sch = (fromSort s) == (typeFromSchema sch)
+    hasSort s sch = (fromSort s) == (typeFromSchema sch)
 
 -- | All universally quantified symbols in an environment -- includes measures
 universalSyms :: Environment -> Set Id 
-universalSyms env = Map.keysSet (allSymbols env) `Set.union` Map.keysSet (env ^. measures)
+universalSyms env = Map.keysSet (allSymbols env) `Set.union` Map.keysSet (env ^. measureDefs)
 
 -- | 'lookupSymbol' @name env@ : type of symbol @name@ in @env@, including built-in constants
 lookupSymbol :: Id -> Int -> Bool -> Environment -> Maybe RSchema
@@ -394,7 +398,7 @@ embedContext env t = (env, t)
 unfoldAllVariables env = over unfoldedVars (Set.union (Map.keysSet (symbolsOfArity 0 env) Set.\\ (env ^. constants))) env
 
 addMeasure :: Id -> MeasureDef -> Environment -> Environment
-addMeasure measureName m = over measures (Map.insert measureName m)
+addMeasure measureName m = over measureDefs (Map.insert measureName m)
 
 addBoundPredicate :: PredSig -> Environment -> Environment
 addBoundPredicate sig = over boundPredicates (sig :)
@@ -439,7 +443,7 @@ addScrutinee p = usedScrutinees %~ (p :)
 allPredicates env = Map.fromList (map (\(PredSig pName argSorts resSort) -> (pName, resSort:argSorts)) (env ^. boundPredicates)) `Map.union` (env ^. globalPredicates)
 
 -- | 'allMeasuresOf' @dtName env@ : all measure of datatype with name @dtName@ in @env@
-allMeasuresOf dtName env = Map.filter (\(MeasureDef (DataS sName _) _ _ _ _) -> dtName == sName) $ env ^. measures
+allMeasuresOf dtName env = Map.filter (\(MeasureDef (DataS sName _) _ _ _ _) -> dtName == sName) $ env ^. measureDefs
 
 -- | 'allMeasurePostconditions' @baseT env@ : all nontrivial postconditions of measures of @baseT@ in case it is a datatype
 allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env =
@@ -488,6 +492,12 @@ allMeasurePostconditions _ _ _ = []
 
 typeSubstituteEnv :: TypeSubstitution -> Environment -> Environment
 typeSubstituteEnv tass = over symbols (Map.map (Map.map (schemaSubstitute tass)))
+
+-- Apply type substitution to all scalars in environment
+scalarSubstituteEnv :: TypeSubstitution -> SymbolMap -> SymbolMap
+scalarSubstituteEnv tass syms = 
+  let scalars = (fromMaybe Map.empty $ Map.lookup 0 syms) :: Map Id RSchema
+  in  Map.insert 0 (Map.map (schemaSubstitute tass) scalars) syms
 
 -- | Insert weakest refinement
 refineTop :: Environment -> SType -> RType
@@ -545,39 +555,33 @@ data SubtypeVariant = Simple -- Consistency = False, Nondeterministic = False
 
 -- | Typing constraints
 data Constraint = 
-  Subtype !Environment !SymbolMap !RType !RType !SubtypeVariant !Id
+  Subtype !Environment !(Maybe Formula) !RType !RType !SubtypeVariant !Id
   | WellFormed !Environment !RType !Id
   | WellFormedCond !Environment !Formula
   | WellFormedMatchCond !Environment !Formula
   | WellFormedPredicate !Environment ![Sort] !Id
-  | SharedType !Environment !RType !RType !RType !Id
+  | SharedEnv !Environment !SymbolMap !SymbolMap !Id
   | ConstantRes !Environment !Id
   deriving (Show, Eq, Ord)
 
 data TaggedConstraint = TaggedConstraint {
-  tag :: Id,            -- Source info for debugging
-  constraint :: Formula -- Simplified Constraint
+  tag :: !Id,            -- Source info for debugging
+  constraint :: !Formula -- Simplified Constraint
 } deriving (Show, Eq, Ord)
 
 labelOf :: Constraint -> Id
-labelOf (Subtype _ _ _ _ _ l) = l
-labelOf (WellFormed _ _ l)      = l
-labelOf (SharedType _ _ _ _ l)  = l
-labelOf _                       = ""
+labelOf (Subtype _ _ _ _ _ l)  = l
+labelOf (WellFormed _ _ l)     = l
+labelOf (SharedEnv _ _ _ l) = l
+labelOf _                      = ""
 
 envFrom :: Constraint -> Environment
 envFrom (Subtype e _ _ _ _ _)       = e
 envFrom (WellFormed e _ _)          = e
 envFrom (WellFormedCond e _)        = e
 envFrom (WellFormedPredicate e _ _) = e
-envFrom (SharedType e _ _ _ _)      = e
+envFrom (SharedEnv e _ _ _)         = e
 envFrom (ConstantRes e _)           = e
-
-typesFrom :: Constraint -> [RType]
-typesFrom (Subtype _ _ tl tr _ _)   = [tl, tr]
-typesFrom (WellFormed _ t _)        = [t]
-typesFrom (SharedType _ t1 t2 t3 _) = [t1, t2, t3]
-typesFrom c                         = []
 
 isCTConstraint (ConstantRes _ _) = True
 isCTConstraint _                 = False
@@ -599,7 +603,7 @@ unresolvedSpec goal = unresolvedType (gEnvironment goal) (gName goal)
 
 -- Remove measure being typechecked from environment
 filterEnv :: Environment -> Id -> Environment
-filterEnv e m = Lens.set measures (Map.filterWithKey (\k _ -> k == m) (e ^. measures)) e
+filterEnv e m = Lens.set measureDefs (Map.filterWithKey (\k _ -> k == m) (e ^. measureDefs)) e
 
 -- Transform a resolved measure into a program
 measureProg :: Id -> MeasureDef -> UProgram
@@ -658,6 +662,42 @@ genSkeleton name preds inSorts outSort post = Monotype $ uncurry 0 inSorts
     outType = (baseTypeOf . fromSort) outSort
     pforms = fmap predform preds
     predform x = Pred AnyS x []
+
+getAllPreds :: Formula -> Set Id
+getAllPreds (Binary _ l r) = getAllPreds l `Set.union` getAllPreds r
+getAllPreds (Unary _ f)    = getAllPreds f
+getAllPreds (Ite g t f)    = getAllPreds g `Set.union` getAllPreds t `Set.union` getAllPreds f 
+getAllPreds (All _ f)      = getAllPreds f
+getAllPreds (Pred _ x fs)  = Set.insert x (Set.unions (map getAllPreds fs))
+getAllPreds _              = Set.empty 
+
+-- Return a map from the IDs of multi-argument measures to a list of sets of possible 
+--   instantiations of those constant arguments by scraping the schema annotations
+getAllCArgsFromSchema :: Environment -> RSchema -> ArgMap
+getAllCArgsFromSchema env sch = Map.filter (not . null) $
+-- Should I maybe use refinements AND resource annotations to check for arguments?
+--   Or are resource annotations redundant?
+  let allRefs = allRefinementsOf sch 
+      measures = Map.keys (env ^. measureDefs)
+  in Map.unionsWith combineArgLists $ map (getAllCArgs measures) allRefs
+
+combineArgLists = zipWith Set.union
+
+-- Given a set of all measure IDs, a map from measure IDs to a list of sets of possible 
+--   arguments for each of its constant argument slots
+getAllCArgs :: [Id] -> Formula -> ArgMap
+getAllCArgs ms (Binary op l r) = Map.unionWith combineArgLists (getAllCArgs ms l) (getAllCArgs ms r)
+getAllCArgs ms (Unary _ f)     = getAllCArgs ms f
+getAllCArgs ms (Ite g t f)     = Map.unionsWith combineArgLists [(getAllCArgs ms g), (getAllCArgs ms t), (getAllCArgs ms f)]
+getAllCArgs ms (All _ f)       = getAllCArgs ms f -- Ignore quantifier
+getAllCArgs ms (Pred _ x fs)   = getCArgs ms x fs
+getAllCArgs _ _                = Map.empty
+
+getCArgs :: [Id] -> String -> [Formula] -> ArgMap
+getCArgs ms name fs = Map.singleton name $ map Set.singleton $
+  if elem name ms
+    then init fs
+    else []
 
 -- Default set implementation -- Needed to typecheck measures involving sets
 defaultSetType :: BareDeclaration
