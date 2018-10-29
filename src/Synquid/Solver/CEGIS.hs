@@ -62,7 +62,7 @@ data Counterexample = CX {
 {- Top-level interface -}
 
 -- | Solve formula containing universally quantified expressions with counterexample-guided inductive synthesis
-solveWithCEGIS :: MonadSMT s 
+solveWithCEGIS :: RMonad s 
                => Int 
                -> Formula 
                -> [UVar] 
@@ -101,7 +101,7 @@ solveWithCEGIS n fml universals measures examples polynomials program = do
 
 -- | 'getCounterexample' @fml universals polynomials program@ 
 --    Find a valuation for @universals@ such that (not @formula@) holds, under parameter valuation @program@
-getCounterexample :: MonadSMT s 
+getCounterexample :: RMonad s 
                   => Formula 
                   -> [UVar] 
                   -> [UMeasure] 
@@ -126,7 +126,7 @@ getCounterexample fml universals measures polynomials program = do
 
 -- | 'getParameters' @fml polynomials examples@
 --   Find a valuation for all coefficients such that @fml@ holds on all @examples@
-getParameters :: MonadSMT s 
+getParameters :: RMonad s 
               => Formula 
               -> PolynomialSkeletons 
               -> ExampleSet 
@@ -147,7 +147,7 @@ getParameters fml polynomials examples = do
   model <- runInSolver $ solveAndGetModel paramQuery 
   join <$> (runInSolver . sequence $ (modelGetAssignment allCoefficients <$> model))
 
-evalMeasures :: MonadSMT s => Counterexample -> Formula -> s Formula
+evalMeasures :: RMonad s => Counterexample -> Formula -> s Formula
 evalMeasures cx fml = case fml of 
   Pred s x args -> do 
     let ms = measureInterps cx

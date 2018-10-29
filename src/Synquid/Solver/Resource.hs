@@ -34,7 +34,10 @@ type RSolver s = ReaderT RType (TCSolver s)
 {- Implementation -}
 
 -- | Check resource bounds: attempt to find satisfying expressions for multiplicity and potential annotations 
-checkResources :: (MonadHorn s, MonadSMT s) => RType -> [Constraint] -> TCSolver s ()
+checkResources :: (MonadHorn s, MonadSMT s, RMonad s) 
+               => RType 
+               -> [Constraint] 
+               -> TCSolver s ()
 checkResources _ [] = return ()
 checkResources typ constraints = do 
   oldConstraints <- use resourceConstraints 
@@ -46,7 +49,7 @@ checkResources typ constraints = do
     Just f  -> resourceConstraints %= (++ f) 
 
 -- | 'solveResourceConstraints' @oldConstraints constraints@ : Transform @constraints@ into logical constraints and attempt to solve the complete system by conjoining with @oldConstraints@
-solveResourceConstraints :: MonadSMT s => [RConstraint] -> [Constraint] -> RSolver s (Maybe [RConstraint]) 
+solveResourceConstraints :: RMonad s => [RConstraint] -> [Constraint] -> RSolver s (Maybe [RConstraint]) 
 solveResourceConstraints oldConstraints constraints = do
     writeLog 3 $ linebreak <+> text "Generating resource constraints:"
     checkMults <- lift $ asks _checkMultiplicities
@@ -90,7 +93,7 @@ isTrivialTC (TaggedConstraint _ f) = isTrivial f
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 --    If there are no universal quantifiers, we can cache the generated formulas (the Left case)
 --    Otherwise, we must re-generate every time
-generateFormula :: MonadSMT s => Bool -> Set Formula -> RConstraint -> RSolver s TaggedConstraint
+generateFormula :: RMonad s => Bool -> Set Formula -> RConstraint -> RSolver s TaggedConstraint
 generateFormula _ _ (Left tc)                      = return tc
 generateFormula shouldLog univs (Right c) = do 
   currentType <- ask
@@ -104,7 +107,7 @@ generateFormula shouldLog univs (Right c) = do
     -- Function type: proceed as usual
     else generateFormula' shouldLog checkMults univs c
 
-generateFormula' :: MonadSMT s 
+generateFormula' :: RMonad s 
                  => Bool 
                  -> Bool 
                  -> Set Formula 
@@ -137,7 +140,7 @@ generateFormula' shouldLog checkMults univs c =
     assemble fs = conjunction $ filter (not . isTrivial) fs
 
 -- | Embed the environment assumptions and preproess the constraint for solving 
-embedAndProcessConstraint :: MonadSMT s 
+embedAndProcessConstraint :: RMonad s 
                           => Bool 
                           -> Environment 
                           -> Constraint 
@@ -163,7 +166,7 @@ embedAndProcessConstraint shouldLog env c fmls relevantFml addTo = do
 
 -- | Check the satisfiability of the generated resource constraints, instantiating universally 
 --     quantified expressions as necessary.
-satisfyResources :: MonadSMT s => [Formula] -> Formula -> RSolver s Bool
+satisfyResources :: RMonad s => [Formula] -> Formula -> RSolver s Bool
 satisfyResources universals fml = do 
   shouldInstantiate <- lift $ asks _instantiateUnivs
   if null universals || not shouldInstantiate
@@ -194,7 +197,7 @@ satisfyResources universals fml = do
 -- CEGIS test harness
 -- If this is going to work with measures, need a way to parse measures, etc
 --   or just manually instantiate cons axioms
-testCEGIS :: MonadSMT s => Formula -> RSolver s Bool
+testCEGIS :: RMonad s => Formula -> RSolver s Bool
 testCEGIS fml = do 
   let fml' = adjustSorts fml
   let universals = map (Var IntS) ["n", "x11"]

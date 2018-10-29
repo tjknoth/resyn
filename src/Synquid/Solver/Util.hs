@@ -174,7 +174,7 @@ somewhatFreshVar env prefix s = Var s name
                     else v
 
 -- | 'isSatWithModel' : check satisfiability and return the model accordingly
-isSatWithModel :: MonadSMT s => Formula -> TCSolver s (Maybe SMTModel)
+isSatWithModel :: RMonad s => Formula -> TCSolver s (Maybe SMTModel)
 isSatWithModel = lift . lift . lift . solveAndGetModel
 
 

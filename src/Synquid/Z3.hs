@@ -87,6 +87,7 @@ instance MonadSMT Z3State where
 
   allUnsatCores = getAllMUSs
 
+instance RMonad Z3State where
   solveAndGetModel fml = do 
     (r, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
     setASTPrintMode Z3_PRINT_SMTLIB_FULL

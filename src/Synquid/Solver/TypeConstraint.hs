@@ -81,7 +81,9 @@ initTypingState env schema = do
 {- Top-level constraint solving interface -}
 
 -- | Solve @typingConstraints@: either strengthen the current candidates and return shapeless type constraints or fail
-solveTypeConstraints :: (MonadSMT s, MonadHorn s) => RType -> TCSolver s ()
+solveTypeConstraints :: (MonadSMT s, MonadHorn s, RMonad s) 
+                     => RType 
+                     -> TCSolver s ()
 solveTypeConstraints typ = do
 
   simplifyAllConstraints
@@ -103,7 +105,8 @@ solveTypeConstraints typ = do
   consistencyChecks .= []
 
 -- | Solve constant-timedness constraints, does not require all the work involved in the general constraint solver
-solveCTConstraints :: (MonadSMT s, MonadHorn s) => TCSolver s ()
+solveCTConstraints :: (MonadSMT s, MonadHorn s, RMonad s) 
+                   => TCSolver s ()
 solveCTConstraints = do 
   tcs <- use typingConstraints
   typingConstraints .= []

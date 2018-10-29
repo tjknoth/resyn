@@ -43,7 +43,7 @@ runExplorer eParams tParams topLevel initTS go = do
 
 -- | 'generateI' @env t@ : explore all terms that have refined type @t@ in environment @env@
 -- (top-down phase of bidirectional typechecking)
-generateI :: (MonadSMT s, MonadHorn s) 
+generateI :: (MonadSMT s, MonadHorn s, RMonad s) 
           => Environment 
           -> RType 
           -> Explorer s RProgram
@@ -67,7 +67,7 @@ exploreFunction env t@(FunctionT x tArg tRes _) explore = do
 exploreFunction _ t _ = throwErrorWithDescription $ text "exploreFunction: called with non-function type" <+> pretty t
 
 -- | Generate a possibly conditional term type @t@, depending on whether a condition is abduced
-generateMaybeIf :: (MonadSMT s, MonadHorn s) 
+generateMaybeIf :: (MonadSMT s, MonadHorn s, RMonad s) 
                 => Environment 
                 -> RType 
                 -> Explorer s RProgram
@@ -84,7 +84,7 @@ generateMaybeIf env t = ifte generateThen (uncurry6 generateElse) (generateMatch
       return (cEnv, bEnv, t, cond, unknownName cUnknown, pThen)
 
 -- | Proceed after solution @pThen@ has been found under assumption @cond@
-generateElse :: (MonadSMT s, MonadHorn s) 
+generateElse :: (MonadSMT s, MonadHorn s, RMonad s) 
              => Environment 
              -> Environment 
              -> RType 
@@ -115,7 +115,7 @@ tryEliminateBranching branch recheck =
             (const $ return True) -- constraints still hold: @branch@ is a valid solution overall
             (return False) -- constraints don't hold: the guard is essential
 
-generateConditionFromFml :: (MonadHorn s, MonadSMT s) 
+generateConditionFromFml :: (MonadHorn s, MonadSMT s, RMonad s) 
                          => Environment 
                          -> Formula 
                          -> Explorer s RProgram
@@ -136,7 +136,10 @@ generateConditionFromFml env fml = do
     conjoin p1 p2 = Program (PApp (Program (PApp andSymb p1) boolAll) p2) boolAll
 
 -- | If partial solutions are accepted, try @gen@, and if it fails, just leave a hole of type @t@; otherwise @gen@
-optionalInPartial :: (MonadSMT s, MonadHorn s) => RType -> Explorer s RProgram -> Explorer s RProgram
+optionalInPartial :: (MonadSMT s, MonadHorn s, RMonad s) 
+                  => RType 
+                  -> Explorer s RProgram 
+                  -> Explorer s RProgram
 optionalInPartial t gen = ifM (asks . view $ _1 . partialSolution) (ifte gen return (return $ Program PHole t)) gen
 
 -- | Generate a match term of type @t@
@@ -202,7 +205,7 @@ generateFirstCase env scrVar pScrutinee t consName =
               return (Case consName binders pCaseExpr, ftrue, dontCare))
 
 -- | Generate the @consName@ case of a match term with scrutinee variable @scrName@ and scrutinee type @scrType@
-generateCase :: (MonadSMT s, MonadHorn s) 
+generateCase :: (MonadSMT s, MonadHorn s, RMonad s) 
              => Environment 
              -> Formula 
              -> RProgram 
@@ -243,7 +246,7 @@ caseSymbols env x (name : names) (FunctionT y tArg tRes _) = do
   return ((name, tArg) : syms, ass)
 
 -- | Generate a possibly conditional possibly match term, depending on which conditions are abduced
-generateMaybeMatchIf :: (MonadSMT s, MonadHorn s) 
+generateMaybeMatchIf :: (MonadSMT s, MonadHorn s, RMonad s) 
                      => Environment 
                      -> RType 
                      -> Explorer s RProgram
@@ -307,12 +310,18 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
       genOtherCases [Case c [] pBaseCase] (delete c ctors)
 
 -- | Transition from I-terms to E-terms
-generateIE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
+generateIE :: (MonadSMT s, MonadHorn s, RMonad s) 
+           => Environment 
+           -> RType 
+           -> Explorer s RProgram
 generateIE = generateE 
 
 -- | 'generateE' @env typ@ : explore all elimination terms of type @typ@ in environment @env@
 -- (bottom-up phase of bidirectional typechecking)
-generateE :: (MonadSMT s, MonadHorn s) => Environment -> RType -> Explorer s RProgram
+generateE :: (MonadSMT s, MonadHorn s, RMonad s) 
+          => Environment 
+          -> RType 
+          -> Explorer s RProgram
 generateE env typ = do
   d <- asks . view $ _1 . eGuessDepth
   generateE' env typ d
@@ -335,7 +344,7 @@ generateE' env typ d = do
         else addLambdaLets t body gs
 
 -- | 'generateEUpTo' @env typ d@ : explore all applications of type shape @shape typ@ in environment @env@ of depth up to @d@
-generateEUpTo :: (MonadSMT s, MonadHorn s) 
+generateEUpTo :: (MonadSMT s, MonadHorn s, RMonad s) 
               => Environment 
               -> RType 
               -> Int 
@@ -345,7 +354,7 @@ generateEUpTo env typ d = msum $ map (enumerateAt env typ) [0..d]
 -- | Perform a gradual check that @p@ has type @typ@ in @env@:
 -- if @p@ is a scalar, perform a full subtyping check;
 -- if @p@ is a (partially applied) function, check as much as possible with unknown arguments
-checkE :: (MonadSMT s, MonadHorn s) 
+checkE :: (MonadSMT s, MonadHorn s, RMonad s) 
        => Environment 
        -> RType 
        -> RProgram 
@@ -372,7 +381,7 @@ checkE env typ p@(Program pTerm pTyp) = do
   typingState . errorContext .= (noPos, empty)
   
 
-enumerateAt :: (MonadSMT s, MonadHorn s) 
+enumerateAt :: (MonadSMT s, MonadHorn s, RMonad s) 
             => Environment 
             -> RType 
             -> Int 
@@ -428,7 +437,9 @@ enumerateAt env typ d = do
       return pApp
 
 -- | Make environment inconsistent (if possible with current unknown assumptions)
-generateError :: (MonadSMT s, MonadHorn s) => Environment -> Explorer s RProgram
+generateError :: (MonadSMT s, MonadHorn s, RMonad s) 
+              => Environment 
+              -> Explorer s RProgram
 generateError env = do
   ctx <- asks . view $ _1. context
   writeLog 1 $ text "Checking" <+> pretty (show errorProgram) <+> text "in" $+$ pretty (ctx errorProgram)
