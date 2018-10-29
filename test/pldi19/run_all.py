@@ -94,7 +94,7 @@ ALL_BENCHMARKS = [
         Benchmark('List-Snoc', 'insert at end'),
         Benchmark('List-Reverse', 'reverse', 'insert at end'),
         #Benchmark('IncList-Insert', 'insert (sorted)', '$\\leq$, $\\neq$'),
-        Benchmark('List-Intersect', 'intersection', '$<$, member', ['--cut-branches=false', '-f=AllArguments', '-a=2']),
+        Benchmark('List-Intersect', 'intersection', '$<$, member', ['--backtrack', '-f=AllArguments', '-a=2']),
         Benchmark('List-ExtractMin', 'extract minimum', '$\\leq$, $\\neq$', ['-a=2', '-m 3']),
         # Try it by hand!
         #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member', ['-f=AllArguments', '-m=3'])
@@ -111,9 +111,9 @@ ALL_BENCHMARKS = [
     BenchmarkGroup("Sorted list", ['-f=AllArguments'], [
         Benchmark('StrictIncList-Insert', 'insert', '$<$'),
         Benchmark('StrictIncList-Delete', 'delete', '$<$'),
-        Benchmark('List-Diff', 'difference', 'member, $<$', ['--cut-branches=false', '-f=AllArguments', '-a=2']),
-        #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member',['-f=AllArguments','--cut-branches=false','-m=3'])
-        #Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments', '--cut-branches=false']),
+        Benchmark('List-Diff', 'difference', 'member, $<$', ['--backtrack', '-f=AllArguments', '-a=2']),
+        #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member',['-f=AllArguments','--backtrack','-m=3'])
+        #Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments', '--backtrack']),
         ]),
     BenchmarkGroup("Tree",  [], [
         Benchmark('Tree-Count', 'node count', '0, 1, +'),

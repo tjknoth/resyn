@@ -180,6 +180,8 @@ universalFml = snd . unUVar
 
 coefficientsOf = map coefficient
 
+defaultInterp = fzero
+
 -- | Convert PolynomialTerm into a formula for use in the counterexample query (ie instantiate the coefficients)
 pTermForCX :: ResourceSolution -> PolynomialTerm -> Formula
 pTermForCX coeffVals (PolynomialTerm coeff Nothing)  = exprValue coeffVals coeff 

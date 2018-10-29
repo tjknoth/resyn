@@ -63,7 +63,7 @@ main = do
                     _consistencyChecking = consistency,
                     _symmetryReduction = symmetry,
                     _explorerLogLevel = log_,
-                    _shouldCut = cut,
+                    _shouldCut = not cut,
                     _numPrograms = nump,
                     _resourceArgs = resArgs
                   }
@@ -130,7 +130,7 @@ data CommandLineArgs
         resources :: Bool,
         multiplicities :: Bool,
         instantiate_foralls :: Bool,
-        cut_branches :: Bool,
+        backtrack :: Bool,
         num_programs :: Int,
         ct :: Bool,
         cegis_max :: Int
@@ -165,7 +165,7 @@ synt = Synthesis {
   resources           = True            &= help ("Verify resource usage (default: True)") &= name "r" &= groupname "Resource analysis parameters",
   multiplicities      = True            &= help ("Use multiplicities when verifying resource usage (default: True)"),
   instantiate_foralls = True            &= help ("Solve exists-forall constraints by instantiating universally quantified expressions (default: True)"),
-  cut_branches        = True            &= help ("Do not backtrack past successfully synthesized branches (default: True)"),
+  backtrack           = False           &= help ("Backtrack past successfully synthesized branches (default: False)") &= name "b",
   num_programs        = 1               &= help ("Number of programs to produce if possible (default: 1)"),
   ct                  = False           &= help ("Require that all branching expressions consume a constant amount of resources (default: False)"),
   cegis_max           = 10              &= help ("Maximum number of iterations through the CEGIS loop (default: 10)")
