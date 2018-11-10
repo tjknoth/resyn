@@ -11,28 +11,10 @@ measure elems :: SList a -> Set a where
   Nil -> [] 
   Cons x xs -> [x] + elems xs
 
-
--- Length comparison
-{- compare :: xs: List {a| |1} -> ys: List {a| |1} -[1]-> {Bool | _v == (len xs == len ys)}
-compare = \xs. \ys. 
-  match xs with 
-    Nil ->
-      match ys with
-        Nil -> True
-        Cons yh yt -> False
-    Cons xh xt ->
-      match ys with 
-        Nil -> and False (compare xt ys)
-        Cons yh yt -> compare xt yt
--}
-
 false :: {Bool | _v == False}
 true :: {Bool | _v == True}
 and :: x: Bool -> y: Bool -> {Bool | _v == (x && y)}
-qualifier { x == y, x < y }
-
 
 -- Constant time version
-compare' :: xs: SList {a| |1} -> ys: SList {a| |1} -[1]-> {Bool | _v == ((len xs == len ys) && (elems xs == elems ys))}
-compare' = ?? 
-
+compare :: xs: SList {a| |1} -> ys: SList a -[1]-> {Bool | _v == (len xs == len ys)}
+compare = ?? 

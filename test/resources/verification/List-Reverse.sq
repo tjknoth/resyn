@@ -4,21 +4,21 @@
 --   We assume Nil requires no memory
 data List a where
 	Nil :: List a
-	Cons :: x: {1 ** a| | 1} -> xs: List a -> List a 
+	Cons :: x: a -> xs: List a -> List a 
   
 termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs  
 
 -- Traverses entire list once; given memory accordingly
-reverse' :: xs: List {1**a| |1} -> acc: List a -> List a
+reverse' :: xs: List {a| |1} -> acc: List a -> List a
 reverse' = \xs. \acc.
   match xs with
     Nil -> acc
     Cons y ys -> reverse' ys (Cons y acc)
 
 -- Wrapper for version using accumulator
-reverse :: xs: List {1**a| |1} -> List a
+reverse :: xs: List {a| |1} -> List a
 reverse = \xs. 
   reverse' xs Nil
 

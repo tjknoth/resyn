@@ -14,6 +14,7 @@ import Synquid.Logic
 import Synquid.Solver.Monad
 import Synquid.Util
 import Synquid.Pretty
+import Synquid.Solver.CEGIS (RMonad(..))
 
 import Data.List
 import Data.Maybe
@@ -30,7 +31,10 @@ import Debug.Trace
 {- Interface -}
 
 -- | Strategies for picking the next candidate solution to strengthen
-data CandidatePickStrategy = FirstCandidate | ValidWeakCandidate | InitializedWeakCandidate
+data CandidatePickStrategy = 
+  FirstCandidate 
+  | ValidWeakCandidate 
+  | InitializedWeakCandidate
       
 -- | Strategies for picking the next constraint to solve      
 data ConstraintPickStrategy = FirstConstraint | SmallSpaceConstraint
@@ -78,7 +82,7 @@ instance (Monad s, Applicative s, RMonad s) => RMonad (FixPointSolver s) where
   solveAndGetModel = lift . solveAndGetModel
   solveAndGetAssignment q f = lift $ solveAndGetAssignment q f
   modelGetAssignment s m = lift $ modelGetAssignment s m
-  modelGetMeasures s m = lift $ modelGetMeasures s m
+  modelGetUFs s m = lift $ modelGetUFs s m
   evalInModel fs m measure = lift $ evalInModel fs m measure
 
  

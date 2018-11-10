@@ -8,7 +8,7 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Cons x xs -> 1 + len xs 
 
 false :: {Bool | _v == False}
---true :: {Bool | _v == True}
+true :: {Bool | _v == True}
 and :: x: Bool -> y: Bool -> {Bool | _v == (x && y)}
 
 

@@ -16,6 +16,7 @@ import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Control.Lens as Lens
+import Debug.Trace
 
 {- Program terms -}
 
@@ -41,8 +42,8 @@ data BareProgram t =
 
 -- | Programs annotated with types
 data Program t = Program {
-  content :: BareProgram t,
-  typeOf :: t
+  content :: !(BareProgram t),
+  typeOf :: !t
 } deriving (Show, Functor)
 
 instance Eq (Program t) where
@@ -218,28 +219,31 @@ makeLenses ''MeasureDef
 
 type SymbolMap = Map Int (Map Id RSchema)  -- Variables and constants indexed by arity
 
-type ArgMap = Map Id [Set Formula] -- All possible constant arguments of measures with multiple arguments
+-- Map from measure ID to a list, where each element is a set 
+--  of possible instantiations of the relevant argument
+type ArgMap = Map Id [Set Formula] 
 
 -- | Typing environment
 data Environment = Environment {
   -- | Variable part:
-  _symbols :: SymbolMap,                   -- ^ Variables and constants (with their refinement types), indexed by arity
-  _boundTypeVars :: [Id],                  -- ^ Bound type variables
-  _boundPredicates :: [PredSig],           -- ^ Argument sorts of bound abstract refinements
-  _assumptions :: Set Formula,             -- ^ Unknown assumptions
-  _shapeConstraints :: Map Id SType,       -- ^ For polymorphic recursive calls, the shape their types must have
-  _usedScrutinees :: [RProgram],           -- ^ Program terms that has already been scrutinized
-  _unfoldedVars :: Set Id,                 -- ^ In eager match mode, datatype variables that can be scrutinized
-  _letBound :: Set Id,                     -- ^ Subset of symbols that are let-bound
+  _symbols :: SymbolMap,                     -- ^ Variables and constants (with their refinement types), indexed by arity
+  _ghostSymbols :: (Set Id),                 -- ^ Set of names of variables that do not carry potential -- ignored in sharing and transfer constraints
+  _freePotential :: Formula,                 -- ^ Extra free potential, used only for weakening
+  _boundTypeVars :: [Id],                    -- ^ Bound type variables
+  _boundPredicates :: [PredSig],             -- ^ Argument sorts of bound abstract refinements
+  _assumptions :: (Set Formula),             -- ^ Unknown assumptions
+  _shapeConstraints :: (Map Id SType),       -- ^ For polymorphic recursive calls, the shape their types must have
+  _usedScrutinees :: [RProgram],             -- ^ Program terms that has already been scrutinized
+  _unfoldedVars :: (Set Id),                 -- ^ In eager match mode, datatype variables that can be scrutinized
+  _letBound :: (Set Id),                     -- ^ Subset of symbols that are let-bound
   -- | Constant part:
-  _constants :: Set Id,                    -- ^ Subset of symbols that are constants
-  _datatypes :: Map Id DatatypeDef,        -- ^ Datatype definitions
-  _globalPredicates :: Map Id [Sort],      -- ^ Signatures (resSort:argSorts) of module-level logic functions (measures, predicates)
-  _measureDefs :: Map Id MeasureDef,       -- ^ Measure definitions
-  _typeSynonyms :: Map Id ([Id], RType),   -- ^ Type synonym definitions
-  _unresolvedConstants :: Map Id RSchema,  -- ^ Unresolved types of components (used for reporting specifications with macros)
-  _emptyCtors :: Set Id,                   -- ^ Empty constructors for data types 
-  _measureConstArgs :: ArgMap              -- ^ Map from measure names to possible valuations of each constant argument in the measure
+  _constants :: (Set Id),                    -- ^ Subset of symbols that are constants
+  _datatypes :: (Map Id DatatypeDef),        -- ^ Datatype definitions
+  _globalPredicates :: (Map Id [Sort]),      -- ^ Signatures (resSort:argSorts) of module-level logic functions (measures, predicates)
+  _measureDefs :: (Map Id MeasureDef),       -- ^ Measure definitions
+  _typeSynonyms :: (Map Id ([Id], RType)),   -- ^ Type synonym definitions
+  _unresolvedConstants :: (Map Id RSchema),  -- ^ Unresolved types of components (used for reporting specifications with macros)
+  _measureConstArgs :: ArgMap                -- ^ Map from measure names to possible valuations of each constant argument in the measure
 } deriving (Show)
 
 makeLenses ''Environment
@@ -253,6 +257,8 @@ instance Ord Environment where
 -- | Empty environment
 emptyEnv = Environment {
   _symbols = Map.empty,
+  _ghostSymbols = Set.empty,
+  _freePotential = fzero,
   _boundTypeVars = [],
   _boundPredicates = [],
   _assumptions = Set.empty,
@@ -266,16 +272,24 @@ emptyEnv = Environment {
   _measureDefs = Map.empty,
   _typeSynonyms = Map.empty,
   _unresolvedConstants = Map.empty,
-  _emptyCtors = Set.empty,
   _measureConstArgs = Map.empty
 }
+
+-- Used to carry around symbols, list of ghosts, and free potential expression 
+--   in resource constraints without storing all the extra stuff.
+mkResourceEnv syms ghosts fp = 
+  emptyEnv {
+    _symbols = syms,
+    _ghostSymbols = ghosts,
+    _freePotential = fp
+  }
 
 -- | 'symbolsOfArity' @n env@: all symbols of arity @n@ in @env@
 symbolsOfArity n env = Map.findWithDefault Map.empty n (env ^. symbols)
 
 -- | All symbols in an environment
 allSymbols :: Environment -> Map Id RSchema
-allSymbols env = Map.unions $ Map.elems (env ^. symbols)
+allSymbols env = Map.unions $ Map.elems (env ^. symbols) 
 
 -- | All symbols of a given sort in an environment
 allScalarsOfSort :: Environment -> Sort -> Map Id RSchema
@@ -357,23 +371,21 @@ isBound :: Environment -> Id -> Bool
 isBound env tv = tv `elem` env ^. boundTypeVars
 
 addVariable :: Id -> RType -> Environment -> Environment
-addVariable name t = addPolyVariable name (Monotype t)
+addVariable name t = addPolyVariable name (Monotype t) 
+
+addGhostVariable :: Id -> RType -> Environment -> Environment
+addGhostVariable name t = addVariable name t . (ghostSymbols %~ Set.insert name)
 
 addPolyVariable :: Id -> RSchema -> Environment -> Environment
 addPolyVariable name sch e =  let n = arity (toMonotype sch) in (symbols %~ Map.insertWith Map.union n (Map.singleton name sch)) e
   where
-    syms = unwords $ Map.keys $ allSymbols e
-    en = Map.keys $ allSymbols e
     n = arity (toMonotype sch)
-    en' = Map.keys $ allSymbols ((symbols %~ Map.insertWith Map.union n (Map.singleton name sch)) e)
-
--- | 'addConstant' @name t env@ : add type binding @name@ :: Monotype @t@ to @env@
-addConstant :: Id -> RType -> Environment -> Environment
-addConstant name t = addPolyConstant name (Monotype t)
 
 -- | 'addPolyConstant' @name sch env@ : add type binding @name@ :: @sch@ to @env@
 addPolyConstant :: Id -> RSchema -> Environment -> Environment
-addPolyConstant name sch = addPolyVariable name sch . (constants %~ Set.insert name)
+-- Polymorphic signatures should be excluded from sharing/transfer constraints
+addPolyConstant name sch@(ForallT x s) = addPolyVariable name sch . (ghostSymbols %~ Set.insert name)
+addPolyConstant name sch = addPolyVariable name sch
 
 addLetBound :: Id -> RType -> Environment -> Environment
 addLetBound name t = addVariable name t . (letBound %~ Set.insert name)
@@ -415,7 +427,7 @@ addDatatype name dt = over datatypes (Map.insert name dt)
 
 -- | 'addEmptyCtor' @name env@ : add empty constructor @name@ the environment
 addEmptyCtor :: Id -> Environment -> Environment
-addEmptyCtor name = over emptyCtors (Set.insert name)
+addEmptyCtor name = over ghostSymbols (Set.insert name)
 
 -- | 'lookupConstructor' @ctor env@ : the name of the datatype for which @ctor@ is registered as a constructor in @env@, if any
 lookupConstructor :: Id -> Environment -> Maybe Id
@@ -444,6 +456,8 @@ allPredicates env = Map.fromList (map (\(PredSig pName argSorts resSort) -> (pNa
 
 -- | 'allMeasuresOf' @dtName env@ : all measure of datatype with name @dtName@ in @env@
 allMeasuresOf dtName env = Map.filter (\(MeasureDef (DataS sName _) _ _ _ _) -> dtName == sName) $ env ^. measureDefs
+
+allIntMeasuresOf dtName env = Map.filter (\(MeasureDef _ s _ _ _) -> s == IntS) (allMeasuresOf dtName env)
 
 -- | 'allMeasurePostconditions' @baseT env@ : all nontrivial postconditions of measures of @baseT@ in case it is a datatype
 allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env =
@@ -548,19 +562,15 @@ isSynthesisGoal _ = False
 
 {- Misc -}
 
-data SubtypeVariant = Simple -- Consistency = False, Nondeterministic = False
-  | Consistency -- Consistency = True, Nondeterministic = False
-  | Nondeterministic -- Consistency = False, Nondeterministic = True
-  deriving (Show, Eq, Ord)
-
 -- | Typing constraints
 data Constraint = 
-  Subtype !Environment !(Maybe Formula) !RType !RType !SubtypeVariant !Id
+  Subtype !Environment !RType !RType !Bool !Id
   | WellFormed !Environment !RType !Id
   | WellFormedCond !Environment !Formula
   | WellFormedMatchCond !Environment !Formula
   | WellFormedPredicate !Environment ![Sort] !Id
-  | SharedEnv !Environment !SymbolMap !SymbolMap !Id
+  | SharedEnv !Environment !Environment !Environment !Id
+  | Transfer !Environment !Environment !Id
   | ConstantRes !Environment !Id
   deriving (Show, Eq, Ord)
 
@@ -569,22 +579,22 @@ data TaggedConstraint = TaggedConstraint {
   constraint :: !Formula -- Simplified Constraint
 } deriving (Show, Eq, Ord)
 
-labelOf :: Constraint -> Id
-labelOf (Subtype _ _ _ _ _ l)  = l
-labelOf (WellFormed _ _ l)     = l
+labelOf (Subtype _ _ _ _ l) = l
+labelOf (WellFormed _ _ l)  = l
 labelOf (SharedEnv _ _ _ l) = l
-labelOf _                      = ""
+labelOf (Transfer _ _ l)    = l
+labelOf _                   = ""
 
-envFrom :: Constraint -> Environment
-envFrom (Subtype e _ _ _ _ _)       = e
+envFrom (Subtype e _ _ _ _)         = e
 envFrom (WellFormed e _ _)          = e
 envFrom (WellFormedCond e _)        = e
 envFrom (WellFormedPredicate e _ _) = e
 envFrom (SharedEnv e _ _ _)         = e
 envFrom (ConstantRes e _)           = e
+envFrom (Transfer e _ _)            = e
 
-isCTConstraint (ConstantRes _ _) = True
-isCTConstraint _                 = False
+isCTConstraint ConstantRes{} = True
+isCTConstraint _             = False
 
 -- | Synthesis goal
 data Goal = Goal {
@@ -675,11 +685,9 @@ getAllPreds _              = Set.empty
 --   instantiations of those constant arguments by scraping the schema annotations
 getAllCArgsFromSchema :: Environment -> RSchema -> ArgMap
 getAllCArgsFromSchema env sch = Map.filter (not . null) $
--- Should I maybe use refinements AND resource annotations to check for arguments?
---   Or are resource annotations redundant?
-  let allRefs = allRefinementsOf sch 
+  let allForms = (allRefinementsOf sch) ++ (allRFormulas True (typeFromSchema sch))
       measures = Map.keys (env ^. measureDefs)
-  in Map.unionsWith combineArgLists $ map (getAllCArgs measures) allRefs
+  in Map.unionsWith combineArgLists $ map (getAllCArgs measures) allForms
 
 combineArgLists = zipWith Set.union
 

@@ -1,6 +1,6 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, FlexibleContexts #-}
 
--- | Interface to SMT solvers
+-- | Basically just a ton of types used throughout the various solvers
 module Synquid.Solver.Monad where
 
 import Synquid.Logic
@@ -11,27 +11,74 @@ import Synquid.Util
 import Synquid.Error
 
 import Data.Map (Map)
-import qualified Data.Set as Set
+import qualified Data.Map as Map
 import Data.Set (Set)
+import qualified Data.Set as Set
 import Control.Lens
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Trans.Except
-import Z3.Monad (Model)
+import qualified Z3.Monad as Z3 
+import qualified Data.Bimap as Bimap
+import Data.Bimap (Bimap)
 
+
+data CEGISParams = CEGISParams {
+  numIterations :: Int, 
+  annotationDomain :: Maybe AnnotationDomain
+} deriving (Show, Eq)
+
+data AnnotationDomain = 
+  Variable | Measure | Both
+  deriving (Show, Eq)
 
 -- | Wrapper for Z3 Model data structure
-type SMTModel = (Model, String)
+type SMTModel = (Z3.Model, String)
 
--- Interpretation of a measure in a Z3 model
-data Z3Measure = Z3Measure {
-  _measureName :: String,
-  _measureDef :: MeasureDef,
+-- Interpretation of an uniterpreted function in a Z3 model
+data Z3UFun = Z3UFun {
+  _functionName :: String,
   _entries :: Map [Formula] Formula,
   _defaultVal :: Formula
 } deriving (Show, Eq)
 
-makeLenses ''Z3Measure
+makeLenses ''Z3UFun
+
+instance Pretty Z3UFun where
+  pretty (Z3UFun m es defVal) = text "measure" <+> text m </> prettyEntries es </> prettydef 
+    where 
+      prettyEntries es = nest 2 $ pretty $ Map.assocs es
+      prettydef = nest 2 $ pretty defVal 
+
+-- Uninterpreted function typeclass
+class UF a where 
+  argSorts :: a -> [Sort]
+  resSort :: a -> Sort
+
+data Z3Env = Z3Env {
+  envSolver  :: Z3.Solver,
+  envContext :: Z3.Context
+}
+
+-- | Z3 state while building constraints
+data Z3Data = Z3Data {
+  _mainEnv :: Z3Env,                          -- ^ Z3 environment for the main solver
+  _sorts :: Map Sort Z3.Sort,                 -- ^ Mapping from Synquid sorts to Z3 sorts
+  _vars :: Map Id Z3.AST,                     -- ^ AST nodes for scalar variables
+  _functions :: Map Id Z3.FuncDecl,           -- ^ Function declarations for measures, predicates, and constructors
+  _storedDatatypes :: Set Id,                 -- ^ Datatypes mapped directly to Z3 datatypes (monomorphic and non-recursive)
+  _controlLiterals :: Bimap Formula Z3.AST,   -- ^ Control literals for computing UNSAT cores
+  _auxEnv :: Z3Env,                           -- ^ Z3 environment for the auxiliary solver
+  _boolSortAux :: Maybe Z3.Sort,              -- ^ Boolean sort in the auxiliary solver
+  _controlLiteralsAux :: Bimap Formula Z3.AST -- ^ Control literals for computing UNSAT cores in the auxiliary solver
+}
+
+makeLenses ''Z3Data
+
+type Z3State = StateT Z3Data IO
+
+class Declarable a where 
+  declare :: (Z3.MonadZ3 s, MonadState Z3Data s) => a -> (Sort -> String -> [Sort] -> s Z3.FuncDecl)
 
 class (Monad s, Applicative s) => MonadSMT s where  
   initSolver :: Environment -> s ()                                                  -- ^ Initialize solver  
@@ -42,9 +89,8 @@ class (Monad s, Applicative s) => RMonad s where
   solveAndGetModel :: Formula -> s (Maybe SMTModel)                                  -- ^ 'solveAndGetModel' @fml@: Evaluate @fml@ and, if satisfiable, return the model object
   solveAndGetAssignment :: Formula -> [String] -> s (Maybe (Map String Formula))     -- ^ 'solveAndGetAssignment' @fml@ @vars@: If @fml@ is satsiable, return the assignments of variables @vars@
   modelGetAssignment :: [String] -> SMTModel -> s (Maybe (Map String Formula))       -- ^ 'modelGetAssignment' @vals@ @m@: Get assignments of all variables @vals@ in model @m@
-  modelGetMeasures :: [(String, MeasureDef)] -> SMTModel -> s (Map String Z3Measure) -- ^ 'modelGetMeasures' @ms model@: Get interpretations of all measures @ms@ given @model@
-  evalInModel :: [Formula] -> SMTModel -> Z3Measure -> s Formula
-  
+  modelGetUFs :: (Declarable a, UF a) => [(String, a)] -> SMTModel -> s (Map String Z3UFun) -- ^ 'modelGetMeasures' @ms model@: Get interpretations of all measures @ms@ given @model@
+  evalInModel :: [Formula] -> SMTModel -> Z3UFun -> s Formula
 
 class (Monad s, Applicative s) => MonadHorn s where
   initHornSolver :: Environment -> s Candidate                                                -- ^ Initial candidate solution
@@ -65,7 +111,7 @@ data TypingParams = TypingParams {
   _checkMultiplicities :: Bool,                                     -- ^ Should multiplicities be considered when generating resource constraints
   _instantiateUnivs :: Bool,                                        -- ^ When solving exists-forall constraints, instantiate universally quantified expressions
   _constantRes :: Bool,                                             -- ^ Check constant-timedness or not
-  _cegisMax :: Int                                                  -- ^ Maximum number of iterations through the CEGIS loop
+  _cegisParams :: CEGISParams                                       -- ^ Miscellaneous CEGIS parameters
 }
 
 makeLenses ''TypingParams

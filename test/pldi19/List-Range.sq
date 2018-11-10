@@ -9,8 +9,6 @@ termination measure ilen :: IList a -> {Int | _v >= 0} where
 measure ielems :: IList a -> Set a where
   INil -> []
   ICons x xs -> [x] + ielems xs
-  
-lt :: x: a -> y: a -> {Bool | _v == (x < y)}
-	
-insert :: x: a -> xs: IList {a| |1} -[1]-> {IList a | ielems _v == ielems xs + [x]}
-insert = ??
+
+range :: lo: Int -> hi: {Int | _v >= lo | _v - lo} -> {IList {a | lo <= _v <= hi} | len _v == (hi - lo)}
+range = ??

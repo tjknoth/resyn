@@ -270,7 +270,7 @@ parseUnrefTypeNoArgs = do
 parseMultiplicity = do
   formula <- parseFormula
   reservedOp "**"
-  return $ Fml formula
+  return formula
 
 parseUnrefTypeWithArgs = do
   name <- parseTypeName
@@ -287,7 +287,7 @@ parseScalarRefPotType = braces $ do
   reservedOp "|"
   refinement <- optionMaybe parseFormula 
   reservedOp "|"
-  potential <- Fml <$> parseFormula
+  potential <- parseFormula
   let refinement' = fromMaybe ftrue refinement
   return $ ScalarT baseType refinement' potential
 

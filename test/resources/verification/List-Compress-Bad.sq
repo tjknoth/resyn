@@ -4,7 +4,7 @@
 --   We assume Nil requires no memory
 data List a where
   Nil :: List a
-  Cons :: x: {1 ** a| |1} -> xs: List a -> List a
+  Cons :: x: a -> xs: List a -> List a
 
 termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
@@ -12,7 +12,7 @@ termination measure len :: List a -> {Int | _v >= 0} where
 
 -- Runs in exponential time (and uses memory accordingly)
 --   , should fail to check against the provided linear-memory resources
-compress :: xs: List {1 ** a| |1} -> List a
+compress :: xs: List a -[1]-> List a
 compress = \xs.
   match xs with
     Nil -> Nil 

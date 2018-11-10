@@ -33,14 +33,18 @@ reconstruct :: (MonadSMT s, MonadHorn s, RMonad s)
             -> Goal 
             -> s (Either ErrorMessage [(RProgram, TypingState)])
 reconstruct eParams tParams goal = do
-    let env = gEnvironment goal
-    initTS <- initTypingState env (gSpec goal) 
-    runExplorer (eParams { _sourcePos = gSourcePos goal }) tParams (Reconstructor reconstructTopLevel) initTS go
+    let goal' = adjustGoalEnv goal
+    initTS <- initTypingState goal'
+    runExplorer (eParams { _sourcePos = gSourcePos goal' }) tParams (Reconstructor reconstructTopLevel) initTS (go goal')
   where
-    go = do
-      pMain <- reconstructTopLevel goal { gDepth = _auxDepth eParams }     -- Reconstruct the program
-      p <- flip insertAuxSolutions pMain <$> use solvedAuxGoals            -- Insert solutions for auxiliary goals stored in @solvedAuxGoals@
-      runInSolver $ finalizeProgram p                                      -- Substitute all type/predicates variables and unknowns
+    go g = do
+      pMain <- reconstructTopLevel g { gDepth = _auxDepth eParams }  -- Reconstruct the program
+      p <- flip insertAuxSolutions pMain <$> use solvedAuxGoals      -- Insert solutions for auxiliary goals stored in @solvedAuxGoals@
+      runInSolver $ finalizeProgram p                                -- Substitute all type/predicates variables and unknowns
+    adjustGoalEnv goal = 
+      let argmap = getAllCArgsFromSchema (gEnvironment goal) (gSpec goal)
+          genv' = (gEnvironment goal) { _measureConstArgs = argmap }
+      in  goal { gEnvironment = genv' }
 
 
 reconstructTopLevel :: (MonadSMT s, MonadHorn s, RMonad s) 
@@ -186,7 +190,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
     let scrT = refineTop env $ shape $ lastType $ head consTypes
     (cEnv, bEnv) <- shareContext env $ show $ text "match" <+> pretty iScr
     pScrutinee <- inContext (\p -> Program (PMatch p []) t) 
-      $ reconstructETopLevel cEnv scrT iScr
+      $ reconstructIE cEnv scrT iScr
     let (bEnv', tScr) = embedContext bEnv (typeOf pScrutinee)
     let scrutineeSymbols = symbolList pScrutinee
     let isGoodScrutinee = not (head scrutineeSymbols `elem` consNames) &&                 -- Is not a value
@@ -205,7 +209,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
       Nothing -> throwErrorWithDescription $ text "Not in scope: data constructor" </> squotes (text consName)
       Just consSch -> do
                         consT <- instantiate env consSch True args -- Set argument names in constructor type to user-provided binders
-                        let consT' = typeMultiply pzero consT
+                        let consT' = typeMultiply fzero consT
                         case lastType consT' of
                           (ScalarT (DatatypeT dtName _ _) _ _) -> do
                             case mName of
@@ -244,7 +248,9 @@ reconstructIE :: (MonadSMT s, MonadHorn s, RMonad s)
               -> RType 
               -> UProgram
               -> Explorer s RProgram
-reconstructIE = reconstructETopLevel 
+reconstructIE env typ p = do 
+  env' <- transferPotential env ""
+  reconstructETopLevel env' typ p
 
 -- | 'reconstructE' @env t impl@ :: reconstruct unknown types and terms in a judgment @env@ |- @impl@ :: @t@ where @impl@ is an elimination term
 -- (bottom-up phase of bidirectional reconstruction)
@@ -276,14 +282,12 @@ reconstructE' env typ PHole = do
 reconstructE' env typ (PSymbol name) =
   case lookupSymbol name (arity typ) (hasSet typ) env of
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
-    Just sch -> do
-      (t, env') <- retrieveVarType name sch env 
-      let p = Program (PSymbol name) t
-      checkE env' typ p
-      return p
-reconstructE' env typ (PApp iFun iArg) = do
+    Just sch -> retrieveAndCheckVarType name sch typ env 
+reconstructE' env typ p@(PApp iFun iArg) = do
   x <- freshVar env "x"
-  (env1, env2) <- shareContext env $ show $ text "APP" <+> pretty iFun <+> pretty iArg 
+  let fp = env ^. freePotential
+  (fp', fp'') <- shareFreePotential fp $ show $ plain $ pretty p
+  (env1, env2) <- shareContext (env { _freePotential = fp' }) $ show $ plain $ pretty p
   pFun <- inContext (\p -> Program (PApp p uHole) typ) 
     $ reconstructE env1 (FunctionT x AnyT typ defCost) iFun
   let tp@(FunctionT x tArg tRes _) = typeOf pFun
@@ -294,8 +298,9 @@ reconstructE' env typ (PApp iFun iArg) = do
       pArg <- generateHOArg env2 (d - 1) tArg' iArg
       return (Program (PApp pFun pArg) tRes')
     else do -- First-order argument: generate now
+      let tArg'' = subtractPotential tArg' fp''
       pArg <- inContext (\p -> Program (PApp pFun p) typ) 
-        $ reconstructE env2 tArg' iArg
+        $ reconstructE env2 tArg'' iArg
       let tRes'' = appType env pArg x tRes'
       return (Program (PApp pFun pArg) tRes'') 
   checkE env typ pApp

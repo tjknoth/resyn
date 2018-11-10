@@ -16,6 +16,8 @@ import Synquid.Stats
 import Synquid.Solver.Monad
 import Synquid.Solver.HornClause
 import Synquid.Solver.TypeConstraint
+import Synquid.Solver.CEGIS (CEGISParams(..))
+import Synquid.Solver.Resource (getAnnotationStyle)
 
 import Data.List
 import Control.Monad
@@ -48,7 +50,7 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _checkMultiplicities = _checkMults rArgs,
                         _instantiateUnivs = _instantiateForall rArgs,
                         _constantRes = _constantTime rArgs,
-                        _cegisMax = _cegisBound rArgs
+                        _cegisParams = CEGISParams (rArgs^.cegisBound) (getAnnotationStyle (gSpec goal))
                       }
       in do cp0 <- lift $ lift startTiming  -- TODO time stats for this one as well?
             res <- reconstruct explorerParams typingParams goal

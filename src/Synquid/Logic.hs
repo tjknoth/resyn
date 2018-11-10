@@ -30,6 +30,13 @@ isData _ = False
 sortArgsOf (DataS _ sArgs) = sArgs
 varSortName (VarS name) = name
 
+sortShape BoolS    = BoolS 
+sortShape IntS     = IntS 
+sortShape (VarS _) = VarS ""
+sortShape DataS{}  = DataS "" []
+sortShape (SetS _) = SetS BoolS -- Instantiate with an arbitrary sort
+sortShape AnyS     = AnyS
+
 -- | 'typeVarsOfSort' @s@ : all type variables in @s@
 typeVarsOfSort :: Sort -> Set Id
 typeVarsOfSort (VarS name) = Set.singleton name
@@ -250,6 +257,27 @@ predsOf (Binary _ e1 e2) = predsOf e1 `Set.union` predsOf e2
 predsOf (Ite e0 e1 e2) = predsOf e0 `Set.union` predsOf e1 `Set.union` predsOf e2
 predsOf (All _ e) = predsOf e
 predsOf _ = Set.empty
+
+-- Does a formula contain a predicate application
+predsOnly :: Formula -> Bool
+predsOnly (Pred _ p es) = True 
+predsOnly (SetLit _ elems) = any predsOnly elems
+predsOnly (Unary _ e) = predsOnly e
+predsOnly (Binary _ e1 e2) = predsOnly e1 || predsOnly e2
+predsOnly (Ite e0 e1 e2) = predsOnly e0 || predsOnly e1 || predsOnly e2
+predsOnly (All _ e) = predsOnly e
+predsOnly _ = False
+
+-- Does a formula contain a variable (not as an argument to a predicate)
+varsOnly :: Formula -> Bool
+varsOnly (SetLit _ elems) = any varsOnly elems
+varsOnly v@(Var _ _) = True
+varsOnly (Unary _ e) = varsOnly e
+varsOnly (Binary _ e1 e2) = varsOnly e1 || varsOnly e2
+varsOnly (Ite e0 e1 e2) = varsOnly e0 || varsOnly e1 || varsOnly e2
+varsOnly (Pred _ _ es) = False 
+varsOnly (All x e) = varsOnly e
+varsOnly _ = False
 
 -- | 'leftHandSide' @fml@ : left-hand side of a binary expression
 leftHandSide (Binary _ l _) = l
@@ -509,33 +537,6 @@ instance Ord Candidate where
 ---------------------------------------
 ---------------------------------------
 
--- Potential annotations are either bottom (infinity) or a logical formula
-data Potential = Infty | Fml !Formula 
-  deriving (Eq, Ord, Show)
-
-pzero = Fml (IntLit 0)
-pone  = Fml (IntLit 1)
-
-pFormula (Fml f) = f
-
-intFml x = Fml (IntLit x)
-
--- Generalized infinity-preserving unary formula operations
--- Only preserves infinity if the result of (fn infty) should be infty
-liftFmlOp :: (Formula -> Formula) -> Potential -> Potential
-liftFmlOp fn Infty   = Infty
-liftFmlOp fn (Fml f) = Fml $ fn f
-
--- Same, but for binary operations
--- Only preserves infinity if the result of (fn infty x) = infty for all x
---   For example, lifting min won't work
-liftFmlBOp :: (Formula -> Formula -> Formula) -> Potential -> Potential -> Potential
-liftFmlBOp fn p q = 
-  case (p, q) of 
-    (Infty, _)     -> Infty 
-    (_, Infty)     -> Infty
-    (Fml f, Fml g) -> Fml $ f `fn` g
-
 isTrivial :: Formula -> Bool
 isTrivial (BoolLit True)    = True 
 isTrivial (Binary Eq f1 f2) = f1 == f2
@@ -564,11 +565,9 @@ simpleMultiply f g =
 isZero (IntLit 0) = True 
 isZero _          = False
 
-sumPotentials = liftFmlBOp addFormulas
-multiplyPotentials = liftFmlBOp multiplyFormulas
-
 multiplyFormulas = simpleFormulaBOp simpleMultiply isMultiplicativeId
 addFormulas = simpleFormulaBOp (|+|) isAdditiveId
+subtractFormulas = simpleFormulaBOp (|-|) isAdditiveId
 sumFormulas :: Foldable t => t Formula -> Formula
 sumFormulas = foldl addFormulas fzero
 

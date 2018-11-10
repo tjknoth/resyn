@@ -8,10 +8,10 @@ module Synquid.Solver.Util (
     potentialVars,
     freshId,
     freshVar,
-    somewhatFreshVar,
     freshValueVars,
-    isSatWithModel,
     throwError,
+    allMeasureApps,
+    nonGhostScalars,
     writeLog
 ) where
 
@@ -56,11 +56,11 @@ embedding env vars includeQuantified = do
                                           (fml : allMeasurePostconditions includeQuantified baseT env) 
                         newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls' in 
                     addBindings env tass pass qmap (fmls `Set.union` fmls') (rest `Set.union` newVars)
-                  LetT y tDef tBody -> addBindings (addVariable x tBody . addVariable y tDef . removeVariable x $ env) tass pass qmap fmls vars
+                  LetT y tDef tBody -> addBindings (addGhostVariable x tBody . addGhostVariable y tDef . removeVariable x $ env) tass pass qmap fmls vars
                   AnyT -> Set.singleton ffalse
                   _ -> error $ unwords ["embedding: encountered non-scalar variable", x, "in 0-arity bucket"]
                 Just sch -> addBindings env tass pass qmap fmls rest -- TODO: why did this work before?
-    allSymbols env = symbolsOfArity 0 env
+    allSymbols = symbolsOfArity 0 
 
 embedEnv :: Monad s => Environment -> Formula -> Bool -> TCSolver s (Set Formula)
 embedEnv env fml consistency = do 
@@ -93,11 +93,16 @@ embedSingletonUnknowns env = do
 
 
 -- | 'instantiateConsAxioms' @env fml@ : If @fml@ contains constructor applications, return the set of instantiations of constructor axioms for those applications in the environment @env@
-instantiateConsAxioms :: Environment -> Maybe Formula -> Formula -> Set Formula
-instantiateConsAxioms env mVal fml = let inst = instantiateConsAxioms env mVal in  
-  case fml of
-    Cons resS@(DataS dtName _) ctor args -> Set.unions $ Set.unions (map (measureAxiom resS ctor args) (Map.assocs $ allMeasuresOf dtName env)) :
-                                                          map (instantiateConsAxioms env Nothing) args
+instantiateConsAxioms :: Environment -> Bool -> Maybe Formula -> Formula -> Set Formula
+instantiateConsAxioms env numeric mVal fml = 
+  let inst = instantiateConsAxioms env numeric mVal 
+      allMeasures dt e = Map.assocs $
+        if numeric
+          then allIntMeasuresOf dt e
+          else allMeasuresOf dt e
+  in case fml of
+    Cons resS@(DataS dtName _) ctor args -> Set.unions $ Set.unions (map (measureAxiom resS ctor args) (allMeasures dtName env)) :
+                                                          map (instantiateConsAxioms env numeric Nothing) args
     Unary op e -> inst e
     Binary op e1 e2 -> inst e1 `Set.union` inst e2
     Ite e0 e1 e2 -> inst e0 `Set.union` inst e1 `Set.union` inst e2
@@ -119,16 +124,15 @@ instantiateConsAxioms env mVal fml = let inst = instantiateConsAxioms env mVal i
         then Set.singleton vSubstBody
         else let
           constArgList = Map.lookup mname (_measureConstArgs env)
-        in 
-          case constArgList of 
-            Nothing -> Set.empty
-            Just constArgs -> 
-              let 
-                possibleArgs = map Set.toList constArgs
-                possibleSubsts = zipWith (\(x, s) vars -> zip (repeat x) vars) constantArgs possibleArgs  
-                -- Nondeterministically choose one concrete argument from all lists of possible arguments
-                allArgLists = sequence possibleSubsts
-              in Set.fromList $ map ((`substitute` vSubstBody) . Map.fromList) allArgLists
+        in Set.fromList $ allMeasureApps constArgList constantArgs vSubstBody 
+
+allMeasureApps :: Maybe [Set Formula] -> [(Id, Sort)] -> Formula -> [Formula]
+allMeasureApps Nothing _ _ = []
+allMeasureApps (Just pArgs) constantArgs body = 
+  let possibleArgs = map Set.toList pArgs
+      possibleSubsts = zipWith (\(x, _) vars -> zip (repeat x) vars) constantArgs possibleArgs
+      allArgLists = sequence possibleSubsts
+  in  map ((`substitute` body) . Map.fromList) allArgLists
 
 bottomValuation :: QMap -> Formula -> Formula
 bottomValuation qmap fml = applySolution bottomSolution fml
@@ -163,20 +167,9 @@ freshValueVars fml sort = do
   newVar <- Var sort <$> freshValueVarId
   return $ substitute (Map.singleton valueVarName newVar) fml
 
--- | 'somewhatFreshVar' @env prefix sort@ : A variable of sort @sort@ not bound in @env@
--- Exists to generate fresh variables for multi-argument measures without making all of the constructor axiom instantiation code monadic
-somewhatFreshVar :: Environment -> String -> Sort -> Formula
-somewhatFreshVar env prefix s = Var s name 
-  where 
-    name = unbound 0 (prefix ++ show 0)
-    unbound n v = if Set.member v (universalSyms env)
-                    then unbound (n + 1) (v ++ show n)
-                    else v
+nonGhostScalars env = Map.filterWithKey (nonGhost env) $ symbolsOfArity 0 env
 
--- | 'isSatWithModel' : check satisfiability and return the model accordingly
-isSatWithModel :: RMonad s => Formula -> TCSolver s (Maybe SMTModel)
-isSatWithModel = lift . lift . lift . solveAndGetModel
-
+nonGhost env x _ = Set.notMember x (env^.ghostSymbols)
 
 -- | Signal type error
 throwError :: MonadHorn s => Doc -> TCSolver s ()

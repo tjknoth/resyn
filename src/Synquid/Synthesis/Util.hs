@@ -227,17 +227,23 @@ generateAuxGoals = do
     etaContract' binders p                                                   = Nothing
 
 -- Variable formula with fresh variable idfreshPot :: MonadHorn s => Explorer s Potential 
-freshPot :: MonadHorn s => Explorer s Potential
+freshPot :: MonadHorn s => Explorer s Formula
 freshPot = do 
   x <- freshId potentialPrefix
   (typingState . resourceVars) %= Set.insert x
-  return $ Fml $ Var IntS x
+  return $ Var IntS x
 
-freshMul :: MonadHorn s => Explorer s Potential
+freshMul :: MonadHorn s => Explorer s Formula
 freshMul = do
   x <- freshId multiplicityPrefix
   (typingState . resourceVars) %= Set.insert x
-  return $ Fml $ Var IntS x
+  return $ Var IntS x
+
+freshFreePotential :: MonadHorn s => Explorer s Formula
+freshFreePotential = do
+  fp <- freshId freePotentialPrefix 
+  (typingState . resourceVars) %= Set.insert fp
+  return $ Var IntS fp
 
 -- | 'freshPotentials' @sch r@ : Replace potentials in schema @sch@ by unwrapping the foralls. If @r@, recursively replace potential annotations in the entire type. Otherwise, just replace top-level annotations.
 freshPotentials :: MonadHorn s => RSchema -> Bool -> Explorer s RSchema
@@ -254,8 +260,7 @@ freshPotentials (ForallP x t) replaceAll = do
 -- Replace potentials in a TypeSkeleton
 freshPotentials' :: MonadHorn s => RType -> Bool -> Explorer s RType
 -- TODO: probably don't need to bother traversing the type here, since annotations on type vars should be Infty as well
-freshPotentials' t@(ScalarT base fml Infty) replaceAll = return t
-freshPotentials' (ScalarT base fml (Fml pot)) replaceAll = do 
+freshPotentials' (ScalarT base fml pot) replaceAll = do 
   pot' <- freshPot
   base' <- if replaceAll then freshMultiplicities base replaceAll else return base
   return $ ScalarT base' fml pot'
@@ -263,8 +268,7 @@ freshPotentials' t _ = return t
 
 -- Replace potentials in a BaseType
 freshMultiplicities :: MonadHorn s => BaseType Formula -> Bool -> Explorer s (BaseType Formula)
-freshMultiplicities t@(TypeVarT s name Infty) _ = return t
-freshMultiplicities (TypeVarT s name (Fml m)) _ = do 
+freshMultiplicities (TypeVarT s name m) _ = do 
   m' <- freshMul
   return $ TypeVarT s name m'
 freshMultiplicities (DatatypeT name ts ps) replaceAll = do
@@ -281,29 +285,11 @@ addScrutineeToEnv env pScr tScr = do
   checkres <- asks . view $ _1 . resourceArgs . checkRes
   (x, env') <- toVar (addScrutinee pScr env) pScr
   varName <- freshId "x"
-  let tScr' = addPotential (typeMultiply pzero tScr) (fromMaybe pzero (topPotentialOf tScr))
-  let env'' = addVariable varName tScr' env'
+  let tScr' = addPotential (typeMultiply fzero tScr) (fromMaybe fzero (topPotentialOf tScr))
+  let env'' = addGhostVariable varName tScr' env'
   if checkres
     then return (x, env'')
     else return (x, env')
-
--- | Given a name, schema, and environment, retrieve the variable type from the environment and split it into left and right types with fresh potential variables, generating constraints accordingly.
-retrieveVarType :: (MonadHorn s, MonadSMT s) 
-                => Id 
-                -> RSchema 
-                -> Environment 
-                -> Explorer s (RType, Environment)
-retrieveVarType name sch env = do 
-  let (isVariable, tempenv) = removeSymbol name env
-  let env' = if isVariable 
-      then addPolyVariable name (schemaMultiply pzero sch) tempenv 
-      else env
-  t <- symbolType env name sch
-  symbolUseCount %= Map.insertWith (+) name 1
-  case Map.lookup name (env ^. shapeConstraints) of
-    Nothing -> return ()
-    Just sc -> addSubtypeConstraint env (refineBot env $ shape t) (refineTop env sc) False ""
-  return (t, env')
 
 -- | Generate subtyping constraint
 addSubtypeConstraint :: (MonadHorn s, MonadSMT s) 
@@ -314,26 +300,7 @@ addSubtypeConstraint :: (MonadHorn s, MonadSMT s)
                      -> Id 
                      -> Explorer s ()
 addSubtypeConstraint env ltyp rtyp consistency tag = 
-  let variant = if consistency then Consistency else Simple in
-  addConstraint $ Subtype env Nothing ltyp rtyp variant tag
-
--- | Generate nondeterministic subtyping constraint -- attempt to re-partition "free" potential between variables in context
-checkNDSubtype :: (MonadHorn s, MonadSMT s) 
-               => Environment 
-               -> RType 
-               -> RType 
-               -> Id 
-               -> Explorer s ()
-checkNDSubtype env ltyp rtyp tag = 
-  if sc ltyp || sc rtyp 
-    then do 
-      fp <- Var IntS <$> freshId freePotentialPrefix 
-      addConstraint $ Subtype env (Just fp) ltyp rtyp Nondeterministic tag
-    else addSubtypeConstraint env ltyp rtyp False tag
-  where 
-    sc ScalarT{} = True
-    sc LetT{}    = True 
-    sc _         = False
+  addConstraint $ Subtype env ltyp rtyp consistency tag
 
 -- Split a context and generate sharing constraints
 shareContext :: (MonadHorn s, MonadSMT s) 
@@ -341,24 +308,66 @@ shareContext :: (MonadHorn s, MonadSMT s)
              -> String 
              -> Explorer s (Environment, Environment)
 shareContext env label = do 
-  let syms = _symbols env
-  let scalars  = fromMaybe Map.empty $ Map.lookup 0 (_symbols env)
-  scalars1 <- mapM (`freshPotentials` True) scalars
-  scalars2 <- mapM (`freshPotentials` True) scalars
-  let syms1 = Map.insert 0 scalars1 syms 
-  let syms2 = Map.insert 0 scalars2 syms
-  --let scalars  = Map.assocs $ fromMaybe Map.empty $ Map.lookup 0 (_symbols env)
-  --let share (x, sch) = do 
-  --      (sch1, sch2) <- shareType sch
-  --      return ((x, sch1), (x, sch2))
-  --(scalars1, scalars2) <- unzip <$> mapM share scalars
-  --let syms1 = Map.insert 0 (Map.fromList scalars1) syms 
-  --let syms2 = Map.insert 0 (Map.fromList scalars2) syms
-  addConstraint $ SharedEnv env syms1 syms2 label
-  return (env { _symbols = syms1 }, env { _symbols = syms2 })
+  symsl <- safeFreshPotentials env True
+  symsr <- safeFreshPotentials env True
+  fpl <- freshFreePotential
+  fpr <- freshFreePotential
+  
+  let ghosts = _ghostSymbols env
+
+  let envl = mkResourceEnv symsl ghosts fpl
+  let envr = mkResourceEnv symsr ghosts fpr
+  addConstraint $ SharedEnv env envl envr label
+  return (env { _symbols = symsl, _freePotential = fpl }, env { _symbols = symsr, _freePotential = fpr })
+
+shareFreePotential :: (MonadHorn s, MonadSMT s)
+                   => Formula 
+                   -> String
+                   -> Explorer s (Formula, Formula) 
+shareFreePotential fp label = do 
+  fp' <- freshFreePotential 
+  fp'' <- freshFreePotential          
+  let env = emptyEnv { _freePotential = fp }
+  let env' = env { _freePotential = fp' }
+  let env'' = env { _freePotential = fp'' }
+
+  addConstraint $ SharedEnv env env' env'' label
+  return (fp', fp'')
+
+-- Transfer potential between variables in a context if necessary
+transferPotential :: (MonadHorn s, MonadSMT s)
+                  => Environment 
+                  -> String 
+                  -> Explorer s Environment
+transferPotential env label = do 
+  fp <- freshFreePotential
+  syms' <- safeFreshPotentials env False
+  let env' = mkResourceEnv syms' (_ghostSymbols env) fp
+
+  addConstraint $ Transfer env env' label
+  return $ env { _symbols = syms', _freePotential = fp }
+
+safeFreshPotentials :: (MonadHorn s, MonadSMT s)
+                    => Environment
+                    -> Bool
+                    -> Explorer s SymbolMap
+safeFreshPotentials env replaceAll = do 
+  let ghosts = env ^. ghostSymbols
+  let replace (x, sch) = if Set.member x ghosts 
+      then return (x, sch)
+      else do 
+        sch' <- freshPotentials sch replaceAll
+        return (x, sch')
+  let syms = env ^. symbols
+  let scalars = Map.assocs $ fromMaybe Map.empty $ Map.lookup 0 syms 
+  scalars' <- mapM replace scalars
+  return $ Map.insert 0 (Map.fromList scalars') syms
 
 mapTuple f (x, y) = (f x, f y)
 
+-- It might turn out to be more efficient to share types
+--  by only generating one fresh variable and subtracting from
+--  the other side of the sharing relation.
 shareType :: (MonadHorn s, MonadSMT s)
           => RSchema
           -> Explorer s (RSchema, RSchema)
@@ -375,11 +384,10 @@ shareType (ForallP x t) = do
 shareType' :: (MonadHorn s, MonadSMT s)
            => RType 
            -> Explorer s (RType, RType)
-shareType' t@(ScalarT base r Infty) = return (t, t)
-shareType' (ScalarT base r (Fml p)) = do 
+shareType' (ScalarT base r p) = do 
   (base1, base2) <- shareTypeBase base
-  (Fml p') <- freshPot
-  return (ScalarT base1 r (Fml p'), ScalarT base2 r (Fml (p |-| p')))
+  p' <- freshPot
+  return (ScalarT base1 r p', ScalarT base2 r (p |-| p'))
 
 shareTypeBase :: (MonadHorn s, MonadSMT s)
               => BaseType Formula 
@@ -387,10 +395,9 @@ shareTypeBase :: (MonadHorn s, MonadSMT s)
 shareTypeBase (DatatypeT x ts ps) = do 
   (ts1, ts2) <- unzip <$> mapM shareType' ts
   return (DatatypeT x ts1 ps, DatatypeT x ts2 ps)
-shareTypeBase t@(TypeVarT s x Infty) = return (t, t)
-shareTypeBase (TypeVarT s x (Fml m)) = do 
-  (Fml m') <- freshMul
-  return (TypeVarT s x (Fml m'), TypeVarT s x (Fml (m |-| m')))
+shareTypeBase (TypeVarT s x m) = do 
+  m' <- freshMul
+  return (TypeVarT s x m', TypeVarT s x (m |-| m'))
 shareTypeBase b = return (b, b)
 
 -- | 'toVar' @p env@: a variable representing @p@ (can be @p@ itself or a fresh ghost)

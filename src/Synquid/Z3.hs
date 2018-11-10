@@ -1,11 +1,14 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, TemplateHaskell #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
 
 -- | Interface to Z3
 module Synquid.Z3 (
-    Z3State
-  , evalZ3State
-  , modelGetAssignment
-  ) where
+  Z3State,
+  Declarable(..),
+  evalZ3State,
+  modelGetAssignment,
+  function,
+  typeConstructor
+) where
 
 import Synquid.Logic
 import Synquid.Type
@@ -28,26 +31,9 @@ import Control.Monad
 import Control.Monad.Extra (mapMaybeM)
 import Control.Monad.Trans.State
 import Control.Lens hiding (both)
+import Debug.Trace
+import Control.Monad.State.Class (MonadState)
 
--- | Z3 state while building constraints
-data Z3Data = Z3Data {
-  _mainEnv :: Z3Env,                          -- ^ Z3 environment for the main solver
-  _sorts :: Map Sort Z3.Sort,                 -- ^ Mapping from Synquid sorts to Z3 sorts
-  _vars :: Map Id AST,                        -- ^ AST nodes for scalar variables
-  _functions :: Map Id FuncDecl,              -- ^ Function declarations for measures, predicates, and constructors
-  _storedDatatypes :: Set Id,                 -- ^ Datatypes mapped directly to Z3 datatypes (monomorphic and non-recursive)
-  _controlLiterals :: Bimap Formula AST,      -- ^ Control literals for computing UNSAT cores
-  _auxEnv :: Z3Env,                           -- ^ Z3 environment for the auxiliary solver
-  _boolSortAux :: Maybe Z3.Sort,              -- ^ Boolean sort in the auxiliary solver
-  _controlLiteralsAux :: Bimap Formula AST    -- ^ Control literals for computing UNSAT cores in the auxiliary solver
-}
-
-data Z3Env = Z3Env {
-  envSolver  :: Z3.Solver,
-  envContext :: Z3.Context
-}
-
-makeLenses ''Z3Data
 
 initZ3Data env env' = Z3Data {
   _mainEnv = env,
@@ -60,8 +46,6 @@ initZ3Data env env' = Z3Data {
   _boolSortAux = Nothing,
   _controlLiteralsAux = Bimap.empty
 }
-
-type Z3State = StateT Z3Data IO
 
 instance MonadSMT Z3State where
   initSolver env = do
@@ -126,8 +110,8 @@ instance RMonad Z3State where
             astLit <- mkASTLit astS ast
             return $ Just (name, astLit)
 
-  modelGetMeasures ms model = do 
-    interps <- getMeasureInterps ms (fst model)
+  modelGetUFs ms model = do 
+    interps <- getInterps ms (fst model)
     return $ Map.fromList $ zip (map fst ms) interps
 
   evalInModel fs (model, modelStr) measure = do 
@@ -144,27 +128,41 @@ instance RMonad Z3State where
           Just res -> return res
 
 -- Get interpretations of a set of measures in a given model
-getMeasureInterps :: [(String, MeasureDef)] -> Model -> Z3State [Z3Measure]
-getMeasureInterps ms model = mapMaybeM (`getMInterp` model) ms
+getInterps :: (Declarable a, UF a) => [(String, a)] -> Model -> Z3State [Z3UFun]
+getInterps ms model = mapMaybeM (`getMInterp` model) ms
 
 -- Get interpretation of a given measure in a given model
-getMInterp (mname, mdef) model = do 
-  let targs = map snd (_constantArgs mdef) ++ [_inSort mdef]
-  fun <- function (_outSort mdef) mname targs
+getMInterp :: (Declarable a, UF a) => (String, a) -> Model -> Z3State (Maybe Z3UFun)
+getMInterp (name, def) model = do 
+  let targs = argSorts def
+  fun <- declare def (resSort def) name targs
   hasI <- hasInterp model fun
   if not hasI 
     then return Nothing
-    else do 
-      interp <- getFuncInterp model fun
+    else case targs of 
+        [] -> interpretConst fun 
+        _  -> interpretFunction fun 
+  where 
+    interpretConst f = do 
+      interp <- getConstInterp model f
+      case interp of 
+        Nothing -> return Nothing 
+        Just intp -> do
+          const <- mkASTLit (resSort def) intp
+          return $ Just Z3UFun {
+            _functionName = name,
+            _entries = Map.empty,
+            _defaultVal = const
+          }
+    interpretFunction f = do 
+      interp <- getFuncInterp model f
       case interp of 
         Nothing -> return Nothing
         Just intp -> do  
-          -- TODO: be smarter about the sort here as well!
-          elseVal <- funcInterpGetElse intp >>= mkASTLit IntS
-          entries <- getFuncEntries mname model intp
-          return $ Just Z3Measure {
-            _measureName = mname,
-            _measureDef = mdef,
+          elseVal <- funcInterpGetElse intp >>= mkASTLit (resSort def)
+          entries <- getFuncEntries name model intp
+          return $ Just Z3UFun {
+            _functionName = name,
             _entries = entries, 
             _defaultVal = elseVal
           }
@@ -249,7 +247,7 @@ litFromAux lit = do
   uses controlLiterals (Bimap.! fml)
 
 -- | Lookup Z3 sort for a Synquid sort
-toZ3Sort :: Sort -> Z3State Z3.Sort
+toZ3Sort :: (MonadZ3 m, MonadState Z3Data m) => Sort -> m Z3.Sort
 toZ3Sort s = do
   resMb <- uses sorts (Map.lookup s)
   case resMb of
@@ -326,7 +324,7 @@ toAST expr = case expr of
     mapM toAST args >>= mkApp decl
   Cons s name args -> do
     let tArgs = map sortOf args
-    decl <- constructor s name tArgs
+    decl <- typeConstructor s name tArgs
     mapM toAST args >>= mkApp decl
   All v e -> accumAll [v] e
   ASTLit _ a _ -> return a
@@ -399,23 +397,6 @@ toAST expr = case expr of
           vars %= Map.insert ident' v
           return v
 
-
-
-    constructor resT cName argTypes = 
-      case resT of
-        DataS dtName [] ->
-          ifM (uses storedDatatypes (Set.member dtName))
-            (do
-              z3dt <- toZ3Sort resT
-              decls <- getDatatypeSortConstructors z3dt
-              findDecl cName decls)
-            (function resT cName argTypes)
-        _ -> function resT cName argTypes
-
-    findDecl cName decls = do
-      declNames <- mapM (\d -> getDeclName d >>= getSymbolString) decls
-      return $ decls !! fromJust (elemIndex cName declNames)
-
 -- | Sort as Z3 sees it
 asZ3Sort s = case s of
   VarS _ -> IntS
@@ -423,7 +404,24 @@ asZ3Sort s = case s of
   SetS el -> SetS (asZ3Sort el)
   _ -> s
 
+findDecl cName decls = do
+  declNames <- mapM (getDeclName >=> getSymbolString) decls
+  return $ decls !! fromJust (elemIndex cName declNames)
+
+
+typeConstructor resT cName argTypes = 
+  case resT of
+    DataS dtName [] ->
+      ifM (uses storedDatatypes (Set.member dtName))
+        (do
+          z3dt <- toZ3Sort resT
+          decls <- getDatatypeSortConstructors z3dt
+          findDecl cName decls)
+        (function resT cName argTypes)
+    _ -> function resT cName argTypes
+
 -- | Lookup or create a function declaration with name `name', return type `resT', and argument types `argTypes'
+function :: (MonadZ3 m, MonadState Z3Data m) => Sort -> String -> [Sort] -> m FuncDecl
 function resT name argTypes = do
   let name' = name ++ concatMap (show . asZ3Sort) (resT : argTypes)
   declMb <- uses functions (Map.lookup name')
@@ -435,7 +433,6 @@ function resT name argTypes = do
       resSort <- toZ3Sort resT
       decl <- mkFuncDecl symb argSorts resSort
       functions %= Map.insert name' decl
-      -- return $ traceShow (text "DECLARE" <+> text name <+> pretty argTypes <+> pretty resT) decl
       return decl
 
 
@@ -449,7 +446,6 @@ getAllMUSs assumption mustHave fmls = do
   let allFmls = mustHave : fmls
   (controlLits, controlLitsAux) <- unzip <$> mapM getControlLits allFmls
 
-  -- traceShow (text "getAllMUSs" $+$ text "assumption:" <+> pretty assumption $+$ text "must have:" <+> pretty mustHave $+$ text "fmls:" <+> pretty fmls) $ return ()
   fmlToAST assumption >>= assert
   condAssumptions <- mapM fmlToAST allFmls >>= zipWithM mkImplies controlLits
   mapM_ assert $ condAssumptions

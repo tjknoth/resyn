@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances, UndecidableInstances, FlexibleContexts #-}
 
+
 module Synquid.Pretty (
   -- * Interface
   Pretty (..),
@@ -72,6 +73,7 @@ import qualified Data.Set as Set
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Data.List
+import Data.Maybe (fromMaybe)
 
 import Control.Lens
 
@@ -202,6 +204,30 @@ fmlDocAt n fml = condHlParens (n' <= n) (
     n' = power fml
     withSort s doc = doc <> text ":" <> pretty s
 
+simpleFmlDoc = simpleFmlDocAt 0
+
+-- | 'simpleFmlDocAt' @n fml@ : Hides well-formedness constraints
+simpleFmlDocAt :: Int -> Formula -> Doc
+simpleFmlDocAt n fml = condHlParens (n' <= n) (
+  case fml of
+    BoolLit b -> pretty b
+    IntLit i -> intLiteral i
+    SetLit s elems -> hlBrackets $ commaSep $ map fmlDoc elems
+    Var s name -> if name == valueVarName then special name else text name
+    Unknown s name -> if Map.null s then text name else hMapDoc pretty pretty s <> text name
+    Unary op e -> pretty op <> simpleFmlDocAt n' e
+    Binary And f (Binary Ge _ (IntLit 0)) -> simpleFmlDoc f
+    Binary op e1 e2 -> simpleFmlDocAt n' e1 <+> pretty op <+> simpleFmlDocAt n' e2
+    Ite e0 e1 e2 -> keyword "if" <+> simpleFmlDoc e0 <+> keyword "then" <+> simpleFmlDoc e1 <+> keyword "else" <+> simpleFmlDoc e2
+    Pred b name args -> text name <+> hsep (map (simpleFmlDocAt n') args)
+    Cons b name args -> hlParens (text name <+> hsep (map (simpleFmlDocAt n') args))
+    All x e -> keyword "forall" <+> pretty x <+> operator "." <+> simpleFmlDoc e
+    ASTLit _ a s -> text s 
+  )
+  where
+    n' = power fml
+    withSort s doc = doc <> text ":" <> pretty s
+
 instance Pretty Formula where pretty = fmlDoc
 
 instance Pretty Valuation where
@@ -230,8 +256,8 @@ prettyBase prettyType base = case base of
                then empty 
                else hMapDoc pretty pretty s
       mult = case m of 
-        (Fml (IntLit 1)) -> empty
-        m'               -> pretty m' <> operator "**"
+        (IntLit 1) -> empty
+        m'         -> pretty m' <> operator "**"
   DatatypeT name tArgs pArgs -> text name <+> hsep (map prettyType tArgs) <+> hsep (map (hlAngles . pretty) pArgs)
 
 instance Pretty (BaseType ()) where
@@ -239,11 +265,6 @@ instance Pretty (BaseType ()) where
 
 instance Pretty (BaseType Formula) where
   pretty = prettyBase (prettyTypeAt 1)
-
-instance Pretty Potential where 
-  pretty Infty   = text "INFTY"
-  pretty (Fml f) = pretty f
-
 
 prettySType :: SType -> Doc
 prettySType (ScalarT base _ _) = pretty base
@@ -360,10 +381,13 @@ prettyBindings env = commaSep (map pretty (Map.keys $ removeDomain (env ^. const
 
 
 
-prettyScalarTypes syms = hcat $ punctuate comma (prettyst <$> Map.assocs (syms Map.! 0))
+prettyScalarTypes syms = hcat $ punctuate comma (prettyst <$> Map.assocs scalars)
   where
+    scalars = fromMaybe Map.empty $ Map.lookup 0 syms
     prettyst (x, t) = pretty x <+> operator ":" <+> pretty ((topPotentialOf . typeFromSchema) t)
-prettyScalars env = hsep $ pretty <$> Map.keys (_symbols env Map.! 0)
+prettyScalars env = hsep $ pretty <$> Map.keys scalars
+  where 
+    scalars = fromMaybe Map.empty $ Map.lookup 0 $ env ^. symbols
 
 instance Pretty Environment where
   pretty env = prettyBindings env <+> prettyAssumptions env
@@ -379,31 +403,30 @@ instance Show SortConstraint where
   show = show . pretty
 
 prettyConstraint :: Constraint -> Doc
-prettyConstraint (Subtype env _fp t1 t2 Consistency label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "/\\" <+> pretty t2 -- <+> text "src:" <+> pretty label
-prettyConstraint (Subtype env _fp t1 t2 Nondeterministic label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "~<:~" <+> pretty t2 -- <+> text "src:" <+> pretty label
-prettyConstraint (Subtype env _fp t1 t2 _ label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "<:" <+> pretty t2 -- <+> text "src:" <+> pretty label
+prettyConstraint (Subtype env t1 t2 True label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "/\\" <+> pretty t2 -- <+> text "src:" <+> pretty label
+prettyConstraint (Subtype env t1 t2 _ label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "<:" <+> pretty t2 -- <+> text "src:" <+> pretty label
 prettyConstraint (WellFormed env t label) = prettyBindings env <+> operator "|-" <+> pretty t -- <+> text "src:" <+> pretty label
 prettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 prettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 prettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
-prettyConstraint (SharedEnv e e' e'' label) = text "Shared scalars:" <+> prettyScalarTypes (_symbols e) <+> operator "\\/" </> prettyScalarTypes e' <+> operator "||" <+> prettyScalarTypes e''
-prettyConstraint (ConstantRes env label) = text "CT expression:" <+> text label <+> text "from scalars:" <+> prettyScalarTypes (_symbols env) -- <+> text "src:" <+> pretty label
+prettyConstraint (SharedEnv e e' e'' label) = text "Shared scalars:" <+> prettyScalars e <+> pretty (_freePotential e)
+  <+> operator "\\/" </> nest 4 (prettyScalars e' <+> pretty (_freePotential e') 
+  <+> operator "||" <+> prettyScalars e'' <+> pretty (_freePotential e'') <+> text "src:" <+> plain (pretty label))
+prettyConstraint (ConstantRes env label) = text "CT expression:" <+> text label <+> text "from scalars:" <+> prettyScalars env -- <+> text "src:" <+> pretty label
+prettyConstraint (Transfer env env' _) = prettyScalars env <+> text "~" <+> prettyScalars env' <+> pretty (_freePotential env')
 
 -- Do not show environment
 simplePrettyConstraint :: Constraint -> Doc
-simplePrettyConstraint (Subtype _env _fp t1 t2 Consistency label) = pretty t1 <+> operator "/\\" <+> pretty t2 
-simplePrettyConstraint (Subtype _env _fp t1 t2 _ label) = pretty t1 <+> operator "<:" <+> pretty t2
+simplePrettyConstraint (Subtype _env t1 t2 True label) = pretty t1 <+> operator "/\\" <+> pretty t2 
+simplePrettyConstraint (Subtype _env t1 t2 _ label) = pretty t1 <+> operator "<:" <+> pretty t2
 simplePrettyConstraint (WellFormed env t label) = prettyBindings env <+> operator "|-" <+> pretty t 
 simplePrettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 simplePrettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 simplePrettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
-simplePrettyConstraint (SharedEnv e e' e'' label) = text "Shared scalars:" <+> prettyScalarTypes (_symbols e) <+> operator "\\/" </> prettyScalarTypes e' <+> operator "||" <+> prettyScalarTypes e''
+simplePrettyConstraint (SharedEnv e e' e'' label) = text "Shared scalars:" <+> prettyScalars e 
+  <+> operator "\\/" </> prettyScalars e' <+> operator "||" <+> prettyScalars e''
 simplePrettyConstraint (ConstantRes env label) = text "CT Expression:" <+> text label <+> text "from scalars:" <+> prettyScalars env 
-
-detailedPrettyConstraint :: Constraint -> Doc
-detailedPrettyConstraint c@(Subtype _env _fp _t1 _t2 Consistency _label) = prettyConstraint c
-detailedPrettyConstraint c@(Subtype env fp t1 t2 _ label) = prettyConstraint c $+$ text "ENV" <+> prettyScalars env $+$ text "FP'" <+> pretty fp 
-detailedPrettyConstraint c = prettyConstraint c
+simplePrettyConstraint (Transfer env env' _) = prettyScalars env <+> text "~" <+> prettyScalars env'
 
 instance Pretty Constraint where
   pretty = prettyConstraint
@@ -534,4 +557,4 @@ lfill w d        = case renderCompact d of
 -- Helper for printing conjunctions line-by-line for readability
 prettyConjuncts :: [TaggedConstraint] -> Doc
 prettyConjuncts fmls = vsep $ fmap printWithTag fmls
-  where printWithTag (TaggedConstraint t f) = fmlDoc f <+> text "   src:" <+> text t
+  where printWithTag (TaggedConstraint t f) = simpleFmlDoc f <+> text "   src:" <+> text t

@@ -14,12 +14,12 @@ import Data.Map (Map)
 data BaseType r = BoolT | 
   IntT | 
   DatatypeT !Id ![TypeSkeleton r] ![r] | 
-  TypeVarT !Substitution !Id !Potential 
+  TypeVarT !Substitution !Id !Formula
   deriving (Show, Eq, Ord)
 
 -- | Type skeletons (parametrized by refinements)
 data TypeSkeleton r =
-  ScalarT !(BaseType r) !r !Potential |
+  ScalarT !(BaseType r) !r !Formula |
   FunctionT !Id !(TypeSkeleton r) !(TypeSkeleton r) !Integer |
   LetT !Id !(TypeSkeleton r) !(TypeSkeleton r) |
   AnyT
@@ -32,8 +32,8 @@ equalShape (TypeVarT s name _) (TypeVarT s' name' m') = (TypeVarT s name defMult
 equalShape (DatatypeT name ts ps) (DatatypeT name' ts' ps') = (name == name') && (fmap shape ts == fmap shape ts') && (ps == ps')
 equalShape t t' = t == t'
 
-defPotential = Fml $ IntLit 0
-defMultiplicity = Fml $ IntLit 1 
+defPotential = IntLit 0
+defMultiplicity = IntLit 1 
 defCost = 0
 
 potentialPrefix = "p"
@@ -220,9 +220,9 @@ typeSubstitutePred :: Substitution -> RType -> RType
 typeSubstitutePred pSubst t = let tsp = typeSubstitutePred pSubst
   in case t of
     ScalarT (DatatypeT name tArgs pArgs) fml pot 
-      -> ScalarT (DatatypeT name (map tsp tArgs) (map (substitutePredicate pSubst) pArgs)) (substitutePredicate pSubst fml) (liftFmlOp (substitutePredicate pSubst) pot)
+      -> ScalarT (DatatypeT name (map tsp tArgs) (map (substitutePredicate pSubst) pArgs)) (substitutePredicate pSubst fml) (substitutePredicate pSubst pot)
     ScalarT baseT fml pot 
-      -> ScalarT baseT (substitutePredicate pSubst fml) (liftFmlOp (substitutePredicate pSubst) pot)
+      -> ScalarT baseT (substitutePredicate pSubst fml) (substitutePredicate pSubst pot)
     FunctionT x tArg tRes c 
       -> FunctionT x (tsp tArg) (tsp tRes) c
     LetT x tDef tBody 
@@ -240,53 +240,37 @@ typeVarsOf (LetT _ tDef tBody) = typeVarsOf tDef `Set.union` typeVarsOf tBody
 typeVarsOf _ = Set.empty
 
 -- | 'updateAnnotations' @t m p@ : "multiply" @t@ by multiplicity @m@, then add on surplus potential @p@
-updateAnnotations :: RType -> Potential -> Potential -> RType
+updateAnnotations :: RType -> Formula -> Formula -> RType
 updateAnnotations t@ScalarT{} mult = addPotential (typeMultiply mult t)
 
-schemaMultiply :: Potential -> RSchema -> RSchema
+schemaMultiply :: Formula -> RSchema -> RSchema
 schemaMultiply p (ForallP x s) = ForallP x (schemaMultiply p s)
 schemaMultiply p (ForallT x s) = ForallT x (schemaMultiply p s)
 schemaMultiply p (Monotype t) = Monotype $ typeMultiply p t
 
-typeMultiply :: Potential -> RType -> RType
-typeMultiply fml (ScalarT t ref pot) = ScalarT (baseTypeMultiply fml t) ref (multiplyPotentials fml pot)
+typeMultiply :: Formula -> RType -> RType
+typeMultiply fml (ScalarT t ref pot) = ScalarT (baseTypeMultiply fml t) ref (multiplyFormulas fml pot)
 typeMultiply fml t = t
 
-baseTypeMultiply :: Potential -> BaseType Formula -> BaseType Formula
-baseTypeMultiply fml (TypeVarT subs name mul) = TypeVarT subs name (multiplyPotentials mul fml)
+baseTypeMultiply :: Formula -> BaseType Formula -> BaseType Formula
+baseTypeMultiply fml (TypeVarT subs name mul) = TypeVarT subs name (multiplyFormulas mul fml)
 baseTypeMultiply fml (DatatypeT name tArgs pArgs) = DatatypeT name (map (typeMultiply fml) tArgs) pArgs
 baseTypeMultiply fml t = t
 
--- Currently only used on the argument in function types, shouldn't need more cases. Also not adding potential recursively to the basetypes.
-addPotential :: RType -> Potential -> RType 
---addPotential t@(ScalarT base ref pot) f = ScalarT (addPotentialBase base f) ref (addFormulas pot f)
-addPotential t@(ScalarT base ref pot) f = ScalarT base ref (sumPotentials pot f)
--- Should only be called when tBody is a scalar (hopefully)
-addPotential (LetT x tDef tBody) f = LetT x tDef (addPotential tBody f)
+addPotential :: RType -> Formula -> RType 
+addPotential (ScalarT base ref pot) f = ScalarT base ref (addFormulas pot f)
+addPotential (LetT x tDef tBody) f    = LetT x tDef (addPotential tBody f)
+addPotential t _ = t
 
-addPotentialBase :: BaseType Formula -> Potential -> BaseType Formula 
-addPotentialBase (DatatypeT x ts ps) f = DatatypeT x (fmap (`addPotential` f) ts) ps
-addPotentialBase b _ = b
+subtractPotential :: RType -> Formula -> RType
+subtractPotential (ScalarT base ref pot) f = ScalarT base ref (subtractFormulas pot f)
+subtractPotential (LetT x tDef tBody) f = LetT x tDef (subtractPotential tBody f)
+subtractPotential t _ = t
 
--- | 'removePotential' @t@ : removes all non-default potential and multiplicity annotations, used to strip constructor annotations
-removePotential :: RType -> RType
-removePotential (ScalarT b r _) = ScalarT (removePotentialBase b) r pzero 
-removePotential (FunctionT x arg res c) = FunctionT x (removePotential arg) (removePotential res) c
-removePotential (LetT x t body) = LetT x (removePotential t) (removePotential body)
-removePotential t = t
-
-removePotentialBase :: BaseType Formula -> BaseType Formula
-removePotentialBase (DatatypeT x ts ps) = DatatypeT x (fmap removePotential ts) ps
---removePotentialBase (TypeVarT subs x _) = TypeVarT subs x (IntLit 1)
-removePotentialBase b = b
-
--- Extract top-level potential from a scalar type (after performing appropriate substitution)
-topPotentialOf :: RType -> Maybe Potential
+-- Extract top-level potential from a scalar type 
+topPotentialOf :: RType -> Maybe Formula 
 topPotentialOf (ScalarT _ _ p) = Just p
 topPotentialOf _               = Nothing
-
-topPotentialFml (ScalarT _ _ (Fml f)) = Just f
-topPotentialFml _                     = Nothing
 
 {- Refinement types -}
 
@@ -321,7 +305,7 @@ addRefinement (ScalarT base fml pot) fml' = if isVarRefinemnt fml'
 addRefinement (LetT x tDef tBody) fml = LetT x tDef (addRefinement tBody fml)
 addRefinement t (BoolLit True) = t
 addRefinement AnyT _ = AnyT
-addRefinement t _ = error "addRefinement: applied to function type"
+addRefinement t _ = error $ "addRefinement: applied to function type: " ++ show t
 
 -- | Conjoin refinement to the return type
 addRefinementToLast t@ScalarT{} fml = addRefinement t fml
@@ -336,10 +320,10 @@ addRefinementToLastSch (ForallP sig sch) fml = ForallP sig $ addRefinementToLast
 
 -- | Apply variable substitution in all formulas inside a type
 substituteInType :: (Id -> Bool) -> Substitution -> RType -> RType
-substituteInType isBound subst (ScalarT baseT fml pot) = ScalarT (substituteBase subst baseT) (substitute subst fml) (liftFmlOp (substitute subst) pot)
+substituteInType isBound subst (ScalarT baseT fml pot) = ScalarT (substituteBase subst baseT) (substitute subst fml) (substitute subst pot)
   where
     -- TODO: does this make sense?
-    substituteBase subst (TypeVarT oldSubst a m) = TypeVarT oldSubst a (liftFmlOp (substitute subst) m)
+    substituteBase subst (TypeVarT oldSubst a m) = TypeVarT oldSubst a (substitute subst m)
       -- Looks like pending substitutions on types are not actually needed, since renamed variables are always out of scope
        -- if isBound a
           -- then TypeVarT oldSubst a
@@ -366,11 +350,10 @@ renameVar _ _ _ _ t = t -- function arguments cannot occur in types (and AnyT is
 -- | Intersection of two types (assuming the types were already checked for consistency) 
 intersection _ t AnyT = t
 intersection _ AnyT t = t
--- TODO: should this be max or min?
 intersection isBound (ScalarT baseT fml pot) (ScalarT baseT' fml' pot') = case baseT of
   DatatypeT name tArgs pArgs -> let DatatypeT _ tArgs' pArgs' = baseT' in
-                                  ScalarT (DatatypeT name (zipWith (intersection isBound) tArgs tArgs') (zipWith andClean pArgs pArgs')) (fml `andClean` fml') (liftFmlBOp fmax pot pot') 
-  _ -> ScalarT baseT (fml `andClean` fml') (liftFmlBOp fmax pot pot')
+                                  ScalarT (DatatypeT name (zipWith (intersection isBound) tArgs tArgs') (zipWith andClean pArgs pArgs')) (fml `andClean` fml') (fmax pot pot') 
+  _ -> ScalarT baseT (fml `andClean` fml') (fmax pot pot')
 intersection isBound (FunctionT x tArg tRes c) (FunctionT y tArg' tRes' c') = FunctionT x tArg (intersection isBound tRes (renameVar isBound y x tArg tRes')) (max c c')
 
 typeFromSchema :: RSchema -> RType
@@ -382,7 +365,7 @@ typeFromSchema (ForallP _ t) = typeFromSchema t
 shiftCost :: RType -> RType
 shiftCost (FunctionT x argT resT c) = 
   if isScalarType resT
-    then FunctionT x (addPotential argT (intFml c)) resT 0 
+    then FunctionT x (addPotential argT (IntLit c)) resT 0 
     else FunctionT x argT (addCostToArrow resT) 0
   where 
     addCostToArrow (FunctionT y a r cost) = FunctionT y a r (cost + c)
@@ -403,6 +386,40 @@ allRefinementsOf sch = allRefinementsOf' $ typeFromSchema sch
 allRefinementsOf' (ScalarT _ ref _) = [ref]
 allRefinementsOf' (FunctionT _ argT resT _) = allRefinementsOf' argT ++ allRefinementsOf' resT
 allRefinementsOf' _ = error "allRefinementsOf called on contextual or any type"
+
+-- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
+allRFormulas :: Bool -> RType -> [Formula]
+allRFormulas cm (FunctionT _ argT resT _) = allRFormulas cm argT ++ allRFormulas cm resT
+allRFormulas cm (ScalarT base _ p)        = p : allRFormulasBase cm base
+allRFormulas _ _                          = [] 
+
+allRFormulasBase :: Bool -> BaseType Formula -> [Formula]
+allRFormulasBase cm (DatatypeT _ ts _) = concatMap (allRFormulas cm) ts
+allRFormulasBase cm (TypeVarT _ _ m)   = [m | cm] 
+allRFormulasBase _ _                   = []
+
+-- Return a set of all formulas (potential, multiplicity, refinement) of a type. 
+--   Doesn't mean anything necesssarily, used to embed environment assumptions
+allFormulasOf :: Bool -> RType -> Set Formula
+allFormulasOf cm (ScalarT b f p)           = Set.singleton f `Set.union` Set.singleton p `Set.union` allFormulasOfBase cm b
+allFormulasOf cm (FunctionT _ argT resT _) = allFormulasOf cm argT `Set.union` allFormulasOf cm resT
+allFormulasOf cm (LetT x s t)              = allFormulasOf cm s `Set.union` allFormulasOf cm t
+allFormulasOf _ t                          = Set.empty
+
+allFormulasOfBase :: Bool -> BaseType Formula -> Set Formula
+allFormulasOfBase cm (TypeVarT _ _ m)    = if cm then Set.singleton m else Set.empty
+allFormulasOfBase cm (DatatypeT x ts ps) = Set.unions (map (allFormulasOf cm) ts)
+allFormulasOfBase _ b                    = Set.empty
+
+allArgSorts :: RType -> [Sort]
+allArgSorts (FunctionT _ (ScalarT b _ _) resT _) = toSort b : allArgSorts resT
+allArgSorts FunctionT{} = error "allArgSorts: Non-scalar type in argument position"
+allArgSorts ScalarT{} = []
+allArgSorts LetT{} = error "allArgSorts: contextual type"
+
+resultSort :: RType -> Sort
+resultSort (FunctionT _ _ resT _) = resultSort resT
+resultSort (ScalarT b _ _) = toSort b
 
 -- Set strings: used for "fake" set type for typechecking measures
 emptySetCtor = "Emptyset"

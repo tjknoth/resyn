@@ -114,7 +114,6 @@ resolveDeclaration (TypeDecl typeName typeVars typeBody) = do
 resolveDeclaration (FuncDecl funcName typeSchema) = do 
   addNewSignature funcName typeSchema
 resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
-  ctors' <- mapM (\(ConstructorSig x t) -> ConstructorSig x <$> updateEmptyCtors x t) ctors 
   let
     (pParams, pVariances) = unzip pVarParams
     datatype = DatatypeDef {
@@ -126,21 +125,7 @@ resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
     }
   environment %= addDatatype dtName datatype
   let addPreds typ = foldl (flip ForallP) (Monotype typ) pParams
-  mapM_ (\(ConstructorSig name typ) -> addNewSignature name $ addPreds typ) ctors'
-  where 
-    -- If a constructor's type signature is a scalar, it builds an empty data structure
-    updateEmptyCtors :: Id -> RType -> Resolver RType
-    updateEmptyCtors cname t@(ScalarT base ref pot) = do 
-      environment %= addEmptyCtor cname
-      base' <- updateBase cname base
-      return $ ScalarT base' ref Infty 
-    updateEmptyCtors _ t = return t 
-    updateBase :: Id -> BaseType Formula -> Resolver (BaseType Formula)
-    updateBase _ (TypeVarT subs name mult) = return $ TypeVarT subs name Infty 
-    updateBase cname (DatatypeT dname ts ps) = do 
-      ts' <- mapM (updateEmptyCtors cname) ts
-      return $ DatatypeT dname ts' ps
-    updateBase _ b = return b
+  mapM_ (\(ConstructorSig name typ) -> addNewSignature name $ addPreds typ) ctors
 resolveDeclaration (MeasureDecl measureName inSort outSort post defCases args isTermination) = do
   env <- use environment
   let allInSorts = fmap snd args ++ [inSort]
@@ -436,9 +421,7 @@ resolveTypeAnnotation targetSort valueSort fml = do
 
 resolveTypeRefinement = resolveTypeAnnotation BoolS 
 
--- Resolve potential annotations: Check against integer sort
-resolveTypePotential vsort Infty   = return Infty
-resolveTypePotential vsort (Fml f) = Fml <$> resolveTypeAnnotation IntS vsort f
+resolveTypePotential = resolveTypeAnnotation IntS 
 
 -- Partially resolve formula describing measure case (just replace inline predicates)
 resolveMeasureFormula :: Formula -> Resolver Formula

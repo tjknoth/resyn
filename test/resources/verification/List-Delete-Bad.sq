@@ -6,7 +6,7 @@ qualifier {x == y, x != y}
 --   We assume Nil requires no memory
 data List a where
 	Nil :: List a
-	Cons :: x: {1**a| |1} -> xs: List a -> List a
+	Cons :: x: a -> xs: List a -> List a
   
 termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
@@ -17,7 +17,7 @@ measure elems :: List a -> Set a where
   Cons x xs -> [x] + elems xs
 
 -- Requires enough memory resources to traverse xs onces
-delete :: x: a -> xs: List {0**a| |0} -> {List a | elems _v == elems xs - [x]}
+delete :: x: a -> xs: List {a| |0} -[1]-> {List a | elems _v == elems xs - [x]}
 delete = \x. \xs.
   match xs with
     Nil -> Nil

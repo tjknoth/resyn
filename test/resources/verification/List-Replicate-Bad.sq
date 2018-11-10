@@ -13,24 +13,15 @@ dec :: x: Int -> {Int | _v == x - 1}
 --   We assume Nil requires no memory
 data List a where
 	Nil :: List a
-	Cons :: x: {1**a| |1} -> xs: List a -> List a
+	Cons :: x: a -> xs: List a -> List a
   
 termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs  
 
 -- Needs enough memory for n copies of x; given insufficient copies of n 
-replicate :: n: Nat -> x: {(n - 1) ** a| |n} -> {List a | len _v == n}
+replicate :: n: Nat -> x: {a| |n - 1} -[1]-> {List a | len _v == n}
 replicate = \n. \x.
   if n <= 0
     then Nil
     else Cons x (replicate (dec n) x)
-
-{-
--- Needs enough memory for n copies of x; given insufficient potential
-replicate' :: n: Nat -> x: {n ** a| |n - 2} -> {List a | len _v == n}
-replicate' = \n. \x.
-  if n <= 0
-    then Nil
-    else Cons x (replicate' (dec n) x)
--}
