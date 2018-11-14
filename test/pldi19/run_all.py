@@ -68,16 +68,16 @@ class BenchmarkGroup:
         self.benchmarks = benchmarks            # List of benchmarks in this group
 
 MICRO_BENCHMARKS = [
-    MBenchmark('List-Insert', 'insert', 'Overapproximate bound', '$<$'),
+    MBenchmark('List-Insert', 'insert', 'Overapproximate bound', '$<$', ['--backtrack']),
     #MBenchmark('List-Insert-Fine', 'insert', 'Annotated with uninterpreted functions', '$<$'),
-    #MBenchmark('List-InsertCT', 'insert', 'Constant-time', '$<$', ['--ct']),
+    MBenchmark('List-InsertCT', 'insert', 'Constant-time', '$<$', ['--ct', '--backtrack']),
     MBenchmark('List-LenCompareCT', 'length comparison', '', 'true, false, and', ['-f=AllArguments', '-a=2', '--ct']),
     MBenchmark('List-LenCompare', 'length comparison', 'Constant-time', 'true, false, and', ['f=AllArguments', '-a=2']),
-    #MBenchmark('List-Replicate', 'replicate', 'Program variables in annotations', 'zero, inc, dec'),
+    MBenchmark('List-Replicate', 'replicate', 'Program variables in annotations', 'zero, inc, dec', ['--cegis-max=20']),
     MBenchmark('List-Append3', 'append 3 lists', 'Compositional bounds'),
     MBenchmark('List-Intersect', 'common', 'optimization'),
-    MBenchmark('List-Union', 'union', 'optimization, fine-grained bound'),
-    MBenchmark('List-Range', 'range', 'termination handling'),
+    #MBenchmark('List-Union', 'union', 'optimization, fine-grained bound'),
+    #MBenchmark('List-Range', 'range', 'termination handling', ['-f=Nonterminating']),
     MBenchmark('List-Pairs', 'ordered pairs', 'optimization'),
     MBenchmark('List-Compress', 'compress', 'optimization')
 ]
@@ -87,7 +87,7 @@ ALL_BENCHMARKS = [
         Benchmark('List-Null', 'is empty', 'true, false'),
         Benchmark('List-Elem', 'member', 'true, false, $=$, $\\neq$'),
         Benchmark('List-Stutter', 'duplicate each element'),
-        #Benchmark('List-Replicate', 'replicate', '0, inc, dec, $\\leq$, $\\neq$'),
+        Benchmark('List-Replicate', 'replicate', '0, inc, dec, $\\leq$, $\\neq$', ['--cegis-max=20']),
         Benchmark('List-Append', 'append two lists', '', ['-m=1']),
         Benchmark('List-Concat', 'concatenate list of lists', 'append'),
         Benchmark('List-Take', 'take first $n$ elements', '0, inc, dec, $\\leq$, $\\neq$'),

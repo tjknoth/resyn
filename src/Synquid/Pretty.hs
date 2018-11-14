@@ -412,6 +412,8 @@ prettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+
 prettyConstraint (SharedEnv e e' e'' label) = text "Shared scalars:" <+> prettyScalars e <+> pretty (_freePotential e)
   <+> operator "\\/" </> nest 4 (prettyScalars e' <+> pretty (_freePotential e') 
   <+> operator "||" <+> prettyScalars e'' <+> pretty (_freePotential e'') <+> text "src:" <+> plain (pretty label))
+prettyConstraint (SharedForm env f fl fr label) = text "Shared potential:" <+> pretty env <+> operator "|-" 
+  <+> pretty f <+> operator "\\/" <+> pretty fl <+> operator "||" <+> pretty fr <+> text "src:" <+> plain (pretty label)
 prettyConstraint (ConstantRes env label) = text "CT expression:" <+> text label <+> text "from scalars:" <+> prettyScalars env -- <+> text "src:" <+> pretty label
 prettyConstraint (Transfer env env' _) = prettyScalars env <+> text "~" <+> prettyScalars env' <+> pretty (_freePotential env')
 
@@ -425,6 +427,8 @@ simplePrettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> oper
 simplePrettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
 simplePrettyConstraint (SharedEnv e e' e'' label) = text "Shared scalars:" <+> prettyScalars e 
   <+> operator "\\/" </> prettyScalars e' <+> operator "||" <+> prettyScalars e''
+simplePrettyConstraint (SharedForm env f fl fr label) = text "Shared potential:" <+> pretty env <+> operator "|-" 
+  <+> pretty f <+> operator "\\/" <+> pretty fl <+> operator "||" <+> pretty fr <+> text "src:" <+> plain (pretty label)
 simplePrettyConstraint (ConstantRes env label) = text "CT Expression:" <+> text label <+> text "from scalars:" <+> prettyScalars env 
 simplePrettyConstraint (Transfer env env' _) = prettyScalars env <+> text "~" <+> prettyScalars env'
 
@@ -557,4 +561,4 @@ lfill w d        = case renderCompact d of
 -- Helper for printing conjunctions line-by-line for readability
 prettyConjuncts :: [TaggedConstraint] -> Doc
 prettyConjuncts fmls = vsep $ fmap printWithTag fmls
-  where printWithTag (TaggedConstraint t f) = simpleFmlDoc f <+> text "   src:" <+> text t
+  where printWithTag (TaggedConstraint t f) = simpleFmlDoc (rformula f) <+> text "   src:" <+> text t

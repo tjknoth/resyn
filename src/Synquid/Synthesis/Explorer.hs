@@ -61,7 +61,8 @@ exploreFunction :: (MonadSMT s, MonadHorn s)
                 -> Explorer s RProgram
 exploreFunction env t@(FunctionT x tArg tRes _) explore = do 
   let ctx p = Program (PFun x p) t
-  pBody <- inContext ctx $ explore (unfoldAllVariables $ addVariable x tArg env) tRes
+  env' <- safeAddVariable x tArg env
+  pBody <- inContext ctx $ explore (unfoldAllVariables env') tRes
   return $ ctx pBody
 exploreFunction _ t _ = throwErrorWithDescription $ text "exploreFunction: called with non-function type" <+> pretty t
 
@@ -187,7 +188,7 @@ generateFirstCase env scrVar pScrutinee t consName =
       consT' <- runInSolver $ currentAssignment consT
       binders <- replicateM (arity consT') (freshVar env "x")
       (syms, ass) <- caseSymbols env scrVar binders consT'
-      let caseEnv = foldr (uncurry addVariable) (addAssumption ass env) syms
+      caseEnv <- foldM (\e (x, t) -> safeAddVariable x t e) (addAssumption ass env) syms
 
       ifte  (do -- Try to find a vacuousness condition:
               deadUnknown <- Unknown Map.empty <$> freshId "C"
@@ -225,7 +226,7 @@ generateCase env scrVar pScrutinee t consName =
       cUnknown <- Unknown Map.empty <$> freshId "M"
       runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton ass) -- Create a fixed-valuation unknown to assume @ass@
 
-      let caseEnv = (if unfoldSyms then unfoldAllVariables else id) $ foldr (uncurry addVariable) (addAssumption cUnknown env) syms
+      caseEnv <- (if unfoldSyms then unfoldAllVariables else id) <$> foldM (\e (x, t) -> safeAddVariable x t e) (addAssumption cUnknown env) syms
       pCaseExpr <- optionalInPartial t $ local (over (_1 . matchDepth) (-1 +))
                                        $ inContext (\p -> Program (PMatch pScrutinee [Case consName binders p]) t)
                                        $ generateError caseEnv `mplus` generateI caseEnv t
@@ -375,7 +376,7 @@ checkE env typ p@(Program pTerm pTyp) = do
   
   -- Add subtyping check, unless it's a function type and incremental checking is diasbled:
   when (incremental || arity typ == 0)
-    $ addSubtypeConstraint env pTyp typ False (show (pretty pTerm))
+    $ addSubtypeConstraint env pTyp typ False (show (plain (pretty pTerm)))
 
   -- Add consistency constraint for function types:
   when (consistency && arity typ > 0) 
@@ -419,7 +420,7 @@ enumerateAt env typ d = do
     generateApp genFun genArg = do
       x <- freshId "X"
       let fp = env ^. freePotential 
-      (fp', fp'') <- shareFreePotential fp $ show $ text "genApp ::" <+> plain (pretty typ)
+      (fp', fp'') <- shareFreePotential env fp $ show $ text "genApp ::" <+> plain (pretty typ)
       (env1, env2) <- shareContext (env { _freePotential = fp' }) $ show $ text "genApp ::" <+> plain (pretty typ)
       fun <- inContext (\p -> Program (PApp p uHole) typ)
              $ genFun env1 (FunctionT x AnyT typ defCost) -- Find all functions that unify with (? -> typ)

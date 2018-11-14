@@ -12,6 +12,8 @@ module Synquid.Solver.Util (
     throwError,
     allMeasureApps,
     nonGhostScalars,
+    safeAddGhostVar,
+    isResourceVariable,
     writeLog
 ) where
 
@@ -23,20 +25,23 @@ import Synquid.Pretty
 import Synquid.Error
 import Synquid.Solver.Monad
 
-import Data.Maybe (fromMaybe, catMaybes)
+import Data.List 
+import Data.Maybe 
 import qualified Data.Set as Set 
 import Data.Set (Set)
 import qualified Data.Map as Map
+import Control.Monad.State (get)
 import Control.Monad (when)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (throwE)
 import Control.Monad.Reader (asks)
+import Control.Monad.Logic (msum)
 import Control.Lens hiding (both)
 import Debug.Trace
 
 -- | Assumptions encoded in an environment
-embedding :: Monad s => Environment -> Set Id -> Bool -> TCSolver s (Set Formula)
-embedding env vars includeQuantified = do
+embedding :: Monad s => Environment -> Set Id -> Bool -> Bool -> TCSolver s (Set Formula)
+embedding env vars includeQuantified substituteValueVars = do
     tass <- use typeAssignment
     pass <- use predAssignment
     qmap <- use qualifierMap
@@ -52,8 +57,9 @@ embedding env vars includeQuantified = do
                 Nothing -> addBindings env tass pass qmap fmls rest -- Variable not found (useful to ignore value variables)
                 Just (Monotype t) -> case typeSubstitute tass t of
                   ScalarT baseT fml pot ->
-                    let fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x)) . substitutePredicate pass)
-                                          (fml : allMeasurePostconditions includeQuantified baseT env) 
+                    let fml' = if substituteValueVars then substitute (Map.singleton valueVarName (Var IntS x)) fml else fml
+                        fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x)) . substitutePredicate pass)
+                                          (fml' : allMeasurePostconditions includeQuantified baseT env) 
                         newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls' in 
                     addBindings env tass pass qmap (fmls `Set.union` fmls') (rest `Set.union` newVars)
                   LetT y tDef tBody -> addBindings (addGhostVariable x tBody . addGhostVariable y tDef . removeVariable x $ env) tass pass qmap fmls vars
@@ -62,34 +68,26 @@ embedding env vars includeQuantified = do
                 Just sch -> addBindings env tass pass qmap fmls rest -- TODO: why did this work before?
     allSymbols = symbolsOfArity 0 
 
-embedEnv :: Monad s => Environment -> Formula -> Bool -> TCSolver s (Set Formula)
-embedEnv env fml consistency = do 
+embedEnv :: Monad s => Environment -> Formula -> Bool -> Bool -> TCSolver s (Set Formula)
+embedEnv env fml consistency subst = do 
   qmap <- use qualifierMap
   let relevantVars = potentialVars qmap fml
-  embedding env relevantVars consistency
+  embedding env relevantVars consistency subst
 
-embedSynthesisEnv :: Monad s => Environment -> Formula -> Bool -> TCSolver s (Set Formula)
-embedSynthesisEnv env fml consistency = do 
-  emb <- embedEnv env fml consistency
-  unknownEmb <- embedSingletonUnknowns env
-  return $ emb `Set.union` unknownEmb
-
--- | When there is a single possible valuation for a condition unknown, assume it.
-embedSingletonUnknowns :: Monad s => Environment -> TCSolver s (Set Formula)
-embedSingletonUnknowns env = do
-    pass <- use predAssignment
-    qmap <- use qualifierMap
-    -- Do I need to substitute predicates?
-    let ass = Set.map (substitutePredicate pass) (env ^. assumptions)
-    let maybeAss = map (assignUnknown qmap) (Set.toList ass)
-    return $ Set.fromList $ catMaybes maybeAss
-  where 
-    assignUnknown qmap fml = do 
-      fname <- maybeUnknownName fml
-      qspace <- Map.lookup fname qmap
-      case _qualifiers qspace of 
-        [f] -> Just f
-        _   -> Nothing
+embedSynthesisEnv :: MonadHorn s 
+                  => Environment 
+                  -> Formula 
+                  -> Bool 
+                  -> Bool
+                  -> TCSolver s (Set Formula)
+embedSynthesisEnv env fml consistency useMeasures = do 
+  let env' = if useMeasures 
+      then env
+      else env { _measureDefs = Map.empty } -- don't instantiate measures in certain cases
+  embedEnv env' fml consistency True
+  --emb <- embedEnv env' fml consistency
+  --emb' <- mapM getCurrentValuation (Set.toList emb)
+  --return emb --(Set.fromList emb')
 
 
 -- | 'instantiateConsAxioms' @env fml@ : If @fml@ contains constructor applications, return the set of instantiations of constructor axioms for those applications in the environment @env@
@@ -162,14 +160,65 @@ freshValueVarId :: Monad s => TCSolver s String
 freshValueVarId = freshId valueVarName
 
 -- | Replace occurrences of _v with a fresh variable in a given formula 
-freshValueVars :: Monad s => Formula -> Sort -> TCSolver s Formula 
+freshValueVars :: Monad s => Formula -> Sort -> TCSolver s (Formula, String)
 freshValueVars fml sort = do 
-  newVar <- Var sort <$> freshValueVarId
-  return $ substitute (Map.singleton valueVarName newVar) fml
+  vnew <- freshValueVarId
+  let newVar = Var sort vnew
+  return (substitute (Map.singleton valueVarName newVar) fml, vnew)
 
 nonGhostScalars env = Map.filterWithKey (nonGhost env) $ symbolsOfArity 0 env
 
 nonGhost env x _ = Set.notMember x (env^.ghostSymbols)
+
+safeAddGhostVar :: Monad s => String -> RType -> Environment -> TCSolver s Environment
+safeAddGhostVar name t@FunctionT{} env = return $ addGhostVariable name t env
+safeAddGhostVar name t@AnyT{} env = return $ addGhostVariable name t env
+safeAddGhostVar name t env = do 
+  tstate <- get 
+  adomain <- asks _cegisDomain 
+  if isResourceVariable env tstate adomain name t
+    then do 
+      universalFmls %= Set.insert (Var IntS name)
+      return $ addGhostVariable name t env
+    else return $ addGhostVariable name t env
+
+getCurrentValuation :: MonadHorn s => Formula -> TCSolver s Formula
+getCurrentValuation u@Unknown{} = do 
+  cands <- use candidates 
+  let candGroups = groupBy (\c1 c2 -> val c1 == val c2) $ sortBy (\c1 c2 -> setCompare (val c1) (val c2)) cands
+  head $ map pickCandidiate candGroups
+  --msum $ map pickCandidiate candGroups
+  where
+    val c = valuation (solution c) u
+    pickCandidiate cands' = do
+      candidates .= cands'
+      return $ conjunction $ val (head cands')
+getCurrentValuation f = return f
+
+isResourceVariable :: Environment 
+                   -> TypingState 
+                   -> Maybe AnnotationDomain
+                   -> String
+                   -> RType 
+                   -> Bool 
+isResourceVariable _ _ Nothing _ _ = False
+isResourceVariable env tstate (Just adomain) x t = 
+  let varName (Var _ n) = n
+      cargs = env ^. measureConstArgs
+      rmeasures = tstate ^. resourceMeasures 
+      allCArgs = concat $ mapMaybe (`Map.lookup` cargs) (Map.keys rmeasures)  
+      resourceCArgs = Set.map varName $ Set.unions allCArgs
+      isUnresolved = Map.member x (_unresolvedConstants env)
+      isInt t = 
+        case baseTypeOf t of 
+          IntT -> True 
+          _    -> False
+  in 
+    not isUnresolved && case adomain of 
+      Variable -> isInt t
+      Measure  -> Set.member x resourceCArgs 
+      Both     -> isInt t || Set.member x resourceCArgs
+
 
 -- | Signal type error
 throwError :: MonadHorn s => Doc -> TCSolver s ()

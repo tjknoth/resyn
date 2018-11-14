@@ -22,12 +22,6 @@ import qualified Z3.Monad as Z3
 import qualified Data.Bimap as Bimap
 import Data.Bimap (Bimap)
 
-
-data CEGISParams = CEGISParams {
-  numIterations :: Int, 
-  annotationDomain :: Maybe AnnotationDomain
-} deriving (Show, Eq)
-
 data AnnotationDomain = 
   Variable | Measure | Both
   deriving (Show, Eq)
@@ -111,7 +105,8 @@ data TypingParams = TypingParams {
   _checkMultiplicities :: Bool,                                     -- ^ Should multiplicities be considered when generating resource constraints
   _instantiateUnivs :: Bool,                                        -- ^ When solving exists-forall constraints, instantiate universally quantified expressions
   _constantRes :: Bool,                                             -- ^ Check constant-timedness or not
-  _cegisParams :: CEGISParams                                       -- ^ Miscellaneous CEGIS parameters
+  _cegisMax :: Int,                                                 -- ^ Maximum depth of CEGIS solver 
+  _cegisDomain :: Maybe AnnotationDomain
 }
 
 makeLenses ''TypingParams
@@ -142,14 +137,14 @@ data TypingState = TypingState {
   _idCount :: Map String Int,                   -- ^ Number of unique identifiers issued so far
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
   _resourceConstraints :: [RConstraint],        -- ^ Constraints relevant to resource analysis
-  _resourceVars :: Set String,                  -- ^ Set of variables created to replace potential/multiplicity annotations
+  _resourceVars :: Map String [Formula],        -- ^ Set of variables created to replace potential/multiplicity annotations
   _resourceMeasures :: Map String MeasureDef,   -- ^ List of measure definitions used in resource annotations
   -- Temporary state:
   _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
   _hornClauses :: [Formula],                    -- ^ Horn clauses generated from subtyping constraints
   _consistencyChecks :: [Formula],              -- ^ Formulas generated from type consistency constraints
   _errorContext :: (SourcePos, Doc),            -- ^ Information to be added to all type errors
-  _universalFmls :: Maybe (Set Formula)         -- ^ Set of universally quantified resource expressions, if there are any
+  _universalFmls :: Set Formula                 -- ^ Set of universally quantified resource expressions, if there are any
 }
 
 makeLenses ''TypingState

@@ -49,7 +49,7 @@ isScalarType LetT{} = True
 isScalarType _ = False
 baseTypeOf (ScalarT baseT _ _) = baseT
 baseTypeOf (LetT _ _ t) = baseTypeOf t
-baseTypeOf _ = error "baseTypeOf: applied to a function type"
+baseTypeOf t = error "baseTypeOf: applied to a function type"
 isFunctionType FunctionT{} = True
 -- isFunctionType (LetT _ _ t) = isFunctionType t
 isFunctionType _ = False
@@ -167,6 +167,7 @@ boolAll = bool ftrue
 int r = ScalarT IntT r defPotential
 int_ = int () 
 intAll = int ftrue 
+intPot = ScalarT IntT ftrue
 nat = int (valInt |>=| IntLit 0) 
 pos = int (valInt |>| IntLit 0) 
 
@@ -420,6 +421,9 @@ allArgSorts LetT{} = error "allArgSorts: contextual type"
 resultSort :: RType -> Sort
 resultSort (FunctionT _ _ resT _) = resultSort resT
 resultSort (ScalarT b _ _) = toSort b
+
+isDataType DatatypeT{} = True 
+isDataType _           = False
 
 -- Set strings: used for "fake" set type for typechecking measures
 emptySetCtor = "Emptyset"

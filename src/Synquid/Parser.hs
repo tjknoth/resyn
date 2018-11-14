@@ -242,7 +242,6 @@ parseArrowWithCost = do
   reservedOp "]->"
   return $ Just n
 
-
 parseTypeAtom :: Parser RType
 parseTypeAtom = choice [
   parens parseType,
@@ -283,7 +282,7 @@ parsePredArg = braces parseFormula <|> (flip (Pred AnyS) [] <$> parseIdentifier)
 parseScalarUnrefType = parseUnrefTypeWithArgs <|> parseUnrefTypeNoArgs
 
 parseScalarRefPotType = braces $ do 
-  ScalarT baseType _ _ <- parseScalarUnrefType 
+  ScalarT baseType _ _ <- try parseScalarRefType <|> try parseScalarRefPotType <|> parseScalarUnrefType 
   reservedOp "|"
   refinement <- optionMaybe parseFormula 
   reservedOp "|"
@@ -292,7 +291,7 @@ parseScalarRefPotType = braces $ do
   return $ ScalarT baseType refinement' potential
 
 parseScalarRefType = braces $ do
-  ScalarT baseType _ _ <- parseScalarUnrefType
+  ScalarT baseType _ _ <- try parseScalarRefType <|> try parseScalarRefPotType <|> parseScalarUnrefType
   reservedOp "|"
   refinement <- parseFormula
   return $ ScalarT baseType refinement defPotential

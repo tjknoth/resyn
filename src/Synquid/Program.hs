@@ -570,26 +570,35 @@ data Constraint =
   | WellFormedMatchCond !Environment !Formula
   | WellFormedPredicate !Environment ![Sort] !Id
   | SharedEnv !Environment !Environment !Environment !Id
+  | SharedForm !Environment !Formula !Formula !Formula !Id
   | Transfer !Environment !Environment !Id
   | ConstantRes !Environment !Id
   deriving (Show, Eq, Ord)
 
+-- RFormula -- Logical formula and a set of pending substitutions
+data RFormula = RFormula {
+  pendingSubsts :: !(Map Formula Substitution),
+  rformula :: !Formula
+} deriving (Eq, Show, Ord)
+
 data TaggedConstraint = TaggedConstraint {
-  tag :: !Id,            -- Source info for debugging
-  constraint :: !Formula -- Simplified Constraint
+  tag :: !Id,             -- Source info for debugging
+  constraint :: !RFormula -- Simplified Constraint
 } deriving (Show, Eq, Ord)
 
-labelOf (Subtype _ _ _ _ l) = l
-labelOf (WellFormed _ _ l)  = l
-labelOf (SharedEnv _ _ _ l) = l
-labelOf (Transfer _ _ l)    = l
-labelOf _                   = ""
+labelOf (Subtype _ _ _ _ l)    = l
+labelOf (WellFormed _ _ l)     = l
+labelOf (SharedEnv _ _ _ l)    = l
+labelOf (SharedForm _ _ _ _ l) = l
+labelOf (Transfer _ _ l)       = l
+labelOf _                      = ""
 
 envFrom (Subtype e _ _ _ _)         = e
 envFrom (WellFormed e _ _)          = e
 envFrom (WellFormedCond e _)        = e
 envFrom (WellFormedPredicate e _ _) = e
 envFrom (SharedEnv e _ _ _)         = e
+envFrom (SharedForm e _ _ _ _)      = e
 envFrom (ConstantRes e _)           = e
 envFrom (Transfer e _ _)            = e
 

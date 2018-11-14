@@ -8,7 +8,7 @@ import Synquid.Error
 import Synquid.Pretty
 import Synquid.Parser
 import Synquid.Resolver (resolveDecls)
-import Synquid.Solver.Monad 
+import Synquid.Solver.Monad hiding (name)
 import Synquid.Solver.HornClause
 import Synquid.Synthesis.Synthesizer
 import Synquid.Synthesis.Util
@@ -26,6 +26,7 @@ import Data.Map ((!))
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 import Control.Lens ((.~), (^.), (%~))
+import Debug.Trace
 
 import Data.List.Split
 
@@ -163,7 +164,7 @@ synt = Synthesis {
   print_stats         = False           &= help ("Show specification and solution size (default: False)"),
   log_                = 0               &= help ("Logger verboseness level (default: 0)") &= name "l",
   resources           = True            &= help ("Verify resource usage (default: True)") &= name "r" &= groupname "Resource analysis parameters",
-  multiplicities      = False           &= help ("Use multiplicities when verifying resource usage (default: False)"),
+  multiplicities      = True            &= help ("Use multiplicities when verifying resource usage (default: True)"),
   instantiate_foralls = True            &= help ("Solve exists-forall constraints by instantiating universally quantified expressions (default: True)"),
   backtrack           = False           &= help ("Backtrack past successfully synthesized branches (default: False)") &= name "b",
   num_programs        = 1               &= help ("Number of programs to produce if possible (default: 1)"),

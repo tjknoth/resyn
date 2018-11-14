@@ -157,7 +157,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
   PLet x iDef iBody -> do -- E-term let (since lambda-let was considered before)
     (pDef, _) <- inContext (\p -> Program (PLet x p (Program PHole t)) t) $ reconstructETopLevel env AnyT iDef
     let (env', tDef) = embedContext env (typeOf pDef)
-    pBody <- inContext (\p -> Program (PLet x pDef p) t) $ reconstructI (addVariable x tDef env') t iBody
+    pBody <- inContext (\p -> Program (PLet x pDef p) t) $ reconstructI (safeAddVariable x tDef env') t iBody
     return $ Program (PLet x pDef pBody) t
   -}   
    
@@ -175,9 +175,9 @@ reconstructI' env t@ScalarT{} impl = case impl of
     return $ Program (PIf pCond pThen pElse) t
   
   PIf iCond iThen iElse -> do
-    (cEnv, bEnv) <- shareContext env $ show $ text "if" <+> pretty iCond
+    (cEnv, bEnv) <- shareContext env $ show $ text "if" <+> plain (pretty iCond)
     pCond <- inContext (\p -> Program (PIf p (Program PHole t) (Program PHole t)) t) 
-      $ reconstructETopLevel cEnv (ScalarT BoolT ftrue defPotential) iCond
+      $ reconstructIE cEnv (ScalarT BoolT ftrue defPotential) iCond
     let (bEnv', ScalarT BoolT cond pot) = embedContext bEnv $ typeOf pCond
     pThen <- inContext (\p -> Program (PIf pCond p (Program PHole t)) t) 
       $ reconstructI (addAssumption (substitute (Map.singleton valueVarName ftrue) cond) bEnv') t iThen
@@ -188,7 +188,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
   PMatch iScr iCases -> do
     (consNames, consTypes) <- unzip <$> checkCases Nothing iCases
     let scrT = refineTop env $ shape $ lastType $ head consTypes
-    (cEnv, bEnv) <- shareContext env $ show $ text "match" <+> pretty iScr
+    (cEnv, bEnv) <- shareContext env $ show $ text "match" <+> plain (pretty iScr)
     pScrutinee <- inContext (\p -> Program (PMatch p []) t) 
       $ reconstructIE cEnv scrT iScr
     let (bEnv', tScr) = embedContext bEnv (typeOf pScrutinee)
@@ -236,7 +236,7 @@ reconstructCase env scrVar pScrutinee t (Case consName args iBody) consT = cut $
   runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
   consT' <- runInSolver $ currentAssignment consT 
   (syms, ass) <- caseSymbols env scrVar args consT'
-  let caseEnv = foldr (uncurry addVariable) (addAssumption ass env) syms
+  caseEnv <- foldM (\e (x, t) -> safeAddVariable x t e) (addAssumption ass env) syms
   pCaseExpr <- local (over (_1 . matchDepth) (-1 +)) $
                inContext (\p -> Program (PMatch pScrutinee [Case consName args p]) t) $
                reconstructI caseEnv t iBody
@@ -286,7 +286,7 @@ reconstructE' env typ (PSymbol name) =
 reconstructE' env typ p@(PApp iFun iArg) = do
   x <- freshVar env "x"
   let fp = env ^. freePotential
-  (fp', fp'') <- shareFreePotential fp $ show $ plain $ pretty p
+  (fp', fp'') <- shareFreePotential env fp $ show $ plain $ pretty p
   (env1, env2) <- shareContext (env { _freePotential = fp' }) $ show $ plain $ pretty p
   pFun <- inContext (\p -> Program (PApp p uHole) typ) 
     $ reconstructE env1 (FunctionT x AnyT typ defCost) iFun
@@ -299,7 +299,7 @@ reconstructE' env typ p@(PApp iFun iArg) = do
       return (Program (PApp pFun pArg) tRes')
     else do -- First-order argument: generate now
       let tArg'' = subtractPotential tArg' fp''
-      pArg <- inContext (\p -> Program (PApp pFun p) typ) 
+      pArg <- inContext (\p -> Program (PApp pFun p) tRes') 
         $ reconstructE env2 tArg'' iArg
       let tRes'' = appType env pArg x tRes'
       return (Program (PApp pFun pArg) tRes'') 
@@ -333,12 +333,12 @@ checkAnnotation :: (MonadSMT s, MonadHorn s, RMonad s)
 checkAnnotation env t t' p = do
   tass <- use (typingState . typeAssignment)
   potentialSyms <- use (typingState . resourceVars)
-  case resolveRefinedType (typeSubstituteEnv tass env) t' potentialSyms of
+  case resolveRefinedType (typeSubstituteEnv tass env) t' (Set.fromList (Map.keys potentialSyms)) of
     Left err -> throwError err
     Right t'' -> do
       ctx <- asks . view $ _1 . context
       writeLog 2 $ text "Checking consistency of type annotation" <+> pretty t'' <+> text "with" <+> pretty t <+> text "in" $+$ pretty (ctx (Program p t''))
-      addSubtypeConstraint env t'' t True (show (pretty p)) 
+      addSubtypeConstraint env t'' t True (show (plain (pretty p)))
 
       fT <- runInSolver $ finalizeType t
       fT'' <- runInSolver $ finalizeType t''

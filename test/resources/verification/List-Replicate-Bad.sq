@@ -3,7 +3,6 @@ qualifier {x <= y, x != y}
 type Nat = {Int | _v >= 0}
 
 -- Need predicates to specify replicate with refinement types
-zero :: {Int | _v == 0}
 inc :: x: Int -> {Int | _v == x + 1}
 dec :: x: Int -> {Int | _v == x - 1}
 

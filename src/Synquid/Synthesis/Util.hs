@@ -11,7 +11,7 @@ import Synquid.Pretty
 import Synquid.Tokens
 import Synquid.Solver.Monad
 import Synquid.Solver.TypeConstraint
-import qualified Synquid.Solver.Util as TCSolver (freshId, freshVar)
+import qualified Synquid.Solver.Util as TCSolver 
 
 import Data.Maybe
 import Data.List
@@ -23,6 +23,7 @@ import Control.Monad.Logic
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Lens
+import Control.Monad.Extra (mapMaybeM)
 import Data.Key (mapWithKeyM)
 import Debug.Trace
 
@@ -135,6 +136,8 @@ freshId = runInSolver . TCSolver.freshId
 freshVar :: MonadHorn s => Environment -> String -> Explorer s String
 freshVar env prefix = runInSolver $ TCSolver.freshVar env prefix
 
+inContext ctx = local (over (_1 . context) (. ctx))
+
 -- | Return the current valuation of @u@;
 -- in case there are multiple solutions,
 -- order them from weakest to strongest in terms of valuation of @u@ and split the computation
@@ -149,8 +152,6 @@ currentValuation u = do
     pickCandidiate cands' = do
       typingState . candidates .= cands'
       return $ val (head cands')
-
-inContext ctx = local (over (_1 . context) (. ctx))
 
 -- | Replace all bound type and predicate variables with fresh free variables
 -- (if @top@ is @False@, instantiate with bottom refinements instead of top refinements)
@@ -202,6 +203,16 @@ cut e = do
   b <- asks . view $ _1 . shouldCut
   if b then once e else e
 
+safeAddVariable :: Monad s => String -> RType -> Environment -> Explorer s Environment
+safeAddVariable x t@FunctionT{} env = return $ addVariable x t env
+safeAddVariable x typ env = do
+  isRV <- checkResourceVar env x typ 
+  if isRV
+    then do 
+      (typingState . universalFmls) %= Set.insert (Var IntS x)
+      return $ addVariable x typ env
+    else return $ addVariable x typ env
+
 -- | Synthesize auxiliary goals accumulated in @auxGoals@ and store the result in @solvedAuxGoals@
 generateAuxGoals :: MonadHorn s => Explorer s ()
 generateAuxGoals = do
@@ -226,55 +237,87 @@ generateAuxGoals = do
     etaContract' [] f@(PSymbol _)                                            = Just f
     etaContract' binders p                                                   = Nothing
 
+checkResourceVar :: Monad s 
+                 => Environment
+                 -> String 
+                 -> RType
+                 -> Explorer s Bool 
+checkResourceVar env x t = do 
+  tstate <- use typingState 
+  -- TODO: figure out how to use lenses so I can skip the intermediate bind lmao
+  tparams <- asks . view $ _2 
+  return $ TCSolver.isResourceVariable env tstate (_cegisDomain tparams) x t 
+
+makeResourceVar :: Monad s  
+                => Environment 
+                -> Maybe (BaseType Formula) 
+                -> String 
+                -> Explorer s (String, [Formula])
+makeResourceVar env vvtype name = do 
+  let universalsInScope = typeFromSchema <$> symbolsOfArity 0 env
+  let mkUFml (x, t) = do 
+        isRV <- checkResourceVar env x t
+        return $ if isRV 
+          then Just $ Var IntS x
+          else Nothing
+  domain <- mapMaybeM mkUFml (Map.assocs universalsInScope)
+  return $ case vvtype of 
+    Nothing -> (name, domain)
+    Just b  -> (name, Var (toSort b) valueVarName : domain)
+
+insertRVar (name, info) = Map.insert name info
+
 -- Variable formula with fresh variable idfreshPot :: MonadHorn s => Explorer s Potential 
-freshPot :: MonadHorn s => Explorer s Formula
-freshPot = do 
+freshPot :: MonadHorn s => Environment -> Maybe (BaseType Formula) -> Explorer s Formula
+freshPot env vtype = do 
   x <- freshId potentialPrefix
-  (typingState . resourceVars) %= Set.insert x
+  rvar <- makeResourceVar env vtype x
+  (typingState . resourceVars) %= insertRVar rvar
   return $ Var IntS x
 
-freshMul :: MonadHorn s => Explorer s Formula
-freshMul = do
+freshMul :: MonadHorn s => Environment -> Maybe (BaseType Formula)-> Explorer s Formula
+freshMul env vtype = do
   x <- freshId multiplicityPrefix
-  (typingState . resourceVars) %= Set.insert x
+  rvar <- makeResourceVar env vtype x
+  (typingState . resourceVars) %= insertRVar rvar
   return $ Var IntS x
 
-freshFreePotential :: MonadHorn s => Explorer s Formula
-freshFreePotential = do
+freshFreePotential :: MonadHorn s => Environment -> Explorer s Formula
+freshFreePotential env = do
   fp <- freshId freePotentialPrefix 
-  (typingState . resourceVars) %= Set.insert fp
+  rvar <- makeResourceVar env Nothing fp
+  (typingState . resourceVars) %= insertRVar rvar
   return $ Var IntS fp
 
 -- | 'freshPotentials' @sch r@ : Replace potentials in schema @sch@ by unwrapping the foralls. If @r@, recursively replace potential annotations in the entire type. Otherwise, just replace top-level annotations.
-freshPotentials :: MonadHorn s => RSchema -> Bool -> Explorer s RSchema
-freshPotentials (Monotype t) replaceAll = do 
-  t' <- freshPotentials' t replaceAll
+freshPotentials :: MonadHorn s => Environment -> RSchema -> Bool -> Bool -> Explorer s RSchema
+freshPotentials env (Monotype t) replaceAll usevv = do 
+  t' <- freshPotentials' env t replaceAll usevv
   return $ Monotype t'
-freshPotentials (ForallT x t) replaceAll = do 
-  t' <- freshPotentials t replaceAll 
+freshPotentials env (ForallT x t) replaceAll usevv = do 
+  t' <- freshPotentials env t replaceAll usevv
   return $ ForallT x t'
-freshPotentials (ForallP x t) replaceAll = do
-  t' <- freshPotentials t replaceAll
+freshPotentials env (ForallP x t) replaceAll usevv = do
+  t' <- freshPotentials env t replaceAll usevv
   return $ ForallP x t'
 
 -- Replace potentials in a TypeSkeleton
-freshPotentials' :: MonadHorn s => RType -> Bool -> Explorer s RType
--- TODO: probably don't need to bother traversing the type here, since annotations on type vars should be Infty as well
-freshPotentials' (ScalarT base fml pot) replaceAll = do 
-  pot' <- freshPot
-  base' <- if replaceAll then freshMultiplicities base replaceAll else return base
+freshPotentials' :: MonadHorn s => Environment -> RType -> Bool -> Bool -> Explorer s RType
+freshPotentials' env (ScalarT base fml pot) replaceAll usevv = do 
+  pot' <- freshPot env (if usevv then Just base else Nothing)
+  base' <- if replaceAll then freshMultiplicities env base replaceAll usevv else return base
   return $ ScalarT base' fml pot'
-freshPotentials' t _ = return t
+freshPotentials' _ t _ _ = return t
 
 -- Replace potentials in a BaseType
-freshMultiplicities :: MonadHorn s => BaseType Formula -> Bool -> Explorer s (BaseType Formula)
-freshMultiplicities (TypeVarT s name m) _ = do 
-  m' <- freshMul
+freshMultiplicities :: MonadHorn s => Environment -> BaseType Formula -> Bool -> Bool -> Explorer s (BaseType Formula)
+freshMultiplicities env b@(TypeVarT s name m) _ _ = do 
+  m' <- freshMul env Nothing
   return $ TypeVarT s name m'
-freshMultiplicities (DatatypeT name ts ps) replaceAll = do
-  ts' <- mapM (`freshPotentials'` replaceAll) ts
+freshMultiplicities env (DatatypeT name ts ps) replaceAll usevv = do
+  ts' <- mapM (\t -> freshPotentials' env t replaceAll usevv) ts
   return $ DatatypeT name ts' ps
-freshMultiplicities t _ = return t
+freshMultiplicities _ t _ _ = return t
 
 addScrutineeToEnv :: (MonadHorn s, MonadSMT s) 
                   => Environment 
@@ -308,10 +351,10 @@ shareContext :: (MonadHorn s, MonadSMT s)
              -> String 
              -> Explorer s (Environment, Environment)
 shareContext env label = do 
-  symsl <- safeFreshPotentials env True
-  symsr <- safeFreshPotentials env True
-  fpl <- freshFreePotential
-  fpr <- freshFreePotential
+  symsl <- safeFreshPotentials env True True
+  symsr <- safeFreshPotentials env True True
+  fpl <- freshFreePotential env
+  fpr <- freshFreePotential env
   
   let ghosts = _ghostSymbols env
 
@@ -321,12 +364,13 @@ shareContext env label = do
   return (env { _symbols = symsl, _freePotential = fpl }, env { _symbols = symsr, _freePotential = fpr })
 
 shareFreePotential :: (MonadHorn s, MonadSMT s)
-                   => Formula 
+                   => Environment
+                   -> Formula 
                    -> String
                    -> Explorer s (Formula, Formula) 
-shareFreePotential fp label = do 
-  fp' <- freshFreePotential 
-  fp'' <- freshFreePotential          
+shareFreePotential env fp label = do 
+  fp' <- freshFreePotential env
+  fp'' <- freshFreePotential env
   let env = emptyEnv { _freePotential = fp }
   let env' = env { _freePotential = fp' }
   let env'' = env { _freePotential = fp'' }
@@ -340,8 +384,8 @@ transferPotential :: (MonadHorn s, MonadSMT s)
                   -> String 
                   -> Explorer s Environment
 transferPotential env label = do 
-  fp <- freshFreePotential
-  syms' <- safeFreshPotentials env False
+  fp <- freshFreePotential env
+  syms' <- safeFreshPotentials env False False
   let env' = mkResourceEnv syms' (_ghostSymbols env) fp
 
   addConstraint $ Transfer env env' label
@@ -350,13 +394,14 @@ transferPotential env label = do
 safeFreshPotentials :: (MonadHorn s, MonadSMT s)
                     => Environment
                     -> Bool
+                    -> Bool
                     -> Explorer s SymbolMap
-safeFreshPotentials env replaceAll = do 
+safeFreshPotentials env replaceAll containsvv = do 
   let ghosts = env ^. ghostSymbols
   let replace (x, sch) = if Set.member x ghosts 
       then return (x, sch)
       else do 
-        sch' <- freshPotentials sch replaceAll
+        sch' <- freshPotentials env sch replaceAll containsvv
         return (x, sch')
   let syms = env ^. symbols
   let scalars = Map.assocs $ fromMaybe Map.empty $ Map.lookup 0 syms 
@@ -368,10 +413,11 @@ mapTuple f (x, y) = (f x, f y)
 -- It might turn out to be more efficient to share types
 --  by only generating one fresh variable and subtracting from
 --  the other side of the sharing relation.
+{-
 shareType :: (MonadHorn s, MonadSMT s)
           => RSchema
           -> Explorer s (RSchema, RSchema)
-shareType (Monotype t) = do 
+shareType env (Monotype t) = do 
   ts <- shareType' t
   return $ mapTuple Monotype ts
 shareType (ForallT x t) = do 
@@ -399,6 +445,7 @@ shareTypeBase (TypeVarT s x m) = do
   m' <- freshMul
   return (TypeVarT s x m', TypeVarT s x (m |-| m'))
 shareTypeBase b = return (b, b)
+-}
 
 -- | 'toVar' @p env@: a variable representing @p@ (can be @p@ itself or a fresh ghost)
 toVar :: (MonadSMT s, MonadHorn s) => Environment -> RProgram -> Explorer s (Formula, Environment)
