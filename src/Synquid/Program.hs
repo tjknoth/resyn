@@ -565,6 +565,7 @@ isSynthesisGoal _ = False
 -- | Typing constraints
 data Constraint = 
   Subtype !Environment !RType !RType !Bool !Id
+  | RSubtype !Environment !Formula !Formula !Id
   | WellFormed !Environment !RType !Id
   | WellFormedCond !Environment !Formula
   | WellFormedMatchCond !Environment !Formula
@@ -587,6 +588,7 @@ data TaggedConstraint = TaggedConstraint {
 } deriving (Show, Eq, Ord)
 
 labelOf (Subtype _ _ _ _ l)    = l
+labelOf (RSubtype _ _ _ l)     = l
 labelOf (WellFormed _ _ l)     = l
 labelOf (SharedEnv _ _ _ l)    = l
 labelOf (SharedForm _ _ _ _ l) = l
@@ -594,6 +596,7 @@ labelOf (Transfer _ _ l)       = l
 labelOf _                      = ""
 
 envFrom (Subtype e _ _ _ _)         = e
+envFrom (RSubtype e _ _ _)          = e
 envFrom (WellFormed e _ _)          = e
 envFrom (WellFormedCond e _)        = e
 envFrom (WellFormedPredicate e _ _) = e

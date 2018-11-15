@@ -405,6 +405,7 @@ instance Show SortConstraint where
 prettyConstraint :: Constraint -> Doc
 prettyConstraint (Subtype env t1 t2 True label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "/\\" <+> pretty t2 -- <+> text "src:" <+> pretty label
 prettyConstraint (Subtype env t1 t2 _ label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "<:" <+> pretty t2 -- <+> text "src:" <+> pretty label
+prettyConstraint (RSubtype env p1 p2 label) = pretty env <+> operator "|-" <+> pretty p1 <+> operator ">=" <+> pretty p2 <+> text "src:" <+> pretty label
 prettyConstraint (WellFormed env t label) = prettyBindings env <+> operator "|-" <+> pretty t -- <+> text "src:" <+> pretty label
 prettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 prettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c

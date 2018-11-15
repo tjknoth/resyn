@@ -206,12 +206,12 @@ cut e = do
 safeAddVariable :: Monad s => String -> RType -> Environment -> Explorer s Environment
 safeAddVariable x t@FunctionT{} env = return $ addVariable x t env
 safeAddVariable x typ env = do
-  isRV <- checkResourceVar env x typ 
-  if isRV
-    then do 
-      (typingState . universalFmls) %= Set.insert (Var IntS x)
-      return $ addVariable x typ env
-    else return $ addVariable x typ env
+  --isRV <- checkResourceVar env x typ 
+  --if isRV
+  --  then do 
+  (typingState . universalFmls) %= Set.insert (Var IntS x)
+  return $ addVariable x typ env
+  --  else return $ addVariable x typ env
 
 -- | Synthesize auxiliary goals accumulated in @auxGoals@ and store the result in @solvedAuxGoals@
 generateAuxGoals :: MonadHorn s => Explorer s ()
@@ -246,20 +246,21 @@ checkResourceVar env x t = do
   tstate <- use typingState 
   -- TODO: figure out how to use lenses so I can skip the intermediate bind lmao
   tparams <- asks . view $ _2 
-  return $ TCSolver.isResourceVariable env tstate (_cegisDomain tparams) x t 
+  let isRV = TCSolver.isResourceVariable env tstate (_cegisDomain tparams) x t 
+  return isRV
 
 makeResourceVar :: Monad s  
                 => Environment 
                 -> Maybe (BaseType Formula) 
                 -> String 
                 -> Explorer s (String, [Formula])
-makeResourceVar env vvtype name = do 
+makeResourceVar env vvtype name = do
   let universalsInScope = typeFromSchema <$> symbolsOfArity 0 env
-  let mkUFml (x, t) = do 
+  let mkUFml (x, t) = do
         isRV <- checkResourceVar env x t
         return $ if isRV 
           then Just $ Var IntS x
-          else Nothing
+          else Nothing 
   domain <- mapMaybeM mkUFml (Map.assocs universalsInScope)
   return $ case vvtype of 
     Nothing -> (name, domain)
@@ -303,6 +304,16 @@ freshPotentials env (ForallP x t) replaceAll usevv = do
 
 -- Replace potentials in a TypeSkeleton
 freshPotentials' :: MonadHorn s => Environment -> RType -> Bool -> Bool -> Explorer s RType
+freshPotentials' env (ScalarT base fml (Ite g t f)) replaceAll usevv = do
+  --if usevv
+  --  then do 
+      t' <- freshPot env (if usevv then Just base else Nothing) 
+      f' <- freshPot env (if usevv then Just base else Nothing) 
+      base' <- if replaceAll then freshMultiplicities env base replaceAll usevv else return base
+      return $ ScalarT base' fml $ Ite g t' f'
+  --  else do 
+  --    p' <- freshPot env Nothing
+  --    return $ ScalarT base fml p' 
 freshPotentials' env (ScalarT base fml pot) replaceAll usevv = do 
   pot' <- freshPot env (if usevv then Just base else Nothing)
   base' <- if replaceAll then freshMultiplicities env base replaceAll usevv else return base

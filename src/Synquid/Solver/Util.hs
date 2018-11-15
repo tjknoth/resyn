@@ -85,9 +85,6 @@ embedSynthesisEnv env fml consistency useMeasures = do
       then env
       else env { _measureDefs = Map.empty } -- don't instantiate measures in certain cases
   embedEnv env' fml consistency True
-  --emb <- embedEnv env' fml consistency
-  --emb' <- mapM getCurrentValuation (Set.toList emb)
-  --return emb --(Set.fromList emb')
 
 
 -- | 'instantiateConsAxioms' @env fml@ : If @fml@ contains constructor applications, return the set of instantiations of constructor axioms for those applications in the environment @env@
@@ -182,19 +179,6 @@ safeAddGhostVar name t env = do
       return $ addGhostVariable name t env
     else return $ addGhostVariable name t env
 
-getCurrentValuation :: MonadHorn s => Formula -> TCSolver s Formula
-getCurrentValuation u@Unknown{} = do 
-  cands <- use candidates 
-  let candGroups = groupBy (\c1 c2 -> val c1 == val c2) $ sortBy (\c1 c2 -> setCompare (val c1) (val c2)) cands
-  head $ map pickCandidiate candGroups
-  --msum $ map pickCandidiate candGroups
-  where
-    val c = valuation (solution c) u
-    pickCandidiate cands' = do
-      candidates .= cands'
-      return $ conjunction $ val (head cands')
-getCurrentValuation f = return f
-
 isResourceVariable :: Environment 
                    -> TypingState 
                    -> Maybe AnnotationDomain
@@ -206,6 +190,7 @@ isResourceVariable env tstate (Just adomain) x t =
   let varName (Var _ n) = n
       cargs = env ^. measureConstArgs
       rmeasures = tstate ^. resourceMeasures 
+      rsorts = map _inSort $ Map.elems rmeasures
       allCArgs = concat $ mapMaybe (`Map.lookup` cargs) (Map.keys rmeasures)  
       resourceCArgs = Set.map varName $ Set.unions allCArgs
       isUnresolved = Map.member x (_unresolvedConstants env)
@@ -216,8 +201,8 @@ isResourceVariable env tstate (Just adomain) x t =
   in 
     not isUnresolved && case adomain of 
       Variable -> isInt t
-      Measure  -> Set.member x resourceCArgs 
-      Both     -> isInt t || Set.member x resourceCArgs
+      Measure  -> error "Measures not supported" -- Set.member x resourceCArgs 
+      Both     -> error "Measures not supported" -- isInt t || Set.member x resourceCArgs
 
 
 -- | Signal type error

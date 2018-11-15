@@ -200,6 +200,13 @@ simplifyConstraint' _ _ (Subtype _ (ScalarT (DatatypeT _ _ _) _ _) t _ _) | t ==
 -- Well-formedness of a known predicate drop
 simplifyConstraint' _ pass c@(WellFormedPredicate _ _ p) | p `Map.member` pass = return ()
 
+-- Strip away potentials 
+simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl rl pl) tr@(ScalarT br rr pr) variant label)
+  | (pl /= fzero) || (pr /= fzero) 
+    = do 
+        simpleConstraints %= (RSubtype (addGhostVariable valueVarName tl env) pl pr (show (plain (pretty tl))) :)
+        simplifyConstraint (Subtype env (ScalarT bl rl fzero) (ScalarT br rr fzero) variant label)
+
 -- Type variable with known assignment: substitute
 simplifyConstraint' tass _ (Subtype env tv@(ScalarT (TypeVarT _ a _) _ _) t variant label) 
   | a `Map.member` tass 
@@ -273,22 +280,7 @@ simplifyConstraint' _ _ (Subtype env t@(ScalarT (DatatypeT name [] (pArg:pArgs))
       if isContra
         then simplifyConstraint (Subtype env (int pArg') (int pArg) consistency label)
         else simplifyConstraint (Subtype env (int pArg) (int pArg') consistency label)
-      -- If potentials were not already checked (ie still are nonzero), check them:
-      --when ((pot /= fzero) && (pot' /= fzero)) $
-      --  simplifyConstraint (Subtype (addGhostVariable valueVarName t env) (intPot pot) (intPot pot') consistency label)
-      --simplifyConstraint (Subtype env (ScalarT (DatatypeT name [] pArgs) fml fzero) (ScalarT (DatatypeT name' [] pArgs') fml' fzero) consistency label)
       simplifyConstraint (Subtype env (ScalarT (DatatypeT name [] pArgs) fml pot) (ScalarT (DatatypeT name' [] pArgs') fml' pot') consistency label)
-{-
-simplifyConstraint' _ _ (Subtype env t@(ScalarT (DatatypeT name ts@(tArg:tArgs) pArgs) fml pot) (ScalarT (DatatypeT name' rs@(tArg':tArgs') pArgs') fml' pot') consistency label)
-  = do 
-      let subt t t' = Subtype env t t' consistency label
-      -- Assert subtypes of type variables 
-      zipWithM_ (\t t' -> simplifyConstraint (subt t t')) ts rs
-      -- Check potentials
-      simplifyConstraint (Subtype (addGhostVariable valueVarName t env) (intPot pot) (intPot pot') consistency ("from: " ++ show (plain (pretty t))))
-      -- Check predicates
-      simplifyConstraint (Subtype env (ScalarT (DatatypeT name [] pArgs) fml fzero) (ScalarT (DatatypeT name' [] pArgs') fml' fzero) consistency label)
--}
 simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) True label)
   = if isScalarType tArg1
       then do 
@@ -374,8 +366,6 @@ processConstraint c@(Subtype env (ScalarT baseTL l potl) (ScalarT baseTR r potr)
   = if l == ffalse || r == ftrue 
       then do 
         -- Implication on refinements is trivially true, add constraint with trivial refinements for resource analysis
-        -- let c' = Subtype env (ScalarT baseTL ftrue potl) (ScalarT baseTR ftrue potr) consistency label
-        -- when ((potl /= fzero) && (potr /= fzero)) $ simpleConstraints %= (c': ) 
         let c' = Subtype env (ScalarT baseTL ffalse potl) (ScalarT baseTR r potr) consistency label
         simpleConstraints %= (c': ) 
       else do 
@@ -446,6 +436,16 @@ processConstraint (WellFormedMatchCond env (Unknown _ u))
       mq <- asks _matchQualsGen
       let env' = typeSubstituteEnv tass env
       addQuals u (mq env' (allPotentialScrutinees env'))
+processConstraint (RSubtype env pl pr l) 
+  = do 
+      tass <- use typeAssignment
+      pass <- use predAssignment
+      let subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass
+      let pl' = subst pl
+      let pr' = subst pr
+      let env' = typeSubstituteEnv tass env
+      let c' = RSubtype env' pl' pr' l
+      simpleConstraints %= (c' :)
 processConstraint c@ConstantRes{} = simpleConstraints %= (c :)
 processConstraint c@SharedEnv{}   = error "processConstraint: shared environment constraint present"
 processConstraint c@SharedForm{}  = simpleConstraints %= (c :)
@@ -464,6 +464,8 @@ generateHornClauses c@(Subtype env (ScalarT baseTL l potl) (ScalarT baseTR r pot
       clauses <- lift . lift . lift $ preprocessConstraint (conjunction (Set.insert l emb) |=>| r)
       hornClauses %= (clauses ++)
 generateHornClauses WellFormed{}
+  = return ()
+generateHornClauses RSubtype{} 
   = return ()
 generateHornClauses SharedEnv{}
   = return ()

@@ -79,7 +79,9 @@ MICRO_BENCHMARKS = [
     #MBenchmark('List-Union', 'union', 'optimization, fine-grained bound'),
     #MBenchmark('List-Range', 'range', 'termination handling', ['-f=Nonterminating']),
     MBenchmark('List-Pairs', 'ordered pairs', 'optimization'),
-    MBenchmark('List-Compress', 'compress', 'optimization')
+    MBenchmark('List-Compress', 'compress', 'optimization'),
+    MBenchmark('List-Triple1', 'triple append', 'impact of annotations', ['--multiplicities=false']),
+    MBenchmark('List-Triple2', 'triple append', 'impact of annotations', ['--multiplicities=false'])
 ]
 
 ALL_BENCHMARKS = [

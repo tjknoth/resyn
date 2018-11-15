@@ -67,14 +67,9 @@ solveResourceConstraints oldConstraints constraints = do
       $+$ prettyConjuncts (filter (isInteresting . rformula . constraint) accFmls)
     writeLog 3 $ nest 4 $ text "Solved resource constraint after conjoining formulas:" 
       <+> text result $+$ prettyConjuncts (filter (isInteresting . rformula . constraint) constraintList)
-    if b 
-      then 
-        return $ Just $ map Left $ filter (not . isTrivialTC) constraintList -- $ Just $ if hasUniversals
-          -- Store raw constraints
-          -- then map Right constraints
-          -- Otherwise, store TaggedConstraints with the appropriate formulas
-          -- else map Left $ filter (not . isTrivialTC) constraintList
-      else return Nothing
+    return $ if b 
+      then Just $ map Left $ filter (not . isTrivialTC) constraintList -- $ Just $ if hasUniversals
+      else Nothing
 
 
 -- | Given lists of constraints (newly-generated and accumulated), construct the corresponding solver query
@@ -107,12 +102,11 @@ generateFormula' shouldLog checkMults c =
     Subtype env tl tr variant label -> do
       op <- subtypeOp
       let fmls = RFormula Map.empty $ assemble (directSubtypes checkMults op tl tr)
-      -- When decomposing datatypes into subtyping constraints we already added _v to the context. Not true
-      --   for other types. TODO: make this less janky (add a new class of constraint for doing the >= comparison)
-      env' <- if isNothing (Map.lookup valueVarName (symbolsOfArity 0 env)) && not (isDataType (baseTypeOf tl))
-                then safeAddGhostVar valueVarName tl env 
-                else return env
-      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env' c fmls (Set.insert (refinementOf tl))
+      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls id
+    RSubtype env pl pr label -> do 
+      op <- subtypeOp 
+      let fml = RFormula Map.empty $ pl `op` pr
+      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fml id
     WellFormed env t label -> do
       let fmls = RFormula Map.empty $ assemble $ map (|>=| fzero) $ allRFormulas checkMults t
       TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls (Set.insert (refinementOf t))
@@ -147,7 +141,7 @@ embedAndProcessConstraint shouldLog env c rfml addTo = do
   let useMeasures = maybe False shouldUseMeasures aDomain 
   univs <- use universalFmls
   let possibleVars = varsOf fml
-  emb <- embedSynthesisEnv env (conjunction (Set.union univs possibleVars)) True useMeasures
+  emb <- embedSynthesisEnv env (conjunction possibleVars) {-(Set.union univs possibleVars))-} True useMeasures
   -- Check if embedding is singleton { false }
   let isFSingleton s = (Set.size s == 1) && (Set.findMin s == ffalse)
   if isFSingleton emb  
@@ -168,7 +162,7 @@ embedAndProcessConstraint shouldLog env c rfml addTo = do
 -- Filter out irrelevant assumptions -- might be measures, and 
 --   any operation over a non-integer variable
 isRelevantAssumption :: Bool -> Set Formula -> Formula -> Bool 
-isRelevantAssumption _ rvs v@Var{} = Set.member v rvs
+isRelevantAssumption _ rvs v@Var{} = True --Set.member v rvs
 isRelevantAssumption useM _ Pred{} = useM 
 isRelevantAssumption _ _ Unknown{} = trace "Warning: unknown assumption" False -- TODO: fix once i start assuming unknowns
 isRelevantAssumption useM rvs (Unary _ f) = isRelevantAssumption useM rvs f
@@ -342,7 +336,7 @@ directSubtypes :: Bool
                -> RType 
                -> [Formula]
 directSubtypes cm op (ScalarT bl _ fl) (ScalarT br _ fr) = 
-  (fl `op` fr) : directSubtypesBase cm op bl br
+  {-(fl `op` fr) :-} directSubtypesBase cm op bl br
 directSubtypes _ _ _ _ = [] 
 
 directSubtypesBase :: Bool 
@@ -363,8 +357,8 @@ totalTopLevelPotential _                  = fzero
 
 -- Is given constraint relevant for resource analysis
 isResourceConstraint :: Constraint -> Bool
-isResourceConstraint (Subtype _ _ _ True _) = False -- don't care about consistency checks
-isResourceConstraint (Subtype _ ScalarT{} ScalarT{} _ _) = True
+isResourceConstraint (Subtype _ ScalarT{} ScalarT{} _ _) = False-- True
+isResourceConstraint RSubtype{}    = True
 isResourceConstraint WellFormed{}  = True
 isResourceConstraint SharedEnv{}   = False -- should never be present by now
 isResourceConstraint SharedForm{}  = True
