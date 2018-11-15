@@ -280,9 +280,11 @@ redistribute envIn envOut = do
   let scalarsOf env = typeFromSchema <$> nonGhostScalars env
   -- All top-level potential annotations of a map of scalar types
   let topPotentials = Map.mapMaybe topPotentialOf
+  -- Generate pending substitutions 
+  -- TODO: generalize this to potentials that aren't just free variables!
   let substitutions e = Map.foldlWithKey generateSubst Map.empty (scalarsOf e)
   -- Sum of all top-level potentials of scalar types in context
-  let envSum env = sumFormulas $ topPotentials $ scalarsOf env
+  let envSum env = sumFormulas $ topPotentials $ Map.mapWithKey applySubst $ scalarsOf env
   -- Assert that all potentials are well-formed
   let wellFormed smap = map (|>=| fzero) ((Map.elems . topPotentials) smap) 
   -- Assert (fresh) potentials in output context are well-formed
@@ -293,13 +295,19 @@ redistribute envIn envOut = do
 
 -- Substitute for _v in potential annotation
 generateSubst subs x t = 
-    case topPotentialOf t of 
-      Nothing -> subs 
-      Just p -> 
-        case toSort (baseTypeOf t) of 
-          IntS -> let value' = Var (toSort (baseTypeOf t)) x 
-                  in Map.insert p (Map.singleton valueVarName value') subs
-          _ -> subs
+  case topPotentialOf t of 
+    Nothing -> subs 
+    Just (Ite g p q) -> 
+      let value' = Var (toSort (baseTypeOf t)) x
+          subs' = Map.insert p (Map.singleton valueVarName value') subs
+      in Map.insert q (Map.singleton valueVarName value') subs
+    Just p ->
+      let value' = Var (toSort (baseTypeOf t)) x 
+      in Map.insert p (Map.singleton valueVarName value') subs
+
+applySubst x (ScalarT b r p) = 
+  let value' = Var (toSort b) x 
+  in ScalarT b r $ substitute (Map.singleton valueVarName value') p
 
 partitionType :: Bool 
               -> String 

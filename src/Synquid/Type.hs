@@ -425,6 +425,10 @@ resultSort (ScalarT b _ _) = toSort b
 isDataType DatatypeT{} = True 
 isDataType _           = False
 
+getConditional :: RType -> Maybe Formula
+getConditional (ScalarT _ _ f@(Ite g _ _)) = Just f
+getConditional _ = Nothing
+
 -- Set strings: used for "fake" set type for typechecking measures
 emptySetCtor = "Emptyset"
 singletonCtor = "Singleton"

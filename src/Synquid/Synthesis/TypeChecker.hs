@@ -286,7 +286,7 @@ reconstructE' env typ (PSymbol name) =
 reconstructE' env typ p@(PApp iFun iArg) = do
   x <- freshVar env "x"
   let fp = env ^. freePotential
-  (fp', fp'') <- shareFreePotential env fp $ show $ plain $ pretty p
+  (fp', fp'') <- shareFreePotential env True fp $ show $ plain $ pretty p
   (env1, env2) <- shareContext (env { _freePotential = fp' }) $ show $ plain $ pretty p
   pFun <- inContext (\p -> Program (PApp p uHole) typ) 
     $ reconstructE env1 (FunctionT x AnyT typ defCost) iFun
