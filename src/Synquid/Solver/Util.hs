@@ -84,7 +84,15 @@ embedSynthesisEnv env fml consistency useMeasures = do
   let env' = if useMeasures 
       then env
       else env { _measureDefs = Map.empty } -- don't instantiate measures in certain cases
-  embedEnv env' fml consistency True
+  fmls <- embedEnv env' fml consistency True
+  let unknowns = env' ^. assumptions
+  sol <- (solution . head) <$> use candidates
+  -- This is clumsy but the set API doesn't seem to have a better option...
+  let unkFmls = Set.map fromJust $ Set.filter isJust $ Set.map (fmap conjunction . getUnknown sol) unknowns
+  return $ Set.union unkFmls fmls
+  where 
+    getUnknown solution (Unknown _ u) = Map.lookup u solution 
+    getUnknown _ _ = Nothing
 
 
 -- | 'instantiateConsAxioms' @env fml@ : If @fml@ contains constructor applications, return the set of instantiations of constructor axioms for those applications in the environment @env@

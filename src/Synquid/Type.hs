@@ -429,6 +429,13 @@ getConditional :: RType -> Maybe Formula
 getConditional (ScalarT _ _ f@(Ite g _ _)) = Just f
 getConditional _ = Nothing
 
+removePotential (ScalarT b r _) = ScalarT (removePotentialBase b) r fzero
+removePotential (FunctionT x arg res c) = FunctionT x (removePotential arg) (removePotential res) c
+removePotential t = t
+
+removePotentialBase (DatatypeT x ts ps) = DatatypeT x (map removePotential ts) ps
+removePotentialBase b = b
+
 -- Set strings: used for "fake" set type for typechecking measures
 emptySetCtor = "Emptyset"
 singletonCtor = "Singleton"

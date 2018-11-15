@@ -344,7 +344,7 @@ checkAnnotation env t t' p = do
       fT'' <- runInSolver $ finalizeType t''
       pos <- asks . view $ _1 . sourcePos
       typingState . errorContext .= (pos, text "when checking consistency of type annotation" </> pretty fT'' </> text "with" </> pretty fT </> text "in" $+$ pretty (ctx (Program p t'')))
-      runInSolver $ solveTypeConstraints t'
+      runInSolver solveTypeConstraints 
       typingState . errorContext .= (noPos, empty)
 
       tass' <- use (typingState . typeAssignment)

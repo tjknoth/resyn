@@ -13,8 +13,10 @@ measure ielems :: IList a -> Set a where
 inc :: x: Int -> {Int | _v == x + 1}
 dec :: x: Int -> {Int | _v == x - 1}
 
-range :: lo: Int -> hi: {Int | _v > lo | _v - lo} -[1]-> {IList {Int | (lo <= _v) && (_v <= hi)} | ilen _v == (hi - lo)}
-range = \lo. \hi. 
-  if lo >= dec hi 
-    then ICons hi INil 
+qualifier { x >= y }
+
+range :: lo: Int -> hi: {Int | _v >= lo | _v - lo} -[1]-> {IList {Int | (lo <= _v) && (_v <= hi)} | ilen _v == (hi - lo)}
+range = \lo. \hi.
+  if lo >= hi 
+    then INil 
     else ICons lo (range (inc lo) hi) 

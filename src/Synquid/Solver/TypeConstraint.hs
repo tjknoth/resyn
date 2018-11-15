@@ -79,10 +79,8 @@ initTypingState goal = do
 {- Top-level constraint solving interface -}
 
 -- | Solve @typingConstraints@: either strengthen the current candidates and return shapeless type constraints or fail
-solveTypeConstraints :: (MonadSMT s, MonadHorn s, RMonad s) 
-                     => RType 
-                     -> TCSolver s ()
-solveTypeConstraints typ = do
+solveTypeConstraints :: (MonadSMT s, MonadHorn s, RMonad s) => TCSolver s ()
+solveTypeConstraints = do
 
   simplifyAllConstraints
   processAllPredicates
@@ -97,7 +95,7 @@ solveTypeConstraints typ = do
   checkTypeConsistency
 
   res <- asks _checkResourceBounds
-  when res $ checkResources typ scs 
+  when res $ checkResources scs 
 
   hornClauses .= []
   consistencyChecks .= []
@@ -200,12 +198,19 @@ simplifyConstraint' _ _ (Subtype _ (ScalarT (DatatypeT _ _ _) _ _) t _ _) | t ==
 -- Well-formedness of a known predicate drop
 simplifyConstraint' _ pass c@(WellFormedPredicate _ _ p) | p `Map.member` pass = return ()
 
--- Strip away potentials 
-simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl rl pl) tr@(ScalarT br rr pr) variant label)
-  | (pl /= fzero) || (pr /= fzero) 
+-- Strip away potentials -- This is a little janky
+-- Bound type variables: can compare potentials
+simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@(TypeVarT _ a _) rl pl) tr@(ScalarT br@(TypeVarT _ b _) rr pr) False label) 
+  | isBound env a && isBound env b && pr /= fzero
     = do 
         simpleConstraints %= (RSubtype (addGhostVariable valueVarName tl env) pl pr (show (plain (pretty tl))) :)
-        simplifyConstraint (Subtype env (ScalarT bl rl fzero) (ScalarT br rr fzero) variant label)
+        simplifyConstraint (Subtype env (ScalarT bl rl fzero) (ScalarT br rr fzero) False label)
+-- Data types: can compare potentials
+simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@DatatypeT{} rl pl) tr@(ScalarT br@DatatypeT{} rr pr) False label)
+  | (pr /= fzero)
+    = do 
+        simpleConstraints %= (RSubtype (addGhostVariable valueVarName tl env) pl pr (show (plain (pretty tl))) :)
+        simplifyConstraint (Subtype env (ScalarT bl rl pl) (ScalarT br rr fzero) False label)
 
 -- Type variable with known assignment: substitute
 simplifyConstraint' tass _ (Subtype env tv@(ScalarT (TypeVarT _ a _) _ _) t variant label) 
@@ -289,11 +294,11 @@ simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tA
       else simplifyConstraint (Subtype env tRes1 tRes2 True label)
 simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) consistency label)
   = do
-      simplifyConstraint (Subtype env tArg2 tArg1 consistency label)
+      simplifyConstraint (Subtype env (removePotential tArg2) (removePotential tArg1) consistency label)
       if isScalarType tArg1
         then do 
           env' <- safeAddGhostVar y tArg2 env
-          simplifyConstraint (Subtype env' (renameVar (isBound env) x y tArg1 tRes1) tRes2 consistency label)
+          simplifyConstraint (Subtype env' (renameVar (isBound env) x y tArg1 (removePotential tRes1)) (removePotential tRes2) consistency label)
         else simplifyConstraint (Subtype env tRes1 tRes2 consistency label)
 simplifyConstraint' _ _ c@(WellFormed env (ScalarT (DatatypeT name tArgs _) fml pot) label)
   = do

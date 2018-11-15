@@ -26,4 +26,15 @@ member :: x: a -> xs: IList {a| |1} -> {Bool | _v == (x in ielems xs)}
 qualifier { x < y }
 
 intersect :: l1: IList {a| |1} -> l2: IList {a| |1} -[1]-> {List a | elems _v == (ielems l1 * ielems l2)}
-intersect = ?? 
+intersect = ?? {-\l1. \l2. 
+  match l1 with 
+    INil -> Nil 
+    ICons x xs -> 
+      match l2 with 
+        INil -> Nil 
+        ICons y ys -> 
+          if x < y 
+            then intersect xs l2 -- (ICons y ys) 
+            else if y < x 
+              then intersect l1 ys -- (ICons x xs) ys 
+              else Cons x (intersect xs ys) -}

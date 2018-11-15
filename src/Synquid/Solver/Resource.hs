@@ -34,11 +34,10 @@ import Debug.Trace
 
 -- | Check resource bounds: attempt to find satisfying expressions for multiplicity and potential annotations 
 checkResources :: (MonadHorn s, MonadSMT s, RMonad s) 
-               => RType 
-               -> [Constraint] 
+               => [Constraint] 
                -> TCSolver s ()
-checkResources _ [] = return ()
-checkResources typ constraints = do 
+checkResources [] = return ()
+checkResources constraints = do 
   oldConstraints <- use resourceConstraints 
   tparams <- ask 
   let solve = solveResourceConstraints oldConstraints (filter isResourceConstraint constraints)
@@ -147,7 +146,7 @@ embedAndProcessConstraint shouldLog env c rfml addTo = do
   if isFSingleton emb  
     then return $ RFormula Map.empty ftrue
     else do 
-      let emb' = conjunction $ preprocessAssumptions $ Set.filter (isRelevantAssumption useMeasures univs) (addTo emb)
+      let emb' = conjunction $ Set.filter (isRelevantAssumption useMeasures univs) (addTo emb)
       let axioms = if useMeasures
           then conjunction $ instantiateConsAxioms env True Nothing emb'
           else ftrue
@@ -378,22 +377,6 @@ isResourceConstraint _             = False
 refinementOf :: RType -> Formula 
 refinementOf (ScalarT _ fml _) = fml
 refinementOf _                 = error "error: Encountered non-scalar type when generating resource constraints"
-
--- | 'preprocessAssumptions' @fmls@ : eliminate assumptions that contain unknown predicates 
---    temporary only -- this is incomplete
-preprocessAssumptions :: Set Formula -> Set Formula 
-preprocessAssumptions = Set.filter (not . isUnknownForm)
-
-assumeUnknowns :: Formula -> Formula
-assumeUnknowns u@(Unknown s id)  = BoolLit True
-assumeUnknowns (SetLit s fs)     = SetLit s (map assumeUnknowns fs)
-assumeUnknowns (Unary op f)      = Unary op (assumeUnknowns f)
-assumeUnknowns (Binary op fl fr) = Binary op (assumeUnknowns fl) (assumeUnknowns fr)
-assumeUnknowns (Ite g t f)       = Ite (assumeUnknowns g) (assumeUnknowns t) (assumeUnknowns f)
-assumeUnknowns (Pred s x fs)     = Pred s x (map assumeUnknowns fs)
-assumeUnknowns (Cons s x fs)     = Cons s x (map assumeUnknowns fs)
-assumeUnknowns (All f g)         = All (assumeUnknowns f) (assumeUnknowns g)
-assumeUnknowns f                 = f
 
 -- | 'allUniversals' @env sch@ : set of all universally quantified resource formulas in the potential
 --    annotations of the type @sch@

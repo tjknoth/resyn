@@ -70,14 +70,15 @@ class BenchmarkGroup:
 MICRO_BENCHMARKS = [
     MBenchmark('List-Insert', 'insert', 'Overapproximate bound', '$<$', ['--backtrack']),
     #MBenchmark('List-Insert-Fine', 'insert', 'Annotated with uninterpreted functions', '$<$'),
+    MBenchmark('List-Insert-Fine-Alt', 'insert', 'Fine-grained bound', '$<$', ['--multiplicities=false']),
     MBenchmark('List-InsertCT', 'insert', 'Constant-time', '$<$', ['--ct', '--backtrack']),
     MBenchmark('List-LenCompareCT', 'length comparison', '', 'true, false, and', ['-f=AllArguments', '-a=2', '--ct']),
     MBenchmark('List-LenCompare', 'length comparison', 'Constant-time', 'true, false, and', ['f=AllArguments', '-a=2']),
-    MBenchmark('List-Replicate', 'replicate', 'Program variables in annotations', 'zero, inc, dec', ['--cegis-max=20']),
+    MBenchmark('List-Replicate', 'replicate', 'Program variables in annotations', 'zero, inc, dec'),
     MBenchmark('List-Append3', 'append 3 lists', 'Compositional bounds'),
-    MBenchmark('List-Intersect', 'common', 'optimization'),
+    MBenchmark('List-Intersect', 'common', 'optimization', '$<$'),
     #MBenchmark('List-Union', 'union', 'optimization, fine-grained bound'),
-    #MBenchmark('List-Range', 'range', 'termination handling', ['-f=Nonterminating']),
+    MBenchmark('List-Range', 'range', 'termination handling', '', ['-f=Nonterminating']),
     MBenchmark('List-Pairs', 'ordered pairs', 'optimization'),
     MBenchmark('List-Compress', 'compress', 'optimization'),
     MBenchmark('List-Triple1', 'triple append', 'impact of annotations', ['--multiplicities=false']),
@@ -89,7 +90,7 @@ ALL_BENCHMARKS = [
         Benchmark('List-Null', 'is empty', 'true, false'),
         Benchmark('List-Elem', 'member', 'true, false, $=$, $\\neq$'),
         Benchmark('List-Stutter', 'duplicate each element'),
-        Benchmark('List-Replicate', 'replicate', '0, inc, dec, $\\leq$, $\\neq$', ['--cegis-max=20']),
+        Benchmark('List-Replicate', 'replicate', '0, inc, dec, $\\leq$, $\\neq$'),
         Benchmark('List-Append', 'append two lists', '', ['-m=1']),
         Benchmark('List-Concat', 'concatenate list of lists', 'append'),
         Benchmark('List-Take', 'take first $n$ elements', '0, inc, dec, $\\leq$, $\\neq$'),
@@ -100,9 +101,9 @@ ALL_BENCHMARKS = [
         Benchmark('List-ElemIndex', 'index of element', '0, inc, dec, $=$, $\\neq$'),
         Benchmark('List-Snoc', 'insert at end'),
         Benchmark('List-Reverse', 'reverse', 'insert at end'),
-        #Benchmark('IncList-Insert', 'insert (sorted)', '$\\leq$, $\\neq$'),
+        Benchmark('IncList-Insert', 'insert (sorted)', '$\\leq$, $\\neq$'),
         Benchmark('List-Intersect', 'intersection', '$<$, member', ['--backtrack', '-f=AllArguments', '-a=2']),
-        Benchmark('List-ExtractMin', 'extract minimum', '$\\leq$, $\\neq$', ['-a=2', '-m 3']),
+        Benchmark('List-ExtractMin', 'extract minimum', '$\\leq$, $\\neq$', ['-a=2', '-m=3']),
         # Try it by hand!
         #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member', ['-f=AllArguments', '-m=3'])
         ]),
@@ -118,7 +119,7 @@ ALL_BENCHMARKS = [
     BenchmarkGroup("Sorted list", ['-f=AllArguments'], [
         Benchmark('StrictIncList-Insert', 'insert', '$<$'),
         Benchmark('StrictIncList-Delete', 'delete', '$<$'),
-        #Benchmark('List-Diff', 'difference', 'member, $<$', ['--backtrack', '-f=AllArguments', '-a=2']),
+        Benchmark('List-Diff', 'difference', 'member, $<$', ['--backtrack', '-f=AllArguments', '-a=2']),
         #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member',['-f=AllArguments','--backtrack','-m=3'])
         #Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments', '--backtrack']),
         ]),

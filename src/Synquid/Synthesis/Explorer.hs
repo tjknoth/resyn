@@ -334,7 +334,7 @@ generateE env typ = do
 generateE' env typ d = do
   (Program pTerm pTyp) <- generateEUpTo env typ d                      -- Generate the E-term
   runInSolver $ isFinal .= True 
-             >> solveTypeConstraints pTyp 
+             >> solveTypeConstraints 
              >> isFinal .= False  -- Final type checking pass that eliminates all free type variables
   newGoals <- uses auxGoals (map gName)                                      -- Remember unsolved auxiliary goals
   generateAuxGoals                                                           -- Solve auxiliary goals
@@ -384,7 +384,7 @@ checkE env typ p@(Program pTerm pTyp) = do
   fTyp <- runInSolver $ finalizeType typ
   pos <- asks . view $ _1 . sourcePos
   typingState . errorContext .= (pos, text "when checking" </> pretty p </> text "::" </> pretty fTyp </> text "in" $+$ pretty (ctx p))
-  runInSolver $ solveTypeConstraints pTyp
+  runInSolver $ solveTypeConstraints 
   typingState . errorContext .= (noPos, empty)
   
 
@@ -478,7 +478,7 @@ generateError env = do
   addSubtypeConstraint env (int $ conjunction $ map trivial (allScalars env')) (int ffalse) False "Generate Error"
   pos <- asks . view $ _1 . sourcePos
   typingState . errorContext .= (pos, text "when checking" </> pretty errorProgram </> text "in" $+$ pretty (ctx errorProgram))
-  runInSolver $ solveTypeConstraints AnyT
+  runInSolver solveTypeConstraints 
   typingState . errorContext .= (noPos, empty)
   return errorProgram
   where
