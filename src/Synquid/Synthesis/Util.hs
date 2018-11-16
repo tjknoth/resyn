@@ -163,7 +163,7 @@ instantiate env sch top argNames = do
   where
     instantiate' subst pSubst t@(ForallT a sch) = do
       a' <- freshId "A"
-      addConstraint $ WellFormed env (vartSafe a' ftrue) (show (text "Instantiate" <+> pretty t))
+      addConstraint $ WellFormed env (vartSafe a' ftrue) (show (text "Instantiate" <+> plain (pretty t)))
       instantiate' (Map.insert a (vartSafe a' (BoolLit top)) subst) pSubst sch
     instantiate' subst pSubst (ForallP (PredSig p argSorts _) sch) = do
       let argSorts' = map (sortSubstitute (asSortSubst subst)) argSorts
@@ -251,7 +251,7 @@ makeResourceVar :: Monad s
                 -> String 
                 -> Explorer s (String, [Formula])
 makeResourceVar env vvtype name = do
-  let universalsInScope = typeFromSchema <$> symbolsOfArity 0 env
+  let universalsInScope = typeFromSchema <$> TCSolver.nonGhostScalars env --symbolsOfArity 0 env
   let mkUFml (x, t) = do
         isRV <- checkResourceVar env x t
         return $ if isRV 
@@ -327,14 +327,11 @@ addScrutineeToEnv :: (MonadHorn s, MonadSMT s)
                   -> RType 
                   -> Explorer s (Formula, Environment)
 addScrutineeToEnv env pScr tScr = do 
-  checkres <- asks . view $ _1 . resourceArgs . checkRes
+  --checkres <- asks . view $ _1 . resourceArgs . checkRes
   (x, env') <- toVar (addScrutinee pScr env) pScr
   varName <- freshId "x"
   let tScr' = addPotential (typeMultiply fzero tScr) (fromMaybe fzero (topPotentialOf tScr))
-  let env'' = addGhostVariable varName tScr' env'
-  if checkres
-    then return (x, env'')
-    else return (x, env')
+  return (x, env')
 
 -- | Generate subtyping constraint
 addSubtypeConstraint :: (MonadHorn s, MonadSMT s) 

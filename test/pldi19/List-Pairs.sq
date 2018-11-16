@@ -36,11 +36,11 @@ measure sndElems :: PairList a -> Set a where
 
 append :: xs: PairList {a| |1} -> ys: PairList a 
       -[1]-> {PairList a | fstElems _v == fstElems xs + fstElems ys && sndElems _v == sndElems xs + sndElems ys}
-append = ??
+--append = ??
 
-attach :: x: a -> xs: SList {a | x < _v} 
--> {PairList a | (fstElems _v == if elems xs == [] then [] else [x]) && sndElems _v == elems xs}
-attach = ??
+attach :: x: a -> xs: SList {a | x < _v } 
+      -> {PairList a | (fstElems _v == if elems xs == [] then [] else [x]) && sndElems _v == elems xs}
+--attach = ??
 -- attach = \x . \xs.
 -- match xs with
     -- Nil -> PNil
@@ -48,11 +48,7 @@ attach = ??
 
 pairs :: xs: SList {a| |1} -> {PairList a | sndElems _v == elems xs - heads xs && fstElems _v == elems xs - tails xs}
 pairs = \xs. 
-  match xs with 
-    Nil -> PNil 
-    Cons x xt -> 
-      append (attach x xt) (pairs xt) 
 -- pairs = \xs .
--- match xs with
-    -- Nil -> PNil
-    -- Cons y ys -> append (attach y ys) (pairs ys)
+  match xs with
+    Nil -> PNil
+    Cons y ys -> append (attach y ys) (pairs ys)

@@ -25,6 +25,7 @@ module Synquid.Solver.TypeConstraint (
   processAllPredicates,
   checkTypeConsistency,
   solveTypeConstraints,
+  solveResourceConstraints,
   initTypingState
 ) where
 
@@ -95,10 +96,22 @@ solveTypeConstraints = do
   checkTypeConsistency
 
   res <- asks _checkResourceBounds
-  when res $ checkResources scs 
+  eac <- asks _enumAndCheck
+  when res $ 
+    if eac 
+      then processResources scs
+      else checkResources scs
 
   hornClauses .= []
   consistencyChecks .= []
+
+solveResourceConstraints :: (MonadSMT s, MonadHorn s, RMonad s) => TCSolver s () 
+solveResourceConstraints = do 
+  traceM "SOLVING"
+  res <- asks _checkResourceBounds
+  -- THIS IS A HACK SO THAT EAC WILL ACTUALLY SOLVE THE RESOURCE CONSTRAINTS
+  let c = SharedForm emptyEnv fzero fzero fzero "PLACEHOLDER"
+  when res $ checkResources [c] 
 
 -- | Impose typing constraint @c@ on the programs
 addTypingConstraint c = over typingConstraints (nub . (c :))
@@ -198,7 +211,7 @@ simplifyConstraint' _ _ (Subtype _ (ScalarT (DatatypeT _ _ _) _ _) t _ _) | t ==
 -- Well-formedness of a known predicate drop
 simplifyConstraint' _ pass c@(WellFormedPredicate _ _ p) | p `Map.member` pass = return ()
 
--- Strip away potentials -- This is a little janky
+-- Strip away potentials -- This is a little janky. Is there a better way than matching everything that is NOT a type var?
 -- Bound type variables: can compare potentials
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@(TypeVarT _ a _) rl pl) tr@(ScalarT br@(TypeVarT _ b _) rr pr) False label) 
   | isBound env a && isBound env b && pr /= fzero
@@ -207,10 +220,23 @@ simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@(TypeVarT _ a _) rl pl) tr@(
         simplifyConstraint (Subtype env (ScalarT bl rl fzero) (ScalarT br rr fzero) False label)
 -- Data types: can compare potentials
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@DatatypeT{} rl pl) tr@(ScalarT br@DatatypeT{} rr pr) False label)
-  | (pr /= fzero)
+  | pr /= fzero
     = do 
         simpleConstraints %= (RSubtype (addGhostVariable valueVarName tl env) pl pr (show (plain (pretty tl))) :)
         simplifyConstraint (Subtype env (ScalarT bl rl pl) (ScalarT br rr fzero) False label)
+-- Bools
+simplifyConstraint' _ _ (Subtype env tl@(ScalarT BoolT rl pl) tr@(ScalarT BoolT rr pr) False label)
+  | pr /= fzero
+    = do 
+        simpleConstraints %= (RSubtype (addGhostVariable valueVarName tl env) pl pr (show (plain (pretty tl))) :)
+        simplifyConstraint (Subtype env (ScalarT BoolT rl pl) (ScalarT BoolT rr fzero) False label)
+-- Ints
+simplifyConstraint' _ _ (Subtype env tl@(ScalarT IntT rl pl) tr@(ScalarT IntT rr pr) False label)
+  | pr /= fzero
+    = do 
+        simpleConstraints %= (RSubtype (addGhostVariable valueVarName tl env) pl pr (show (plain (pretty tl))) :)
+        simplifyConstraint (Subtype env (ScalarT IntT rl pl) (ScalarT IntT rr fzero) False label)
+
 
 -- Type variable with known assignment: substitute
 simplifyConstraint' tass _ (Subtype env tv@(ScalarT (TypeVarT _ a _) _ _) t variant label) 
@@ -225,10 +251,10 @@ simplifyConstraint' tass _ (WellFormed env tv@(ScalarT (TypeVarT _ a _) _ _) l)
 
 -- Substitute all scalars in environment  
 simplifyConstraint' tass _ (SharedEnv env envl envr l) = do
-  let substAndGetScalars = Map.elems . fmap typeFromSchema . nonGhostScalars . over symbols (scalarSubstituteEnv tass)
-  let scalars = substAndGetScalars env
-  let scalarsl = substAndGetScalars envl
-  let scalarsr = substAndGetScalars envr
+  let substAndGetScalars = fmap typeFromSchema . nonGhostScalars . over symbols (scalarSubstituteEnv tass)
+  let scalars = Map.assocs $ substAndGetScalars env
+  let scalarsl = Map.elems $ substAndGetScalars envl
+  let scalarsr = Map.elems $ substAndGetScalars envr
   cm <- asks _checkMultiplicities
   let cs = zipWith3 (partitionType cm l env) scalars scalarsl scalarsr
   let fpc = SharedForm env (_freePotential env) (_freePotential envl) (_freePotential envr) l

@@ -35,10 +35,11 @@ reconstruct :: (MonadSMT s, MonadHorn s, RMonad s)
 reconstruct eParams tParams goal = do
     let goal' = adjustGoalEnv goal
     initTS <- initTypingState goal'
-    runExplorer (eParams { _sourcePos = gSourcePos goal' }) tParams (Reconstructor reconstructTopLevel) initTS (go goal')
+    runExplorer (eParams { _sourcePos = gSourcePos goal' }) tParams (Reconstructor reconstruct') initTS (go goal')
   where
+    reconstruct' = if tParams ^. enumAndCheck then reconstructAndCheck else reconstructTopLevel
     go g = do
-      pMain <- reconstructTopLevel g { gDepth = _auxDepth eParams }  -- Reconstruct the program
+      pMain <- reconstruct' g { gDepth = _auxDepth eParams }  -- Reconstruct the program
       p <- flip insertAuxSolutions pMain <$> use solvedAuxGoals      -- Insert solutions for auxiliary goals stored in @solvedAuxGoals@
       runInSolver $ finalizeProgram p                                -- Substitute all type/predicates variables and unknowns
     adjustGoalEnv goal = 
@@ -46,6 +47,13 @@ reconstruct eParams tParams goal = do
           genv' = (gEnvironment goal) { _measureConstArgs = argmap }
       in  goal { gEnvironment = genv' }
 
+reconstructAndCheck :: (MonadSMT s, MonadHorn s, RMonad s)
+                    => Goal 
+                    -> Explorer s RProgram 
+reconstructAndCheck g = do
+  p <- reconstructTopLevel g
+  runInSolver solveResourceConstraints
+  return p
 
 reconstructTopLevel :: (MonadSMT s, MonadHorn s, RMonad s) 
                     => Goal 

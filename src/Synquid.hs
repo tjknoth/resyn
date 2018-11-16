@@ -42,13 +42,14 @@ main = do
                appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency symmetry
                lfp bfs
                out_file out_module outFormat resolve 
-               print_spec print_stats log_ resources mult forall cut nump constTime cegisMax) -> do
+               print_spec print_stats log_ resources mult forall cut nump constTime cegisMax ec) -> do
                   let resArgs = defaultResourceArgs {
                     _checkRes = resources,
                     _checkMults = mult,
                     _instantiateForall = forall,
                     _constantTime = constTime,
-                    _cegisBound = cegisMax
+                    _cegisBound = cegisMax,
+                    _enumerate = ec
                   }
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
@@ -134,7 +135,8 @@ data CommandLineArgs
         backtrack :: Bool,
         num_programs :: Int,
         ct :: Bool,
-        cegis_max :: Int
+        cegis_max :: Int,
+        eac :: Bool
       }
   deriving (Data, Typeable, Show, Eq)
 
@@ -169,7 +171,8 @@ synt = Synthesis {
   backtrack           = False           &= help ("Backtrack past successfully synthesized branches (default: False)") &= name "b",
   num_programs        = 1               &= help ("Number of programs to produce if possible (default: 1)"),
   ct                  = False           &= help ("Require that all branching expressions consume a constant amount of resources (default: False)"),
-  cegis_max           = 10              &= help ("Maximum number of iterations through the CEGIS loop (default: 10)")
+  cegis_max           = 10              &= help ("Maximum number of iterations through the CEGIS loop (default: 10)"),
+  eac                 = False           &= help ("Enumerate-and-check instead of round-trip resource analysis (default: False)")
   } &= auto &= help "Synthesize goals specified in the input file"
     where
       defaultFormat = outputFormat defaultSynquidParams
@@ -201,7 +204,7 @@ defaultExplorerParams = ExplorerParams {
   _explorerLogLevel = 0,
   _shouldCut = True,
   _numPrograms = 1,
-  _resourceArgs = defaultResourceArgs 
+  _resourceArgs = defaultResourceArgs
 }
 
 defaultResourceArgs = ResourceArgs {
@@ -209,7 +212,8 @@ defaultResourceArgs = ResourceArgs {
   _checkMults = True,
   _instantiateForall = True,
   _constantTime = False,
-  _cegisBound = 10
+  _cegisBound = 10,
+  _enumerate = False
 }
 
 -- | Parameters for constraint solving

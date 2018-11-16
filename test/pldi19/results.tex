@@ -1,41 +1,43 @@
-\multirow{17}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{List}}} & is empty & 2 & true, false & 1 & 16 & 0.14 & 0.14 & - & - & - \\
- & member & 3 & true, false, $=$, $\neq$ & 2 & 41 & 0.24 & 0.18 & - & - & - \\
- & duplicate each element & 3 &  & 2 & 39 & 0.53 & 0.23 & - & - & - \\
- & replicate & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 31 & 11.97 & 0.19 & - & - & - \\
- & append two lists & 3 &  & 2 & 38 & 1.89 & 0.49 & - & - & - \\
- & concatenate list of lists & 4 & append & 3 & 49 & 2.90 & 0.74 & 49 & - & - \\
- & take first $n$ elements & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 34 & 1.63 & 0.29 & - & - & - \\
- & drop first $n$ elements & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 30 & 1.00 & 0.31 & - & - & - \\
- & delete value & 3 & $=$, $\neq$ & 2 & 49 & 1.10 & 0.27 & - & - & - \\
- & zip & 2 &  & 1 & 32 & 0.65 & 0.22 & - & - & - \\
- & $i$-th element & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 30 & 0.38 & 0.20 & - & - & - \\
- & index of element & 3 & 0, inc, dec, $=$, $\neq$ & 2 & 43 & 0.70 & 0.32 & - & - & - \\
- & insert at end & 3 &  & 2 & 42 & 0.50 & 0.29 & - & - & - \\
- & reverse & 3 & insert at end & 2 & 35 & 0.45 & 0.30 & - & - & - \\
- & insert (sorted) & - & $\leq$, $\neq$ & - & - & 0.18 & - & - & - & - \\
- & intersection & 5 & $<$, member & 4 & 95 & 77.19 & 1.62 & 87 & - & - \\
- & extract minimum & 5 & $\leq$, $\neq$ & 4 & 71 & 33.08 & 7.54 & 71 & - & - \\
-\hline\multirow{6}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Unique list}}} & insert & 3 & $=$, $\neq$ & 2 & 49 & 0.98 & 0.40 & - & - & - \\
- & delete & 3 & $=$, $\neq$ & 2 & 45 & 0.60 & 0.34 & - & - & - \\
- & remove duplicates & 5 & member & 2 & 94 & 37.23 & 3.80 & - & - & - \\
- & remove adjacent dupl. & 4 & $=$, $\neq$ & 3 & 60 & 9.67 & 1.61 & 62 & 3 & - \\
- & integer range & 3 & 0, inc, dec, $\leq$, $\neq$ & 2 & 46 & 6.01 & 4.51 & - & - & - \\
- & partition & 5 & $\leq$ & 4 & 71 & 17.69 & 4.81 & - & - & - \\
-\hline\multirow{3}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Sorted list}}} & insert & 3 & $<$ & 2 & 64 & 2.07 & 0.51 & - & - & - \\
- & delete & 3 & $<$ & 2 & 52 & 0.51 & 0.25 & - & - & - \\
- & difference & 5 & member, $<$ & 4 & 95 & 297.18 & 1.93 & 73 & - & - \\
-\hline\multirow{5}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Tree}}} & node count & 2 & 0, 1, + & 1 & 34 & 2.17 & 0.45 & - & - & - \\
- & preorder & 3 & append & 2 & 45 & 4.26 & 0.44 & - & - & - \\
- & to list & 3 &  & 2 & 45 & 4.22 & 0.45 & - & - & - \\
- & member & 3 &  & 2 & 63 & 0.35 & 0.15 & - & - & - \\
- & size & 2 &  & 1 & 34 & 2.17 & 0.45 & - & - & - \\
-\hline\multirow{4}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{BST}}} & member & 3 & true, false, $\leq$, $\neq$ & 2 & 72 & 0.56 & 0.28 & - & - & - \\
- & insert & 3 & $\leq$, $\neq$ & 2 & 90 & 6.05 & 1.46 & - & - & - \\
- & delete & 3 & $\leq$, $\neq$ & 2 & 103 & 40.83 & 8.31 & - & - & - \\
- & BST sort & 11 & $\leq$, $\neq$ & 6 & 191 & 14.15 & 3.78 & - & - & - \\
-\hline\multirow{5}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Binary Heap}}} & insert & 3 & $\leq$, $\neq$ & 2 & 90 & 4.36 & 0.92 & - & - & - \\
- & member & 3 &  & 2 & 78 & 2.84 & 0.73 & - & - & - \\
- & 1-element constructor & 3 & $\leq$, $\neq$ & 2 & 44 & 0.18 & 0.16 & - & - & - \\
- & 2-element constructor & 3 & $\leq$, $\neq$ & 2 & 91 & 0.76 & 0.28 & - & - & - \\
- & 3-element constructor & 3 & $\leq$, $\neq$ & 2 & 274 & 32.75 & 3.53 & - & - & - \\
+\multirow{19}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{List}}} & is empty & 2 & true, false & 1 & 16 & 0.14 & 0.14 \\
+ & member & 3 & true, false, $=$, $\neq$ & 2 & 41 & 0.24 & 0.18 \\
+ & duplicate each element & 3 &  & 2 & 39 & 0.53 & 0.23 \\
+ & replicate & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 31 & 11.97 & 0.19 \\
+ & append two lists & 3 &  & 2 & 38 & 1.89 & 0.49 \\
+ & append 3 lists & 3 &  & 2 & 36 & 0.22 & 0.15 \\
+ & concatenate list of lists & 4 & append & 3 & 49 & 2.90 & 0.74 \\
+ & take first $n$ elements & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 34 & 1.63 & 0.29 \\
+ & drop first $n$ elements & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 30 & 1.00 & 0.31 \\
+ & delete value & 3 & $=$, $\neq$ & 2 & 49 & 1.10 & 0.27 \\
+ & zip & 2 &  & 1 & 32 & 0.65 & 0.22 \\
+ & $i$-th element & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 30 & 0.38 & 0.20 \\
+ & index of element & 3 & 0, inc, dec, $=$, $\neq$ & 2 & 43 & 0.70 & 0.32 \\
+ & insert at end & 3 &  & 2 & 42 & 0.50 & 0.29 \\
+ & reverse & 3 & insert at end & 2 & 35 & 0.45 & 0.30 \\
+ & insert (sorted) & - & $\leq$, $\neq$ & - & - & 0.18 & - \\
+ & intersection & 5 & $<$, member & 4 & 95 & 77.19 & 1.62 \\
+ & extract minimum & 5 & $\leq$, $\neq$ & 4 & 71 & 33.08 & 7.54 \\
+ & range & - & inc,dec,$\geq$ & - & - & 5.55 & - \\
+\hline\multirow{6}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Unique list}}} & insert & 3 & $=$, $\neq$ & 2 & 49 & 0.98 & 0.40 \\
+ & delete & 3 & $=$, $\neq$ & 2 & 45 & 0.60 & 0.34 \\
+ & remove duplicates & 5 & member & 2 & 94 & 37.23 & 3.80 \\
+ & remove adjacent dupl. & 4 & $=$, $\neq$ & 3 & 60 & 9.67 & 1.61 \\
+ & integer range & 3 & 0, inc, dec, $\leq$, $\neq$ & 2 & 46 & 6.01 & 4.51 \\
+ & partition & 5 & $\leq$ & 4 & 71 & 17.69 & 4.81 \\
+\hline\multirow{3}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Sorted list}}} & insert & 3 & $<$ & 2 & 64 & 2.07 & 0.51 \\
+ & delete & 3 & $<$ & 2 & 52 & 0.51 & 0.25 \\
+ & difference & 5 & member, $<$ & 4 & 95 & 297.18 & 1.93 \\
+\hline\multirow{5}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Tree}}} & node count & 2 & 0, 1, + & 1 & 34 & 2.17 & 0.45 \\
+ & preorder & 3 & append & 2 & 45 & 4.26 & 0.44 \\
+ & to list & 3 &  & 2 & 45 & 4.22 & 0.45 \\
+ & member & 3 &  & 2 & 63 & 0.35 & 0.15 \\
+ & size & 2 &  & 1 & 34 & 2.17 & 0.45 \\
+\hline\multirow{4}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{BST}}} & member & 3 & true, false, $\leq$, $\neq$ & 2 & 72 & 0.56 & 0.28 \\
+ & insert & 3 & $\leq$, $\neq$ & 2 & 90 & 6.05 & 1.46 \\
+ & delete & 3 & $\leq$, $\neq$ & 2 & 103 & 40.83 & 8.31 \\
+ & BST sort & 11 & $\leq$, $\neq$ & 6 & 191 & 14.15 & 3.78 \\
+\hline\multirow{5}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Binary Heap}}} & insert & 3 & $\leq$, $\neq$ & 2 & 90 & 4.36 & 0.92 \\
+ & member & 3 &  & 2 & 78 & 2.84 & 0.73 \\
+ & 1-element constructor & 3 & $\leq$, $\neq$ & 2 & 44 & 0.18 & 0.16 \\
+ & 2-element constructor & 3 & $\leq$, $\neq$ & 2 & 91 & 0.76 & 0.28 \\
+ & 3-element constructor & 3 & $\leq$, $\neq$ & 2 & 274 & 32.75 & 3.53 \\
 \hline

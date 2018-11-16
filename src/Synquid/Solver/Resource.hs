@@ -3,10 +3,10 @@
 -- | Resource analysis
 module Synquid.Solver.Resource (
   checkResources,
+  processResources,
   allUniversals,
   allRFormulas,
   allRMeasures,
-  --testCEGIS,
   partitionType,
   getAnnotationStyle
 ) where
@@ -36,16 +36,22 @@ import Debug.Trace
 checkResources :: (MonadHorn s, MonadSMT s, RMonad s) 
                => [Constraint] 
                -> TCSolver s ()
-checkResources [] = return ()
+checkResources [] = return () 
 checkResources constraints = do 
   oldConstraints <- use resourceConstraints 
-  tparams <- ask 
-  let solve = solveResourceConstraints oldConstraints (filter isResourceConstraint constraints)
-  newC <- solve 
+  newC <- solveResourceConstraints oldConstraints (filter isResourceConstraint constraints)
   case newC of 
     Nothing -> throwError $ text "Insufficient resources"
     Just f  -> resourceConstraints %= (++ f) 
 
+processResources :: (MonadHorn s, MonadSMT s, RMonad s)
+                 => [Constraint]
+                 -> TCSolver s ()
+processResources [] = return ()
+processResources constraints = do 
+  rcs <- mapM (generateFormula True . Right) constraints 
+  resourceConstraints %= (++ map Left rcs)
+  
 -- | 'solveResourceConstraints' @oldConstraints constraints@ : Transform @constraints@ into logical constraints and attempt to solve the complete system by conjoining with @oldConstraints@
 solveResourceConstraints :: (MonadHorn s, RMonad s) => [RConstraint] -> [Constraint] -> TCSolver s (Maybe [RConstraint]) 
 solveResourceConstraints _ [] = return $ Just [] 
@@ -56,7 +62,7 @@ solveResourceConstraints oldConstraints constraints = do
     -- Generate numerical resource-usage formulas from typing constraints:
     constraintList <- mapM (generateFormula True . Right) constraints
     accFmls <- mapM (generateFormula False) oldConstraints
-    let query = assembleQuery accFmls constraintList 
+    query <- assembleQuery accFmls constraintList 
     -- Check satisfiability
     universals <- use universalFmls
     hasUniversals <- isJust <$> asks _cegisDomain
@@ -72,13 +78,30 @@ solveResourceConstraints oldConstraints constraints = do
 
 
 -- | Given lists of constraints (newly-generated and accumulated), construct the corresponding solver query
-assembleQuery :: [TaggedConstraint] -> [TaggedConstraint] -> [RFormula]
-assembleQuery accConstraints constraints = 
+assembleQuery :: MonadHorn s 
+              => [TaggedConstraint] 
+              -> [TaggedConstraint] 
+              -> TCSolver s [RFormula]
+assembleQuery accConstraints constraints = do
   let fmlList    = map constraint (filter (not . isTrivialTC) constraints)
-      accFmlList = map constraint accConstraints
-  in accFmlList ++ fmlList 
+  let accFmlList = map constraint accConstraints
+  let allRFmls = accFmlList ++ fmlList 
+  mapM applyAssumptions allRFmls
 
--- worth having a "constraint" typeclass?
+applyAssumptions :: MonadHorn s 
+                 => RFormula 
+                 -> TCSolver s RFormula
+applyAssumptions (RFormula known unknown substs fml) = do 
+  emb <- assignUnknowns unknown
+  univs <- use universalFmls
+  aDomain <- asks _cegisDomain
+  let useMeasures = maybe False shouldUseMeasures aDomain 
+  let emb' = Set.filter (isRelevantAssumption useMeasures univs) emb
+  let finalFml = if isNothing aDomain 
+      then fml
+      else (conjunction known |&| conjunction emb') |=>| fml
+  return $ RFormula Set.empty Set.empty substs finalFml 
+
 isTrivialTC (TaggedConstraint _ f) = isTrivial . rformula $ f
 
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
@@ -96,31 +119,34 @@ generateFormula' :: (MonadHorn s, RMonad s)
                  -> Constraint 
                  -> TCSolver s TaggedConstraint 
 generateFormula' shouldLog checkMults c = 
-  let assemble fs = conjunction (filter (not . isTrivial) fs) in
+  let assemble fs = conjunction (filter (not . isTrivial) fs) 
+      -- Start without assumptions, known or unknown
+      mkRForm = RFormula Set.empty Set.empty in
   case c of 
     Subtype env tl tr variant label -> do
       op <- subtypeOp
-      let fmls = RFormula Map.empty $ assemble (directSubtypes checkMults op tl tr)
-      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls id
+      let fmls = mkRForm Map.empty $ assemble (directSubtypes checkMults op tl tr)
+      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls Nothing
     RSubtype env pl pr label -> do 
       op <- subtypeOp 
-      let fml = RFormula Map.empty $ pl `op` pr
-      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fml id
+      let fml = mkRForm Map.empty $ pl `op` pr
+      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fml Nothing
     WellFormed env t label -> do
-      let fmls = RFormula Map.empty $ assemble $ map (|>=| fzero) $ allRFormulas checkMults t
-      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls (Set.insert (refinementOf t))
+      let fmls = mkRForm Map.empty $ assemble $ map (|>=| fzero) $ allRFormulas checkMults t
+      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls (Just (refinementOf t))
     SharedForm env f fl fr label -> do 
       let sharingFml = f |=| (fl |+| fr)  
       let wf = conjunction [f |>=| fzero, fl |>=| fzero, fr |>=| fzero]
-      let fmls = RFormula Map.empty (wf |&| sharingFml)
-      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls id
+      let fmls = mkRForm Map.empty (wf |&| sharingFml)
+      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls Nothing
     ConstantRes env label -> do 
-      fml <- assertZeroPotential env
-      TaggedConstraint ("CT: " ++ label) <$> embedAndProcessConstraint shouldLog env c fml id 
+      (substs, f) <- assertZeroPotential env
+      let fmls = mkRForm substs f 
+      TaggedConstraint ("CT: " ++ label) <$> embedAndProcessConstraint shouldLog env c fmls Nothing
     Transfer env env' label -> do 
       (fmls, substs) <- redistribute env env' 
-      let rfml = RFormula substs $ assemble fmls
-      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c rfml id
+      let rfml = mkRForm substs $ assemble fmls
+      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c rfml Nothing 
     _ -> error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
 
 -- | Embed the environment assumptions and preproess the constraint for solving 
@@ -129,48 +155,45 @@ embedAndProcessConstraint :: (MonadHorn s, RMonad s)
                           -> Environment 
                           -> Constraint 
                           -> RFormula
-                          -> (Set Formula -> Set Formula) 
+                          -> Maybe Formula
                           -> TCSolver s RFormula
-embedAndProcessConstraint shouldLog env c rfml addTo = do 
+embedAndProcessConstraint shouldLog env c rfml extra = do 
   let fml = rformula rfml
   let substs = pendingSubsts rfml
+  let unknownEmb = allUnknowns env
   aDomain <- asks _cegisDomain
   -- If the top-level annotations do not contain measures,
   --   do not consider any assumptions over measures or any post conditions
   let useMeasures = maybe False shouldUseMeasures aDomain 
   univs <- use universalFmls
   let possibleVars = varsOf fml
-  emb <- embedSynthesisEnv env (conjunction possibleVars) {-(Set.union univs possibleVars))-} True useMeasures
-  -- Check if embedding is singleton { false }
-  let isFSingleton s = (Set.size s == 1) && (Set.findMin s == ffalse)
-  if isFSingleton emb  
-    then return $ RFormula Map.empty ftrue
-    else do 
-      let emb' = conjunction $ Set.filter (isRelevantAssumption useMeasures univs) (addTo emb)
-      let axioms = if useMeasures
-          then conjunction $ instantiateConsAxioms env True Nothing emb'
-          else ftrue
-      let emb'' = emb' |&| axioms 
-      --let instantiated = instantiateConsAxioms env True Nothing emb'
-      noUnivs <- isNothing <$> asks _cegisDomain
-      -- Only include implication if its nontrivial and there are no universally quantified expressions
-      let finalFml = if (emb'' == ftrue) || noUnivs then fml else emb'' |=>| fml
-      when shouldLog $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty finalFml)
-      return $ RFormula substs finalFml
+  emb <- Set.filter (not . isUnknownForm) <$> embedSynthesisEnv env (conjunction possibleVars) {-(Set.union univs possibleVars))-} True useMeasures
+  let axioms = if useMeasures
+      then instantiateConsAxioms env True Nothing (conjunction emb)
+      else Set.empty
+  noUnivs <- isNothing <$> asks _cegisDomain
+  let finalEmb = if noUnivs then Set.empty else Set.union emb axioms 
+  -- Only for logging:
+  let printFml = conjunction finalEmb |=>| fml
+  when shouldLog $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty printFml)
+  let (finalEmb', unknownEmb') = case extra of 
+        Nothing -> (finalEmb, unknownEmb)
+        Just u@Unknown{} -> (finalEmb, Set.insert u unknownEmb)
+        Just f -> (Set.insert f finalEmb, unknownEmb)
+  return $ RFormula finalEmb unknownEmb substs fml
 
 -- Filter out irrelevant assumptions -- might be measures, and 
 --   any operation over a non-integer variable
 isRelevantAssumption :: Bool -> Set Formula -> Formula -> Bool 
 isRelevantAssumption _ rvs v@Var{} = True --Set.member v rvs
 isRelevantAssumption useM _ Pred{} = useM 
-isRelevantAssumption _ _ Unknown{} = trace "Warning: unknown assumption" False -- TODO: fix once i start assuming unknowns
+isRelevantAssumption _ _ Unknown{} = False -- TODO: fix once i start assuming unknowns
 isRelevantAssumption useM rvs (Unary _ f) = isRelevantAssumption useM rvs f
 isRelevantAssumption useM rvs (Binary _ f g) = isRelevantAssumption useM rvs f && isRelevantAssumption useM rvs g
 isRelevantAssumption useM rvs (Ite f g h) = isRelevantAssumption useM rvs f && isRelevantAssumption useM rvs g && isRelevantAssumption useM rvs h
 isRelevantAssumption useM _ Cons{} = useM
 isRelevantAssumption useM _ All{} = trace "Warning: universally quantified assumption" True
 isRelevantAssumption _ _ _ = True
-
 
 -- | Check the satisfiability of the generated resource constraints, instantiating universally 
 --     quantified expressions as necessary.
@@ -225,33 +248,6 @@ satisfyResources env universals rfmls = do
 shouldUseMeasures  ad = case ad of 
     Variable -> False 
     _ -> True 
--- CEGIS test harness
--- If this is going to work with measures, need a way to parse measures, etc
---   or just manually instantiate cons axioms
-{-
-testCEGIS :: RMonad s => Formula -> RSolver s Bool
-testCEGIS fml = do 
-  let fml' = adjustSorts fml
-  let universals = map (Var IntS) ["n", "x11"]
-  let rVars = ["p0", "p1"]
-  let aDomain = Variable
-  let uMeasures = []
-  let env = emptyEnv
-  -- max number of iterations through the CEGIS loop
-  let maxIterations = length universals + 10
-  let init rv = initializePolynomial env aDomain universals uMeasures
-  let allPolynomials = zip rVars $ map init rVars
-  let allCoefficients = concatMap (coefficientsOf . snd) allPolynomials
-  let initialProgram = Map.fromList $ zip allCoefficients initialCoefficients 
-  let universalsWithVars = formatUniversals universals 
-  let ctors = []
-  let measures = []
-  let allUniversals = Universals universalsWithVars measures ctors
-  let ass = conjunction $ map (|>=| fzero) (possibleMeasureApps env universals uMeasures)
-  writeLog 3 $ linebreak </> text "Solving resource constraint with CEGIS:" <+> pretty fml' 
-    <+> text "Over universally quantified expressions:" <+> pretty (map snd universalsWithVars)
-  lift $ solveWithCEGIS maxIterations fml' ass allUniversals [] (Map.fromList allPolynomials) initialProgram
--}
 
 adjustSorts (BoolLit b) = BoolLit b
 adjustSorts (IntLit b) = IntLit b
@@ -311,30 +307,30 @@ applySubst x (ScalarT b r p) =
 partitionType :: Bool 
               -> String 
               -> Environment 
-              -> RType 
-              -> RType 
-              -> RType 
+              -> (String, RType)
+              -> RType
+              -> RType
               -> [Constraint]
-partitionType cm l env t@(ScalarT b _ f) (ScalarT bl _ fl) (ScalarT br _ fr) 
+partitionType cm l env (x, t@(ScalarT b _ f)) (ScalarT bl _ fl) (ScalarT br _ fr)
   = let env' = addVariable valueVarName t env
-    in SharedForm env' f fl fr l : partitionBase cm l env b bl br
+    in SharedForm env' f fl fr (x ++ " : " ++ l) : partitionBase cm l env (x, b) bl br
 
-partitionBase cm l env (DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _)
-  = concat $ zipWith3 (partitionType cm l env) ts tsl tsr
-partitionBase cm l env b@(TypeVarT _ _ m) (TypeVarT _ _ ml) (TypeVarT _ _ mr) 
-  = [SharedForm env m ml mr l | cm]
+partitionBase cm l env (x, DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _)
+  = concat $ zipWith3 (partitionType cm l env) (zip (repeat x) ts) tsl tsr
+partitionBase cm l env (x, b@(TypeVarT _ _ m)) (TypeVarT _ _ ml) (TypeVarT _ _ mr) 
+  = [SharedForm env m ml mr (x ++ " : " ++ l) | cm]
 partitionBase _ _ _ _ _ _ = []
 
 
 assertZeroPotential :: Monad s 
                     => Environment 
-                    -> TCSolver s RFormula
+                    -> TCSolver s (PendingRSubst, Formula) 
 assertZeroPotential env = do 
   let scalars = typeFromSchema <$> nonGhostScalars env 
   let topPotentials = Map.mapMaybe topPotentialOf
   let substitutions = Map.foldlWithKey generateSubst Map.empty scalars
   let fml = ((env ^. freePotential) |+| sumFormulas (topPotentials scalars)) |=| fzero
-  return $ RFormula substitutions fml 
+  return (substitutions, fml)
 
 -- | 'directSubtypes' @env tl tr@ : Generate the set of all formulas in types @tl@ and @tr@, zipped by a binary operation @op@ on formulas 
 directSubtypes :: Bool 
@@ -402,20 +398,6 @@ getUniversals syms (Pred _ _ fs)  = Set.unions $ map (getUniversals syms) fs
 getUniversals syms (Cons _ _ fs)  = Set.unions $ map (getUniversals syms) fs
 getUniversals syms (All f g)      = getUniversals syms g
 getUniversals _ _                 = Set.empty 
-
--- Substitute variable for a formula (predicate application or variable) in given formula @fml@
-substituteForFml :: Formula -> Formula -> Formula -> Formula
-substituteForFml new old v@Var{} = if v == old then new else v
-substituteForFml new old (Unary op f) = Unary op (substituteForFml new old f)
-substituteForFml new old (Binary op f g) = Binary op (substituteForFml new old f) (substituteForFml new old g)
-substituteForFml new old (Ite f g h) = Ite (substituteForFml new old f) (substituteForFml new old g) (substituteForFml new old h)
-substituteForFml new old p@(Pred s x fs) = 
-  if p == old 
-    then new
-    else Pred s x $ map (substituteForFml new old) fs
-substituteForFml new old (Cons s x fs) = Cons s x $ map (substituteForFml new old) fs
-substituteForFml new old (All f g) = All f (substituteForFml new old g)
-substituteForFml _ _ f = f
 
 -- Filter away "uninteresting" constraints for logging. Specifically, well-formednes
 -- Definitely not complete, just "pretty good"

@@ -14,7 +14,7 @@ from colorama import init, Fore, Back, Style
 if platform.system() in ['Linux', 'Darwin']:
     SYNQUID_CMD = ['stack', 'exec', '--', 'synquid']            # Command to call Synquid
     TIMEOUT_CMD = ['timeout']                                   # Timeout command
-    TIMEOUT = ['120']                                           # Timeout value (seconds)    
+    TIMEOUT = ['300']                                           # Timeout value (seconds)    
 else:
     SYNQUID_CMD = ['Synquid.exe']
     TIMEOUT_CMD = ['']
@@ -50,13 +50,15 @@ class Benchmark:
 
 # Micro benchmark
 class MBenchmark:
-    def __init__(self, name, description, feature, components='', options=[], np = '-'):
-        self.name = name                # Id
+    def __init__(self, name, description, signature='', components='', options=[], complexity='', complexity_nr='', eac=-1):
+        self.name = name                # file to test
         self.description = description  # Description (in the table)
-        self.feature = feature          # Relevant ReSyn feature
+        self.signature = signature      # Type signature
+        self.complexity = complexity 
+        self.complexity_nr = complexity_nr 
         self.components = components    # Description of components used (in the table)
         self.options = options          # Command-line options to use for this benchmark when running in individual context
-        self.num_programs = np          # Number of programs generated in the enumerate-and-check process
+        self.eac = eac
 
     def str(self):
         return self.name + ': ' + self.description + ' ' + str(self.options)
@@ -67,22 +69,63 @@ class BenchmarkGroup:
         self.default_options = default_options  # Command-line options to use for all benchmarks in this group when running in common context
         self.benchmarks = benchmarks            # List of benchmarks in this group
 
-MICRO_BENCHMARKS = [
-    MBenchmark('List-Insert', 'insert', 'Overapproximate bound', '$<$', ['--backtrack']),
-    #MBenchmark('List-Insert-Fine', 'insert', 'Annotated with uninterpreted functions', '$<$'),
-    MBenchmark('List-Insert-Fine-Alt', 'insert', 'Fine-grained bound', '$<$', ['--multiplicities=false']),
-    MBenchmark('List-InsertCT', 'insert', 'Constant-time', '$<$', ['--ct', '--backtrack']),
-    MBenchmark('List-LenCompareCT', 'length comparison', '', 'true, false, and', ['-f=AllArguments', '-a=2', '--ct']),
-    MBenchmark('List-LenCompare', 'length comparison', 'Constant-time', 'true, false, and', ['f=AllArguments', '-a=2']),
-    MBenchmark('List-Replicate', 'replicate', 'Program variables in annotations', 'zero, inc, dec'),
-    MBenchmark('List-Append3', 'append 3 lists', 'Compositional bounds'),
-    MBenchmark('List-Intersect', 'common', 'optimization', '$<$'),
-    #MBenchmark('List-Union', 'union', 'optimization, fine-grained bound'),
-    MBenchmark('List-Range', 'range', 'termination handling', '', ['-f=Nonterminating']),
-    MBenchmark('List-Pairs', 'ordered pairs', 'optimization'),
-    MBenchmark('List-Compress', 'compress', 'optimization'),
-    MBenchmark('List-Triple1', 'triple append', 'impact of annotations', ['--multiplicities=false']),
-    MBenchmark('List-Triple2', 'triple append', 'impact of annotations', ['--multiplicities=false'])
+INSERT_TYPE = '$\\forall\\alpha .\
+                 \\tarrow{x}{\\alpha}\
+                 {\\tarrow{xs}{\\tilist{\\tpot{\\alpha}{1}}}\
+                   {\\tsubset{\\tilist{\\alpha}}{\T{elems} \ \\nu = [x] \\cup \T{elems} \ xs}}}$'
+INSERT_FG_TYPE = '$\\forall\\alpha .\
+                    \\tarrow{x}{\\alpha}\
+                     {\\tarrow{xs}{\\tilist{\\tpot{\\alpha}{\\mathsf{ite}(x > \\nu, 1, 0)}}}\
+                       {\\tsubset{\\tilist{\\alpha}}{\T{elems} \ \\nu = [x] \\cup \T{elems} \ xs}}}$'
+LEN_COMPARE_TYPE = '$\\forall\\alpha .\
+                       \\tarrow{ys}{\\tlist{\\tpot{\\alpha}{1}}}\
+                         {\\tarrow{zs}{\\tlist{\\alpha}}{\\tsubset{\\tlist{\\alpha}}{\\nu = ( \T{len} \ ys = \T{len} ) \ zs}}} $' 
+REPLICATE_TYPE  = '$\\forall\\alpha .\
+             \\tarrow{n}{\T{Nat}}\
+               {\\tarrow{x}{n \\times \\tpot{\\alpha}{n}}}\
+                 {\\tsubset{\\tlist{\\alpha}}{\T{len} \ \\nu = n}}$'
+INTERSECT_TYPE  = '$\\forall\\alpha .\
+             \\tarrow{ys}{\\tilist{\\tpot{\\alpha}{1}}}\
+               {\\tarrow{zs}{\\tilist{\\alpha}}\
+                 {\\tsubset{\\tlist{\\alpha}}{\T{elems} \ \\nu = \T{elems} \ ys \\cap \T{elems} \ zs}}}$' 
+RANGE_TYPE  = '$\\tarrow{lo}{\T{Int}}\
+                 {\\tarrow{hi}{\\tsubset{\\tpot{\T{Int}}{\\nu - lo}}{\\nu \geq lo}}\
+                   {\\tsubset{\\tilist{\\tsubset{\T{Int}}{lo \leq \\nu \leq hi}}}{\T{len} \\nu = hi - lo}}}\
+                   {}  $' 
+COMPRESS_TYPE  = '$\\forall \\alpha .\
+                    \\tarrow{xs}{\\tlist{\\tpot{\\alpha}{1}}}\
+                      {\\tsubset{\\tclist{\\alpha}}{\T{elems} \ xs = \T{elems} \ \\nu}}$' 
+TRIPLE_TYPE  = '$\\forall \\alpha .\
+                    \\tarrow{xs}{\\tlist{\\tpot{\\alpha}{2}}}\
+                      {\\tsubset{\\tlist{\\alpha}}{\T{len} \ \\nu = \T{len} \ xs + \T{len} \ xs + \T{len} \ xs }}$'  
+TRIPLE_TYPE  = '$\\forall \\alpha .\
+                    \\tarrow{xs}{\\tlist{\\tpot{\\alpha}{2}}}\
+                      {\\tsubset{\\tlist{\\alpha}}{\T{len} \ \\nu = \T{len} \ xs + \T{len} \ xs + \T{len} \ xs }}$'  
+CONCAT_TYPE = '$\\forall\\alpha .\
+             \\tarrow{xxs}{\\tlist{\\tlist{\\tpot{\\alpha}{1}}}}\
+               {\\tarrow{acc}{\\tlist{\\alpha}}\
+                 {\\tsubset{\\tlist{\\alpha}}{\T{sumLen} \ xs = \T{len} \\nu}}}$'
+DIFF_TYPE  = '$\\forall\\alpha .\
+             \\tarrow{ys}{\\tilist{\\tpot{\\alpha}{1}}}\
+               {\\tarrow{zs}{\\tilist{\\alpha}}\
+                 {\\tsubset{\\tlist{\\alpha}}{\T{elems} \ \\nu = \T{elems} \ ys \\ \T{elems} \ zs}}}$'
+
+MICRO_BENCHMARKS = [    
+    MBenchmark('List-Triple1', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$'),
+    MBenchmark('List-Triple2', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$'),
+    MBenchmark('List-Intersect', 'common', INTERSECT_TYPE, '$<$, member', ['-f=AllArguments', '-a=2', '--backtrack'], '$\mid ys \mid + \mid zs \mid$', '$\mid ys \mid \mid zs \mid$', 1),
+    MBenchmark('List-Concat', 'concat list of lists', CONCAT_TYPE, 'append', [], '$\mid xxs \mid$', '$\mid xxs \mid^2$',1),
+    MBenchmark('List-Compress', 'compress', COMPRESS_TYPE, '$=$,$\\neq$', [], '$\mid xs \mid$', '$2^{ \mid xs \mid }$',1),
+    MBenchmark('List-Diff', 'list difference', DIFF_TYPE, 'member', ['-f=AllArguments', '-a=2', '--backtrack'], '$\mid ys \mid + \mid zs \mid$', '$\mid ys \mid \mid zs \mid$',1),
+    MBenchmark('List-Insert-Fine-Alt', 'insert', INSERT_FG_TYPE, '$<$', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$', 1),
+    MBenchmark('List-Insert', 'insert', INSERT_TYPE , '$<$', ['--backtrack'], '$\mid xs \mid$', '$\mid xs \mid$'),
+    MBenchmark('List-InsertCT', 'CT insert', INSERT_TYPE, '$<$', ['--ct', '--backtrack'], '$\mid xs \mid$', '$\mid xs \mid$'),
+    MBenchmark('List-LenCompareCT', 'CT compare', LEN_COMPARE_TYPE, 'true, false, and', ['-f=AllArguments', '-a=2', '--ct'], '$\mid ys \mid$', '$\mid ys \mid$'),
+    MBenchmark('List-LenCompare', 'compare', LEN_COMPARE_TYPE, 'true, false, and', ['-f=AllArguments', '-a=2'], '$\mid ys \mid$', '$\mid ys \mid$'),
+    MBenchmark('List-Replicate', 'replicate', REPLICATE_TYPE, 'zero, inc, dec', [], '$n$', '$n$',),
+    #MBenchmark('List-Union', 'union', ''),
+    MBenchmark('List-Range', 'range', RANGE_TYPE, 'inc,dec,$\geq$', ['-f=Nonterminating'], '$hi - lo$', '-'),
+    #MBenchmark('List-Pairs', 'ordered pairs', 'append, attach' ),
 ]
 
 ALL_BENCHMARKS = [
@@ -91,7 +134,8 @@ ALL_BENCHMARKS = [
         Benchmark('List-Elem', 'member', 'true, false, $=$, $\\neq$'),
         Benchmark('List-Stutter', 'duplicate each element'),
         Benchmark('List-Replicate', 'replicate', '0, inc, dec, $\\leq$, $\\neq$'),
-        Benchmark('List-Append', 'append two lists', '', ['-m=1']),
+        Benchmark('List-Append', 'append two lists', ''),
+        MBenchmark('List-Append3', 'append 3 lists', 'append'),
         Benchmark('List-Concat', 'concatenate list of lists', 'append'),
         Benchmark('List-Take', 'take first $n$ elements', '0, inc, dec, $\\leq$, $\\neq$'),
         Benchmark('List-Drop', 'drop first $n$ elements', '0, inc, dec, $\\leq$, $\\neq$'),
@@ -104,6 +148,7 @@ ALL_BENCHMARKS = [
         Benchmark('IncList-Insert', 'insert (sorted)', '$\\leq$, $\\neq$'),
         Benchmark('List-Intersect', 'intersection', '$<$, member', ['--backtrack', '-f=AllArguments', '-a=2']),
         Benchmark('List-ExtractMin', 'extract minimum', '$\\leq$, $\\neq$', ['-a=2', '-m=3']),
+        Benchmark('List-Range', 'range', 'inc,dec,$\geq$'),
         # Try it by hand!
         #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member', ['-f=AllArguments', '-m=3'])
         ]),
@@ -156,7 +201,7 @@ class SynthesisResult:
         self.optimized = False 
         self.nres_code_size = '-' 
         self.nres_time = -3.0 
-        self.eac_time = '-'
+        self.eac_time = -3.0 
         self.num_constraints = num_constraints
 
     def str(self):
@@ -200,7 +245,7 @@ def run_benchmark(name, opts, default_opts):
 
       print()
 
-def run_micro_benchmark(name, opts, default_opts):
+def run_micro_benchmark(name, opts, default_opts, eac):
     '''Run benchmark name with command-line options opts (use default_opts with running the common context variant); record results in the results dictionary'''
 
     with open(MICRO_LOGFILE, 'a+') as logfile:
@@ -231,12 +276,18 @@ def run_micro_benchmark(name, opts, default_opts):
       variant_options = [   # Command-line options to use for each variant of Synquid
             ('nres', opts + RESOURCES_OFF_OPT),
         ]
-
+      
       # Run each variant: (now there's only one, should probably change this...)
       for (variant_id, opts) in variant_options:
           run_version(name, variant_id, opts, logfile, str(synthesis_output), micro_results)
 
+      if eac < 0:
+          micro_results[name].eac_time = '-'
+      else:
+          run_eac_version(name, logfile, micro_results)
+
       print()
+
 
 def run_version(name, variant_id, variant_opts, logfile, with_res, results_file):
     '''Run benchmark name using command-line options variant_opts and record it as a Synquid variant variant_id in the results dictionary'''
@@ -246,6 +297,8 @@ def run_version(name, variant_id, variant_opts, logfile, with_res, results_file)
     synthesis_res = run(TIMEOUT_CMD + TIMEOUT + SYNQUID_CMD + COMMON_OPTS +
         variant_opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
     end = time.time()
+
+    #results_file[name].eac_time = -1
 
     print('{0:0.2f}'.format(end - start), end = ' ')
     if synthesis_res.returncode == 124:  # Timeout: record timeout
@@ -269,9 +322,30 @@ def run_version(name, variant_id, variant_opts, logfile, with_res, results_file)
           results_file[name].nres_code_size = solution_size
       except StopIteration:
           print('Unchanged', end=' ')
+
+def run_eac_version(name, logfile, results_file):
+    '''Run benchmark using enumerate-and-check version of synquid'''
+    start = time.time()
+    logfile.seek(0, os.SEEK_END)
+    eac_opts = ['--eac', '--backtrack']
+    # Run Synquid on the benchmark, mute output:
+    synthesis_res = run(TIMEOUT_CMD + TIMEOUT + SYNQUID_CMD + COMMON_OPTS + eac_opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
+    end = time.time()
+    print('{0:0.2f}'.format(end - start), end = ' ')
+    if synthesis_res.returncode == 124:  # Timeout: record timeout
+      print(Back.RED + Fore.RED + Style.BRIGHT + 'EAC TIMEOUT' + Style.RESET_ALL, end = ' ')
+      results_file[name].eac_time = 'TO' 
+    elif synthesis_res.returncode: # Synthesis failed: record failure
+      print(Back.RED + Fore.RED + Style.BRIGHT + 'EAC FAIL' + Style.RESET_ALL, end = ' ')
+      results_file[name].eac_time = -2
+    else: # Synthesis succeeded: record time for variant
+      results_file[name].eac_time = (end - start)
+      print(Back.GREEN + Fore.GREEN + Style.BRIGHT + 'EAC OK' + Style.RESET_ALL, end=' ')
       
 def format_time(t):
-    if t < 0:
+    if isinstance(t, str):
+        return t
+    elif t < 0:
         return '-'
     else:
         return '{0:0.2f}'.format(t)
@@ -287,9 +361,9 @@ def write_micro_csv():
             outfile.write (result.code_size + ',')
             outfile.write (format_time(result.time) + ',')
             outfile.write (format_time(result.nres_time) + ',')
+            #outfile.write (result.eac_time + ',')
+            outfile.write (format_time(result.eac_time) + ',')
             outfile.write (result.nres_code_size + ',')
-            outfile.write (str(b.num_programs) + ',')
-            outfile.write (result.eac_time + ',')
             #outfile.write (optstr + ',')
             outfile.write ('\n')
 
@@ -306,8 +380,7 @@ def write_csv():
                 outfile.write (format_time(result.time) + ',')
                 outfile.write (format_time(result.nres_time) + ',')
                 outfile.write (result.nres_code_size + ',')
-                outfile.write (str(b.num_programs) + ',')
-                outfile.write (result.eac_time + ',')
+                #outfile.write (result.eac_time + ',')
                 #outfile.write (optstr + ',')
                 outfile.write ('\n')
 
@@ -324,14 +397,15 @@ def write_micro_latex():
             optstr = 'Yes' if result.optimized else '-'
             row = \
                 b.description +\
-                ' & ' + b.feature +\
-                ' & ' + result.goal_count +\
-                ' & ' + b.components + \
-                ' & ' + result.measure_count + \
-                ' & ' + result.code_size + \
+                ' & ' + b.signature + \
+                ' & ' + str(b.components) + \
                 ' & ' + format_time(result.time) + \
                 ' & ' + format_time(result.nres_time) + \
-                ' & ' + result.nres_code_size + ' \\\\'
+                ' & ' + format_time(result.eac_time) + \
+                ' & ' + b.complexity + \
+                ' & ' + b.complexity_nr + ' \\\\'
+#format_time(result.eac_time) + \
+                #' & ' + result.nres_code_size + ' \\\\'
                 #' & ' + str(b.num_programs) + \
                 #' & ' + str(result.eac_time) + ' \\\\'
                 #' & ' + optstr + ' \\\\'
@@ -339,12 +413,8 @@ def write_micro_latex():
             outfile.write ('\n')
             
             total_count = total_count + 1
-            if result.nres_time < 0.0:
-                to_nres = to_nres + 1 
-                
             
     print('Total:', total_count)
-    print('TO nres:', to_nres)
 
 def write_latex():
     '''Generate Latex table from the results dictionary'''
@@ -367,14 +437,14 @@ def write_latex():
                 row = \
                     ' & ' + b.description +\
                     ' & ' + result.goal_count +\
-                    ' & ' + b.components + \
+                    ' & ' + str(b.components) + \
                     ' & ' + result.measure_count + \
                     ' & ' + result.code_size + \
                     ' & ' + format_time(result.time) + \
-                    ' & ' + format_time(result.nres_time) + \
-                    ' & ' + result.nres_code_size + \
-                    ' & ' + str(b.num_programs) + \
-                    ' & ' + str(result.eac_time) + ' \\\\'
+                    ' & ' + format_time(result.nres_time) + ' \\\\'
+                    #' & ' + result.nres_code_size + \
+                    #' & ' + str(b.num_programs) + \
+                    #' & ' + format_time(result.eac_time) + ' \\\\'
                     #' & ' + optstr + ' \\\\'
                 outfile.write (row)
                 outfile.write ('\n')
@@ -436,7 +506,7 @@ if __name__ == '__main__':
             print(b.str() + Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'SKIPPED' + Style.RESET_ALL)
         else:
             print(b.str())
-            run_micro_benchmark(b.name, b.options, group.default_options)
+            run_micro_benchmark(b.name, b.options, group.default_options, b.eac)
             with open(MICRO_DUMPFILE, 'wb') as data_dump:
                 pickle.dump(micro_results, data_dump)    
 

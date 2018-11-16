@@ -115,7 +115,7 @@ solveWithCEGIS 0 rfmls ass universals _ polynomials program = do
   case counterexample of 
     Nothing -> return True
     Just cx -> do
-      traceM "CEGIS failed on final iteration"
+      --traceM "CEGIS failed on final iteration"
       writeLog 4 $ text "Last counterexample:" <+> pretty (Map.assocs (variables cx)) </> linebreak
       return False
 
@@ -162,7 +162,7 @@ getCounterexample ass rfmls universals polynomials program = do
   cxPolynomials <- runInSolver $ mapM (mkCXPolynomial program) polynomials
   -- Replace resource variables with appropriate polynomials (with pending substitutions applied)
   --   and negate the resource constraint
-  let substRFml (RFormula subs f) = substAndApplyPolynomial subs cxPolynomials f
+  let substRFml (RFormula _ _ subs f) = substAndApplyPolynomial subs cxPolynomials f
   let fml = conjunction $ map substRFml rfmls 
   let fml' = substitute program fml
   let cxQuery = fnot (ass |=>| fml')
@@ -191,7 +191,7 @@ getParameters rfmls pastExamples polynomials counterexample = do
   -- For each example, substitute its value for the universally quantified expressions in each polynomial skeleton
   paramPolynomials <- runInSolver $ mapM (mkParamPolynomial counterexample) polynomials
   -- Replace resource variables with appropriate polynomials after applying pending substitutions
-  let substRFml (RFormula subs f) = substAndApplyPolynomial subs paramPolynomials f
+  let substRFml (RFormula _ _ subs f) = substAndApplyPolynomial subs paramPolynomials f
   let fml = conjunction $ map substRFml rfmls
   -- Substitute example valuations of universally quantified expressions in resource constraint
   let fml' = substitute (variables counterexample) fml

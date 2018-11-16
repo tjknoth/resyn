@@ -106,7 +106,8 @@ data TypingParams = TypingParams {
   _instantiateUnivs :: Bool,                                        -- ^ When solving exists-forall constraints, instantiate universally quantified expressions
   _constantRes :: Bool,                                             -- ^ Check constant-timedness or not
   _cegisMax :: Int,                                                 -- ^ Maximum depth of CEGIS solver 
-  _cegisDomain :: Maybe AnnotationDomain
+  _cegisDomain :: Maybe AnnotationDomain,
+  _enumAndCheck ::Bool
 }
 
 makeLenses ''TypingParams
@@ -117,7 +118,8 @@ data ResourceArgs = ResourceArgs {
   _checkMults :: Bool,
   _instantiateForall :: Bool,
   _constantTime :: Bool,
-  _cegisBound :: Int 
+  _cegisBound :: Int,
+  _enumerate :: Bool
 } 
 
 makeLenses ''ResourceArgs

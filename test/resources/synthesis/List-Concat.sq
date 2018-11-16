@@ -18,7 +18,7 @@ measure sumLen :: ListOfLists a -> {Int | _v >= 0} where
   Nil2 -> 0
   Cons2 x xs -> sumLen xs + len x
 
-zappend :: xs: List {a| |1} -> ys: List a -> { List a | len _v == len xs + len ys }
+append :: xs: List {a| |1} -> ys: List a -> { List a | len _v == len xs + len ys }
 
 concat :: xss: ListOfLists {a| |1} -> acc: List a -> { List a | len _v == sumLen xss + len acc }
 concat = ?? 

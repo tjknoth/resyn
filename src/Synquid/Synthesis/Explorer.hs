@@ -106,13 +106,13 @@ generateElse cEnv bEnv t cond condUnknown pThen = if cond == ftrue
       (return pElse)
       (return $ Program (PIf pCond pThen pElse) t)
 
-tryEliminateBranching branch recheck =
+tryEliminateBranching branch recheck = 
   if isHole branch
       then return False
       else ifte -- If synthesis of the branch succeeded, try to remove the branching construct
             recheck -- Re-check Horn constraints after retracting the branch guard
             (const $ return True) -- constraints still hold: @branch@ is a valid solution overall
-            (return False) -- constraints don't hold: the guard is essential
+            (return False) -- constraints don't hold: the guard is essential 
 
 generateConditionFromFml :: (MonadHorn s, MonadSMT s, RMonad s) 
                          => Environment 

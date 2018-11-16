@@ -388,7 +388,7 @@ addPolyConstant name sch@(ForallT x s) = addPolyVariable name sch . (ghostSymbol
 addPolyConstant name sch = addPolyVariable name sch
 
 addLetBound :: Id -> RType -> Environment -> Environment
-addLetBound name t = addVariable name t . (letBound %~ Set.insert name)
+addLetBound name t = addVariable name t . (ghostSymbols %~ Set.insert name) . (letBound %~ Set.insert name)
 
 addUnresolvedConstant :: Id -> RSchema -> Environment -> Environment
 addUnresolvedConstant name sch = unresolvedConstants %~ Map.insert name sch
@@ -576,9 +576,13 @@ data Constraint =
   | ConstantRes !Environment !Id
   deriving (Show, Eq, Ord)
 
+type PendingRSubst = Map Formula Substitution
+
 -- RFormula -- Logical formula and a set of pending substitutions
 data RFormula = RFormula {
-  pendingSubsts :: !(Map Formula Substitution),
+  knownAssumptions :: !(Set Formula),
+  unknownAssumptions :: !(Set Formula),
+  pendingSubsts :: !PendingRSubst,
   rformula :: !Formula
 } deriving (Eq, Show, Ord)
 

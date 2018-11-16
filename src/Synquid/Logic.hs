@@ -537,11 +537,11 @@ instance Ord Candidate where
 ---------------------------------------
 ---------------------------------------
 
-isTrivial :: Formula -> Bool
-isTrivial (BoolLit True)    = True 
-isTrivial (Binary Eq f1 f2) = f1 == f2
-isTrivial (Binary Ge (IntLit x) (IntLit 0)) = x >= 0
-isTrivial (Binary Implies f g) = f == ffalse || g == ftrue
+--isTrivial :: Formula -> Bool
+--isTrivial (BoolLit True)    = True 
+--isTrivial (Binary Eq f1 f2) = f1 == f2
+--isTrivial (Binary Ge (IntLit x) (IntLit 0)) = x >= 0
+--isTrivial (Binary Implies f g) = f == ffalse || g == ftrue
 isTrivial _                 = False 
 
 isUnknownForm :: Formula -> Bool
