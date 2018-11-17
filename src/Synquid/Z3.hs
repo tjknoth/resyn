@@ -35,7 +35,7 @@ import Debug.Trace
 import Control.Monad.State.Class (MonadState)
 
 
-initZ3Data env env' = Z3Data {
+initZ3Data env env' renv = Z3Data {
   _mainEnv = env,
   _sorts = Map.empty,
   _vars = Map.empty,
@@ -44,7 +44,8 @@ initZ3Data env env' = Z3Data {
   _controlLiterals = Bimap.empty,
   _auxEnv = env',
   _boolSortAux = Nothing,
-  _controlLiteralsAux = Bimap.empty
+  _controlLiteralsAux = Bimap.empty,
+  _resEnv = renv
 }
 
 instance MonadSMT Z3State where
@@ -72,8 +73,9 @@ instance MonadSMT Z3State where
   allUnsatCores = getAllMUSs
 
 instance RMonad Z3State where
-  solveAndGetModel fml = do 
-    (r, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
+  solveAndGetModel fml = {-withResSolver $ -}do
+    --push 
+    (r, m) <- (fmlToAST >=> assert) fml >> solverCheckAndGetModel
     setASTPrintMode Z3_PRINT_SMTLIB_FULL
     fmlAst <- fmlToAST fml
     astStr <- astToString fmlAst
@@ -83,15 +85,20 @@ instance RMonad Z3State where
               Sat   -> True
               _     -> error $ "solveWithModel: Z3 returned Unknown for AST " ++ astStr 
     case m of  
-      Nothing -> return Nothing
+      Nothing -> do 
+        --pop 1
+        return Nothing
       Just md -> do 
         mdStr <- modelToString md 
         return $ Just (md, mdStr)
 
-  solveAndGetAssignment fml vals = do 
-    (_, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
+  solveAndGetAssignment fml vals = {-withResSolver $ -}do 
+    --push
+    (_, m) <- (fmlToAST >=> assert) fml >> solverCheckAndGetModel
     case m of 
-      Nothing -> return Nothing 
+      Nothing -> do 
+        --pop 1
+        return Nothing 
       Just md -> do 
         mstr <- modelToString md 
         modelGetAssignment vals (md, mstr)
@@ -288,6 +295,16 @@ withAuxSolver c = do
   mainEnv .= m
   return res
 
+withResSolver :: Z3State a -> Z3State a 
+withResSolver c = do 
+  m <- use mainEnv 
+  r <- use resEnv 
+  mainEnv .= r 
+  res <- c 
+  mainEnv .= m 
+  resEnv .= r
+  return res
+
 evalZ3State :: Z3State a -> IO a
 evalZ3State f = do
   -- env <- newEnv (Just QF_AUFLIA) stdOpts
@@ -296,7 +313,8 @@ evalZ3State f = do
   --env' <- newEnv (Just AUFLIA) stdOpts
   env <- newEnv Nothing stdOpts
   env' <- newEnv Nothing stdOpts
-  evalStateT f $ initZ3Data env env'
+  renv <- newEnv Nothing stdOpts
+  evalStateT f $ initZ3Data env env' renv
 
 -- | Convert a first-order constraint to a Z3 AST.
 fmlToAST :: Formula -> Z3State AST

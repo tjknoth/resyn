@@ -237,13 +237,12 @@ makePTerm prefix fml = PolynomialTerm coeff (Just (fmlStr, mkPForm fml))
 mkPForm v@Var{} = v
 mkPForm p@Pred{} = Var IntS $ show $ plain $ pretty p
 
-
 prepareForCEGIS p@Pred{} = mkPForm p 
-prepareForCEGIS (SetLit s xs) = SetLit x $ map prepareForCEGIS xs
+prepareForCEGIS (SetLit s xs) = SetLit s $ map prepareForCEGIS xs
 prepareForCEGIS v@Var{} = v 
 prepareForCEGIS u@Unknown{} = trace "Warning: unknown assumption going into CEGIS" u
 prepareForCEGIS (Binary op f g) = Binary op (prepareForCEGIS f) (prepareForCEGIS g)
-prepareForCEGIS (Unary op g) = Unary op (prepareForCEGIS f) 
+prepareForCEGIS (Unary op g) = Unary op (prepareForCEGIS g) 
 prepareForCEGIS (Ite t f g) = Ite (prepareForCEGIS t) (prepareForCEGIS f) (prepareForCEGIS g)
 prepareForCEGIS c@Cons{} = c
 prepareForCEGIS a@All{} = trace "Warning: universal quantifier going into CEGIS" a

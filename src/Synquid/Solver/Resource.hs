@@ -200,7 +200,6 @@ isRelevantAssumption useM _ _ Cons{} = useM
 isRelevantAssumption useM rms rvs (All f g) = isRelevantAssumption useM rms rvs g -- trace "Warning: universally quantified assumption" True
 isRelevantAssumption _ _ _ _ = True
 
-
 -- | Check the satisfiability of the generated resource constraints, instantiating universally 
 --     quantified expressions as necessary.
 satisfyResources :: RMonad s 
@@ -313,8 +312,8 @@ partitionType :: Bool
               -> RType
               -> [Constraint]
 partitionType cm l env (x, t@(ScalarT b _ f)) (ScalarT bl _ fl) (ScalarT br _ fr)
-  = let env' = addAssumption (Var (toSort b) valueVarName |=| Var (toSort b) x) $ addVariable valueVarName t env
-    in trace ("adding " ++ x ++ " :: " ++ show (plain (pretty t))) $ SharedForm env' f fl fr (x ++ " : " ++ l) : partitionBase cm l env (x, b) bl br
+  = let env' = {-addAssumption (Var (toSort b) valueVarName |=| Var (toSort b) x) $-} addVariable valueVarName t env
+    in SharedForm env' f fl fr (x ++ " : " ++ l) : partitionBase cm l env (x, b) bl br
 
 partitionBase cm l env (x, DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _)
   = concat $ zipWith3 (partitionType cm l env) (zip (repeat x) ts) tsl tsr
