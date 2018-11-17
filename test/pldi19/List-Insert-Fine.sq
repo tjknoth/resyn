@@ -24,6 +24,6 @@ insert = \x . \xs .
   match xs with
     INil -> ICons x INil
     ICons y ys -> 
-      if x <= y
-        then ICons x (ICons y ys)
-        else ICons y (insert x ys)
+      if x > y
+        then ICons y (insert x ys) 
+        else ICons x (ICons y ys)

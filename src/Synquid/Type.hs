@@ -318,6 +318,10 @@ addRefinementToLastSch (Monotype t) fml = Monotype $ addRefinementToLast t fml
 addRefinementToLastSch (ForallT a sch) fml = ForallT a $ addRefinementToLastSch sch fml
 addRefinementToLastSch (ForallP sig sch) fml = ForallP sig $ addRefinementToLastSch sch fml
 
+-- | Conjoin refinement to the return type inside a schema
+replaceInSch (Monotype _) s = Monotype s
+replaceInSch (ForallT a sch) s = ForallT a $ replaceInSch sch s
+replaceInSch (ForallP sig sch) s = ForallP sig $ replaceInSch sch s
 
 -- | Apply variable substitution in all formulas inside a type
 substituteInType :: (Id -> Bool) -> Substitution -> RType -> RType

@@ -249,24 +249,13 @@ simplifyConstraint' tass _ (WellFormed env tv@(ScalarT (TypeVarT _ a _) _ _) l)
   | a `Map.member` tass
     = simplifyConstraint (WellFormed env (typeSubstitute tass tv) l)
 
--- Substitute all scalars in environment  
-simplifyConstraint' tass _ (SharedEnv env envl envr l) = do
-  let substAndGetScalars = fmap typeFromSchema . nonGhostScalars . over symbols (scalarSubstituteEnv tass)
-  let scalars = Map.assocs $ substAndGetScalars env
-  let scalarsl = Map.elems $ substAndGetScalars envl
-  let scalarsr = Map.elems $ substAndGetScalars envr
-  cm <- asks _checkMultiplicities
-  let cs = zipWith3 (partitionType cm l env) scalars scalarsl scalarsr
-  let fpc = SharedForm env (_freePotential env) (_freePotential envl) (_freePotential envr) l
-  simpleConstraints %= (concat cs ++)
-  simpleConstraints %= (fpc :)
-simplifyConstraint' tass _ (ConstantRes env l) = do 
-  let env' = over symbols (scalarSubstituteEnv tass) env
-  simpleConstraints %= (ConstantRes env' l :)
-simplifyConstraint' tass _ (Transfer envIn envOut l) = do 
-  let envIn' = over symbols (scalarSubstituteEnv tass) envIn
-  let envOut' = over symbols (scalarSubstituteEnv tass) envOut
-  simpleConstraints %= (Transfer envIn' envOut' l :)
+-- Don't do shit yet, wait until type assignment is finalized
+simplifyConstraint' tass _ c@SharedEnv{} = 
+  simpleConstraints %= (c :)
+simplifyConstraint' tass _ c@ConstantRes{} = 
+  simpleConstraints %= (c :)
+simplifyConstraint' tass _ c@Transfer{} = 
+  simpleConstraints %= (c :)
 
 -- Two unknown free variables: nothing can be done for now
 simplifyConstraint' _ _ c@(Subtype env (ScalarT (TypeVarT _ a _) _ _) (ScalarT (TypeVarT _ b _) _ _) _ _) | not (isBound env a) && not (isBound env b)
@@ -477,10 +466,29 @@ processConstraint (RSubtype env pl pr l)
       let env' = typeSubstituteEnv tass env
       let c' = RSubtype env' pl' pr' l
       simpleConstraints %= (c' :)
-processConstraint c@ConstantRes{} = simpleConstraints %= (c :)
-processConstraint c@SharedEnv{}   = error "processConstraint: shared environment constraint present"
-processConstraint c@SharedForm{}  = simpleConstraints %= (c :)
-processConstraint c@Transfer{}    = simpleConstraints %= (c :)
+processConstraint (SharedEnv env envl envr l) 
+  = do 
+      tass <- use typeAssignment
+      pass <- use predAssignment 
+      let substAndGetScalars = fmap typeFromSchema . nonGhostScalars . over symbols (scalarSubstituteEnv tass) 
+      let scalars = Map.assocs $ substAndGetScalars env 
+      let scalarsl = Map.elems $ substAndGetScalars envl 
+      let scalarsr = Map.elems $ substAndGetScalars envr 
+      cm <- asks _checkMultiplicities 
+      let cs = zipWith3 (partitionType cm l env) scalars scalarsl scalarsr 
+      let fpc = SharedForm env (_freePotential env) (_freePotential envl) (_freePotential envr) l
+      simpleConstraints %= (concat cs ++) 
+      simpleConstraints %= (fpc :)
+processConstraint (ConstantRes env l) = do 
+  tass <- use typeAssignment
+  let env' = over symbols (scalarSubstituteEnv tass) env
+  simpleConstraints %= (ConstantRes env' l :)
+processConstraint c@SharedForm{}  = return () -- don't do shit 
+processConstraint (Transfer envIn envOut l) = do 
+  tass <- use typeAssignment
+  let envIn' = over symbols (scalarSubstituteEnv tass) envIn
+  let envOut' = over symbols (scalarSubstituteEnv tass) envOut
+  simpleConstraints %= (Transfer envIn' envOut' l :)
 processConstraint c = error $ show $ text "processConstraint: not a simple constraint" <+> pretty c
 
 generateHornClauses :: (MonadHorn s, MonadSMT s) => Constraint -> TCSolver s ()

@@ -42,8 +42,7 @@ type UConstructor = (String, (Environment, String))
 
 data Universals = Universals {
   uvars :: [UVar],
-  umeasures :: [UMeasure],
-  uctors :: [UConstructor]
+  umeasures :: [UMeasure]
 } deriving (Show, Eq)
 
 -- Term of a polynomial: coefficient * universal
@@ -67,7 +66,6 @@ type ResourceSolution = Map String Formula
 -- Map from universally quantified expression (in string form) to its valuation
 data Counterexample = CX {
   measureInterps :: Map String Z3UFun,
-  constructorInterps :: Map String Z3UFun,
   variables :: Map String Formula,
   model :: SMTModel
 } deriving (Eq)
@@ -79,23 +77,8 @@ instance UF MeasureDef where
   argSorts mdef = map snd (_constantArgs mdef) ++ [_inSort mdef]
   resSort = _outSort
 
--- Uninterpreted function instance for constructors requires an environment
---   and the name of the constructor
-instance UF (Environment, String) where 
-  argSorts (env, dt) = 
-    case Map.lookup dt (allSymbols env) of 
-      Nothing -> error $ "argSorts: constructor " ++ dt ++ " not found"
-      Just cons -> allArgSorts $ typeFromSchema cons
-  resSort (env, dt) = 
-    case Map.lookup dt (allSymbols env) of 
-      Nothing -> error $ "resSort: constructor " ++ dt ++ " not found"
-      Just cons -> resultSort $ typeFromSchema cons
-
 instance Declarable MeasureDef where 
   declare _ = Z3.function
-
-instance Declarable (Environment, String) where 
-  declare _ = Z3.typeConstructor
 
 {- Top-level interface -}
 
@@ -132,7 +115,6 @@ solveWithCEGIS n rfmls ass universals examples polynomials program = do
       do 
         writeLog 4 $ text "Counterexample:" <+> pretty (Map.assocs (variables cx))
         writeLog 4 $ text "      measures:" <+> pretty (Map.assocs (measureInterps cx))
-        writeLog 4 $ text "  constructors:" <+> pretty (Map.assocs (constructorInterps cx))
         -- Update example list
         -- Attempt to find parameterization holding on all examples
         -- Assumptions shouldn't be relevant for this query???? (IS THIS TRUE?)
@@ -173,11 +155,9 @@ getCounterexample ass rfmls universals polynomials program = do
     $ (modelGetAssignment (map fst (uvars universals)) <$> model)
   minterps <- runInSolver . sequence 
     $ (modelGetUFs (umeasures universals) <$> model)
-  cinterps <- runInSolver . sequence 
-    $ (modelGetUFs (uctors universals) <$> model)
-  return $ (CX <$> minterps) <*> cinterps <*> join assignments <*> model
+  return $ (CX <$> minterps) <*> join assignments <*> model
 
-  
+
 -- | 'getParameters' @fml polynomials examples@
 --   Find a valuation for all coefficients such that @fml@ holds on all @examples@
 getParameters :: RMonad s 
@@ -239,10 +219,7 @@ evalMeasures cx fml = case fml of
   Unary op e    -> Unary op <$> evalMeasures cx e
   Binary op f g -> Binary op <$> evalMeasures cx f <*> evalMeasures cx g
   Ite g t f     -> Ite <$> evalMeasures cx g <*> evalMeasures cx t <*> evalMeasures cx f
-  Cons s x args -> --Cons s x <$> mapM (evalMeasures cx) as
-    case Map.lookup x (constructorInterps cx) of 
-      Nothing   -> return $ Cons s x args 
-      Just md   -> evalInModel args (model cx) md
+  Cons s x args -> Cons s x <$> mapM (evalMeasures cx) args
   All{}         -> return fml
   _             -> return fml
 
@@ -252,10 +229,25 @@ mkSimplePolynomial cx poly = sumFormulas <$> mapM (pTermForPrinting cx) poly
 
 -- | Assemble a polynomial term, given a variable prefix and a universally quantified expression
 makePTerm :: String -> Formula -> PolynomialTerm
-makePTerm prefix fml = PolynomialTerm coeff (Just (fmlStr, fml))
+makePTerm prefix fml = PolynomialTerm coeff (Just (fmlStr, mkPForm fml))
   where 
     coeff  = makePolynomialVar prefix fml
     fmlStr = universalToString fml
+
+mkPForm v@Var{} = v
+mkPForm p@Pred{} = Var IntS $ show $ plain $ pretty p
+
+
+prepareForCEGIS p@Pred{} = mkPForm p 
+prepareForCEGIS (SetLit s xs) = SetLit x $ map prepareForCEGIS xs
+prepareForCEGIS v@Var{} = v 
+prepareForCEGIS u@Unknown{} = trace "Warning: unknown assumption going into CEGIS" u
+prepareForCEGIS (Binary op f g) = Binary op (prepareForCEGIS f) (prepareForCEGIS g)
+prepareForCEGIS (Unary op g) = Unary op (prepareForCEGIS f) 
+prepareForCEGIS (Ite t f g) = Ite (prepareForCEGIS t) (prepareForCEGIS f) (prepareForCEGIS g)
+prepareForCEGIS c@Cons{} = c
+prepareForCEGIS a@All{} = trace "Warning: universal quantifier going into CEGIS" a
+prepareForCEGIS a@ASTLit{} = a
 
 coefficientsOf = map coefficient
 
@@ -349,4 +341,3 @@ initialCoefficients = repeat $ IntLit 0
 universalToString :: Formula -> String
 universalToString (Var _ x) = x -- ++ "_u"
 universalToString (Pred _ x fs) = x ++ concatMap show fs ++ "_u"
-universalToString (Cons _ x fs) = x ++ concatMap show fs ++ "_u"

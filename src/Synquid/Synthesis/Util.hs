@@ -206,7 +206,7 @@ cut e = do
 safeAddVariable :: Monad s => String -> RType -> Environment -> Explorer s Environment
 safeAddVariable x t@FunctionT{} env = return $ addVariable x t env
 safeAddVariable x typ env = do
-  (typingState . universalFmls) %= Set.insert (Var IntS x)
+  (typingState . universalFmls) %= Set.insert (Var (toSort (baseTypeOf typ)) x)
   return $ addVariable x typ env
 
 -- | Synthesize auxiliary goals accumulated in @auxGoals@ and store the result in @solvedAuxGoals@
@@ -349,7 +349,8 @@ shareContext :: (MonadHorn s, MonadSMT s)
              => Environment 
              -> String 
              -> Explorer s (Environment, Environment)
-shareContext env label = do 
+shareContext env label = do
+  traceM $ show $ symbolsOfArity 0 env 
   symsl <- safeFreshPotentials env False
   symsr <- safeFreshPotentials env False
   (fpl, fpr) <- shareFreePotential env False (env ^. freePotential) label

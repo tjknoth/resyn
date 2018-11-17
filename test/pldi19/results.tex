@@ -1,12 +1,11 @@
-\multirow{19}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{List}}} & is empty & 2 & true, false & 1 & 16 & 0.15 & 0.15 \\
+\multirow{18}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{List}}} & is empty & 2 & true, false & 1 & 16 & 0.15 & 0.15 \\
  & member & 3 & true, false, $=$, $\neq$ & 2 & 41 & 0.24 & 0.18 \\
  & duplicate each element & 3 &  & 2 & 39 & 0.57 & 0.23 \\
  & replicate & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 31 & 11.50 & 0.20 \\
  & append two lists & 3 &  & 2 & 38 & 2.70 & 0.41 \\
- & append 3 lists & 3 &  & 2 & 36 & 0.19 & 0.14 \\
- & concatenate list of lists & 4 & append & 3 & 49 & 5.91 & 0.71 \\
  & take first $n$ elements & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 34 & 1.58 & 0.30 \\
  & drop first $n$ elements & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 30 & 0.92 & 0.28 \\
+ & concat list of lists & 4 & append & 3 & 49 & 5.91 & 0.71 \\
  & delete value & 3 & $=$, $\neq$ & 2 & 49 & 0.99 & 0.28 \\
  & zip & 2 &  & 1 & 32 & 0.54 & 0.19 \\
  & $i$-th element & 2 & 0, inc, dec, $\leq$, $\neq$ & 1 & 30 & 0.34 & 0.19 \\
@@ -14,23 +13,23 @@
  & insert at end & 3 &  & 2 & 42 & 0.49 & 0.28 \\
  & reverse & 3 & insert at end & 2 & 35 & 0.48 & 0.28 \\
  & insert (sorted) & - & $\leq$, $\neq$ & - & - & 0.18 & - \\
- & intersection & 5 & $<$, member & 4 & 95 & 79.83 & 1.60 \\
  & extract minimum & 5 & $\leq$, $\neq$ & 4 & 71 & 25.89 & 7.44 \\
  & range & - & inc,dec,$\geq$ & - & - & 6.18 & - \\
+ & split list & 5 &  & 4 & 64 & 17.75 & 1.65 \\
 \hline\multirow{6}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Unique list}}} & insert & 3 & $=$, $\neq$ & 2 & 49 & 1.00 & 0.40 \\
  & delete & 3 & $=$, $\neq$ & 2 & 45 & 0.54 & 0.30 \\
  & remove duplicates & 5 & member & 2 & 94 & 38.40 & 3.96 \\
  & remove adjacent dupl. & 4 & $=$, $\neq$ & 3 & 64 & 6.78 & 1.60 \\
  & integer range & 3 & 0, inc, dec, $\leq$, $\neq$ & 2 & 46 & 8.37 & 4.59 \\
  & partition & 5 & $\leq$ & 4 & 71 & 18.51 & 4.83 \\
-\hline\multirow{3}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Sorted list}}} & insert & 3 & $<$ & 2 & 64 & 2.17 & 0.52 \\
+\hline\multirow{4}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Sorted list}}} & insert & 3 & $<$ & 2 & 64 & 2.17 & 0.52 \\
  & delete & 3 & $<$ & 2 & 52 & 0.52 & 0.25 \\
  & difference & 5 & member, $<$ & 4 & 95 & 309.08 & 1.99 \\
-\hline\multirow{5}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Tree}}} & node count & 2 & 0, 1, + & 1 & 34 & 6.98 & 0.47 \\
+ & intersect & - & $<$ & - & - & 97.36 & 0.69 \\
+\hline\multirow{4}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Tree}}} & node count & 2 & 0, 1, + & 1 & 34 & 6.98 & 0.47 \\
  & preorder & 3 & append & 2 & 45 & 4.50 & 0.45 \\
  & to list & 3 &  & 2 & 45 & 4.25 & 0.46 \\
  & member & 3 &  & 2 & 63 & 0.42 & 0.17 \\
- & size & 2 &  & 1 & 34 & 6.98 & 0.47 \\
 \hline\multirow{4}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{BST}}} & member & 3 & true, false, $\leq$, $\neq$ & 2 & 72 & 0.57 & 0.28 \\
  & insert & 3 & $\leq$, $\neq$ & 2 & 90 & 6.44 & 1.39 \\
  & delete & 3 & $\leq$, $\neq$ & 2 & 103 & 39.34 & 8.32 \\
