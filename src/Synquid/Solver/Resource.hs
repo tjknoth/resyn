@@ -65,7 +65,6 @@ solveResourceConstraints oldConstraints constraints = do
     query <- assembleQuery accFmls constraintList 
     -- Check satisfiability
     universals <- use universalFmls
-    hasUniversals <- isJust <$> asks _cegisDomain
     b <- satisfyResources tempEnv (Set.toList universals) query
     let result = if b then "SAT" else "UNSAT"
     writeLog 5 $ nest 4 $ text "Accumulated resource constraints:" 
@@ -160,27 +159,29 @@ embedAndProcessConstraint :: (MonadHorn s, RMonad s)
 embedAndProcessConstraint shouldLog env c rfml extra = do 
   let fml = rformula rfml
   let substs = pendingSubsts rfml
-  let unknownEmb = allUnknowns env
   aDomain <- asks _cegisDomain
   -- If the top-level annotations do not contain measures,
   --   do not consider any assumptions over measures or any post conditions
   let useMeasures = maybe False shouldUseMeasures aDomain 
   univs <- use universalFmls
   let possibleVars = varsOf fml
-  emb <- Set.filter (not . isUnknownForm) <$> embedSynthesisEnv env (conjunction possibleVars) {-(Set.union univs possibleVars))-} True useMeasures
+  emb <- Set.filter (not . isUnknownForm) <$> embedSynthesisEnv env (conjunction possibleVars) True useMeasures
   let axioms = if useMeasures
       then instantiateConsAxioms env True Nothing (conjunction emb)
       else Set.empty
   noUnivs <- isNothing <$> asks _cegisDomain
-  let finalEmb = if noUnivs then Set.empty else Set.union emb axioms 
-  -- Only for logging:
-  let printFml = conjunction finalEmb |=>| fml
-  when shouldLog $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty printFml)
+  let (finalEmb, unknownEmb) = 
+        if noUnivs 
+          then (Set.empty, Set.empty)
+          else (Set.union emb axioms, allUnknowns env)
   let (finalEmb', unknownEmb') = case extra of 
         Nothing -> (finalEmb, unknownEmb)
         Just u@Unknown{} -> (finalEmb, Set.insert u unknownEmb)
         Just f -> (Set.insert f finalEmb, unknownEmb)
-  return $ RFormula finalEmb unknownEmb substs fml
+  -- Only for logging:
+  let printFml = conjunction finalEmb |=>| fml
+  when shouldLog $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty printFml)
+  return $ RFormula finalEmb' unknownEmb' substs fml
 
 -- Filter out irrelevant assumptions -- might be measures, and 
 --   any operation over a non-integer variable

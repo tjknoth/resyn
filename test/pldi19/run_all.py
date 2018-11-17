@@ -9,6 +9,7 @@ import difflib
 import pickle
 from subprocess import run, PIPE 
 from colorama import init, Fore, Back, Style
+from statistics import median
 
 # Globals
 if platform.system() in ['Linux', 'Darwin']:
@@ -202,6 +203,7 @@ class SynthesisResult:
         self.nres_code_size = '-' 
         self.nres_time = -3.0 
         self.eac_time = -3.0 
+        self.pct_slowdown = 0.0
         self.num_constraints = num_constraints
 
     def str(self):
@@ -311,6 +313,8 @@ def run_version(name, variant_id, variant_opts, logfile, with_res, results_file)
       lastLines = synthesis_res.stdout.split('\n')[-6:]
       solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)   
       results_file[name].nres_time = (end - start)
+      pct_slower = (end - start) / results_file[name].time
+      results_file[name].pct_slowdown = pct_slower
       without_res = synthesis_res.stdout.split('\n')[:-6]
       # Compare outputs to see if resources led to any optimization
       diff = difflib.unified_diff(with_res, str(without_res))
@@ -490,7 +494,7 @@ if __name__ == '__main__':
 
     # Run experiments
     groups = ALL_BENCHMARKS[:1] if cl_opts.small else ALL_BENCHMARKS
-        
+
     for group in groups:
         for b in group.benchmarks: 
             if b.name in results:
@@ -510,7 +514,9 @@ if __name__ == '__main__':
             with open(MICRO_DUMPFILE, 'wb') as data_dump:
                 pickle.dump(micro_results, data_dump)    
 
-            
+    med_slowdown = median([results[b.name].pct_slowdown for g in groups for b in g.benchmarks]) 
+    print('Median slowdown = ' + str(med_slowdown))
+
     # Generate CSV
     write_csv()            
     # Generate Latex table
