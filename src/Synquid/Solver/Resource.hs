@@ -94,11 +94,14 @@ applyAssumptions (RFormula known unknown substs fml) = do
   emb <- assignUnknowns unknown
   univs <- use universalFmls
   aDomain <- asks _cegisDomain
+  rms <- Map.keys <$> use resourceMeasures
   let useMeasures = maybe False shouldUseMeasures aDomain 
-  let emb' = Set.filter (isRelevantAssumption useMeasures univs) emb
+  let emb' = Set.filter (isRelevantAssumption useMeasures rms univs) emb
+  let known' = Set.filter (isRelevantAssumption useMeasures rms univs) known
   let finalFml = if isNothing aDomain 
       then fml
-      else (conjunction known |&| conjunction emb') |=>| fml
+      else (conjunction known' |&| conjunction emb') |=>| fml
+  writeLog 3 $ text "Assembled formula:" <+> pretty finalFml
   return $ RFormula Set.empty Set.empty substs finalFml 
 
 isTrivialTC (TaggedConstraint _ f) = isTrivial . rformula $ f
@@ -162,6 +165,7 @@ embedAndProcessConstraint shouldLog env c rfml extra = do
   let useMeasures = maybe False shouldUseMeasures aDomain 
   univs <- use universalFmls
   let possibleVars = varsOf fml
+  --traceM $ "POSSIBLE: " ++ show possibleVars
   emb <- Set.filter (not . isUnknownForm) <$> embedSynthesisEnv env (conjunction possibleVars) True useMeasures
   let axioms = if useMeasures
       then instantiateConsAxioms env True Nothing (conjunction emb)
@@ -182,16 +186,16 @@ embedAndProcessConstraint shouldLog env c rfml extra = do
 
 -- Filter out irrelevant assumptions -- might be measures, and 
 --   any operation over a non-integer variable
-isRelevantAssumption :: Bool -> Set Formula -> Formula -> Bool 
-isRelevantAssumption _ rvs v@Var{} = True --Set.member v rvs
-isRelevantAssumption useM _ Pred{} = useM 
-isRelevantAssumption _ _ Unknown{} = False -- TODO: fix once i start assuming unknowns
-isRelevantAssumption useM rvs (Unary _ f) = isRelevantAssumption useM rvs f
-isRelevantAssumption useM rvs (Binary _ f g) = isRelevantAssumption useM rvs f && isRelevantAssumption useM rvs g
-isRelevantAssumption useM rvs (Ite f g h) = isRelevantAssumption useM rvs f && isRelevantAssumption useM rvs g && isRelevantAssumption useM rvs h
-isRelevantAssumption useM _ Cons{} = useM
-isRelevantAssumption useM _ All{} = trace "Warning: universally quantified assumption" True
-isRelevantAssumption _ _ _ = True
+isRelevantAssumption :: Bool -> [String] -> Set Formula -> Formula -> Bool 
+isRelevantAssumption _ _ rvs v@Var{} = True --Set.member v rvs
+isRelevantAssumption useM rms _ (Pred _ x _) = useM && x `elem` rms
+isRelevantAssumption _ _ _ Unknown{} = False -- TODO: fix once i start assuming unknowns
+isRelevantAssumption useM rms rvs (Unary _ f) = isRelevantAssumption useM rms rvs f
+isRelevantAssumption useM rms rvs (Binary _ f g) = isRelevantAssumption useM rms rvs f && isRelevantAssumption useM rms rvs g
+isRelevantAssumption useM rms rvs (Ite f g h) = isRelevantAssumption useM rms rvs f && isRelevantAssumption useM rms rvs g && isRelevantAssumption useM rms rvs h
+isRelevantAssumption useM _ _ Cons{} = useM
+isRelevantAssumption useM rms rvs (All f g) = isRelevantAssumption useM rms rvs g -- trace "Warning: universally quantified assumption" True
+isRelevantAssumption _ _ _ _ = True
 
 -- | Check the satisfiability of the generated resource constraints, instantiating universally 
 --     quantified expressions as necessary.
@@ -232,12 +236,7 @@ satisfyResources env universals rfmls = do
       let ass = if useMeasures
           then conjunction $ map (|>=| fzero) (possibleMeasureApps env universals uMeasures)
           else ftrue
-      -- Gather data types and their constructors
-      let dts = filter (`notElem` setConstructors) $ concatMap _constructors 
-              $ Map.elems $ env^.datatypes
-      -- This is ugly currently: need to zip the names twice because of how the UF instances are designed
-      let cons = zip dts $ zip (repeat env) dts
-      let allUniversals = Universals universalsWithVars uMeasures cons
+      let allUniversals = Universals universalsWithVars uMeasures 
       writeLog 3 $ text "Solving resource constraint with CEGIS:" 
       writeLog 5 $ pretty $ conjunction $ map rformula rfmls
       writeLog 3 $ text "Over universally quantified expressions:" <+> hsep (map (pretty . snd) universalsWithVars)
@@ -310,7 +309,7 @@ partitionType :: Bool
               -> RType
               -> [Constraint]
 partitionType cm l env (x, t@(ScalarT b _ f)) (ScalarT bl _ fl) (ScalarT br _ fr)
-  = let env' = addVariable valueVarName t env
+  = let env' = {-addAssumption (Var (toSort b) valueVarName |=| Var (toSort b) x) $-} addVariable valueVarName t env
     in SharedForm env' f fl fr (x ++ " : " ++ l) : partitionBase cm l env (x, b) bl br
 
 partitionBase cm l env (x, DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _)

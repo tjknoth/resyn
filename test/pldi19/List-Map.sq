@@ -1,0 +1,11 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+  
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+	
+map :: f: (a -[1]-> b) -> xs: List {a| |1} -> {List b | len _v == len xs}
+map = ??
+

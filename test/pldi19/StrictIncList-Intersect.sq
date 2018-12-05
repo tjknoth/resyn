@@ -10,8 +10,7 @@ measure elems :: SList a -> Set a where
   Nil -> []
   Cons x xs -> [x] + elems xs
 
-member :: x: a -> xs: SList {1 ** a| |1} -> {Bool | _v == (x in elems xs)}
 lt :: x: a -> y: a -> {Bool | _v == (x < y)}
   
-intersect :: xs: SList a -> ys: SList a -> {SList a | elems _v == elems xs * elems ys}
+intersect :: xs: SList {a| |1} -> ys: SList {a| |1} -[1]-> {SList a | elems _v == elems xs * elems ys}
 intersect = ??

@@ -112,6 +112,7 @@ DIFF_TYPE  = '$\\forall\\alpha .\
                  {\\tsubset{\\tlist{\\alpha}}{\T{elems} \ \\nu = \T{elems} \ ys \\ \T{elems} \ zs}}}$'
 
 MICRO_BENCHMARKS = [    
+<<<<<<< local
     MBenchmark('List-Triple1', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$',1),
     MBenchmark('List-Triple2', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$',1),
     #MBenchmark('List-Intersect', 'common', INTERSECT_TYPE, '$<$, member', ['-f=AllArguments', '-a=2', '--backtrack'], '$\mid ys \mid + \mid zs \mid$', '$\mid ys \mid \mid zs \mid$', 1),
@@ -124,8 +125,41 @@ MICRO_BENCHMARKS = [
     #MBenchmark('List-LenCompareCT', 'CT compare', LEN_COMPARE_TYPE, 'true, false, and', ['-f=AllArguments', '-a=2', '--ct'], '$\mid ys \mid$', '$\mid ys \mid$'),
     #MBenchmark('List-LenCompare', 'compare', LEN_COMPARE_TYPE, 'true, false, and', ['-f=AllArguments', '-a=2'], '$\mid ys \mid$', '$\mid ys \mid$'),
     #MBenchmark('List-Replicate', 'replicate', REPLICATE_TYPE, 'zero, inc, dec', [], '$n$', '$n$',),
+||||||| base
+    MBenchmark('List-Triple1', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$'),
+    MBenchmark('List-Triple2', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$'),
+    MBenchmark('List-Intersect', 'common', INTERSECT_TYPE, '$<$, member', ['-f=AllArguments', '-a=2', '--backtrack'], '$\mid ys \mid + \mid zs \mid$', '$\mid ys \mid \mid zs \mid$', 1),
+    MBenchmark('List-Concat', 'concat list of lists', CONCAT_TYPE, 'append', [], '$\mid xxs \mid$', '$\mid xxs \mid^2$',1),
+    MBenchmark('List-Compress', 'compress', COMPRESS_TYPE, '$=$,$\\neq$', [], '$\mid xs \mid$', '$2^{ \mid xs \mid }$',1),
+    MBenchmark('List-Diff', 'list difference', DIFF_TYPE, 'member', ['-f=AllArguments', '-a=2', '--backtrack'], '$\mid ys \mid + \mid zs \mid$', '$\mid ys \mid \mid zs \mid$',1),
+    MBenchmark('List-Insert-Fine-Alt', 'insert', INSERT_FG_TYPE, '$<$', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$', 1),
+    MBenchmark('List-Insert', 'insert', INSERT_TYPE , '$<$', ['--backtrack'], '$\mid xs \mid$', '$\mid xs \mid$'),
+    MBenchmark('List-InsertCT', 'CT insert', INSERT_TYPE, '$<$', ['--ct', '--backtrack'], '$\mid xs \mid$', '$\mid xs \mid$'),
+    MBenchmark('List-LenCompareCT', 'CT compare', LEN_COMPARE_TYPE, 'true, false, and', ['-f=AllArguments', '-a=2', '--ct'], '$\mid ys \mid$', '$\mid ys \mid$'),
+    MBenchmark('List-LenCompare', 'compare', LEN_COMPARE_TYPE, 'true, false, and', ['-f=AllArguments', '-a=2'], '$\mid ys \mid$', '$\mid ys \mid$'),
+    MBenchmark('List-Replicate', 'replicate', REPLICATE_TYPE, 'zero, inc, dec', [], '$n$', '$n$',),
+=======
+    MBenchmark('List-Triple1', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$', 1),
+    MBenchmark('List-Triple2', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$', 1),
+    MBenchmark('List-Concat', 'concat list of lists', CONCAT_TYPE, 'append', [], '$\mid xxs \mid$', '$\mid xxs \mid^2$',1),
+    MBenchmark('List-Compress', 'compress', COMPRESS_TYPE, '$=$,$\\neq$', [], '$\mid xs \mid$', '$2^{ \mid xs \mid }$',1),
+    MBenchmark('List-Intersect', 'common', INTERSECT_TYPE, '$<$, member', ['-f=AllArguments', '-a=2', '--backtrack'], '$\mid ys \mid + \mid zs \mid$', '$\mid ys \mid \mid zs \mid$', 1),
+    MBenchmark('List-Diff', 'list difference', DIFF_TYPE, '$<$, member', ['-f=AllArguments', '-a=2', '--backtrack'], '$\mid ys \mid + \mid zs \mid$', '$\mid ys \mid \mid zs \mid$',1),
+    MBenchmark('List-Insert-Fine-Alt', 'insert', INSERT_FG_TYPE, '$<$', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$'),
+    MBenchmark('List-Insert', 'insert', INSERT_TYPE , '$<$', ['--backtrack'], '$\mid xs \mid$', '$\mid xs \mid$'),
+    MBenchmark('List-Replicate', 'replicate', REPLICATE_TYPE, 'zero, inc, dec', [], '$n$', '$n$',),
+    MBenchmark('List-Range', 'range', RANGE_TYPE, 'inc,dec,$\geq$', ['-f=Nonterminating'], '$hi - lo$', '-'),
+    MBenchmark('List-InsertCT', 'CT insert', INSERT_TYPE, '$<$', ['--ct', '--backtrack'], '$\mid xs \mid$', '$\mid xs \mid$'),
+    MBenchmark('List-LenCompareCT', 'CT compare', LEN_COMPARE_TYPE, 'true, false, and', ['-f=AllArguments', '-a=2', '--ct'], '$\mid ys \mid$', '$\mid ys \mid$'),
+    MBenchmark('List-LenCompare', 'compare', LEN_COMPARE_TYPE, 'true, false, and', ['-f=AllArguments', '-a=2'], '$\mid ys \mid$', '$\mid ys \mid$'),
+>>>>>>> other
     #MBenchmark('List-Union', 'union', ''),
+<<<<<<< local
     #MBenchmark('List-Range', 'range', RANGE_TYPE, 'inc,dec,$\geq$', ['-f=Nonterminating'], '$hi - lo$', '-'),
+||||||| base
+    MBenchmark('List-Range', 'range', RANGE_TYPE, 'inc,dec,$\geq$', ['-f=Nonterminating'], '$hi - lo$', '-'),
+=======
+>>>>>>> other
     #MBenchmark('List-Pairs', 'ordered pairs', 'append, attach' ),
 ]
 
@@ -136,24 +170,36 @@ ALL_BENCHMARKS = [
         Benchmark('List-Stutter', 'duplicate each element'),
         Benchmark('List-Replicate', 'replicate', '0, inc, dec, $\\leq$, $\\neq$'),
         Benchmark('List-Append', 'append two lists', ''),
-        MBenchmark('List-Append3', 'append 3 lists', 'append'),
-        Benchmark('List-Concat', 'concatenate list of lists', 'append'),
         Benchmark('List-Take', 'take first $n$ elements', '0, inc, dec, $\\leq$, $\\neq$'),
         Benchmark('List-Drop', 'drop first $n$ elements', '0, inc, dec, $\\leq$, $\\neq$'),
+        Benchmark('List-Concat', 'concat list of lists', 'append'),
         Benchmark('List-Delete', 'delete value', '$=$, $\\neq$'),
         Benchmark('List-Zip', 'zip'),
+<<<<<<< local
         #Benchmark('List-ZipWith', 'zip with function'),
         #Benchmark('List-Foldr', 'foldr'),
         #Benchmark('List-ElemIndex', 'index of element', '0, inc, dec, $=$, $\\neq$'),
+||||||| base
+=======
+        #Benchmark('List-ZipWith', 'zip with'),
+>>>>>>> other
         Benchmark('List-Ith', '$i$-th element', '0, inc, dec, $\\leq$, $\\neq$'),
         Benchmark('List-ElemIndex', 'index of element', '0, inc, dec, $=$, $\\neq$'),
         Benchmark('List-Snoc', 'insert at end'),
         Benchmark('List-Split', 'balanced split', '', ['-m=3']),
         Benchmark('List-Reverse', 'reverse', 'insert at end'),
         Benchmark('IncList-Insert', 'insert (sorted)', '$\\leq$, $\\neq$'),
-        Benchmark('List-Intersect', 'intersection', '$<$, member', ['--backtrack', '-f=AllArguments', '-a=2']),
         Benchmark('List-ExtractMin', 'extract minimum', '$\\leq$, $\\neq$', ['-a=2', '-m=3']),
+<<<<<<< local
         #Benchmark('List-Range', 'range', 'inc,dec,$\geq$'),
+||||||| base
+        Benchmark('List-Range', 'range', 'inc,dec,$\geq$'),
+=======
+        Benchmark('List-Range', 'range', 'inc,dec,$\geq$'),
+        #Benchmark('List-Foldr', 'foldr'),
+        #Benchmark('List-Map', 'map'),
+        Benchmark('List-Split', 'split list', '', ['-m=3'])
+>>>>>>> other
         # Try it by hand!
         #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member', ['-f=AllArguments', '-m=3'])
         ]),
@@ -171,14 +217,13 @@ ALL_BENCHMARKS = [
         Benchmark('StrictIncList-Delete', 'delete', '$<$'),
         #Benchmark('List-Diff', 'difference', 'member, $<$', ['--backtrack', '-f=AllArguments', '-a=2']),
         #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member',['-f=AllArguments','--backtrack','-m=3'])
-        #Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments', '--backtrack']),
+        Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments']),
         ]),
     BenchmarkGroup("Tree",  [], [
         Benchmark('Tree-Count', 'node count', '0, 1, +'),
         Benchmark('Tree-Flatten', 'preorder', 'append'),
         Benchmark('Tree-ToList', 'to list'),
         Benchmark('Tree-Elem', 'member', '', ['--multiplicities=false'] ),
-        Benchmark('Tree-Count', 'size')
         ]),
     BenchmarkGroup("BST", [], [
         Benchmark('BST-Member', 'member', 'true, false, $\\leq$, $\\neq$'),

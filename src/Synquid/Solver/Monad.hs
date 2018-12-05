@@ -64,7 +64,8 @@ data Z3Data = Z3Data {
   _controlLiterals :: Bimap Formula Z3.AST,   -- ^ Control literals for computing UNSAT cores
   _auxEnv :: Z3Env,                           -- ^ Z3 environment for the auxiliary solver
   _boolSortAux :: Maybe Z3.Sort,              -- ^ Boolean sort in the auxiliary solver
-  _controlLiteralsAux :: Bimap Formula Z3.AST -- ^ Control literals for computing UNSAT cores in the auxiliary solver
+  _controlLiteralsAux :: Bimap Formula Z3.AST,-- ^ Control literals for computing UNSAT cores in the auxiliary solver
+  _resEnv :: Z3Env 
 }
 
 makeLenses ''Z3Data

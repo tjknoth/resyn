@@ -59,7 +59,7 @@ embedding env vars includeQuantified substituteValueVars = do
                 Nothing -> addBindings env tass pass qmap fmls rest -- Variable not found (useful to ignore value variables)
                 Just (Monotype t) -> case typeSubstitute tass t of
                   ScalarT baseT fml pot ->
-                    let fml' = if substituteValueVars then substitute (Map.singleton valueVarName (Var IntS x)) fml else fml
+                    let fml' = fml --if substituteValueVars then substitute (Map.singleton valueVarName (Var IntS x)) fml else fml
                         fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x)) . substitutePredicate pass)
                                           (fml' : allMeasurePostconditions includeQuantified baseT env) 
                         newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls' in 
@@ -212,8 +212,8 @@ isResourceVariable env tstate (Just adomain) x t =
   in 
     not isUnresolved && case adomain of 
       Variable -> isInt t
-      Measure  -> Set.member x resourceCArgs 
-      Both     -> isInt t || Set.member x resourceCArgs
+      Measure  -> error "measures not supported" -- Set.member x resourceCArgs 
+      Both     -> error "measures not supported" -- isInt t || Set.member x resourceCArgs
 
 
 -- | Signal type error
