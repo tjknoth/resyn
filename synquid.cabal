@@ -49,6 +49,7 @@ executable synquid
                     , tuple >= 0.3
                     , keys >= 3.11
                     , extra >= 1.4
+                    , bifunctors >= 5.0
 
   ghc-options: -O2 
 

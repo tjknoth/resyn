@@ -245,7 +245,7 @@ instance Pretty QMap where
 
 {- Types -}
 
-prettyBase :: Pretty r => (TypeSkeleton r -> Doc) -> BaseType r -> Doc
+prettyBase :: (Pretty r, Pretty p) => (TypeSkeleton r p -> Doc) -> BaseType r p -> Doc
 prettyBase prettyType base = case base of
   IntT -> text "Int"
   BoolT -> text "Bool"
@@ -255,15 +255,13 @@ prettyBase prettyType base = case base of
       subs = if Map.null s 
                then empty 
                else hMapDoc pretty pretty s
-      mult = case m of 
-        (IntLit 1) -> empty
-        m'         -> pretty m' <> operator "**"
+      mult = pretty m <> operator "**"
   DatatypeT name tArgs pArgs -> text name <+> hsep (map prettyType tArgs) <+> hsep (map (hlAngles . pretty) pArgs)
 
-instance Pretty (BaseType ()) where
+instance (Pretty p, Pretty (TypeSkeleton () p)) => Pretty (BaseType () p) where
   pretty = prettyBase (hlParens . pretty)
 
-instance Pretty (BaseType Formula) where
+instance Pretty RBase where
   pretty = prettyBase (prettyTypeAt 1)
 
 prettySType :: SType -> Doc
@@ -306,7 +304,7 @@ instance Pretty RType where
   pretty = prettyType
 
 
-prettySchema :: Pretty (TypeSkeleton r) => SchemaSkeleton r -> Doc
+prettySchema :: Pretty (TypeSkeleton r p) => SchemaSkeleton (TypeSkeleton r p) -> Doc
 prettySchema sch = case sch of
   Monotype t -> pretty t
   ForallT a sch' -> hlAngles (text a) <+> operator "." <+> prettySchema sch'
@@ -384,7 +382,7 @@ prettyBindings env = commaSep (map pretty (Map.keys $ removeDomain (env ^. const
 prettyScalarTypes syms = hcat $ punctuate comma (prettyst <$> Map.assocs scalars)
   where
     scalars = fromMaybe Map.empty $ Map.lookup 0 syms
-    prettyst (x, t) = pretty x <+> operator ":" <+> pretty ((topPotentialOf . typeFromSchema) t)
+    prettyst (x, t) = pretty x <+> operator ":" <+> pretty ((topPotentialOf . toMonotype) t)
 prettyScalars env = hsep $ pretty <$> Map.keys scalars
   where 
     scalars = fromMaybe Map.empty $ Map.lookup 0 $ env ^. symbols
@@ -562,4 +560,7 @@ lfill w d        = case renderCompact d of
 -- Helper for printing conjunctions line-by-line for readability
 prettyConjuncts :: [TaggedConstraint] -> Doc
 prettyConjuncts fmls = vsep $ fmap printWithTag fmls
-  where printWithTag (TaggedConstraint t f) = simpleFmlDoc (rformula f) <+> text "   src:" <+> text t
+  where 
+    ass f = conjunction $ Set.union (knownAssumptions f) (unknownAssumptions f)
+    printWithTag (TaggedConstraint t f) = 
+      simpleFmlDoc (ass f) <+> operator "=>" <+> simpleFmlDoc (rformula f) 

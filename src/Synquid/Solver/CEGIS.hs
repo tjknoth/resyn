@@ -85,11 +85,11 @@ instance UF (Environment, String) where
   argSorts (env, dt) = 
     case Map.lookup dt (allSymbols env) of 
       Nothing -> error $ "argSorts: constructor " ++ dt ++ " not found"
-      Just cons -> allArgSorts $ typeFromSchema cons
+      Just cons -> allArgSorts $ toMonotype cons
   resSort (env, dt) = 
     case Map.lookup dt (allSymbols env) of 
       Nothing -> error $ "resSort: constructor " ++ dt ++ " not found"
-      Just cons -> resultSort $ typeFromSchema cons
+      Just cons -> resultSort $ toMonotype cons
 
 instance Declarable MeasureDef where 
   declare _ = Z3.function

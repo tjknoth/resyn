@@ -122,10 +122,7 @@ generateFormula' shouldLog checkMults c =
       -- Start without assumptions, known or unknown
       mkRForm = RFormula Set.empty Set.empty in
   case c of 
-    Subtype env tl tr variant label -> do
-      op <- subtypeOp
-      let fmls = mkRForm Map.empty $ assemble (directSubtypes checkMults op tl tr)
-      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls Nothing
+    Subtype{} -> error $ show $ text "generateFormula: subtype constraint present:" <+> pretty c
     RSubtype env pl pr label -> do 
       op <- subtypeOp 
       let fml = mkRForm Map.empty $ pl `op` pr
@@ -180,7 +177,7 @@ embedAndProcessConstraint shouldLog env c rfml extra = do
         Just f -> (Set.insert f finalEmb, unknownEmb)
   -- Only for logging:
   let printFml = conjunction finalEmb |=>| fml
-  when shouldLog $ writeLog 3 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty printFml)
+  when shouldLog $ writeLog 5 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty printFml)
   return $ RFormula finalEmb' unknownEmb' substs fml
 
 -- Filter out irrelevant assumptions -- might be measures, and 
@@ -256,7 +253,7 @@ adjustSorts (Var _ x) = Var IntS x
 adjustSorts (Binary op f g) = Binary op (adjustSorts f) (adjustSorts g)
 adjustSorts (Unary op f) = Unary op (adjustSorts f)
 
-allRMeasures sch = allRMeasures' (typeFromSchema sch) 
+allRMeasures sch = allRMeasures' (toMonotype sch) 
 
 allRMeasures' :: RType -> Map String MeasureDef -> Map String MeasureDef
 allRMeasures' typ measures = 
@@ -273,7 +270,7 @@ redistribute envIn envOut = do
   let fpIn  = _freePotential envIn 
   let fpOut = _freePotential envOut 
   -- All (non-ghost) scalar types 
-  let scalarsOf env = typeFromSchema <$> nonGhostScalars env
+  let scalarsOf env = toMonotype <$> nonGhostScalars env
   -- All top-level potential annotations of a map of scalar types
   let topPotentials = Map.mapMaybe topPotentialOf
   -- Generate pending substitutions 
@@ -327,33 +324,11 @@ assertZeroPotential :: Monad s
                     => Environment 
                     -> TCSolver s (PendingRSubst, Formula) 
 assertZeroPotential env = do 
-  let scalars = typeFromSchema <$> nonGhostScalars env 
+  let scalars = toMonotype <$> nonGhostScalars env 
   let topPotentials = Map.mapMaybe topPotentialOf
   let substitutions = Map.foldlWithKey generateSubst Map.empty scalars
   let fml = ((env ^. freePotential) |+| sumFormulas (topPotentials scalars)) |=| fzero
   return (substitutions, fml)
-
--- | 'directSubtypes' @env tl tr@ : Generate the set of all formulas in types @tl@ and @tr@, zipped by a binary operation @op@ on formulas 
-directSubtypes :: Bool 
-               -> (Formula -> Formula -> Formula) 
-               -> RType 
-               -> RType 
-               -> [Formula]
-directSubtypes cm op (ScalarT bl _ fl) (ScalarT br _ fr) = 
-  {-(fl `op` fr) :-} directSubtypesBase cm op bl br
-directSubtypes _ _ _ _ = [] 
-
-directSubtypesBase :: Bool 
-                  -> (Formula -> Formula -> Formula) 
-                  -> BaseType Formula 
-                  -> BaseType Formula 
-                  -> [Formula]
-directSubtypesBase cm op (DatatypeT _ tsl _) (DatatypeT _ tsr _) 
-  = concat $ zipWith (directSubtypes cm op) tsl tsr
-directSubtypesBase cm op (TypeVarT _ _ ml) (TypeVarT _ _ mr)     
-  = [fml | cm && not (isTrivial fml)] 
-    where fml = ml `op` mr
-directSubtypesBase _ _ _ _ = []
 
 totalTopLevelPotential :: RType -> Formula
 totalTopLevelPotential (ScalarT base _ p) = p 
@@ -378,10 +353,10 @@ refinementOf _                 = error "error: Encountered non-scalar type when 
 -- | 'allUniversals' @env sch@ : set of all universally quantified resource formulas in the potential
 --    annotations of the type @sch@
 allUniversals :: Environment -> RSchema -> Set Formula
-allUniversals env sch = getUniversals univSyms $ conjunction $ allRFormulas True $ typeFromSchema sch 
+allUniversals env sch = getUniversals univSyms $ conjunction $ allRFormulas True $ toMonotype sch 
   where
     -- Include function argument variable names in set of possible universally quantified expressions
-    univSyms = varsOfType (typeFromSchema sch) `Set.union` universalSyms env
+    univSyms = varsOfType (toMonotype sch) `Set.union` universalSyms env
     varsOfType ScalarT{}                 = Set.empty
     varsOfType (FunctionT x argT resT _) = Set.insert x (varsOfType argT `Set.union` varsOfType resT)
 
@@ -410,7 +385,7 @@ isInteresting (BoolLit True)           = False
 isInteresting (Binary And f g)         = isInteresting f || isInteresting g 
 isInteresting _                        = True
 
-getAnnotationStyle sch = getAnnotationStyle' $ typeFromSchema sch
+getAnnotationStyle sch = getAnnotationStyle' $ toMonotype sch
 
 getAnnotationStyle' t = 
   let rforms = conjunction $ allRFormulas True t

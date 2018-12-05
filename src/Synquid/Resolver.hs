@@ -210,7 +210,7 @@ resolveSignatures (DataDecl dtName tParams pParams ctors) = mapM_ resolveConstru
       if shape nominalType == shape returnType
         then do
           let nominalSort = toSort $ baseTypeOf nominalType
-          let sch'' = addRefinementToLastSch sch' (Var nominalSort valueVarName |=| Cons nominalSort name (allArgs (toMonotype sch')))
+          let sch'' = addRefinementToLastSch (Var nominalSort valueVarName |=| Cons nominalSort name (allArgs (toMonotype sch'))) sch'
           environment %= addPolyConstant name sch''
         else throwResError (commaSep [text "Constructor" <+> text name <+> text "must return type" <+> pretty nominalType, text "got" <+> pretty returnType])
 resolveSignatures (MeasureDecl measureName _ _ post defCases args _) = do
@@ -382,7 +382,7 @@ resolveType (FunctionT x tArg tRes c)
 resolveType AnyT = return AnyT
 
 
-resolveBaseType :: BaseType Formula -> Resolver (BaseType Formula)
+resolveBaseType :: RBase -> Resolver (RBase)
 resolveBaseType (TypeVarT subs name mult) = do
   mult' <- resolveTypePotential (VarS name) mult
   return $ TypeVarT subs name mult'

@@ -112,20 +112,20 @@ DIFF_TYPE  = '$\\forall\\alpha .\
                  {\\tsubset{\\tlist{\\alpha}}{\T{elems} \ \\nu = \T{elems} \ ys \\ \T{elems} \ zs}}}$'
 
 MICRO_BENCHMARKS = [    
-    MBenchmark('List-Triple1', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$'),
-    MBenchmark('List-Triple2', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$'),
-    MBenchmark('List-Intersect', 'common', INTERSECT_TYPE, '$<$, member', ['-f=AllArguments', '-a=2', '--backtrack'], '$\mid ys \mid + \mid zs \mid$', '$\mid ys \mid \mid zs \mid$', 1),
-    MBenchmark('List-Concat', 'concat list of lists', CONCAT_TYPE, 'append', [], '$\mid xxs \mid$', '$\mid xxs \mid^2$',1),
-    MBenchmark('List-Compress', 'compress', COMPRESS_TYPE, '$=$,$\\neq$', [], '$\mid xs \mid$', '$2^{ \mid xs \mid }$',1),
-    MBenchmark('List-Diff', 'list difference', DIFF_TYPE, 'member', ['-f=AllArguments', '-a=2', '--backtrack'], '$\mid ys \mid + \mid zs \mid$', '$\mid ys \mid \mid zs \mid$',1),
-    MBenchmark('List-Insert-Fine-Alt', 'insert', INSERT_FG_TYPE, '$<$', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$', 1),
-    MBenchmark('List-Insert', 'insert', INSERT_TYPE , '$<$', ['--backtrack'], '$\mid xs \mid$', '$\mid xs \mid$'),
-    MBenchmark('List-InsertCT', 'CT insert', INSERT_TYPE, '$<$', ['--ct', '--backtrack'], '$\mid xs \mid$', '$\mid xs \mid$'),
-    MBenchmark('List-LenCompareCT', 'CT compare', LEN_COMPARE_TYPE, 'true, false, and', ['-f=AllArguments', '-a=2', '--ct'], '$\mid ys \mid$', '$\mid ys \mid$'),
-    MBenchmark('List-LenCompare', 'compare', LEN_COMPARE_TYPE, 'true, false, and', ['-f=AllArguments', '-a=2'], '$\mid ys \mid$', '$\mid ys \mid$'),
-    MBenchmark('List-Replicate', 'replicate', REPLICATE_TYPE, 'zero, inc, dec', [], '$n$', '$n$',),
+    MBenchmark('List-Triple1', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$',1),
+    MBenchmark('List-Triple2', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$',1),
+    #MBenchmark('List-Intersect', 'common', INTERSECT_TYPE, '$<$, member', ['-f=AllArguments', '-a=2', '--backtrack'], '$\mid ys \mid + \mid zs \mid$', '$\mid ys \mid \mid zs \mid$', 1),
+    #MBenchmark('List-Concat', 'concat list of lists', CONCAT_TYPE, 'append', [], '$\mid xxs \mid$', '$\mid xxs \mid^2$',1),
+    #MBenchmark('List-Compress', 'compress', COMPRESS_TYPE, '$=$,$\\neq$', [], '$\mid xs \mid$', '$2^{ \mid xs \mid }$',1),
+    #MBenchmark('List-Diff', 'list difference', DIFF_TYPE, 'member', ['-f=AllArguments', '-a=2', '--backtrack'], '$\mid ys \mid + \mid zs \mid$', '$\mid ys \mid \mid zs \mid$',1),
+    #MBenchmark('List-Insert-Fine-Alt', 'insert', INSERT_FG_TYPE, '$<$', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$', 1),
+    #MBenchmark('List-Insert', 'insert', INSERT_TYPE , '$<$', ['--backtrack'], '$\mid xs \mid$', '$\mid xs \mid$'),
+    #MBenchmark('List-InsertCT', 'CT insert', INSERT_TYPE, '$<$', ['--ct', '--backtrack'], '$\mid xs \mid$', '$\mid xs \mid$'),
+    #MBenchmark('List-LenCompareCT', 'CT compare', LEN_COMPARE_TYPE, 'true, false, and', ['-f=AllArguments', '-a=2', '--ct'], '$\mid ys \mid$', '$\mid ys \mid$'),
+    #MBenchmark('List-LenCompare', 'compare', LEN_COMPARE_TYPE, 'true, false, and', ['-f=AllArguments', '-a=2'], '$\mid ys \mid$', '$\mid ys \mid$'),
+    #MBenchmark('List-Replicate', 'replicate', REPLICATE_TYPE, 'zero, inc, dec', [], '$n$', '$n$',),
     #MBenchmark('List-Union', 'union', ''),
-    MBenchmark('List-Range', 'range', RANGE_TYPE, 'inc,dec,$\geq$', ['-f=Nonterminating'], '$hi - lo$', '-'),
+    #MBenchmark('List-Range', 'range', RANGE_TYPE, 'inc,dec,$\geq$', ['-f=Nonterminating'], '$hi - lo$', '-'),
     #MBenchmark('List-Pairs', 'ordered pairs', 'append, attach' ),
 ]
 
@@ -142,21 +142,25 @@ ALL_BENCHMARKS = [
         Benchmark('List-Drop', 'drop first $n$ elements', '0, inc, dec, $\\leq$, $\\neq$'),
         Benchmark('List-Delete', 'delete value', '$=$, $\\neq$'),
         Benchmark('List-Zip', 'zip'),
+        #Benchmark('List-ZipWith', 'zip with function'),
+        #Benchmark('List-Foldr', 'foldr'),
+        #Benchmark('List-ElemIndex', 'index of element', '0, inc, dec, $=$, $\\neq$'),
         Benchmark('List-Ith', '$i$-th element', '0, inc, dec, $\\leq$, $\\neq$'),
         Benchmark('List-ElemIndex', 'index of element', '0, inc, dec, $=$, $\\neq$'),
         Benchmark('List-Snoc', 'insert at end'),
+        Benchmark('List-Split', 'balanced split', '', ['-m=3']),
         Benchmark('List-Reverse', 'reverse', 'insert at end'),
         Benchmark('IncList-Insert', 'insert (sorted)', '$\\leq$, $\\neq$'),
         Benchmark('List-Intersect', 'intersection', '$<$, member', ['--backtrack', '-f=AllArguments', '-a=2']),
         Benchmark('List-ExtractMin', 'extract minimum', '$\\leq$, $\\neq$', ['-a=2', '-m=3']),
-        Benchmark('List-Range', 'range', 'inc,dec,$\geq$'),
+        #Benchmark('List-Range', 'range', 'inc,dec,$\geq$'),
         # Try it by hand!
         #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member', ['-f=AllArguments', '-m=3'])
         ]),
     BenchmarkGroup("Unique list", [], [
         Benchmark('UniqueList-Insert', 'insert', '$=$, $\\neq$'),
         Benchmark('UniqueList-Delete', 'delete', '$=$, $\\neq$'),
-        Benchmark('List-Nub', 'remove duplicates', 'member', []),
+        #Benchmark('List-Nub', 'remove duplicates', 'member', []),
         Benchmark('List-Compress', 'remove adjacent dupl.', '$=$, $\\neq$', np = 3),
         Benchmark('UniqueList-Range', 'integer range', '0, inc, dec, $\\leq$, $\\neq$'),
         Benchmark('List-Partition', 'partition', '$\\leq$'),
@@ -165,7 +169,7 @@ ALL_BENCHMARKS = [
     BenchmarkGroup("Sorted list", ['-f=AllArguments'], [
         Benchmark('StrictIncList-Insert', 'insert', '$<$'),
         Benchmark('StrictIncList-Delete', 'delete', '$<$'),
-        Benchmark('List-Diff', 'difference', 'member, $<$', ['--backtrack', '-f=AllArguments', '-a=2']),
+        #Benchmark('List-Diff', 'difference', 'member, $<$', ['--backtrack', '-f=AllArguments', '-a=2']),
         #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member',['-f=AllArguments','--backtrack','-m=3'])
         #Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments', '--backtrack']),
         ]),
@@ -313,7 +317,7 @@ def run_version(name, variant_id, variant_opts, logfile, with_res, results_file)
       lastLines = synthesis_res.stdout.split('\n')[-6:]
       solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)   
       results_file[name].nres_time = (end - start)
-      pct_slower = (end - start) / results_file[name].time
+      pct_slower = results_file[name].time / (end - start)
       results_file[name].pct_slowdown = pct_slower
       without_res = synthesis_res.stdout.split('\n')[:-6]
       # Compare outputs to see if resources led to any optimization
@@ -396,11 +400,12 @@ def write_micro_latex():
     to_nres = 0
 
     with open(MICRO_LATEX_FILE, 'w') as outfile:
+        rownum = 1
         for b in MICRO_BENCHMARKS:
             result = micro_results [b.name]                
             optstr = 'Yes' if result.optimized else '-'
-            row = \
-                b.description +\
+            row = str(rownum) +\
+                ' & ' + b.description +\
                 ' & ' + b.signature + \
                 ' & ' + str(b.components) + \
                 ' & ' + format_time(result.time) + \
@@ -415,6 +420,7 @@ def write_micro_latex():
                 #' & ' + optstr + ' \\\\'
             outfile.write (row)
             outfile.write ('\n')
+            rownum = rownum + 1
             
             total_count = total_count + 1
             
@@ -543,4 +549,4 @@ if __name__ == '__main__':
 
     # Copy results to paper directory
     shutil.copy('./' + LATEX_FILE, PAPER_PATH + LATEX_FILE)
-    shutil.copy('./' + MICRO_LATEX_FILE, PAPER_PATH + MICRO_LATEX_FILE)
+    #shutil.copy('./' + MICRO_LATEX_FILE, PAPER_PATH + MICRO_LATEX_FILE)

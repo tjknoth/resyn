@@ -229,7 +229,7 @@ generateAuxGoals = do
                       Just f -> Program f (typeOf p)
     etaContract' [] (PFix _ p)                                               = etaContract' [] (content p)
     etaContract' binders (PFun x p)                                          = etaContract' (x:binders) (content p)
-    etaContract' (x:binders) (PApp pFun (Program (PSymbol y) _)) | x == y    =  etaContract' binders (content pFun)
+    etaContract' (x:binders) (PApp pFun (Program (PSymbol y) _)) | x == y    = etaContract' binders (content pFun)
     etaContract' [] f@(PSymbol _)                                            = Just f
     etaContract' binders p                                                   = Nothing
 
@@ -247,11 +247,11 @@ checkResourceVar env x t = do
 
 makeResourceVar :: Monad s  
                 => Environment 
-                -> Maybe (BaseType Formula) 
+                -> Maybe (RBase) 
                 -> String 
                 -> Explorer s (String, [Formula])
 makeResourceVar env vvtype name = do
-  let universalsInScope = typeFromSchema <$> TCSolver.nonGhostScalars env --symbolsOfArity 0 env
+  let universalsInScope = toMonotype <$> TCSolver.nonGhostScalars env --symbolsOfArity 0 env
   let mkUFml (x, t) = do
         isRV <- checkResourceVar env x t
         return $ if isRV 
@@ -265,14 +265,14 @@ makeResourceVar env vvtype name = do
 insertRVar (name, info) = Map.insert name info
 
 -- Variable formula with fresh variable idfreshPot :: MonadHorn s => Explorer s Potential 
-freshPot :: MonadHorn s => Environment -> Maybe (BaseType Formula) -> Explorer s Formula
+freshPot :: MonadHorn s => Environment -> Maybe (RBase) -> Explorer s Formula
 freshPot env vtype = do 
   x <- freshId potentialPrefix
   rvar <- makeResourceVar env vtype x
   (typingState . resourceVars) %= insertRVar rvar
   return $ Var IntS x
 
-freshMul :: MonadHorn s => Environment -> Maybe (BaseType Formula)-> Explorer s Formula
+freshMul :: MonadHorn s => Environment -> Maybe (RBase)-> Explorer s Formula
 freshMul env vtype = do
   x <- freshId multiplicityPrefix
   rvar <- makeResourceVar env vtype x
@@ -288,15 +288,12 @@ freshFreePotential env = do
 
 -- | 'freshPotentials' @sch r@ : Replace potentials in schema @sch@ by unwrapping the foralls. If @r@, recursively replace potential annotations in the entire type. Otherwise, just replace top-level annotations.
 freshPotentials :: MonadHorn s => Environment -> RSchema -> Bool -> Explorer s RSchema
-freshPotentials env (Monotype t) isTransfer = do 
-  t' <- freshPotentials' env t isTransfer
-  return $ Monotype t'
-freshPotentials env (ForallT x t) isTransfer = do 
-  t' <- freshPotentials env t isTransfer
-  return $ ForallT x t'
-freshPotentials env (ForallP x t) isTransfer = do
-  t' <- freshPotentials env t isTransfer
-  return $ ForallP x t'
+freshPotentials env (Monotype t) isTransfer = 
+  Monotype <$> freshPotentials' env t isTransfer
+freshPotentials env (ForallT x t) isTransfer = 
+  ForallT x <$> freshPotentials env t isTransfer
+freshPotentials env (ForallP x t) isTransfer = 
+  ForallP x <$> freshPotentials env t isTransfer
 
 -- Replace potentials in a TypeSkeleton
 freshPotentials' :: MonadHorn s => Environment -> RType -> Bool -> Explorer s RType
@@ -312,7 +309,7 @@ freshPotentials' env (ScalarT base fml pot) isTransfer = do
 freshPotentials' _ t _ = return t
 
 -- Replace potentials in a BaseType
-freshMultiplicities :: MonadHorn s => Environment -> BaseType Formula -> Bool -> Explorer s (BaseType Formula)
+freshMultiplicities :: MonadHorn s => Environment -> RBase -> Bool -> Explorer s (RBase)
 freshMultiplicities env b@(TypeVarT s x m) _ = do 
   m' <- freshMul env Nothing
   return $ TypeVarT s x m'
@@ -409,7 +406,7 @@ transferFreePotential :: (MonadHorn s, MonadSMT s)
                       -> Explorer s Formula
 transferFreePotential env = do 
   let scalars = Map.elems $ TCSolver.nonGhostScalars env 
-  let conds = mapMaybe (getConditional . typeFromSchema) scalars
+  let conds = mapMaybe (getConditional . toMonotype) scalars
   case conds of 
     [] -> freshFreePotential env
     Ite g _ _ : _ -> do 

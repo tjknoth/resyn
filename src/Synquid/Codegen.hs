@@ -108,7 +108,7 @@ symbolRenames = Map.fromList [("!=", "/=")]
 instance AsHaskell (Id, DatatypeDef) where
   toHs env nameDef = HE $ toHsDecl env nameDef
 
-instance AsHaskell (Id, SchemaSkeleton r) where
+instance AsHaskellType t => AsHaskell (Id, SchemaSkeleton t) where
   toHs env nameType = HE $ toHsDecl env nameType
 
 instance AsHaskell (Program r) where
@@ -148,7 +148,7 @@ instance AsHaskellDecl Goal where
     [Ident name]
     (toHsQualType env spec)
 
-instance AsHaskellDecl (Id, SchemaSkeleton r) where
+instance AsHaskellType t => AsHaskellDecl (Id, SchemaSkeleton t) where
   toHsDecl env (name, typ) = TypeSig unknownLoc
     [Ident name]
     (toHsQualType env typ)
@@ -162,7 +162,7 @@ instance AsHaskellDecl Id where
 instance AsHaskellDecl AsHaskellDeclElement where
   toHsDecl env (AHDE e) = toHsDecl env e
 
-instance AsHaskellType (SchemaSkeleton r) where
+instance AsHaskellType t => AsHaskellType (SchemaSkeleton t) where
   toHsType env (ForallT tArg typ) = toHsType env typ
   toHsType env (ForallP pArg typ) = toHsType env typ
   toHsType env (Monotype skel) = toHsType env skel
@@ -170,13 +170,13 @@ instance AsHaskellType (SchemaSkeleton r) where
     qualifyByDefault tArg $ toHsQualType env typ
   toHsQualType env typ = {- HsQualType [] $ -} toHsType env typ
 
-instance AsHaskellType (TypeSkeleton r) where
+instance AsHaskellType (TypeSkeleton r p) where
   toHsType env (ScalarT base _ _) = toHsType env base
   toHsType env (FunctionT _ argType resultType _) =
     TyFun (toHsType env argType) (toHsType env resultType)
   toHsType env AnyT = TyCon $ UnQual $ Ident "Any"
 
-instance AsHaskellType (BaseType r) where
+instance AsHaskellType (BaseType r p) where
   toHsType env BoolT = TyCon $ UnQual $ Ident "Bool"
   toHsType env IntT = TyCon $ UnQual $ Ident "Int"
   toHsType env (DatatypeT name tArgs pArgs) =

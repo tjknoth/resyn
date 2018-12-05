@@ -251,7 +251,7 @@ simplifyConstraint' tass _ (WellFormed env tv@(ScalarT (TypeVarT _ a _) _ _) l)
 
 -- Substitute all scalars in environment  
 simplifyConstraint' tass _ (SharedEnv env envl envr l) = do
-  let substAndGetScalars = fmap typeFromSchema . nonGhostScalars . over symbols (scalarSubstituteEnv tass)
+  let substAndGetScalars = fmap toMonotype . nonGhostScalars . over symbols (scalarSubstituteEnv tass)
   let scalars = Map.assocs $ substAndGetScalars env
   let scalarsl = Map.elems $ substAndGetScalars envl
   let scalarsr = Map.elems $ substAndGetScalars envr

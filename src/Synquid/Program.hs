@@ -295,7 +295,7 @@ allSymbols env = Map.unions $ Map.elems (env ^. symbols)
 allScalarsOfSort :: Environment -> Sort -> Map Id RSchema
 allScalarsOfSort env s = Map.filter (hasSort s) (symbolsOfArity 0 env)
   where 
-    hasSort s sch = (fromSort s) == (typeFromSchema sch)
+    hasSort s sch = (fromSort s) == (toMonotype sch)
 
 -- | All universally quantified symbols in an environment -- includes measures
 universalSyms :: Environment -> Set Id 
@@ -667,17 +667,17 @@ getPredParams e (DataS name _) = case Map.lookup name (e ^. datatypes) of
 getPredParams e _              = []
 
 -- Wrap function in appropriate type-polymorphic Schema skeleton
-typePolymorphic :: [Id] -> [PredSig] -> Id -> [(Maybe Id, Sort)] -> Sort -> Formula -> SchemaSkeleton Formula
+typePolymorphic :: [Id] -> [PredSig] -> Id -> [(Maybe Id, Sort)] -> Sort -> Formula -> RSchema
 typePolymorphic [] ps name inSorts outSort f = predPolymorphic ps [] name inSorts outSort f
 typePolymorphic (x:xs) ps name inSorts outSort f = ForallT x (typePolymorphic xs ps name inSorts outSort f)
 
 -- Wrap function in appropriate predicate-polymorphic SchemaSkeleton
-predPolymorphic :: [PredSig] -> [Id] -> Id -> [(Maybe Id, Sort)] -> Sort -> Formula -> SchemaSkeleton Formula
+predPolymorphic :: [PredSig] -> [Id] -> Id -> [(Maybe Id, Sort)] -> Sort -> Formula -> RSchema
 predPolymorphic [] ps name inSorts outSort f = genSkeleton name ps inSorts outSort f
 predPolymorphic (x:xs) ps name inSorts outSort f = ForallP x (predPolymorphic xs  ((predSigName x) : ps) name inSorts outSort f)
 
 -- Generate non-polymorphic core of schema
-genSkeleton :: Id -> [Id] -> [(Maybe Id, Sort)] -> Sort -> Formula -> SchemaSkeleton Formula
+genSkeleton :: Id -> [Id] -> [(Maybe Id, Sort)] -> Sort -> Formula -> RSchema
 genSkeleton name preds inSorts outSort post = Monotype $ uncurry 0 inSorts 
   where
     uncurry n (x:xs) = FunctionT (fromMaybe ("arg" ++ show n) (fst x)) (ScalarT (toType (snd x)) ftrue defPotential) (uncurry (n + 1) xs) defCost
@@ -701,7 +701,7 @@ getAllPreds _              = Set.empty
 --   instantiations of those constant arguments by scraping the schema annotations
 getAllCArgsFromSchema :: Environment -> RSchema -> ArgMap
 getAllCArgsFromSchema env sch = Map.filter (not . null) $
-  let allForms = (allRefinementsOf sch) ++ (allRFormulas True (typeFromSchema sch))
+  let allForms = (allRefinementsOf sch) ++ (allRFormulas True (toMonotype sch))
       measures = Map.keys (env ^. measureDefs)
   in Map.unionsWith combineArgLists $ map (getAllCArgs measures) allForms
 
