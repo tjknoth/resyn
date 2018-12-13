@@ -25,7 +25,7 @@ module Synquid.Solver.TypeConstraint (
   processAllPredicates,
   checkTypeConsistency,
   solveTypeConstraints,
-  solveResourceConstraints,
+  finalSolveRCs,
   initTypingState
 ) where
 
@@ -99,15 +99,15 @@ solveTypeConstraints = do
   eac <- asks _enumAndCheck
   when res $ 
     if eac 
-      then processResources scs
+      then simplifyRCs scs
       else checkResources scs
 
   hornClauses .= []
   consistencyChecks .= []
 
-solveResourceConstraints :: (MonadSMT s, MonadHorn s, RMonad s) => TCSolver s () 
-solveResourceConstraints = do 
-  traceM "SOLVING"
+-- Solve resource constraints on final pass of enumerate-and-check algorithm
+finalSolveRCs :: (MonadSMT s, MonadHorn s, RMonad s) => TCSolver s () 
+finalSolveRCs = do 
   res <- asks _checkResourceBounds
   -- THIS IS A HACK SO THAT EAC WILL ACTUALLY SOLVE THE RESOURCE CONSTRAINTS
   let c = SharedForm emptyEnv fzero fzero fzero "PLACEHOLDER"

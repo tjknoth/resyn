@@ -558,9 +558,5 @@ lfill w d        = case renderCompact d of
            | otherwise = text $ replicate n ' '
 
 -- Helper for printing conjunctions line-by-line for readability
-prettyConjuncts :: [TaggedConstraint] -> Doc
-prettyConjuncts fmls = vsep $ fmap printWithTag fmls
-  where 
-    ass f = conjunction $ Set.union (knownAssumptions f) (unknownAssumptions f)
-    printWithTag (TaggedConstraint t f) = 
-      simpleFmlDoc (ass f) <+> operator "=>" <+> simpleFmlDoc (rformula f) 
+prettyConjuncts :: [Formula] -> Doc
+prettyConjuncts fmls = vsep $ fmap simpleFmlDoc fmls

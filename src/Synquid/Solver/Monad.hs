@@ -22,6 +22,8 @@ import qualified Z3.Monad as Z3
 import qualified Data.Bimap as Bimap
 import Data.Bimap (Bimap)
 
+{- Types for interacting with Z3 -}
+
 data AnnotationDomain = 
   Variable | Measure | Both
   deriving (Show, Eq)
@@ -44,10 +46,24 @@ instance Pretty Z3UFun where
       prettyEntries es = nest 2 $ pretty $ Map.assocs es
       prettydef = nest 2 $ pretty defVal 
 
--- Uninterpreted function typeclass
 class UF a where 
   argSorts :: a -> [Sort]
   resSort :: a -> Sort
+
+{- Types for solving resource formulas -}
+
+type PendingRSubst = Map Formula Substitution
+
+-- RFormula : Logical formula and a set of pending substitutions
+data RFormula a = RFormula {
+  knownAssumptions :: !a,
+  unknownAssumptions :: !a,
+  pendingSubsts :: !PendingRSubst,
+  rformula :: !Formula
+} deriving (Eq, Show, Ord)
+
+type RawRFormula = RFormula (Set Formula) 
+type ProcessedRFormula = RFormula ()
 
 data Z3Env = Z3Env {
   envSolver  :: Z3.Solver,
@@ -74,6 +90,8 @@ type Z3State = StateT Z3Data IO
 
 class Declarable a where 
   declare :: (Z3.MonadZ3 s, MonadState Z3Data s) => a -> (Sort -> String -> [Sort] -> s Z3.FuncDecl)
+
+{- Monadic structure of solvers -}
 
 class (Monad s, Applicative s) => MonadSMT s where  
   initSolver :: Environment -> s ()                                                  -- ^ Initialize solver  
@@ -125,9 +143,6 @@ data ResourceArgs = ResourceArgs {
 
 makeLenses ''ResourceArgs
 
--- Store either the generated formulas or the entire constraint (if the resource bounds include universal quantifiers)
-type RConstraint = Either TaggedConstraint Constraint
-
 -- | State of type constraint solving
 data TypingState = TypingState {
   -- Persistent state:
@@ -139,7 +154,7 @@ data TypingState = TypingState {
   _initEnv :: Environment,                      -- ^ Initial environment
   _idCount :: Map String Int,                   -- ^ Number of unique identifiers issued so far
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
-  _resourceConstraints :: [RConstraint],        -- ^ Constraints relevant to resource analysis
+  _resourceConstraints :: [ProcessedRFormula],  -- ^ Constraints relevant to resource analysis
   _resourceVars :: Map String [Formula],        -- ^ Set of variables created to replace potential/multiplicity annotations
   _resourceMeasures :: Map String MeasureDef,   -- ^ List of measure definitions used in resource annotations
   -- Temporary state:

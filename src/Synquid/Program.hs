@@ -576,20 +576,7 @@ data Constraint =
   | ConstantRes !Environment !Id
   deriving (Show, Eq, Ord)
 
-type PendingRSubst = Map Formula Substitution
 
--- RFormula -- Logical formula and a set of pending substitutions
-data RFormula = RFormula {
-  knownAssumptions :: !(Set Formula),
-  unknownAssumptions :: !(Set Formula),
-  pendingSubsts :: !PendingRSubst,
-  rformula :: !Formula
-} deriving (Eq, Show, Ord)
-
-data TaggedConstraint = TaggedConstraint {
-  tag :: !Id,             -- Source info for debugging
-  constraint :: !RFormula -- Simplified Constraint
-} deriving (Show, Eq, Ord)
 
 labelOf (Subtype _ _ _ _ l)    = l
 labelOf (RSubtype _ _ _ l)     = l

@@ -212,8 +212,8 @@ isResourceVariable env tstate (Just adomain) x t =
   in 
     not isUnresolved && case adomain of 
       Variable -> isInt t
-      Measure  -> error "measures not supported" -- Set.member x resourceCArgs 
-      Both     -> error "measures not supported" -- isInt t || Set.member x resourceCArgs
+      Measure  -> Set.member x resourceCArgs 
+      Both     -> isInt t || Set.member x resourceCArgs
 
 
 -- | Signal type error

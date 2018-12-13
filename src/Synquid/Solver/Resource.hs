@@ -3,7 +3,7 @@
 -- | Resource analysis
 module Synquid.Solver.Resource (
   checkResources,
-  processResources,
+  simplifyRCs,
   allUniversals,
   allRFormulas,
   allRMeasures,
@@ -30,6 +30,7 @@ import Control.Monad.Reader
 import Control.Lens
 import Debug.Trace
 
+
 {- Implementation -}
 
 -- | Check resource bounds: attempt to find satisfying expressions for multiplicity and potential annotations 
@@ -38,58 +39,49 @@ checkResources :: (MonadHorn s, MonadSMT s, RMonad s)
                -> TCSolver s ()
 checkResources [] = return () 
 checkResources constraints = do 
-  oldConstraints <- use resourceConstraints 
-  newC <- solveResourceConstraints oldConstraints (filter isResourceConstraint constraints)
+  accConstraints <- use resourceConstraints 
+  newC <- solveResourceConstraints accConstraints (filter isResourceConstraint constraints)
   case newC of 
     Nothing -> throwError $ text "Insufficient resources"
     Just f  -> resourceConstraints %= (++ f) 
 
-processResources :: (MonadHorn s, MonadSMT s, RMonad s)
+simplifyRCs :: (MonadHorn s, MonadSMT s, RMonad s)
                  => [Constraint]
                  -> TCSolver s ()
-processResources [] = return ()
-processResources constraints = do 
-  rcs <- mapM (generateFormula True . Right) constraints 
-  resourceConstraints %= (++ map Left rcs)
+simplifyRCs [] = return ()
+simplifyRCs constraints = do 
+  rcs <- mapM process constraints 
+  resourceConstraints %= (++ rcs)
   
--- | 'solveResourceConstraints' @oldConstraints constraints@ : Transform @constraints@ into logical constraints and attempt to solve the complete system by conjoining with @oldConstraints@
-solveResourceConstraints :: (MonadHorn s, RMonad s) => [RConstraint] -> [Constraint] -> TCSolver s (Maybe [RConstraint]) 
+-- | 'solveResourceConstraints' @accConstraints constraints@ : Transform @constraints@ into logical constraints and attempt to solve the complete system by conjoining with @accConstraints@
+solveResourceConstraints :: (MonadHorn s, RMonad s) => [ProcessedRFormula] -> [Constraint] -> TCSolver s (Maybe [ProcessedRFormula]) 
 solveResourceConstraints _ [] = return $ Just [] 
-solveResourceConstraints oldConstraints constraints = do
+solveResourceConstraints accConstraints constraints = do
     writeLog 3 $ linebreak <+> text "Generating resource constraints:"
+
     -- Need environment to determine which annotation formulas are universally quantified
     let tempEnv = envFrom $ head constraints
-    -- Generate numerical resource-usage formulas from typing constraints:
-    constraintList <- mapM (generateFormula True . Right) constraints
-    accFmls <- mapM (generateFormula False) oldConstraints
-    query <- assembleQuery accFmls constraintList 
+    constraintList <- mapM process constraints
+
     -- Check satisfiability
-    universals <- use universalFmls
-    b <- satisfyResources tempEnv (Set.toList universals) query
+    universals <- Set.toList <$> use universalFmls
+    b <- satisfyResources tempEnv universals (accConstraints ++ constraintList) 
+
     let result = if b then "SAT" else "UNSAT"
     writeLog 5 $ nest 4 $ text "Accumulated resource constraints:" 
-      $+$ prettyConjuncts (filter (isInteresting . rformula . constraint) accFmls)
+      $+$ prettyConjuncts (map rformula accConstraints)
     writeLog 3 $ nest 4 $ text "Solved resource constraint after conjoining formulas:" 
-      <+> text result $+$ prettyConjuncts (filter (isInteresting . rformula . constraint) constraintList)
+      <+> text result $+$ prettyConjuncts (map rformula constraintList)
     return $ if b 
-      then Just $ map Left $ filter (not . isTrivialTC) constraintList -- $ Just $ if hasUniversals
+      then Just constraintList -- $ Just $ if hasUniversals
       else Nothing
 
-
--- | Given lists of constraints (newly-generated and accumulated), construct the corresponding solver query
-assembleQuery :: MonadHorn s 
-              => [TaggedConstraint] 
-              -> [TaggedConstraint] 
-              -> TCSolver s [RFormula]
-assembleQuery accConstraints constraints = do
-  let fmlList    = map constraint (filter (not . isTrivialTC) constraints)
-  let accFmlList = map constraint accConstraints
-  let allRFmls = accFmlList ++ fmlList 
-  mapM applyAssumptions allRFmls
+process :: (MonadHorn s, RMonad s) => Constraint -> TCSolver s ProcessedRFormula 
+process = generateFormula True >=> applyAssumptions
 
 applyAssumptions :: MonadHorn s 
-                 => RFormula 
-                 -> TCSolver s RFormula
+                 => RawRFormula 
+                 -> TCSolver s ProcessedRFormula
 applyAssumptions (RFormula known unknown substs fml) = do 
   emb <- assignUnknowns unknown
   univs <- use universalFmls
@@ -102,16 +94,13 @@ applyAssumptions (RFormula known unknown substs fml) = do
       then fml
       else (conjunction known' |&| conjunction emb') |=>| fml
   writeLog 3 $ text "Assembled formula:" <+> pretty finalFml
-  return $ RFormula Set.empty Set.empty substs finalFml 
-
-isTrivialTC (TaggedConstraint _ f) = isTrivial . rformula $ f
+  return $ RFormula () () substs finalFml 
 
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 --    If there are no universal quantifiers, we can cache the generated formulas (the Left case)
 --    Otherwise, we must re-generate every time
-generateFormula :: (MonadHorn s, RMonad s) => Bool -> RConstraint -> TCSolver s TaggedConstraint
-generateFormula _ (Left tc) = return tc
-generateFormula shouldLog (Right c) = do 
+generateFormula :: (MonadHorn s, RMonad s) => Bool -> Constraint -> TCSolver s RawRFormula 
+generateFormula shouldLog c = do 
   checkMults <- asks _checkMultiplicities
   generateFormula' shouldLog checkMults c
 
@@ -119,33 +108,31 @@ generateFormula' :: (MonadHorn s, RMonad s)
                  => Bool 
                  -> Bool 
                  -> Constraint 
-                 -> TCSolver s TaggedConstraint 
+                 -> TCSolver s RawRFormula 
 generateFormula' shouldLog checkMults c = 
-  let assemble fs = conjunction (filter (not . isTrivial) fs) 
-      -- Start without assumptions, known or unknown
-      mkRForm = RFormula Set.empty Set.empty in
+  let mkRForm = RFormula Set.empty Set.empty in
   case c of 
     Subtype{} -> error $ show $ text "generateFormula: subtype constraint present:" <+> pretty c
     RSubtype env pl pr label -> do 
       op <- subtypeOp 
       let fml = mkRForm Map.empty $ pl `op` pr
-      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fml Nothing
+      embedAndProcessConstraint shouldLog env c fml Nothing
     WellFormed env t label -> do
-      let fmls = mkRForm Map.empty $ assemble $ map (|>=| fzero) $ allRFormulas checkMults t
-      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls (Just (refinementOf t))
+      let fmls = mkRForm Map.empty $ conjunction $ map (|>=| fzero) $ allRFormulas checkMults t
+      embedAndProcessConstraint shouldLog env c fmls (Just (refinementOf t))
     SharedForm env f fl fr label -> do 
       let sharingFml = f |=| (fl |+| fr)  
       let wf = conjunction [f |>=| fzero, fl |>=| fzero, fr |>=| fzero]
       let fmls = mkRForm Map.empty (wf |&| sharingFml)
-      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c fmls Nothing
+      embedAndProcessConstraint shouldLog env c fmls Nothing
     ConstantRes env label -> do 
       (substs, f) <- assertZeroPotential env
       let fmls = mkRForm substs f 
-      TaggedConstraint ("CT: " ++ label) <$> embedAndProcessConstraint shouldLog env c fmls Nothing
+      embedAndProcessConstraint shouldLog env c fmls Nothing
     Transfer env env' label -> do 
       (fmls, substs) <- redistribute env env' 
-      let rfml = mkRForm substs $ assemble fmls
-      TaggedConstraint label <$> embedAndProcessConstraint shouldLog env c rfml Nothing 
+      let rfml = mkRForm substs $ conjunction fmls
+      embedAndProcessConstraint shouldLog env c rfml Nothing 
     _ -> error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
 
 -- | Embed the environment assumptions and preproess the constraint for solving 
@@ -153,9 +140,9 @@ embedAndProcessConstraint :: (MonadHorn s, RMonad s)
                           => Bool 
                           -> Environment 
                           -> Constraint 
-                          -> RFormula
+                          -> RawRFormula 
                           -> Maybe Formula
-                          -> TCSolver s RFormula
+                          -> TCSolver s RawRFormula
 embedAndProcessConstraint shouldLog env c rfml extra = do 
   let fml = rformula rfml
   let substs = pendingSubsts rfml
@@ -165,7 +152,6 @@ embedAndProcessConstraint shouldLog env c rfml extra = do
   let useMeasures = maybe False shouldUseMeasures aDomain 
   univs <- use universalFmls
   let possibleVars = varsOf fml
-  --traceM $ "POSSIBLE: " ++ show possibleVars
   emb <- Set.filter (not . isUnknownForm) <$> embedSynthesisEnv env (conjunction possibleVars) True useMeasures
   let axioms = if useMeasures
       then instantiateConsAxioms env True Nothing (conjunction emb)
@@ -184,8 +170,8 @@ embedAndProcessConstraint shouldLog env c rfml extra = do
   when shouldLog $ writeLog 5 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty printFml)
   return $ RFormula finalEmb' unknownEmb' substs fml
 
--- Filter out irrelevant assumptions -- might be measures, and 
---   any operation over a non-integer variable
+-- | Given a list of resource variables and a set of possible measures,
+--     determine whether or not a given formula is relevant to the resource analysis
 isRelevantAssumption :: Bool -> [String] -> Set Formula -> Formula -> Bool 
 isRelevantAssumption _ _ rvs v@Var{} = True --Set.member v rvs
 isRelevantAssumption useM rms _ (Pred _ x _) = useM && x `elem` rms
@@ -202,7 +188,7 @@ isRelevantAssumption _ _ _ _ = True
 satisfyResources :: RMonad s 
                  => Environment 
                  -> [Formula] 
-                 -> [RFormula]
+                 -> [ProcessedRFormula]
                  -> TCSolver s Bool
 satisfyResources env universals rfmls = do 
   shouldInstantiate <- asks _instantiateUnivs

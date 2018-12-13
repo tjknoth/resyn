@@ -537,8 +537,6 @@ instance Ord Candidate where
 ---------------------------------------
 ---------------------------------------
 
-isTrivial _                 = False 
-
 isUnknownForm :: Formula -> Bool
 isUnknownForm (Unknown _ _) = True
 isUnknownForm _             = False

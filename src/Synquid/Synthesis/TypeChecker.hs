@@ -52,7 +52,7 @@ reconstructAndCheck :: (MonadSMT s, MonadHorn s, RMonad s)
                     -> Explorer s RProgram 
 reconstructAndCheck g = do
   p <- reconstructTopLevel g
-  runInSolver solveResourceConstraints
+  runInSolver finalSolveRCs 
   return p
 
 reconstructTopLevel :: (MonadSMT s, MonadHorn s, RMonad s) 

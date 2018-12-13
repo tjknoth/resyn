@@ -85,7 +85,7 @@ instance Declarable MeasureDef where
 -- | Solve formula containing universally quantified expressions with counterexample-guided inductive synthesis
 solveWithCEGIS :: RMonad s 
                => Int 
-               -> [RFormula]
+               -> [ProcessedRFormula]
                -> Formula
                -> Universals 
                -> [Formula] 
@@ -133,7 +133,7 @@ solveWithCEGIS n rfmls ass universals examples polynomials program = do
 --    Find a valuation for @universals@ such that (not @formula@) holds, under parameter valuation @program@
 getCounterexample :: RMonad s 
                   => Formula
-                  -> [RFormula]
+                  -> [ProcessedRFormula]
                   -> Universals
                   -> PolynomialSkeletons 
                   -> ResourceSolution 
@@ -161,7 +161,7 @@ getCounterexample ass rfmls universals polynomials program = do
 -- | 'getParameters' @fml polynomials examples@
 --   Find a valuation for all coefficients such that @fml@ holds on all @examples@
 getParameters :: RMonad s 
-              => [RFormula]
+              => [ProcessedRFormula]
               -> [Formula]
               -> PolynomialSkeletons 
               -> Counterexample
