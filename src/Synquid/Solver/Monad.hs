@@ -65,6 +65,9 @@ data RFormula a = RFormula {
 type RawRFormula = RFormula (Set Formula) 
 type ProcessedRFormula = RFormula ()
 
+instance Pretty a => Pretty (RFormula a) where 
+  pretty = pretty . rformula
+
 data Z3Env = Z3Env {
   envSolver  :: Z3.Solver,
   envContext :: Z3.Context
@@ -80,8 +83,7 @@ data Z3Data = Z3Data {
   _controlLiterals :: Bimap Formula Z3.AST,   -- ^ Control literals for computing UNSAT cores
   _auxEnv :: Z3Env,                           -- ^ Z3 environment for the auxiliary solver
   _boolSortAux :: Maybe Z3.Sort,              -- ^ Boolean sort in the auxiliary solver
-  _controlLiteralsAux :: Bimap Formula Z3.AST,-- ^ Control literals for computing UNSAT cores in the auxiliary solver
-  _resEnv :: Z3Env 
+  _controlLiteralsAux :: Bimap Formula Z3.AST -- ^ Control literals for computing UNSAT cores in the auxiliary solver
 }
 
 makeLenses ''Z3Data

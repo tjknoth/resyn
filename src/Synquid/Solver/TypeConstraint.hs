@@ -21,7 +21,6 @@ module Synquid.Solver.TypeConstraint (
   allScalars,
   processAllConstraints,
   generateAllHornClauses,
-  solveHornClauses,
   processAllPredicates,
   checkTypeConsistency,
   solveTypeConstraints,
@@ -88,7 +87,7 @@ solveTypeConstraints = do
   processAllConstraints
 
   scs <- use simpleConstraints
-  writeLog 2 (text "Simple Constraints" $+$ nest 2 (vsep (map pretty scs)))
+  writeLog 2 $ nest 4 $ text "Simple Constraints" $+$ vsep (map pretty scs)
 
   generateAllHornClauses
 
@@ -123,7 +122,7 @@ addTypingConstraint c = over typingConstraints (nub . (c :))
 simplifyAllConstraints :: MonadHorn s => TCSolver s ()
 simplifyAllConstraints = do
   tcs <- use typingConstraints
-  writeLog 3 $ nest 2 $ text "Typing Constraints" $+$ vsep (map pretty tcs) 
+  writeLog 3 $ nest 4 $ text "Typing Constraints" $+$ vsep (map pretty tcs) 
   typingConstraints .= []
   tass <- use typeAssignment
   mapM_ simplifyConstraint tcs

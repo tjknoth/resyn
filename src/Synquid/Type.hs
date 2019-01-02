@@ -156,15 +156,14 @@ lastType (FunctionT _ _ tRes _) = lastType tRes
 lastType (LetT _ _ t) = lastType t
 lastType t = t
 
-allArgTypes (FunctionT x tArg tRes _) = tArg : (allArgTypes tRes)
+allArgTypes (FunctionT x tArg tRes _) = tArg : allArgTypes tRes
 allArgTypes (LetT _ _ t) = allArgTypes t
 allArgTypes _ = []
 
 allArgs (ScalarT _ _ _) = []
-allArgs (FunctionT x (ScalarT baseT _ _) tRes _) = (Var (toSort baseT) x) : (allArgs tRes)
-allArgs (FunctionT _ _ tRes _) = (allArgs tRes)
+allArgs (FunctionT x (ScalarT baseT _ _) tRes _) = Var (toSort baseT) x : allArgs tRes
+allArgs (FunctionT _ _ tRes _) = allArgs tRes
 allArgs (LetT _ _ t) = allArgs t
-
 
 -- | Free variables of a type
 varsOfType :: RType -> Set Id

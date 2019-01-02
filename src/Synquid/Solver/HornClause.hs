@@ -401,7 +401,7 @@ pruneValuations assumption vals =
   
 -- | 'pruneQualifiers' @quals@: eliminate logical duplicates from @quals@
 pruneQSpace :: MonadSMT s => QSpace -> FixPointSolver s QSpace 
-pruneQSpace qSpace = let isSubsumed qual quals = anyM (\q -> isValidFml $ qual |<=>| q) quals
+pruneQSpace qSpace = let isSubsumed qual = anyM (\q -> isValidFml $ qual |<=>| q) 
   in do
     quals' <- filterM (\q -> ifM (isValidFml q) (return False) (not <$> isValidFml (fnot q))) (qSpace ^. qualifiers) 
     quals <- prune isSubsumed quals'

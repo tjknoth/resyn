@@ -477,9 +477,12 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
     extractPost (mName, MeasureDef _ outSort _ constArgs fml) = 
       if fml == ftrue
         then [Nothing]
-        else let argLists = sequence (map allPossibleArgs constArgs)
-                 makePred args = Pred outSort mName (args ++ [Var (toSort baseT) valueVarName])
-             in concatMap (\args -> [Just (substitute (Map.singleton valueVarName (makePred args)) fml)]) argLists
+        else
+          let mkVar = uncurry (flip Var)
+              constVars = map mkVar constArgs
+              quantifiedFml = foldr All fml constVars
+              mApp = Pred outSort mName (constVars ++ [(Var (toSort baseT) valueVarName)])
+          in [Just (substitute (Map.singleton valueVarName mApp) quantifiedFml)] 
     -- TODO: should potentials transfer as well?
     contentProperties (mName, MeasureDef (DataS _ vars) a _ _ _) = case elemIndex a vars of
       Nothing -> Nothing

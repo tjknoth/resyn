@@ -386,7 +386,7 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
           let result = assembleResult stats goal progs
           return result
     assembleResult stats goal ps = SynthesisResult (fst (head ps)) (snd (head ps)) (tail ps) stats goal
-    updateLogLevel goal orig = if gSynthesize goal then orig else 0 -- prevent logging while type checking measures
+    updateLogLevel goal orig = if gSynthesize goal then orig else orig --0 -- prevent logging while type checking measures
     
     updateExplorerParams eParams goal = 
       let eParams' = explorerLogLevel %~ updateLogLevel goal $ eParams 

@@ -44,8 +44,7 @@ initZ3Data env env' renv = Z3Data {
   _controlLiterals = Bimap.empty,
   _auxEnv = env',
   _boolSortAux = Nothing,
-  _controlLiteralsAux = Bimap.empty,
-  _resEnv = renv
+  _controlLiteralsAux = Bimap.empty
 }
 
 instance MonadSMT Z3State where
@@ -63,7 +62,6 @@ instance MonadSMT Z3State where
 
   isSat fml = do
       res <- local $ (fmlToAST >=> assert) fml >> check
-
       case res of
         Unsat -> debug 2 (text "SMT CHECK" <+> pretty fml <+> text "UNSAT") $ return False
         Sat -> debug 2 (text "SMT CHECK" <+> pretty fml <+> text "SAT") $ return True
@@ -73,9 +71,8 @@ instance MonadSMT Z3State where
   allUnsatCores = getAllMUSs
 
 instance RMonad Z3State where
-  solveAndGetModel fml = {-withResSolver $ -}do
-    --push 
-    (r, m) <- (fmlToAST >=> assert) fml >> solverCheckAndGetModel
+  solveAndGetModel fml = do
+    (r, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
     setASTPrintMode Z3_PRINT_SMTLIB_FULL
     fmlAst <- fmlToAST fml
     astStr <- astToString fmlAst
@@ -85,20 +82,15 @@ instance RMonad Z3State where
               Sat   -> True
               _     -> error $ "solveWithModel: Z3 returned Unknown for AST " ++ astStr 
     case m of  
-      Nothing -> do 
-        --pop 1
-        return Nothing
+      Nothing -> return Nothing
       Just md -> do 
         mdStr <- modelToString md 
         return $ Just (md, mdStr)
 
-  solveAndGetAssignment fml vals = {-withResSolver $ -}do 
-    --push
-    (_, m) <- (fmlToAST >=> assert) fml >> solverCheckAndGetModel
+  solveAndGetAssignment fml vals = do 
+    (_, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
     case m of 
-      Nothing -> do 
-        --pop 1
-        return Nothing 
+      Nothing -> return Nothing 
       Just md -> do 
         mstr <- modelToString md 
         modelGetAssignment vals (md, mstr)
@@ -293,16 +285,6 @@ withAuxSolver c = do
   mainEnv .= a
   res <- c
   mainEnv .= m
-  return res
-
-withResSolver :: Z3State a -> Z3State a 
-withResSolver c = do 
-  m <- use mainEnv 
-  r <- use resEnv 
-  mainEnv .= r 
-  res <- c 
-  mainEnv .= m 
-  resEnv .= r
   return res
 
 evalZ3State :: Z3State a -> IO a

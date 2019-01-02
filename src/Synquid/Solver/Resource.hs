@@ -19,7 +19,6 @@ import Synquid.Pretty
 import Synquid.Solver.Util hiding (writeLog)
 import Synquid.Solver.CEGIS 
 
-import Data.List (union)
 import Data.Maybe
 import qualified Data.Set as Set 
 import Data.Set (Set)
@@ -57,7 +56,7 @@ simplifyRCs constraints = do
 solveResourceConstraints :: (MonadHorn s, RMonad s) => [ProcessedRFormula] -> [Constraint] -> TCSolver s (Maybe [ProcessedRFormula]) 
 solveResourceConstraints _ [] = return $ Just [] 
 solveResourceConstraints accConstraints constraints = do
-    writeLog 3 $ linebreak <+> text "Generating resource constraints:"
+    writeLog 3 $ linebreak <> text "Generating resource constraints:"
 
     -- Need environment to determine which annotation formulas are universally quantified
     let tempEnv = envFrom $ head constraints
@@ -77,8 +76,11 @@ solveResourceConstraints accConstraints constraints = do
       else Nothing
 
 process :: (MonadHorn s, RMonad s) => Constraint -> TCSolver s ProcessedRFormula 
-process = generateFormula True >=> applyAssumptions
-
+process c = do 
+  pf <- (generateFormula >=> applyAssumptions) c 
+  writeLog 3 $ indent 2 $ nest 4 $ simplePrettyConstraint c <+> text "~>" $+$ pretty pf 
+  return pf
+  
 applyAssumptions :: MonadHorn s 
                  => RawRFormula 
                  -> TCSolver s ProcessedRFormula
@@ -86,64 +88,71 @@ applyAssumptions (RFormula known unknown substs fml) = do
   emb <- assignUnknowns unknown
   univs <- use universalFmls
   aDomain <- asks _cegisDomain
-  rms <- Map.keys <$> use resourceMeasures
+  rms <- Map.assocs <$> use resourceMeasures
+
   let useMeasures = maybe False shouldUseMeasures aDomain 
-  let emb' = Set.filter (isRelevantAssumption useMeasures rms univs) emb
-  let known' = Set.filter (isRelevantAssumption useMeasures rms univs) known
+
+  let emb' = Set.filter (isRelevantAssumption useMeasures (map fst rms) univs) emb
+  let known' = Set.filter (isRelevantAssumption useMeasures (map fst rms) univs) known
+
+  -- Not sure why I once needed this?
+  --env <- use initEnv
+  --let wfMeasures = if useMeasures
+  --    then conjunction $ map (|>=| fzero) (possibleMeasureApps env (Set.toList univs) rms)
+  --    else ftrue
+
   let finalFml = if isNothing aDomain 
       then fml
-      else (conjunction known' |&| conjunction emb') |=>| fml
-  writeLog 3 $ text "Assembled formula:" <+> pretty finalFml
+      else (conjunction known' |&| conjunction emb' {-|&| wfMeasures-}) |=>| fml
+
   return $ RFormula () () substs finalFml 
 
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
---    If there are no universal quantifiers, we can cache the generated formulas (the Left case)
+--    If there are no universal quantifiers, we can cache the generated formulas 
 --    Otherwise, we must re-generate every time
-generateFormula :: (MonadHorn s, RMonad s) => Bool -> Constraint -> TCSolver s RawRFormula 
-generateFormula shouldLog c = do 
+generateFormula :: (MonadHorn s, RMonad s) => Constraint -> TCSolver s RawRFormula 
+generateFormula c = do 
   checkMults <- asks _checkMultiplicities
-  generateFormula' shouldLog checkMults c
+  generateFormula' checkMults c
 
 generateFormula' :: (MonadHorn s, RMonad s)
                  => Bool 
-                 -> Bool 
                  -> Constraint 
                  -> TCSolver s RawRFormula 
-generateFormula' shouldLog checkMults c = 
+generateFormula' checkMults c = 
   let mkRForm = RFormula Set.empty Set.empty in
   case c of 
     Subtype{} -> error $ show $ text "generateFormula: subtype constraint present:" <+> pretty c
     RSubtype env pl pr label -> do 
       op <- subtypeOp 
       let fml = mkRForm Map.empty $ pl `op` pr
-      embedAndProcessConstraint shouldLog env c fml Nothing
+      embedAndProcessConstraint env c fml Nothing
     WellFormed env t label -> do
       let fmls = mkRForm Map.empty $ conjunction $ map (|>=| fzero) $ allRFormulas checkMults t
-      embedAndProcessConstraint shouldLog env c fmls (Just (refinementOf t))
+      embedAndProcessConstraint env c fmls (Just (refinementOf t))
     SharedForm env f fl fr label -> do 
       let sharingFml = f |=| (fl |+| fr)  
       let wf = conjunction [f |>=| fzero, fl |>=| fzero, fr |>=| fzero]
       let fmls = mkRForm Map.empty (wf |&| sharingFml)
-      embedAndProcessConstraint shouldLog env c fmls Nothing
+      embedAndProcessConstraint env c fmls Nothing
     ConstantRes env label -> do 
       (substs, f) <- assertZeroPotential env
       let fmls = mkRForm substs f 
-      embedAndProcessConstraint shouldLog env c fmls Nothing
+      embedAndProcessConstraint env c fmls Nothing
     Transfer env env' label -> do 
       (fmls, substs) <- redistribute env env' 
       let rfml = mkRForm substs $ conjunction fmls
-      embedAndProcessConstraint shouldLog env c rfml Nothing 
+      embedAndProcessConstraint env c rfml Nothing 
     _ -> error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
 
 -- | Embed the environment assumptions and preproess the constraint for solving 
 embedAndProcessConstraint :: (MonadHorn s, RMonad s)
-                          => Bool 
-                          -> Environment 
+                          => Environment 
                           -> Constraint 
                           -> RawRFormula 
                           -> Maybe Formula
                           -> TCSolver s RawRFormula
-embedAndProcessConstraint shouldLog env c rfml extra = do 
+embedAndProcessConstraint env c rfml extra = do 
   let fml = rformula rfml
   let substs = pendingSubsts rfml
   aDomain <- asks _cegisDomain
@@ -165,23 +174,30 @@ embedAndProcessConstraint shouldLog env c rfml extra = do
         Nothing -> (finalEmb, unknownEmb)
         Just u@Unknown{} -> (finalEmb, Set.insert u unknownEmb)
         Just f -> (Set.insert f finalEmb, unknownEmb)
-  -- Only for logging:
-  let printFml = conjunction finalEmb |=>| fml
-  when shouldLog $ writeLog 5 (nest 4 $ pretty c $+$ text "Gives numerical constraint" <+> pretty printFml)
+
   return $ RFormula finalEmb' unknownEmb' substs fml
 
 -- | Given a list of resource variables and a set of possible measures,
 --     determine whether or not a given formula is relevant to the resource analysis
 isRelevantAssumption :: Bool -> [String] -> Set Formula -> Formula -> Bool 
-isRelevantAssumption _ _ rvs v@Var{} = True --Set.member v rvs
-isRelevantAssumption useM rms _ (Pred _ x _) = useM && x `elem` rms
-isRelevantAssumption _ _ _ Unknown{} = False -- TODO: fix once i start assuming unknowns
-isRelevantAssumption useM rms rvs (Unary _ f) = isRelevantAssumption useM rms rvs f
-isRelevantAssumption useM rms rvs (Binary _ f g) = isRelevantAssumption useM rms rvs f && isRelevantAssumption useM rms rvs g
-isRelevantAssumption useM rms rvs (Ite f g h) = isRelevantAssumption useM rms rvs f && isRelevantAssumption useM rms rvs g && isRelevantAssumption useM rms rvs h
-isRelevantAssumption useM _ _ Cons{} = useM
-isRelevantAssumption useM rms rvs (All f g) = isRelevantAssumption useM rms rvs g -- trace "Warning: universally quantified assumption" True
-isRelevantAssumption _ _ _ _ = True
+isRelevantAssumption _ _ rvs v@Var{} 
+  = True --Set.member v rvs
+isRelevantAssumption useM rms _ (Pred _ x _) 
+  = useM && x `elem` rms
+isRelevantAssumption _ _ _ Unknown{} 
+  = False -- TODO: fix once i start assuming unknowns
+isRelevantAssumption useM rms rvs (Unary _ f) 
+  = isRelevantAssumption useM rms rvs f
+isRelevantAssumption useM rms rvs (Binary _ f g) 
+  = isRelevantAssumption useM rms rvs f && isRelevantAssumption useM rms rvs g
+isRelevantAssumption useM rms rvs (Ite f g h) 
+  = isRelevantAssumption useM rms rvs f && isRelevantAssumption useM rms rvs g && isRelevantAssumption useM rms rvs h
+isRelevantAssumption useM _ _ Cons{} 
+  = useM
+isRelevantAssumption useM rms rvs (All f g) 
+  = isRelevantAssumption useM rms rvs g -- trace "Warning: universally quantified assumption" True
+isRelevantAssumption _ _ _ _ 
+  = True
 
 -- | Check the satisfiability of the generated resource constraints, instantiating universally 
 --     quantified expressions as necessary.
@@ -217,30 +233,20 @@ satisfyResources env universals rfmls = do
       let allCoefficients = concat $ Map.elems $ fmap coefficientsOf allPolynomials
       -- Initialize all coefficient values -- the starting value should not matter
       let initialProgram = Map.fromList $ zip allCoefficients initialCoefficients 
-      -- Assume that all measure applications are well-formed:
-      let useMeasures = shouldUseMeasures aDomain 
-      let ass = if useMeasures
-          then conjunction $ map (|>=| fzero) (possibleMeasureApps env universals uMeasures)
-          else ftrue
+
       let allUniversals = Universals universalsWithVars uMeasures 
       writeLog 3 $ text "Solving resource constraint with CEGIS:" 
       writeLog 5 $ pretty $ conjunction $ map rformula rfmls
-      writeLog 3 $ text "Over universally quantified expressions:" <+> hsep (map (pretty . snd) universalsWithVars)
-      solveWithCEGIS cMax rfmls ass allUniversals [] allPolynomials initialProgram 
+      writeLog 3 $ indent 2 $ text "Over universally quantified expressions:" <+> hsep (map (pretty . snd) universalsWithVars)
+      solveWithCEGIS cMax rfmls allUniversals [] allPolynomials initialProgram 
 
 shouldUseMeasures  ad = case ad of 
     Variable -> False 
     _ -> True 
 
-adjustSorts (BoolLit b) = BoolLit b
-adjustSorts (IntLit b) = IntLit b
-adjustSorts (Var _ x) = Var IntS x
-adjustSorts (Binary op f g) = Binary op (adjustSorts f) (adjustSorts g)
-adjustSorts (Unary op f) = Unary op (adjustSorts f)
-
+allRMeasures :: RSchema -> Map String MeasureDef -> Map String MeasureDef
 allRMeasures sch = allRMeasures' (toMonotype sch) 
 
-allRMeasures' :: RType -> Map String MeasureDef -> Map String MeasureDef
 allRMeasures' typ measures = 
   let rforms = allRFormulas True typ
       allPreds = Set.unions $ map getAllPreds rforms
@@ -363,14 +369,20 @@ getUniversals _ _                 = Set.empty
 -- Filter away "uninteresting" constraints for logging. Specifically, well-formednes
 -- Definitely not complete, just "pretty good"
 isInteresting :: Formula -> Bool
-isInteresting (Binary Ge (IntLit _) (IntLit 0)) = False
-isInteresting (Binary Ge (Var _ _) (IntLit 0))  = False
-isInteresting (Binary Implies _ f)     = isInteresting f 
-isInteresting (BoolLit True)           = False
-isInteresting (Binary And f g)         = isInteresting f || isInteresting g 
-isInteresting _                        = True
+isInteresting (Binary Ge (IntLit _) (IntLit 0)) 
+  = False
+isInteresting (Binary Ge (Var _ _) (IntLit 0)) 
+  = False
+isInteresting (Binary Implies _ f) 
+  = isInteresting f 
+isInteresting (BoolLit True) 
+  = False
+isInteresting (Binary And f g) 
+  = isInteresting f || isInteresting g 
+isInteresting _ 
+  = True
 
-getAnnotationStyle sch = getAnnotationStyle' $ toMonotype sch
+getAnnotationStyle = getAnnotationStyle' . toMonotype 
 
 getAnnotationStyle' t = 
   let rforms = conjunction $ allRFormulas True t

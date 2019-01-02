@@ -100,14 +100,14 @@ assignUnknowns fmls = do
   
 -- | 'instantiateConsAxioms' @env fml@ : If @fml@ contains constructor applications, return the set of instantiations of constructor axioms for those applications in the environment @env@
 instantiateConsAxioms :: Environment -> Bool -> Maybe Formula -> Formula -> Set Formula
-instantiateConsAxioms env numeric mVal fml = 
+instantiateConsAxioms env numeric mVal fml =
   let inst = instantiateConsAxioms env numeric mVal 
       allMeasures dt e = Map.assocs $
         if numeric
           then allIntMeasuresOf dt e
           else allMeasuresOf dt e
   in case fml of
-    Cons resS@(DataS dtName _) ctor args -> Set.unions $ Set.unions (map (measureAxiom resS ctor args) (allMeasures dtName env)) :
+    Cons resS@(DataS dtName _) ctor args -> Set.unions $ Set.fromList (map (measureAxiom resS ctor args) (allMeasures dtName env)) :
                                                           map (instantiateConsAxioms env numeric Nothing) args
     Unary op e -> inst e
     Binary op e1 e2 -> inst e1 `Set.union` inst e2
@@ -116,7 +116,7 @@ instantiateConsAxioms env numeric mVal fml =
     Pred _ p args -> Set.unions $ map inst args
     _ -> Set.empty
   where
-    measureAxiom resS ctor args (mname, MeasureDef inSort _ defs constantArgs _) =
+    measureAxiom resS ctor args (mname, MeasureDef inSort _ defs constArgs _) =
       let
         MeasureCase _ vars body = head $ filter (\(MeasureCase c _ _) -> c == ctor) defs
         sParams = map varSortName (sortArgsOf inSort) -- sort parameters in the datatype declaration
@@ -124,13 +124,13 @@ instantiateConsAxioms env numeric mVal fml =
         body' = noncaptureSortSubstFml sParams sArgs body -- measure definition with actual sorts for all subexpressions
         newValue = fromMaybe (Cons resS ctor args) mVal
         subst = Map.fromList $ (valueVarName, newValue) : zip vars args 
-        -- Body of measure with constructor application (newValue) substituted for _v:
-        vSubstBody = substitute subst body'
-      in if null constantArgs
-        then Set.singleton vSubstBody
-        else let
-          constArgList = Map.lookup mname (_measureConstArgs env)
-        in Set.fromList $ allMeasureApps constArgList constantArgs vSubstBody 
+       
+        -- Universally quantified arguments:
+        mkVar = uncurry (flip Var)
+        constVars = map mkVar constArgs
+        qBody = foldr All body' constVars
+
+      in substitute subst qBody
 
 allMeasureApps :: Maybe [Set Formula] -> [(Id, Sort)] -> Formula -> [Formula]
 allMeasureApps Nothing _ _ = []
