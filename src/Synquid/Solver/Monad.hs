@@ -124,7 +124,6 @@ data TypingParams = TypingParams {
   _tcSolverLogLevel :: Int,                                         -- ^ How verbose logging is
   _checkResourceBounds :: Bool,                                     -- ^ Is resource checking enabled
   _checkMultiplicities :: Bool,                                     -- ^ Should multiplicities be considered when generating resource constraints
-  _instantiateUnivs :: Bool,                                        -- ^ When solving exists-forall constraints, instantiate universally quantified expressions
   _constantRes :: Bool,                                             -- ^ Check constant-timedness or not
   _cegisMax :: Int,                                                 -- ^ Maximum depth of CEGIS solver 
   _cegisDomain :: Maybe AnnotationDomain,
@@ -137,7 +136,6 @@ makeLenses ''TypingParams
 data ResourceArgs = ResourceArgs {
   _checkRes :: Bool,
   _checkMults :: Bool,
-  _instantiateForall :: Bool,
   _constantTime :: Bool,
   _cegisBound :: Int,
   _enumerate :: Bool

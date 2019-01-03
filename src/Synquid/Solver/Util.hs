@@ -10,7 +10,6 @@ module Synquid.Solver.Util (
     freshVar,
     freshValueVars,
     throwError,
-    allMeasureApps,
     nonGhostScalars,
     safeAddGhostVar,
     isResourceVariable,
@@ -132,14 +131,6 @@ instantiateConsAxioms env numeric mVal fml =
 
       in substitute subst qBody
 
-allMeasureApps :: Maybe [Set Formula] -> [(Id, Sort)] -> Formula -> [Formula]
-allMeasureApps Nothing _ _ = []
-allMeasureApps (Just pArgs) constantArgs body = 
-  let possibleArgs = map Set.toList pArgs
-      possibleSubsts = zipWith (\(x, _) vars -> zip (repeat x) vars) constantArgs possibleArgs
-      allArgLists = sequence possibleSubsts
-  in  map ((`substitute` body) . Map.fromList) allArgLists
-
 bottomValuation :: QMap -> Formula -> Formula
 bottomValuation qmap fml = applySolution bottomSolution fml
   where
@@ -186,7 +177,7 @@ safeAddGhostVar name t env = do
   adomain <- asks _cegisDomain 
   if isResourceVariable env tstate adomain name t
     then do 
-      universalFmls %= Set.insert (Var IntS name)
+      universalFmls %= Set.insert (Var (toSort (baseTypeOf t)) name)
       return $ addGhostVariable name t env
     else return $ addGhostVariable name t env
 
@@ -202,8 +193,8 @@ isResourceVariable env tstate (Just adomain) x t =
       cargs = env ^. measureConstArgs
       rmeasures = tstate ^. resourceMeasures 
       rsorts = map _inSort $ Map.elems rmeasures
-      allCArgs = concat $ mapMaybe (`Map.lookup` cargs) (Map.keys rmeasures)  
-      resourceCArgs = Set.map varName $ Set.unions allCArgs
+      allCArgs = Set.unions $ mapMaybe (`Map.lookup` cargs) (Map.keys rmeasures)  
+      resourceCArgs = map varName $ concat allCArgs
       isUnresolved = Map.member x (_unresolvedConstants env)
       isInt t = 
         case baseTypeOf t of 
@@ -212,8 +203,8 @@ isResourceVariable env tstate (Just adomain) x t =
   in 
     not isUnresolved && case adomain of 
       Variable -> isInt t
-      Measure  -> Set.member x resourceCArgs 
-      Both     -> isInt t || Set.member x resourceCArgs
+      Measure  -> x `elem` resourceCArgs 
+      Both     -> isInt t || x `elem` resourceCArgs
 
 
 -- | Signal type error

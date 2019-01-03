@@ -46,7 +46,6 @@ main = do
                   let resArgs = defaultResourceArgs {
                     _checkRes = resources,
                     _checkMults = mult,
-                    _instantiateForall = forall,
                     _constantTime = constTime,
                     _cegisBound = cegisMax,
                     _enumerate = ec
@@ -210,7 +209,6 @@ defaultExplorerParams = ExplorerParams {
 defaultResourceArgs = ResourceArgs {
   _checkRes = True,
   _checkMults = True,
-  _instantiateForall = True,
   _constantTime = False,
   _cegisBound = 10,
   _enumerate = False
@@ -319,7 +317,6 @@ runCEGISTest fname = do
             else print $ "UNSAT: " ++ show (plain (pretty fml)) 
   where 
     tParams = TypingParams {
-      _instantiateUnivs = True,
       _constantRes = False,
       _tcSolverLogLevel = 6
     }
@@ -386,7 +383,7 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
           let result = assembleResult stats goal progs
           return result
     assembleResult stats goal ps = SynthesisResult (fst (head ps)) (snd (head ps)) (tail ps) stats goal
-    updateLogLevel goal orig = if gSynthesize goal then orig else orig --0 -- prevent logging while type checking measures
+    updateLogLevel goal orig = if gSynthesize goal then orig else 0 -- prevent logging while type checking measures
     
     updateExplorerParams eParams goal = 
       let eParams' = explorerLogLevel %~ updateLogLevel goal $ eParams 

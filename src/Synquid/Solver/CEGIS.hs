@@ -26,6 +26,8 @@ import Data.Maybe
 import Data.List (tails)
 import qualified Data.Map as Map
 import Data.Map (Map)
+import qualified Data.Set as Set 
+import Data.Set (Set)
 import Control.Lens
 import Debug.Trace
 import Control.Monad.Reader (asks)
@@ -298,16 +300,31 @@ initializePolynomial env sty ms (name, uvars) =
 
 initializePolynomial' env Variable _ (name, uvars) = map (makePTerm name) uvars
 initializePolynomial' env Measure ms (name, uvars) = 
-  map (makePTerm name) (possibleMeasureApps env uvars ms)
+  map (makePTerm name) (allPossibleMeasureApps env uvars ms)
 initializePolynomial' env Both ms rvar = 
   initializePolynomial' env Variable ms rvar 
   ++ initializePolynomial' env Measure ms rvar 
 
-possibleMeasureApps :: Environment 
-                    -> [Formula]
-                    -> [UMeasure]
-                    -> [Formula]
-possibleMeasureApps env universals ms = 
+allPossibleMeasureApps :: Environment 
+                       -> [Formula]
+                       -> [UMeasure]
+                       -> [Formula]
+allPossibleMeasureApps env universals = concatMap (possibleMeasureApps env universals)
+
+possibleMeasureApps :: Environment -> [Formula] -> UMeasure -> [Formula]
+possibleMeasureApps env universals (m, MeasureDef inS outS defs cargs post) = 
+  let 
+      possibleCArgs = 
+        Set.toList $ Map.findWithDefault Set.empty m (env ^. measureConstArgs)
+      sortAssignment args = 
+        foldl assignSorts (Just Map.empty) (zip (map sortOf args) (map snd cargs))
+      makePred args f = Pred outS m (args ++ [f])
+      attemptToAssign ass f = 
+        (`sortSubstituteFml` f) <$> assignSorts ass (sortOf f, inS)
+      tryAllUniversals args = 
+        map (makePred args) $ mapMaybe (attemptToAssign (sortAssignment args)) universals
+  in concatMap tryAllUniversals possibleCArgs 
+  {-
   let cargs = env^.measureConstArgs 
       -- Assemble relevant logical formulas
       mkVar (x, s) = Var s x
@@ -319,6 +336,43 @@ possibleMeasureApps env universals ms =
       -- all constant-argument combinations for a given measure
       mkAllApps m def = allMeasureApps (Map.lookup m cargs) (def^.constantArgs)
   in concat $ concatMap (\(m, def) -> map (mkAllApps m def) (possibleApps m def)) ms
+  -}
+
+-- Attempt to unify two sorts
+assignSorts :: Maybe SortSubstitution -> (Sort, Sort) -> Maybe SortSubstitution
+assignSorts Nothing _ = Nothing
+assignSorts (Just substs) (argSort, formalSort) = 
+  case formalSort of 
+    BoolS -> 
+      case argSort of 
+        BoolS -> Just substs
+        _     -> Nothing -- What about polymorphic sorts?
+    IntS -> 
+      case argSort of 
+        IntS -> Just substs
+        _    -> Nothing 
+    VarS x ->
+      case argSort of 
+        VarS y -> 
+          case Map.lookup y substs of 
+            Just v  -> if v == VarS x then Just substs else Nothing
+            Nothing -> Just $ Map.insert y (VarS x) substs
+        _      -> Nothing
+    DataS x ts -> 
+      case argSort of 
+        DataS y qs -> 
+          if x == y 
+            then foldl assignSorts (Just substs) (zip qs ts) 
+            else Nothing
+        _          -> Nothing
+    SetS s -> 
+      case argSort of 
+        SetS s' -> assignSorts (Just substs) (s', s)
+        _       -> Nothing
+    AnyS -> 
+      case argSort of 
+        AnyS -> Just substs
+        _    -> Nothing
 
 -- Generate all congruence relations given a list of possible applications of 
 --   some measure

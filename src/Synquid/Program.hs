@@ -220,8 +220,8 @@ makeLenses ''MeasureDef
 type SymbolMap = Map Int (Map Id RSchema)  -- Variables and constants indexed by arity
 
 -- Map from measure ID to a list, where each element is a set 
---  of possible instantiations of the relevant argument
-type ArgMap = Map Id [Set Formula] 
+--  of possible argument vectors
+type ArgMap = Map Id (Set [Formula])
 
 -- | Typing environment
 data Environment = Environment {
@@ -695,7 +695,7 @@ getAllCArgsFromSchema env sch = Map.filter (not . null) $
       measures = Map.keys (env ^. measureDefs)
   in Map.unionsWith combineArgLists $ map (getAllCArgs measures) allForms
 
-combineArgLists = zipWith Set.union
+combineArgLists = Set.union 
 
 -- Given a set of all measure IDs, a map from measure IDs to a list of sets of possible 
 --   arguments for each of its constant argument slots
@@ -708,7 +708,7 @@ getAllCArgs ms (Pred _ x fs)   = getCArgs ms x fs
 getAllCArgs _ _                = Map.empty
 
 getCArgs :: [Id] -> String -> [Formula] -> ArgMap
-getCArgs ms name fs = Map.singleton name $ map Set.singleton $
+getCArgs ms name fs = Map.singleton name $ Set.singleton $
   if elem name ms
     then init fs
     else []

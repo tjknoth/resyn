@@ -47,7 +47,6 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _tcSolverLogLevel = _explorerLogLevel explorerParams,
                         _checkResourceBounds = _checkRes rArgs,
                         _checkMultiplicities = _checkMults rArgs,
-                        _instantiateUnivs = _instantiateForall rArgs,
                         _constantRes = _constantTime rArgs,
                         _cegisMax = rArgs^.cegisBound,
                         _enumAndCheck = _enumerate rArgs,

@@ -212,9 +212,8 @@ satisfyResources :: RMonad s
                  -> [ProcessedRFormula]
                  -> TCSolver s Bool
 satisfyResources env universals rfmls = do 
-  shouldInstantiate <- asks _instantiateUnivs
   noUnivs <- isNothing <$> asks _cegisDomain
-  if noUnivs || not shouldInstantiate
+  if noUnivs 
     then do 
       let fml = conjunction $ map rformula rfmls
       model <- lift . lift . lift $ solveAndGetModel fml
@@ -306,7 +305,8 @@ partitionType :: Bool
               -> RType
               -> [Constraint]
 partitionType cm l env (x, t@(ScalarT b _ f)) (ScalarT bl _ fl) (ScalarT br _ fr)
-  = let env' = {-addAssumption (Var (toSort b) valueVarName |=| Var (toSort b) x) $-} addVariable valueVarName t env
+  = let env'  = addAssumption (Var (toSort b) valueVarName |=| Var (toSort b) x) $ 
+                  addVariable valueVarName t env
     in SharedForm env' f fl fr (x ++ " : " ++ l) : partitionBase cm l env (x, b) bl br
 
 partitionBase cm l env (x, DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _)
@@ -371,6 +371,20 @@ getUniversals syms (Cons _ _ fs)  = Set.unions $ map (getUniversals syms) fs
 getUniversals syms (All f g)      = getUniversals syms g
 getUniversals _ _                 = Set.empty 
 
+instantiateForall :: Environment -> [Formula] -> Formula -> [Formula]
+instantiateForall env univs (All f g) = instantiateForall env univs g
+instantiateForall env univs f = instantiatePred env univs f
+
+instantiatePred env univs p@(Pred s x args) = 
+  case Map.lookup x (env ^. measureDefs) of 
+    Nothing -> [p]
+    Just mdef -> possibleMeasureApps env univs (x, mdef) 
+instantiatePred env univs (Unary op f) = Unary op <$> instantiateForall env univs f
+instantiatePred env univs (Binary op f g) = [Binary op f' g' | f' <- instantiateForall env univs f, g' <- instantiateForall env univs g]
+instantiatePred env _ f = [f]
+
+-- TODO: will the below include _v if relevant? No... make sure it does (will it need to?)
+{-
 -- Given an environment, a predicate application, a list of arguments, and all 
 --   formal arguments, determine all valid applications of said predicate -- 
 --   ie all applilcations to variables in context that unify with the argument sort
@@ -391,42 +405,7 @@ allValidApplications env (Pred s x _) args constArgs targetSort =
 
         -- TODO fix this: Might be easier to branch on the formal sort
         --   then, branch on the argsort and be methodical
-
--- Attempt to unify two sorts
-assignSorts :: Maybe SortSubstitution -> (Sort, Sort) -> Maybe SortSubstitution
-assignSorts Nothing _ = Nothing
-assignSorts (Just substs) (argSort, formalSort) = 
-  case formalSort of 
-    BoolS -> 
-      case argSort of 
-        BoolS -> Just substs
-        _     -> Nothing -- What about polymorphic sorts?
-    IntS -> 
-      case argSort of 
-        IntS -> Just substs
-        _    -> Nothing 
-    VarS x ->
-      case argSort of 
-        VarS y -> 
-          case Map.lookup y substs of 
-            Just v  -> if v == VarS x then Just substs else Nothing
-            Nothing -> Just $ Map.insert y (VarS x) substs
-        _      -> Nothing
-    DataS x ts -> 
-      case argSort of 
-        DataS y qs -> 
-          if x == y 
-            then foldl assignSorts (Just substs) (zip qs ts) 
-            else Nothing
-        _          -> Nothing
-    SetS s -> 
-      case argSort of 
-        SetS s' -> assignSorts (Just substs) (s', s)
-        _       -> Nothing
-    AnyS -> 
-      case argSort of 
-        AnyS -> Just substs
-        _    -> Nothing
+-}
 
 -- Filter away "uninteresting" constraints for logging. Specifically, well-formednes
 -- Definitely not complete, just "pretty good"
