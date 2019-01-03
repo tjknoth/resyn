@@ -174,7 +174,12 @@ embedAndProcessConstraint env c rfml extra = do
         Nothing -> (finalEmb, unknownEmb)
         Just u@Unknown{} -> (finalEmb, Set.insert u unknownEmb)
         Just f -> (Set.insert f finalEmb, unknownEmb)
+  -- Next: instantiate universals
+  --   How to instantiate: basically a 1-depth synthesis problem! just enumerate...
 
+  -- todo: think of a nice way to encode the "pipline" of adjusting assumptions
+  --       known:   union  -> 
+  --       unknown: allUnk -> 
   return $ RFormula finalEmb' unknownEmb' substs fml
 
 -- | Given a list of resource variables and a set of possible measures,
@@ -365,6 +370,63 @@ getUniversals syms (Pred _ _ fs)  = Set.unions $ map (getUniversals syms) fs
 getUniversals syms (Cons _ _ fs)  = Set.unions $ map (getUniversals syms) fs
 getUniversals syms (All f g)      = getUniversals syms g
 getUniversals _ _                 = Set.empty 
+
+-- Given an environment, a predicate application, a list of arguments, and all 
+--   formal arguments, determine all valid applications of said predicate -- 
+--   ie all applilcations to variables in context that unify with the argument sort
+allValidApplications :: Environment 
+                     -> Formula 
+                     -> [(String, Sort)] 
+                     -> [(String, Sort)] 
+                     -> Sort 
+                     -> [Formula]
+allValidApplications env (Pred s x _) args constArgs targetSort = 
+  let sortAssignment = foldl assignSorts (Just Map.empty) (zip (map snd args) (map snd constArgs))
+      makePred (_, Nothing)      = Nothing 
+      makePred (arg, Just subst) = Just $ Pred s x (map (uncurry (flip Var)) constArgs ++ [sortSubstituteFml subst (mkVar arg)])
+      possibleVars = fmap (toSort . baseTypeOf . toMonotype) (symbolsOfArity 0 env) 
+      mkVar x = Var (possibleVars Map.! x) x
+      attemptToAssign ass s = assignSorts ass (s, targetSort)
+  in mapMaybe makePred $ Map.assocs $ fmap (attemptToAssign sortAssignment) possibleVars
+
+        -- TODO fix this: Might be easier to branch on the formal sort
+        --   then, branch on the argsort and be methodical
+
+-- Attempt to unify two sorts
+assignSorts :: Maybe SortSubstitution -> (Sort, Sort) -> Maybe SortSubstitution
+assignSorts Nothing _ = Nothing
+assignSorts (Just substs) (argSort, formalSort) = 
+  case formalSort of 
+    BoolS -> 
+      case argSort of 
+        BoolS -> Just substs
+        _     -> Nothing -- What about polymorphic sorts?
+    IntS -> 
+      case argSort of 
+        IntS -> Just substs
+        _    -> Nothing 
+    VarS x ->
+      case argSort of 
+        VarS y -> 
+          case Map.lookup y substs of 
+            Just v  -> if v == VarS x then Just substs else Nothing
+            Nothing -> Just $ Map.insert y (VarS x) substs
+        _      -> Nothing
+    DataS x ts -> 
+      case argSort of 
+        DataS y qs -> 
+          if x == y 
+            then foldl assignSorts (Just substs) (zip qs ts) 
+            else Nothing
+        _          -> Nothing
+    SetS s -> 
+      case argSort of 
+        SetS s' -> assignSorts (Just substs) (s', s)
+        _       -> Nothing
+    AnyS -> 
+      case argSort of 
+        AnyS -> Just substs
+        _    -> Nothing
 
 -- Filter away "uninteresting" constraints for logging. Specifically, well-formednes
 -- Definitely not complete, just "pretty good"
