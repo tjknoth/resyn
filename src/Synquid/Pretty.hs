@@ -218,6 +218,7 @@ simpleFmlDocAt n fml = condHlParens (n' <= n) (
     Unknown s name -> if Map.null s then text name else hMapDoc pretty pretty s <> text name
     Unary op e -> pretty op <> simpleFmlDocAt n' e
     Binary And f (Binary Ge _ (IntLit 0)) -> simpleFmlDoc f
+    Binary Implies f g -> fmlDocAt n' f <+> pretty Implies <+> simpleFmlDocAt n' g
     Binary op e1 e2 -> simpleFmlDocAt n' e1 <+> pretty op <+> simpleFmlDocAt n' e2
     Ite e0 e1 e2 -> keyword "if" <+> simpleFmlDoc e0 <+> keyword "then" <+> simpleFmlDoc e1 <+> keyword "else" <+> simpleFmlDoc e2
     Pred b name args -> text name <+> hsep (map (simpleFmlDocAt n') args)

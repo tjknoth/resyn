@@ -24,11 +24,11 @@ import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
+import Data.List (tails, union)
 import Control.Monad.Logic
 import Control.Monad.Reader
 import Control.Lens
 import Debug.Trace
-
 
 {- Implementation -}
 
@@ -94,12 +94,6 @@ applyAssumptions (RFormula known unknown substs fml) = do
 
   let emb' = Set.filter (isRelevantAssumption useMeasures (map fst rms) univs) emb
   let known' = Set.filter (isRelevantAssumption useMeasures (map fst rms) univs) known
-
-  -- Not sure why I once needed this?
-  --env <- use initEnv
-  --let wfMeasures = if useMeasures
-  --    then conjunction $ map (|>=| fzero) (possibleMeasureApps env (Set.toList univs) rms)
-  --    else ftrue
 
   let finalFml = if isNothing aDomain 
       then fml
@@ -174,13 +168,15 @@ embedAndProcessConstraint env c rfml extra = do
         Nothing -> (finalEmb, unknownEmb)
         Just u@Unknown{} -> (finalEmb, Set.insert u unknownEmb)
         Just f -> (Set.insert f finalEmb, unknownEmb)
-  -- Next: instantiate universals
-  --   How to instantiate: basically a 1-depth synthesis problem! just enumerate...
+  let res = Set.map (instantiateForall env (Set.toList univs)) finalEmb'
+  let instEmb = Set.map fst res
+  let newPreds = Set.map snd res
+  let congAxioms = generateCongAxioms (foldl Set.union Set.empty newPreds)
 
-  -- todo: think of a nice way to encode the "pipline" of adjusting assumptions
-  --       known:   union  -> 
-  --       unknown: allUnk -> 
-  return $ RFormula finalEmb' unknownEmb' substs fml
+  let completeEmb = Set.fromList $ congAxioms ++ (concat instEmb)
+
+  return $ RFormula completeEmb unknownEmb' substs fml
+  --return $ RFormula finalEmb' unknownEmb' substs fml
 
 -- | Given a list of resource variables and a set of possible measures,
 --     determine whether or not a given formula is relevant to the resource analysis
@@ -239,12 +235,14 @@ satisfyResources env universals rfmls = do
       let initialProgram = Map.fromList $ zip allCoefficients initialCoefficients 
 
       let allUniversals = Universals universalsWithVars uMeasures 
+
       writeLog 3 $ text "Solving resource constraint with CEGIS:" 
       writeLog 5 $ pretty $ conjunction $ map rformula rfmls
       writeLog 3 $ indent 2 $ text "Over universally quantified expressions:" <+> hsep (map (pretty . snd) universalsWithVars)
+
       solveWithCEGIS cMax rfmls allUniversals [] allPolynomials initialProgram 
 
-shouldUseMeasures  ad = case ad of 
+shouldUseMeasures ad = case ad of 
     Variable -> False 
     _ -> True 
 
@@ -371,57 +369,58 @@ getUniversals syms (Cons _ _ fs)  = Set.unions $ map (getUniversals syms) fs
 getUniversals syms (All f g)      = getUniversals syms g
 getUniversals _ _                 = Set.empty 
 
-instantiateForall :: Environment -> [Formula] -> Formula -> [Formula]
-instantiateForall env univs (All f g) = instantiateForall env univs g
-instantiateForall env univs f = instantiatePred env univs f
+-- Instantiate universally quantified expression with all possible arguments in the 
+--   quantified position. Also generate congruence axioms.
+-- POSSIBLE PROBLEM: this doesn't really recurse looking for arbitrary foralls
+--   It will find them if top-level or nested below a single operation. This SHOULD
+--   be ok for our current scenario...
+-- The function returns a pair, the first element of which is a list of all formulas,
+--   including new predicate applications, the second is a set of just the instantiated apps 
+instantiateForall :: Environment -> [Formula] -> Formula -> ([Formula], Set Formula)
+instantiateForall env univs f@All{} = instantiateForall' env univs f
+instantiateForall env univs f = ([f], Set.empty)
 
+instantiateForall' env univs (All f g) = instantiateForall' env univs g
+instantiateForall' env univs f = instantiatePred env univs f
+
+instantiatePred :: Environment -> [Formula] -> Formula -> ([Formula], Set Formula)
 instantiatePred env univs p@(Pred s x args) = 
   case Map.lookup x (env ^. measureDefs) of 
-    Nothing -> [p]
-    Just mdef -> possibleMeasureApps env univs (x, mdef) 
-instantiatePred env univs (Unary op f) = Unary op <$> instantiateForall env univs f
-instantiatePred env univs (Binary op f g) = [Binary op f' g' | f' <- instantiateForall env univs f, g' <- instantiateForall env univs g]
-instantiatePred env _ f = [f]
+    Nothing -> ([mkMeasureVar p], Set.empty)
+    Just mdef -> 
+      let apps = possibleMeasureApps env univs (x, mdef) 
+      in  (apps, Set.fromList apps)
+instantiatePred env univs (Unary op f) = 
+  let (allFs, ps) = instantiateForall' env univs f
+  in (Unary op <$> allFs, ps)
+instantiatePred env univs (Binary op f g) = 
+  let (instf, fpreds) = instantiateForall' env univs f
+      (instg, gpreds) = instantiateForall' env univs g
+  in  ([Binary op f' g' | f' <- instf, g' <- instg], Set.union fpreds gpreds)
+instantiatePred env _ f = ([f], Set.empty)
 
--- TODO: will the below include _v if relevant? No... make sure it does (will it need to?)
-{-
--- Given an environment, a predicate application, a list of arguments, and all 
---   formal arguments, determine all valid applications of said predicate -- 
---   ie all applilcations to variables in context that unify with the argument sort
-allValidApplications :: Environment 
-                     -> Formula 
-                     -> [(String, Sort)] 
-                     -> [(String, Sort)] 
-                     -> Sort 
-                     -> [Formula]
-allValidApplications env (Pred s x _) args constArgs targetSort = 
-  let sortAssignment = foldl assignSorts (Just Map.empty) (zip (map snd args) (map snd constArgs))
-      makePred (_, Nothing)      = Nothing 
-      makePred (arg, Just subst) = Just $ Pred s x (map (uncurry (flip Var)) constArgs ++ [sortSubstituteFml subst (mkVar arg)])
-      possibleVars = fmap (toSort . baseTypeOf . toMonotype) (symbolsOfArity 0 env) 
-      mkVar x = Var (possibleVars Map.! x) x
-      attemptToAssign ass s = assignSorts ass (s, targetSort)
-  in mapMaybe makePred $ Map.assocs $ fmap (attemptToAssign sortAssignment) possibleVars
+-- Generate all congruence axioms, given all instantiations of universally quantified
+--   measure applications
+generateCongAxioms :: Set Formula -> [Formula]
+generateCongAxioms preds = concatMap assertCongruence $ Map.elems (groupPreds preds) 
+  where 
+    groupPreds = foldl (\pmap p@(Pred _ x _) -> Map.insertWith (++) x [p] pmap) Map.empty 
 
-        -- TODO fix this: Might be easier to branch on the formal sort
-        --   then, branch on the argsort and be methodical
--}
+-- Generate all congruence relations given a list of possible applications of 
+--   some measure
+assertCongruence :: [Formula] -> [Formula]
+assertCongruence allApps = map assertCongruence' (pairs allApps)
+  where 
+    -- All pairs from a list
+    pairs xs = [(x, y) | (x:ys) <- tails xs, y <- ys]
 
--- Filter away "uninteresting" constraints for logging. Specifically, well-formednes
--- Definitely not complete, just "pretty good"
-isInteresting :: Formula -> Bool
-isInteresting (Binary Ge (IntLit _) (IntLit 0)) 
-  = False
-isInteresting (Binary Ge (Var _ _) (IntLit 0)) 
-  = False
-isInteresting (Binary Implies _ f) 
-  = isInteresting f 
-isInteresting (BoolLit True) 
-  = False
-isInteresting (Binary And f g) 
-  = isInteresting f || isInteresting g 
-isInteresting _ 
-  = True
+assertCongruence' (pl@(Pred _ ml largs), pr@(Pred _ mr rargs)) =
+  conjunction (zipWith (|=|) largs rargs) |=>| (mkMeasureVar pl |=| mkMeasureVar pr) 
+assertCongruence' ms = error $ show $ text "assertCongruence: called with non-measure formulas:"
+  <+> pretty ms 
+
+mkMeasureVar m@(Pred s _ _) = Var s $ mkMeasureString m
+mkMeasureString (Pred _ m args) = m ++ show (pretty args)
 
 getAnnotationStyle = getAnnotationStyle' . toMonotype 
 

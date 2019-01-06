@@ -162,7 +162,8 @@ data TypingState = TypingState {
   _hornClauses :: [Formula],                    -- ^ Horn clauses generated from subtyping constraints
   _consistencyChecks :: [Formula],              -- ^ Formulas generated from type consistency constraints
   _errorContext :: (SourcePos, Doc),            -- ^ Information to be added to all type errors
-  _universalFmls :: Set Formula                 -- ^ Set of universally quantified resource expressions, if there are any
+  _universalFmls :: Set Formula,                -- ^ Set of universally quantified resource expressions, if there are any
+  _universalMeasures :: Set Formula             -- ^ Set of universally quantified measure applications
 }
 
 makeLenses ''TypingState

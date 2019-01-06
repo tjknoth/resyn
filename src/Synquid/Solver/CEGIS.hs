@@ -23,7 +23,6 @@ import Synquid.Program
 
 import Control.Monad.State
 import Data.Maybe
-import Data.List (tails)
 import qualified Data.Map as Map
 import Data.Map (Map)
 import qualified Data.Set as Set 
@@ -323,20 +322,7 @@ possibleMeasureApps env universals (m, MeasureDef inS outS defs cargs post) =
         (`sortSubstituteFml` f) <$> assignSorts ass (sortOf f, inS)
       tryAllUniversals args = 
         map (makePred args) $ mapMaybe (attemptToAssign (sortAssignment args)) universals
-  in concatMap tryAllUniversals possibleCArgs 
-  {-
-  let cargs = env^.measureConstArgs 
-      -- Assemble relevant logical formulas
-      mkVar (x, s) = Var s x
-      mkApp x def arg = Pred (def^.outSort) x (map mkVar (def^.constantArgs) ++ [arg])
-      -- variables in context of relevant sort
-      possibleArgs s = filter (\uvar -> (sortShape . sortOf) uvar == sortShape s) universals
-      -- apply measure to all possible arguments (in non-constant position)
-      possibleApps x def = map (mkApp x def) (possibleArgs (def^.inSort))
-      -- all constant-argument combinations for a given measure
-      mkAllApps m def = allMeasureApps (Map.lookup m cargs) (def^.constantArgs)
-  in concat $ concatMap (\(m, def) -> map (mkAllApps m def) (possibleApps m def)) ms
-  -}
+  in  concatMap tryAllUniversals possibleCArgs 
 
 -- Attempt to unify two sorts
 assignSorts :: Maybe SortSubstitution -> (Sort, Sort) -> Maybe SortSubstitution
@@ -353,10 +339,13 @@ assignSorts (Just substs) (argSort, formalSort) =
         _    -> Nothing 
     VarS x ->
       case argSort of 
-        VarS y -> 
-          case Map.lookup y substs of 
-            Just v  -> if v == VarS x then Just substs else Nothing
-            Nothing -> Just $ Map.insert y (VarS x) substs
+        VarS y ->
+          if y == x 
+            then Just substs 
+            else  
+              case Map.lookup y substs of 
+                Just v  -> if v == VarS x then Just substs else Nothing
+                Nothing -> Just $ Map.insert y (VarS x) substs
         _      -> Nothing
     DataS x ts -> 
       case argSort of 
@@ -364,7 +353,7 @@ assignSorts (Just substs) (argSort, formalSort) =
           if x == y 
             then foldl assignSorts (Just substs) (zip qs ts) 
             else Nothing
-        _          -> Nothing
+        _ -> Nothing
     SetS s -> 
       case argSort of 
         SetS s' -> assignSorts (Just substs) (s', s)
@@ -374,23 +363,7 @@ assignSorts (Just substs) (argSort, formalSort) =
         AnyS -> Just substs
         _    -> Nothing
 
--- Generate all congruence relations given a list of possible applications of 
---   some measure
-assertCongruence :: [Formula] -> [Formula]
-assertCongruence allApps = map assertCongruence' (pairs allApps)
-  where 
-    -- All pairs from a list
-    pairs xs = [(x, y) | (x:ys) <- tails xs, y <- ys]
-
-assertCongruence' (pl@(Pred _ ml largs), pr@(Pred _ mr rargs)) =
-  conjunction (zipWith (|=|) largs rargs) |=>| (mkMeasureVar pl |=| mkMeasureVar pr) 
-assertCongruence' ms = error $ show $ text "assertCongruence: called with non-measure formulas:"
-  <+> pretty ms 
-
 {- Some utilities -}
-
-mkMeasureVar m@(Pred s _ _) = Var s $ mkMeasureString m
-mkMeasureString (Pred _ m args) = m ++ show (pretty args)
 
 mkPForm v@Var{} = v
 mkPForm p@Pred{} = Var IntS $ show $ plain $ pretty p

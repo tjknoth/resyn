@@ -335,7 +335,8 @@ runCEGISTest fname = do
       _consistencyChecks = [],
       _errorContext = (noPos, empty),
       _resourceVars = Set.empty,
-      _universalFmls = Just Set.empty
+      _universalFmls = Just Set.empty,
+      _universalMeasures = Set.empty
     }
 -}
 

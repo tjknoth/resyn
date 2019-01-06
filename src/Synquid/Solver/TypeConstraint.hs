@@ -73,7 +73,8 @@ initTypingState goal = do
     _hornClauses = [],
     _consistencyChecks = [],
     _errorContext = (noPos, empty),
-    _universalFmls = Set.empty -- Set.singleton $ Var IntS valueVarName
+    _universalFmls = Set.empty, -- Set.singleton $ Var IntS valueVarName
+    _universalMeasures = Set.empty
   }
 
 {- Top-level constraint solving interface -}
