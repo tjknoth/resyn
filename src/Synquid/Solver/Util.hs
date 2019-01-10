@@ -189,6 +189,8 @@ isResourceVariable :: Environment
                    -> Bool 
 isResourceVariable _ _ Nothing _ _ = False
 isResourceVariable env tstate (Just adomain) x t = 
+  not (Map.member x (_unresolvedConstants env))
+  {-
   let varName (Var _ n) = n
       cargs = env ^. measureConstArgs
       rmeasures = tstate ^. resourceMeasures 
@@ -205,7 +207,7 @@ isResourceVariable env tstate (Just adomain) x t =
       Variable -> isInt t
       Measure  -> x `elem` resourceCArgs 
       Both     -> isInt t || x `elem` resourceCArgs
-
+  -}
 
 -- | Signal type error
 throwError :: MonadHorn s => Doc -> TCSolver s ()

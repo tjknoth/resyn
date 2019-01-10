@@ -109,10 +109,6 @@ instance RMonad Z3State where
             astLit <- mkASTLit astS ast
             return $ Just (name, astLit)
 
-  modelGetUFs ms model = do 
-    interps <- getInterps ms (fst model)
-    return $ Map.fromList $ zip (map fst ms) interps
-
   evalInModel fs (model, modelStr) measure = do 
     let eval x = modelEval model x True
     -- Attempt to evaluate all arguments
@@ -125,68 +121,6 @@ instance RMonad Z3State where
         case Map.lookup as (_entries measure) of 
           Nothing -> return $ measure^.defaultVal
           Just res -> return res
-
--- Get interpretations of a set of measures in a given model
-getInterps :: (Declarable a, UF a) => [(String, a)] -> Model -> Z3State [Z3UFun]
-getInterps ms model = mapMaybeM (`getMInterp` model) ms
-
--- Get interpretation of a given measure in a given model
-getMInterp :: (Declarable a, UF a) => (String, a) -> Model -> Z3State (Maybe Z3UFun)
-getMInterp (name, def) model = do 
-  let targs = argSorts def
-  fun <- declare def (resSort def) name targs
-  hasI <- hasInterp model fun
-  if not hasI 
-    then return Nothing
-    else case targs of 
-        [] -> interpretConst fun 
-        _  -> interpretFunction fun 
-  where 
-    interpretConst f = do 
-      interp <- getConstInterp model f
-      case interp of 
-        Nothing -> return Nothing 
-        Just intp -> do
-          const <- mkASTLit (resSort def) intp
-          return $ Just Z3UFun {
-            _functionName = name,
-            _entries = Map.empty,
-            _defaultVal = const
-          }
-    interpretFunction f = do 
-      interp <- getFuncInterp model f
-      case interp of 
-        Nothing -> return Nothing
-        Just intp -> do  
-          elseVal <- funcInterpGetElse intp >>= mkASTLit (resSort def)
-          entries <- getFuncEntries name model intp
-          return $ Just Z3UFun {
-            _functionName = name,
-            _entries = entries, 
-            _defaultVal = elseVal
-          }
-
--- Given a function interpretation, get a map from arguments to interpretations
---   If the function takes multiple arguments, we treat their sum as a single argument
-getFuncEntries :: String -> Model -> FuncInterp -> Z3State (Map [Formula] Formula)
-getFuncEntries mname mod interp = do 
-  numE <- funcInterpGetNumEntries interp
-  entries <- mapM (getIndexedEntry mname mod interp) [0..(numE - 1)] 
-  return $ Map.fromList entries
-
--- Get the argument-result pair at the ith entry of a given function interpretation
-getIndexedEntry :: String -> Model -> FuncInterp -> Int -> Z3State ([Formula], Formula)
-getIndexedEntry mname mod interp i = do 
-  entry <- funcInterpGetEntry interp i
-  numA <- funcEntryGetNumArgs entry
-  let eval x = modelEval mod x True
-  args <- sequence <$> mapM (funcEntryGetArg entry >=> eval) [0..(numA - 1)] 
-  case args of 
-    Nothing -> error $ "Error evaluating function entry in measure " ++ mname
-    Just as -> do
-      args' <- mapM (mkASTLit IntS) as
-      res <- funcEntryGetValue entry >>= mkASTLit IntS
-      return (args', res)
 
 mkASTLit :: Sort -> AST -> Z3State Formula
 mkASTLit s ast = ASTLit s ast <$> astToString ast

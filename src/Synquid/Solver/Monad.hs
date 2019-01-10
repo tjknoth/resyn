@@ -95,6 +95,9 @@ class Declarable a where
 
 {- Monadic structure of solvers -}
 
+
+
+
 class (Monad s, Applicative s) => MonadSMT s where  
   initSolver :: Environment -> s ()                                                  -- ^ Initialize solver  
   isSat :: Formula -> s Bool                                                         -- ^ 'isSat' @fml@: is @fml@ satisfiable?
@@ -104,7 +107,6 @@ class (Monad s, Applicative s) => RMonad s where
   solveAndGetModel :: Formula -> s (Maybe SMTModel)                                  -- ^ 'solveAndGetModel' @fml@: Evaluate @fml@ and, if satisfiable, return the model object
   solveAndGetAssignment :: Formula -> [String] -> s (Maybe (Map String Formula))     -- ^ 'solveAndGetAssignment' @fml@ @vars@: If @fml@ is satsiable, return the assignments of variables @vars@
   modelGetAssignment :: [String] -> SMTModel -> s (Maybe (Map String Formula))       -- ^ 'modelGetAssignment' @vals@ @m@: Get assignments of all variables @vals@ in model @m@
-  modelGetUFs :: (Declarable a, UF a) => [(String, a)] -> SMTModel -> s (Map String Z3UFun) -- ^ 'modelGetMeasures' @ms model@: Get interpretations of all measures @ms@ given @model@
   evalInModel :: [Formula] -> SMTModel -> Z3UFun -> s Formula
 
 class (Monad s, Applicative s) => MonadHorn s where
@@ -163,7 +165,7 @@ data TypingState = TypingState {
   _consistencyChecks :: [Formula],              -- ^ Formulas generated from type consistency constraints
   _errorContext :: (SourcePos, Doc),            -- ^ Information to be added to all type errors
   _universalFmls :: Set Formula,                -- ^ Set of universally quantified resource expressions, if there are any
-  _universalMeasures :: Set Formula             -- ^ Set of universally quantified measure applications
+  _universalMeasures :: Set Formula             -- ^ Set of universally quantified measure applications, in string form
 }
 
 makeLenses ''TypingState

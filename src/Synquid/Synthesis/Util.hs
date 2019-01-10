@@ -245,6 +245,7 @@ checkResourceVar env x t = do
   let isRV = TCSolver.isResourceVariable env tstate (_cegisDomain tparams) x t 
   return isRV
 
+-- THIS IS FUCKED
 makeResourceVar :: Monad s  
                 => Environment 
                 -> Maybe (RBase) 
@@ -255,12 +256,17 @@ makeResourceVar env vvtype name = do
   let mkUFml (x, t) = do
         isRV <- checkResourceVar env x t
         return $ if isRV 
-          then Just $ Var IntS x
+          then Just $ Var ((toSort . baseTypeOf) t) x
           else Nothing 
   domain <- mapMaybeM mkUFml (Map.assocs universalsInScope)
-  return $ case vvtype of 
+  return (name, domain)
+  -- Shouldn't be necessary to have _v in scope... 
+  --   there will always be an assumption of the form _v == x, 
+  --   where x is some variable in context.
+  {- return $ case vvtype of 
     Nothing -> (name, domain)
     Just b  -> (name, Var (toSort b) valueVarName : domain)
+  -}
 
 insertRVar (name, info) = Map.insert name info
 

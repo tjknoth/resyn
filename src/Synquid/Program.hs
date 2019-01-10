@@ -236,14 +236,14 @@ data Environment = Environment {
   _usedScrutinees :: [RProgram],             -- ^ Program terms that has already been scrutinized
   _unfoldedVars :: (Set Id),                 -- ^ In eager match mode, datatype variables that can be scrutinized
   _letBound :: (Set Id),                     -- ^ Subset of symbols that are let-bound
+  _measureConstArgs :: ArgMap,
   -- | Constant part:
   _constants :: (Set Id),                    -- ^ Subset of symbols that are constants
   _datatypes :: (Map Id DatatypeDef),        -- ^ Datatype definitions
   _globalPredicates :: (Map Id [Sort]),      -- ^ Signatures (resSort:argSorts) of module-level logic functions (measures, predicates)
   _measureDefs :: (Map Id MeasureDef),       -- ^ Measure definitions
   _typeSynonyms :: (Map Id ([Id], RType)),   -- ^ Type synonym definitions
-  _unresolvedConstants :: (Map Id RSchema),  -- ^ Unresolved types of components (used for reporting specifications with macros)
-  _measureConstArgs :: ArgMap                -- ^ Map from measure names to possible valuations of each constant argument in the measure
+  _unresolvedConstants :: (Map Id RSchema)   -- ^ Unresolved types of components (used for reporting specifications with macros)
 } deriving (Show)
 
 makeLenses ''Environment
