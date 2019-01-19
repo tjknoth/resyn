@@ -54,8 +54,6 @@ import Debug.Trace
 initTypingState :: MonadHorn s => Goal -> s TypingState
 initTypingState goal = do
   let env = gEnvironment goal
-  let schema = gSpec goal
-  let ms = allRMeasures schema $ env^.measureDefs
   initCand <- initHornSolver env
   return TypingState {
     _typingConstraints = [],
@@ -68,7 +66,6 @@ initTypingState goal = do
     _isFinal = False,
     _resourceConstraints = [],
     _resourceVars = Map.empty,
-    _resourceMeasures = ms,
     _simpleConstraints = [],
     _hornClauses = [],
     _consistencyChecks = [],

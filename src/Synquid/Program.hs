@@ -242,6 +242,7 @@ data Environment = Environment {
   _datatypes :: (Map Id DatatypeDef),        -- ^ Datatype definitions
   _globalPredicates :: (Map Id [Sort]),      -- ^ Signatures (resSort:argSorts) of module-level logic functions (measures, predicates)
   _measureDefs :: (Map Id MeasureDef),       -- ^ Measure definitions
+  _resourceMeasures :: (Set Id),             -- ^ Measure definitions used in resource analysis 
   _typeSynonyms :: (Map Id ([Id], RType)),   -- ^ Type synonym definitions
   _unresolvedConstants :: (Map Id RSchema)   -- ^ Unresolved types of components (used for reporting specifications with macros)
 } deriving (Show)
@@ -270,6 +271,7 @@ emptyEnv = Environment {
   _globalPredicates = Map.empty,
   _datatypes = Map.empty,
   _measureDefs = Map.empty,
+  _resourceMeasures = Set.empty,
   _typeSynonyms = Map.empty,
   _unresolvedConstants = Map.empty,
   _measureConstArgs = Map.empty
@@ -457,7 +459,18 @@ allPredicates env = Map.fromList (map (\(PredSig pName argSorts resSort) -> (pNa
 -- | 'allMeasuresOf' @dtName env@ : all measure of datatype with name @dtName@ in @env@
 allMeasuresOf dtName env = Map.filter (\(MeasureDef (DataS sName _) _ _ _ _) -> dtName == sName) $ env ^. measureDefs
 
-allIntMeasuresOf dtName env = Map.filter (\(MeasureDef _ s _ _ _) -> s == IntS) (allMeasuresOf dtName env)
+allRMeasuresOf dtName env = Map.filterWithKey checkM $ env ^. measureDefs 
+  where 
+    checkM m (MeasureDef (DataS sName _) _ _ _ _) = (dtName == sName) && m `Set.member` (env ^. resourceMeasures)
+
+allRMeasures env = Map.filterWithKey (\m _ -> m `Set.member` (env ^. resourceMeasures)) $ env ^. measureDefs
+
+rMeasuresFromSch :: RSchema -> Set String 
+rMeasuresFromSch sch = rMeasuresFromSch' (toMonotype sch) 
+
+rMeasuresFromSch' typ = 
+  let rforms = allRFormulas True typ
+  in  Set.unions $ map getAllPreds rforms
 
 -- | 'allMeasurePostconditions' @baseT env@ : all nontrivial postconditions of measures of @baseT@ in case it is a datatype
 allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env =

@@ -7,9 +7,9 @@ module Synquid.Solver.CEGIS (
   solveWithCEGIS,
   coefficientsOf,
   formatUniversals,
+  allValidCArgs,
   initializePolynomial,
   initialCoefficients,
-  possibleMeasureApps,
   mkMeasureVar
 ) where 
 
@@ -114,6 +114,7 @@ solveWithCEGIS n rfmls universals examples polynomials program = do
       do 
         writeLog 4 $ text "Counterexample:" <+> pretty (Map.assocs (variables cx))
         writeLog 4 $ text "      measures:" <+> pretty (Map.assocs (measureInterps cx))
+        --writeLog 4 $ text "         model:" <+> pretty (snd (model cx))
         -- Update example list
         -- Attempt to find parameterization holding on all examples
         -- Assumptions shouldn't be relevant for this query???? (IS THIS TRUE?)
@@ -148,7 +149,7 @@ getCounterexample rfmls universals polynomials program = do
   writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
   -- Query solver for a counterexample
   model <- runInSolver $ solveAndGetModel cxQuery 
-  writeLog 6 $ text "Solved with model:" <+> text (fromMaybe "" (snd <$> model))
+  writeLog 5 $ text "Solved with model:" <+> text (fromMaybe "" (snd <$> model))
   assignments <- runInSolver . sequence 
     $ (modelGetAssignment (map fst (uvars universals)) <$> model)
   minterps <- runInSolver . sequence 
@@ -172,10 +173,11 @@ getParameters rfmls pastExamples polynomials counterexample = do
   let substRFml (RFormula _ _ subs f) = substAndApplyPolynomial subs paramPolynomials f
   let fml = conjunction $ map substRFml rfmls
   -- Substitute example valuations of universally quantified expressions in resource constraint
-  --let fml' = substitute (allVariables counterexample) fml
+  -- TODO: this was commented out for some reason!! why???
+  let fml' = substitute (allVariables counterexample) fml
   -- Evaluate the measure applications within the model from the counterexample
   -- Assert that any parameterization must hold for all examples
-  let paramQuery = fml : pastExamples
+  let paramQuery = fml' : pastExamples
   -- Collect all parameters
   let allCoefficients = concatMap coefficientsOf (Map.elems polynomials)
   writeLog 7 $ text "CEGIS param query:" </> pretty paramQuery
@@ -288,11 +290,13 @@ allPossibleMeasureApps :: Environment
                        -> [Formula]
 allPossibleMeasureApps env universals = concatMap (possibleMeasureApps env universals)
 
-possibleMeasureApps :: Environment -> [Formula] -> UMeasure -> [Formula]
+possibleMeasureApps :: Environment 
+                    -> [Formula] 
+                    -> UMeasure 
+                    -> [Formula]
 possibleMeasureApps env universals (m, MeasureDef inS outS defs cargs post) = 
-  let 
-      possibleCArgs = 
-        Set.toList $ Map.findWithDefault Set.empty m (env ^. measureConstArgs)
+  let possibleCArgs = 
+        Set.toList $ Map.findWithDefault Set.empty m (env^.measureConstArgs)
       sortAssignment args = 
         foldl assignSorts (Just Map.empty) (zip (map sortOf args) (map snd cargs))
       mkPred args f = Pred outS m (args ++ [f])
@@ -301,6 +305,27 @@ possibleMeasureApps env universals (m, MeasureDef inS outS defs cargs post) =
       tryAllUniversals args = 
         map (mkPred args) $ mapMaybe (attemptToAssign (sortAssignment args)) universals
   in  concatMap tryAllUniversals possibleCArgs 
+
+-- All variables that can fill the "constant" argument slots -- those that 
+--   unify with the formal type, given the non-constant argument
+allValidCArgs :: Environment
+              -> MeasureDef
+              -> Formula 
+              -> [Substitution]
+allValidCArgs env (MeasureDef inS outS defs cargs post) (Pred s x args) = 
+  let possibleCArgs = 
+        Set.toList $ Map.findWithDefault Set.empty x (env^.measureConstArgs)
+      sortAssignment args = 
+        foldl assignSorts (Just Map.empty) (zip (map sortOf args) (map snd cargs))
+      constructSubst valid = 
+        Map.fromList $ zip (map (\(Var _ x) -> x) args) valid 
+      checkValid as = case assignSorts (sortAssignment as) (sortOf (last args), inS) of 
+            Nothing -> Nothing 
+            Just _  -> Just as
+      validCArgs = mapMaybe checkValid possibleCArgs
+  in  map constructSubst validCArgs 
+      
+      
 
 -- Attempt to unify two sorts
 assignSorts :: Maybe SortSubstitution -> (Sort, Sort) -> Maybe SortSubstitution
@@ -347,7 +372,9 @@ mkPForm v@Var{} = v
 mkPForm p = mkMeasureVar p
 
 mkMeasureVar m@(Pred s _ _) = Var s $ mkMeasureString m
-mkMeasureString (Pred _ m args) = m ++ show (pretty args)
+mkMeasureVar f = f
+
+mkMeasureString (Pred _ m args) = m ++ show (plain (pretty args))
 
 -- Turn a list of universally quantified formulas into a list of Universal 
 --   data structures (formula-string pairs)

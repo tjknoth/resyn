@@ -158,7 +158,6 @@ data TypingState = TypingState {
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
   _resourceConstraints :: [ProcessedRFormula],  -- ^ Constraints relevant to resource analysis
   _resourceVars :: Map String [Formula],        -- ^ Set of variables created to replace potential/multiplicity annotations
-  _resourceMeasures :: Map String MeasureDef,   -- ^ List of measure definitions used in resource annotations
   -- Temporary state:
   _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
   _hornClauses :: [Formula],                    -- ^ Horn clauses generated from subtyping constraints

@@ -83,7 +83,7 @@ resolveDecls declarations =
         spec = allSymbols env Map.! name
         myMutuals = Map.findWithDefault [] name allMutuals
         toRemove = drop (fromJust $ elemIndex name allNames) allNames \\ myMutuals -- All goals after and including @name@, except mutuals
-        env' = foldr removeVariable env toRemove
+        env' = (foldr removeVariable env toRemove) { _resourceMeasures = rMeasuresFromSch spec }
       in Goal name env' spec impl 0 pos synth
     extractPos pass (Pos pos decl) = do
       currentPosition .= pos

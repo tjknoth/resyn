@@ -83,7 +83,7 @@ embedSynthesisEnv :: MonadHorn s
                   -> TCSolver s (Set Formula)
 embedSynthesisEnv env fml consistency useMeasures = do 
   let env' = if useMeasures 
-      then env
+      then env { _measureDefs = allRMeasures env }
       else env { _measureDefs = Map.empty } -- don't instantiate measures in certain cases
   embedEnv env' fml consistency True
 
@@ -99,15 +99,16 @@ assignUnknowns fmls = do
   
 -- | 'instantiateConsAxioms' @env fml@ : If @fml@ contains constructor applications, return the set of instantiations of constructor axioms for those applications in the environment @env@
 instantiateConsAxioms :: Environment -> Bool -> Maybe Formula -> Formula -> Set Formula
-instantiateConsAxioms env numeric mVal fml =
-  let inst = instantiateConsAxioms env numeric mVal 
+instantiateConsAxioms env forRes mVal fml =
+  let inst = instantiateConsAxioms env forRes mVal 
       allMeasures dt e = Map.assocs $
-        if numeric
-          then allIntMeasuresOf dt e
+        if forRes 
+          then allRMeasuresOf dt e
           else allMeasuresOf dt e
   in case fml of
-    Cons resS@(DataS dtName _) ctor args -> Set.unions $ Set.fromList (map (measureAxiom resS ctor args) (allMeasures dtName env)) :
-                                                          map (instantiateConsAxioms env numeric Nothing) args
+    Cons resS@(DataS dtName _) ctor args -> 
+      Set.unions $ Set.fromList (map (measureAxiom resS ctor args) (allMeasures dtName env)) 
+                   : map (instantiateConsAxioms env forRes Nothing) args
     Unary op e -> inst e
     Binary op e1 e2 -> inst e1 `Set.union` inst e2
     Ite e0 e1 e2 -> inst e0 `Set.union` inst e1 `Set.union` inst e2
@@ -175,11 +176,14 @@ safeAddGhostVar name t@AnyT{} env = return $ addGhostVariable name t env
 safeAddGhostVar name t env = do 
   tstate <- get 
   adomain <- asks _cegisDomain 
+  return $ addGhostVariable name t env
+  {-
   if isResourceVariable env tstate adomain name t
     then do 
       universalFmls %= Set.insert (Var (toSort (baseTypeOf t)) name)
       return $ addGhostVariable name t env
     else return $ addGhostVariable name t env
+  -}
 
 isResourceVariable :: Environment 
                    -> TypingState 

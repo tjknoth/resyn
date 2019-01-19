@@ -537,6 +537,23 @@ instance Ord Candidate where
 ---------------------------------------
 ---------------------------------------
 
+-- 'transformFml' @transform f@ : apply some transformation @transform@ to each 
+--    node in the Formula AST
+transformFml :: (Formula -> Formula) -> Formula -> Formula 
+transformFml transform f = 
+  let update = transformFml transform
+      updateRec = transform . update
+  in case f of 
+    (Unary op f)    -> Unary op $ updateRec f
+    (Binary op f g) -> Binary op (updateRec f) (updateRec g) 
+    (Ite g t f)     -> Ite (updateRec g) (updateRec t) (updateRec f)
+    (Pred s x fs)   -> Pred s x $ map transform (map update fs)
+    (Cons s x fs)   -> Cons s x $ map transform (map update fs) 
+    (All f g)       -> All (updateRec f) (updateRec g) 
+    (SetLit s fs)   -> SetLit s $ map transform (map update fs)
+    atom            -> transform atom
+
+
 isUnknownForm :: Formula -> Bool
 isUnknownForm (Unknown _ _) = True
 isUnknownForm _             = False

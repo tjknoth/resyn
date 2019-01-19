@@ -4,7 +4,6 @@
 module Synquid.Solver.Resource (
   checkResources,
   simplifyRCs,
-  allUniversals,
   allRFormulas,
   allRMeasures,
   partitionType,
@@ -128,12 +127,13 @@ embedAndProcessConstraint :: (MonadHorn s, RMonad s)
                           -> TCSolver s ProcessedRFormula
 embedAndProcessConstraint env c extra rfml = do
   hasUnivs <- isJust <$> asks _cegisDomain 
-  let go = (\f -> insertAssumption extra <$> embedConstraint env f) >=> processRFml >=> applyAssumptions
+  let go = insertAssumption extra >=> embedConstraint env >=> processRFml >=> applyAssumptions
   if hasUnivs
     then go rfml 
-    else return $ processSimple rfml 
-
-processSimple (RFormula _ _ substs fml) = RFormula () () substs fml
+    else return $ rfml { 
+      knownAssumptions = (), 
+      unknownAssumptions = ()
+    }
 
 -- Embed context and generate constructor axioms
 embedConstraint :: (MonadHorn s, RMonad s)
@@ -149,13 +149,13 @@ embedConstraint env rfml = do
   let axioms = if useMeasures 
       then instantiateConsAxioms env True Nothing (conjunction emb)
       else Set.empty
-
+  
   return $ rfml { knownAssumptions = Set.union emb axioms } 
 
 -- Insert extra assumption, if necessary
-insertAssumption :: Maybe Formula -> RawRFormula -> RawRFormula
-insertAssumption Nothing f = f
-insertAssumption (Just extra) (RFormula known unknown substs fml) = 
+insertAssumption :: Monad s => Maybe Formula -> RawRFormula -> TCSolver s RawRFormula
+insertAssumption Nothing f = return f
+insertAssumption (Just extra) (RFormula known unknown substs fml) = return $
   case extra of 
     u@Unknown{} -> RFormula known (Set.insert u unknown) substs fml 
     f           -> RFormula (Set.insert f known) unknown substs fml
@@ -172,6 +172,7 @@ processRFml (RFormula known unknown substs body) = do
   let (body', bodyPreds) = adjustAndGatherPreds body
   -- Generate congruence axioms
   let allPreds = Set.unions $ bodyPreds : map snd res
+  universalMeasures %= Set.union (Set.map mkMeasureVar allPreds)
   let congruceAxioms = generateCongAxioms allPreds
 
   let completeEmb = Set.fromList $ congruceAxioms ++ concat instantiatedEmb
@@ -219,7 +220,7 @@ satisfyResources universals rfmls = do
 
       -- Construct list of universally quantified expressions, storing the formula with a string representation
       let universalsWithVars = formatUniversals universals 
-      uMeasures <- Map.assocs <$> use resourceMeasures
+      let uMeasures = Map.assocs $ allRMeasures env
       
       -- Initialize polynomials for each resource variable
       let init name info = initializePolynomial env aDomain uMeasures (name, universals) --(name, info) 
@@ -243,14 +244,6 @@ shouldUseMeasures :: AnnotationDomain -> Bool
 shouldUseMeasures ad = case ad of 
     Variable -> False 
     _ -> True 
-
-allRMeasures :: RSchema -> Map String MeasureDef -> Map String MeasureDef
-allRMeasures sch = allRMeasures' (toMonotype sch) 
-
-allRMeasures' typ measures = 
-  let rforms = allRFormulas True typ
-      allPreds = Set.unions $ map getAllPreds rforms
-  in  Map.filterWithKey (\x _ -> x `Set.member` allPreds) measures
 
 -- Nondeterministically redistribute top-level potentials between variables in context
 redistribute :: Monad s 
@@ -340,31 +333,6 @@ refinementOf :: RType -> Formula
 refinementOf (ScalarT _ fml _) = fml
 refinementOf _                 = error "error: Encountered non-scalar type when generating resource constraints"
 
--- | 'allUniversals' @env sch@ : set of all universally quantified resource formulas in the potential
---    annotations of the type @sch@
-allUniversals :: Environment -> RSchema -> Set Formula
-allUniversals env sch = getUniversals univSyms $ conjunction $ allRFormulas True $ toMonotype sch 
-  where
-    -- Include function argument variable names in set of possible universally quantified expressions
-    univSyms = varsOfType (toMonotype sch) `Set.union` universalSyms env
-    varsOfType ScalarT{}                 = Set.empty
-    varsOfType (FunctionT x argT resT _) = Set.insert x (varsOfType argT `Set.union` varsOfType resT)
-
--- | 'getUniversals' @env f@ : return the set of universally quantified terms in formula @f@ given set of universally quantified symbols @syms@ 
-getUniversals :: Set String -> Formula -> Set Formula
-getUniversals syms (SetLit s fs)  = Set.unions $ map (getUniversals syms) fs
-getUniversals syms v@(Var s x)    = Set.fromList [v | Set.member x syms || isValueVar x] 
-  where 
-    isValueVar ('_':'v':_) = True
-    isValueVar _           = False
-getUniversals syms (Unary _ f)    = getUniversals syms f
-getUniversals syms (Binary _ f g) = getUniversals syms f `Set.union` getUniversals syms g
-getUniversals syms (Ite f g h)    = getUniversals syms f `Set.union` getUniversals syms g `Set.union` getUniversals syms h
-getUniversals syms (Pred _ _ fs)  = Set.unions $ map (getUniversals syms) fs 
-getUniversals syms (Cons _ _ fs)  = Set.unions $ map (getUniversals syms) fs
-getUniversals syms (All f g)      = getUniversals syms g
-getUniversals _ _                 = Set.empty 
-
 -- Instantiate universally quantified expression with all possible arguments in the 
 --   quantified position. Also generate congruence axioms.
 -- POSSIBLE PROBLEM: this doesn't really recurse looking for arbitrary foralls
@@ -374,21 +342,33 @@ getUniversals _ _                 = Set.empty
 --   including new predicate applications, the second is a set of just the instantiated apps 
 instantiateForall :: Monad s => Formula -> TCSolver s ([Formula], Set Formula)
 instantiateForall f@All{} = instantiateForall' f
-instantiateForall f = return ([f], Set.empty)
+instantiateForall f       = return ([f], Set.empty)
 
---instantiateForall :: Environment -> [Formula] -> Formula -> ([Formula], Set Formula)
---instantiateForall env univs f@All{}  = instantiateForall' env univs f
---instantiateForall env univs f        = ([f], Set.empty)
 instantiateForall' (All f g) = instantiateForall' g
 instantiateForall' f         = instantiatePred f
 
 instantiatePred :: Monad s => Formula -> TCSolver s ([Formula], Set Formula)
-instantiatePred p@(Pred s x args) = do 
-  mdefs <- use resourceMeasures 
-  case Map.lookup x mdefs of 
+instantiatePred fml@(Binary op p@(Pred s x args) axiom) = do 
+  env <- use initEnv
+  case Map.lookup x (allRMeasures env) of 
     Nothing -> error $ show $ text "instantiatePred: measure definition not found" <+> pretty p
-    Just mdef -> do  
-      env <- use initEnv
+    Just mdef -> do
+      let substs = allValidCArgs env mdef p
+      let allPreds = map (`substitute` p) substs
+      let allFmls = map (`substitute` fml) substs
+      return (map (transformFml mkMeasureVar) allFmls, Set.fromList allPreds)
+--instantiatePred f = do 
+--  return ([], Set.empty)
+
+{-
+instantiatePred :: Monad s => Formula -> TCSolver s ([Formula], Set Formula)
+instantiatePred p@(Pred s x args) = do 
+  env <- use initEnv
+  case Map.lookup x (allRMeasures env) of 
+    Nothing -> error $ show $ text "instantiatePred: measure definition not found" <+> pretty p
+    Just mdef -> do 
+      let substs = allValidCArgs env mdef p
+      let allApps = map (`substitute` ) 
       univs <- Set.toList <$> use universalFmls
       let apps = possibleMeasureApps env univs (x, mdef) 
       return (map mkMeasureVar apps, Set.fromList apps)
@@ -405,7 +385,7 @@ instantiatePred (Ite g t f) = do
   (fs, fpreds) <- instantiateForall' f 
   return ([Ite g' t' f' | g' <- gs, t' <- ts , f' <- fs], gpreds `Set.union` tpreds `Set.union` fpreds)
 instantiatePred f = return ([f], Set.empty)
-
+-}
 adjustAndGatherPreds :: Formula -> (Formula, Set Formula)
 adjustAndGatherPreds (Unary op f) = 
   let (f', ps) = adjustAndGatherPreds f
