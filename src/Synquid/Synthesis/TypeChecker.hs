@@ -239,12 +239,13 @@ reconstructCase :: (MonadSMT s, MonadHorn s, RMonad s)
                 -> Case RType 
                 -> RType 
                 -> Explorer s (Case RType)
-reconstructCase env scrVar pScrutinee t (Case consName args iBody) consT = cut $ do
+reconstructCase env scrVar pScrutinee t c@(Case consName args iBody) consT = cut $ do
   -- matchConsType simply assigns type variables appropriately
   runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
   consT' <- runInSolver $ currentAssignment consT 
   (syms, ass) <- caseSymbols env scrVar args consT'
   caseEnv <- foldM (\e (x, t) -> safeAddVariable x t e) (addAssumption ass env) syms
+  storeCase caseEnv c
   pCaseExpr <- local (over (_1 . matchDepth) (-1 +)) $
                inContext (\p -> Program (PMatch pScrutinee [Case consName args p]) t) $
                reconstructI caseEnv t iBody
@@ -322,7 +323,7 @@ reconstructE' env typ p@(PApp iFun iArg) = do
                       impl <- etaExpand tArg f
                       _ <- enqueueGoal env tArg impl d
                       return ()
-          Just (env', def) -> auxGoals %= ((Goal f env' (Monotype tArg) def d noPos True) :) -- This is a locally defined function: add an aux goal with its body
+          Just (env', def) -> auxGoals %= (Goal f env' (Monotype tArg) def d noPos True :) -- This is a locally defined function: add an aux goal with its body
         return iArg
       _ -> enqueueGoal env tArg iArg d -- HO argument is an abstraction: enqueue a fresh goal
 
@@ -352,7 +353,7 @@ checkAnnotation env t t' p = do
       fT'' <- runInSolver $ finalizeType t''
       pos <- asks . view $ _1 . sourcePos
       typingState . errorContext .= (pos, text "when checking consistency of type annotation" </> pretty fT'' </> text "with" </> pretty fT </> text "in" $+$ pretty (ctx (Program p t'')))
-      runInSolver solveTypeConstraints 
+      runInSolver solveTypeConstraints
       typingState . errorContext .= (noPos, empty)
 
       tass' <- use (typingState . typeAssignment)

@@ -542,14 +542,13 @@ instance Ord Candidate where
 transformFml :: (Formula -> Formula) -> Formula -> Formula 
 transformFml transform f = 
   let update = transformFml transform
-      updateRec = transform . update
-  in case f of 
-    (Unary op f)    -> Unary op $ updateRec f
-    (Binary op f g) -> Binary op (updateRec f) (updateRec g) 
-    (Ite g t f)     -> Ite (updateRec g) (updateRec t) (updateRec f)
+  in transform $ case f of 
+    (Unary op f)    -> Unary op $ update f
+    (Binary op f g) -> Binary op (update f) (update g) 
+    (Ite g t f)     -> Ite (update g) (update t) (update f)
     (Pred s x fs)   -> Pred s x $ map transform (map update fs)
     (Cons s x fs)   -> Cons s x $ map transform (map update fs) 
-    (All f g)       -> All (updateRec f) (updateRec g) 
+    (All f g)       -> All (update f) (update g) 
     (SetLit s fs)   -> SetLit s $ map transform (map update fs)
     atom            -> transform atom
 

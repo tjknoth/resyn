@@ -271,21 +271,29 @@ makeResourceVar env vvtype name = do
 insertRVar (name, info) = Map.insert name info
 
 -- Variable formula with fresh variable idfreshPot :: MonadHorn s => Explorer s Potential 
-freshPot :: MonadHorn s => Environment -> Maybe (RBase) -> Explorer s Formula
+freshPot :: MonadHorn s 
+         => Environment 
+         -> Maybe (RBase) 
+         -> Explorer s Formula
 freshPot env vtype = do 
   x <- freshId potentialPrefix
   rvar <- makeResourceVar env vtype x
   (typingState . resourceVars) %= insertRVar rvar
   return $ Var IntS x
 
-freshMul :: MonadHorn s => Environment -> Maybe (RBase)-> Explorer s Formula
+freshMul :: MonadHorn s 
+         => Environment 
+         -> Maybe (RBase)
+         -> Explorer s Formula
 freshMul env vtype = do
   x <- freshId multiplicityPrefix
   rvar <- makeResourceVar env vtype x
   (typingState . resourceVars) %= insertRVar rvar
   return $ Var IntS x
 
-freshFreePotential :: MonadHorn s => Environment -> Explorer s Formula
+freshFreePotential :: MonadHorn s 
+                   => Environment 
+                   -> Explorer s Formula
 freshFreePotential env = do
   fp <- freshId freePotentialPrefix 
   rvar <- makeResourceVar env Nothing fp
@@ -293,7 +301,11 @@ freshFreePotential env = do
   return $ Var IntS fp
 
 -- | 'freshPotentials' @sch r@ : Replace potentials in schema @sch@ by unwrapping the foralls. If @r@, recursively replace potential annotations in the entire type. Otherwise, just replace top-level annotations.
-freshPotentials :: MonadHorn s => Environment -> RSchema -> Bool -> Explorer s RSchema
+freshPotentials :: MonadHorn s 
+                => Environment 
+                -> RSchema 
+                -> Bool 
+                -> Explorer s RSchema
 freshPotentials env (Monotype t) isTransfer = 
   Monotype <$> freshPotentials' env t isTransfer
 freshPotentials env (ForallT x t) isTransfer = 
@@ -302,7 +314,11 @@ freshPotentials env (ForallP x t) isTransfer =
   ForallP x <$> freshPotentials env t isTransfer
 
 -- Replace potentials in a TypeSkeleton
-freshPotentials' :: MonadHorn s => Environment -> RType -> Bool -> Explorer s RType
+freshPotentials' :: MonadHorn s 
+                 => Environment 
+                 -> RType 
+                 -> Bool 
+                 -> Explorer s RType
 freshPotentials' env (ScalarT base fml (Ite g t f)) isTransfer = do
   t' <- freshPot env (if isTransfer then Nothing else Just base) 
   f' <- freshPot env (if isTransfer then Nothing else Just base) 
@@ -315,7 +331,11 @@ freshPotentials' env (ScalarT base fml pot) isTransfer = do
 freshPotentials' _ t _ = return t
 
 -- Replace potentials in a BaseType
-freshMultiplicities :: MonadHorn s => Environment -> RBase -> Bool -> Explorer s (RBase)
+freshMultiplicities :: MonadHorn s 
+                    => Environment 
+                    -> RBase 
+                    -> Bool 
+                    -> Explorer s (RBase)
 freshMultiplicities env b@(TypeVarT s x m) _ = do 
   m' <- freshMul env Nothing
   return $ TypeVarT s x m'
@@ -437,10 +457,22 @@ safeFreshPotentials env isTransfer = do
   scalars' <- mapM replace scalars
   return $ Map.insert 0 (Map.fromList scalars') syms
 
+storeCase :: Monad s 
+          => Environment 
+          -> Case RType 
+          -> Explorer s ()
+storeCase env (Case cons args _) = do 
+  let resSort = resultSort $ toMonotype $ allSymbols env Map.! cons
+  let mkArgVar x = flip Var x $ toSort $ baseTypeOf $ toMonotype $ symbolsOfArity 0 env Map.! x
+  (typingState . matchCases) %= Set.insert (Cons resSort cons (map mkArgVar args))
+
 mapTuple f (x, y) = (f x, f y)
 
 -- | 'toVar' @p env@: a variable representing @p@ (can be @p@ itself or a fresh ghost)
-toVar :: (MonadSMT s, MonadHorn s) => Environment -> RProgram -> Explorer s (Formula, Environment)
+toVar :: (MonadSMT s, MonadHorn s) 
+      => Environment 
+      -> RProgram 
+      -> Explorer s (Formula, Environment)
 toVar env (Program (PSymbol name) t) = return (symbolAsFormula env name t, env)
 toVar env (Program _ t) = do
   g <- freshId "G"

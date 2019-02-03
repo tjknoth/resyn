@@ -66,6 +66,7 @@ initTypingState goal = do
     _isFinal = False,
     _resourceConstraints = [],
     _resourceVars = Map.empty,
+    _matchCases = Set.empty,
     _simpleConstraints = [],
     _hornClauses = [],
     _consistencyChecks = [],
@@ -106,9 +107,8 @@ solveTypeConstraints = do
 finalSolveRCs :: (MonadSMT s, MonadHorn s, RMonad s) => TCSolver s () 
 finalSolveRCs = do 
   res <- asks _checkResourceBounds
-  -- THIS IS A HACK SO THAT EAC WILL ACTUALLY SOLVE THE RESOURCE CONSTRAINTS
-  let c = SharedForm emptyEnv fzero fzero fzero "PLACEHOLDER"
-  when res $ checkResources [c] 
+  -- Ensures EAC actually verifies the bounds
+  when res $ checkResources [SharedForm emptyEnv fzero fzero fzero "PLACEHOLDER"] 
 
 -- | Impose typing constraint @c@ on the programs
 addTypingConstraint c = over typingConstraints (nub . (c :))

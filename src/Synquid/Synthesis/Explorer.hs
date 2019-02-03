@@ -189,7 +189,7 @@ generateFirstCase env scrVar pScrutinee t consName =
       binders <- replicateM (arity consT') (freshVar env "x")
       (syms, ass) <- caseSymbols env scrVar binders consT'
       caseEnv <- foldM (\e (x, t) -> safeAddVariable x t e) (addAssumption ass env) syms
-
+      storeCase caseEnv (Case consName binders uHole)
       ifte  (do -- Try to find a vacuousness condition:
               deadUnknown <- Unknown Map.empty <$> freshId "C"
               addConstraint $ WellFormedCond env deadUnknown
@@ -227,6 +227,7 @@ generateCase env scrVar pScrutinee t consName =
       runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton ass) -- Create a fixed-valuation unknown to assume @ass@
 
       caseEnv <- (if unfoldSyms then unfoldAllVariables else id) <$> foldM (\e (x, t) -> safeAddVariable x t e) (addAssumption cUnknown env) syms
+      storeCase caseEnv (Case consName binders uHole)
       pCaseExpr <- optionalInPartial t $ local (over (_1 . matchDepth) (-1 +))
                                        $ inContext (\p -> Program (PMatch pScrutinee [Case consName binders p]) t)
                                        $ generateError caseEnv `mplus` generateI caseEnv t
@@ -234,8 +235,7 @@ generateCase env scrVar pScrutinee t consName =
       let recheck = if disjoint (symbolsOf pCaseExpr) (Set.fromList binders)
                       then runInSolver $ setUnknownRecheck (unknownName cUnknown) Set.empty Set.empty -- ToDo: provide duals here
                       else mzero
-
-      return (Case consName binders pCaseExpr, recheck)
+      return (Case consName binders pCaseExpr, recheck) 
 
 -- | 'caseSymbols' @scrutinee binders consT@: a pair that contains (1) a list of bindings of @binders@ to argument types of @consT@
 -- and (2) a formula that is the return type of @consT@ applied to @scrutinee@
@@ -253,9 +253,6 @@ generateMaybeMatchIf :: (MonadSMT s, MonadHorn s, RMonad s)
 generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplus` generateMatch env t -- might need to backtrack a successful match due to match depth limitation
   where
     -- | Guess an E-term and abduce a condition and a match-condition for it
-    -- For resource analysis: there's no need to share the environment here
-    --   because the match scrutinee can only be a variable 
-    --   (which will not cost resources under the current model)
     generateOneBranch = do
       (ifCEnv, ifBEnv) <- shareContext env $ show 
         $ text "generateMaybeMatchIf ::" <+> plain (pretty t)
@@ -297,8 +294,10 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
       let pScrutinee = Program (PSymbol x) scrT
       let ctors = ((env ^. datatypes) Map.! scrDT) ^. constructors
       let matchBEnv' = addScrutinee pScrutinee matchBEnv
+      storeCase matchBEnv' $ Case c [] uHole
       pBaseCase' <- cut $ inContext (\p -> Program (PMatch pScrutinee [Case c [] p]) t) 
                             $ generateMatchesFor matchCEnv (addAssumption matchCond matchBEnv') rest pBaseCase t
+      return $ Case c [] pBaseCase
 
       let genOtherCases previousCases ctors =
             case ctors of
@@ -384,7 +383,7 @@ checkE env typ p@(Program pTerm pTyp) = do
   fTyp <- runInSolver $ finalizeType typ
   pos <- asks . view $ _1 . sourcePos
   typingState . errorContext .= (pos, text "when checking" </> pretty p </> text "::" </> pretty fTyp </> text "in" $+$ pretty (ctx p))
-  runInSolver $ solveTypeConstraints 
+  runInSolver solveTypeConstraints
   typingState . errorContext .= (noPos, empty)
   
 

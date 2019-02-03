@@ -19,4 +19,4 @@ insert = ?? {-\x. \xs.
     ICons y ys -> 
       if x > y
         then ICons y (insert x ys)
-        else ICons x (ICons y ys) -}
+        else ICons x (ICons y ys)  -}

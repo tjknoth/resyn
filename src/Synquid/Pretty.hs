@@ -410,12 +410,12 @@ prettyConstraint (WellFormed env t label) = prettyBindings env <+> operator "|-"
 prettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 prettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 prettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
-prettyConstraint (SharedEnv e e' e'' label) = text "Shared scalars:" <+> prettyScalars e <+> pretty (_freePotential e)
+prettyConstraint (SharedEnv e e' e'' label) = prettyScalars e <+> pretty (_freePotential e)
   <+> operator "\\/" </> nest 4 (prettyScalars e' <+> pretty (_freePotential e') 
   <+> operator "||" <+> prettyScalars e'' <+> pretty (_freePotential e'')) -- <+> text "src:" <+> plain (pretty label))
-prettyConstraint (SharedForm env f fl fr label) = text "Shared potential:" <+> pretty env <+> operator "|-" 
+prettyConstraint (SharedForm env f fl fr label) = pretty env <+> operator "|-" 
   <+> pretty f <+> operator "\\/" <+> pretty fl <+> operator "||" <+> pretty fr -- <+> text "src:" <+> plain (pretty label)
-prettyConstraint (ConstantRes env label) = text "CT expression:" <+> text label <+> text "from scalars:" <+> prettyScalars env -- <+> text "src:" <+> pretty label
+prettyConstraint (ConstantRes env label) = text "CT:" <+> text label <+> text "from scalars:" <+> prettyScalars env -- <+> text "src:" <+> pretty label
 prettyConstraint (Transfer env env' _) = prettyScalars env <+> text "~" <+> prettyScalars env' <+> pretty (_freePotential env')
 
 -- Do not show environment

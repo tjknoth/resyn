@@ -10,7 +10,8 @@ module Synquid.Solver.CEGIS (
   allValidCArgs,
   initializePolynomial,
   initialCoefficients,
-  mkMeasureVar
+  mkFuncVar,
+  mkFuncString
 ) where 
 
 import Synquid.Type
@@ -41,7 +42,7 @@ type UMeasure = (String, MeasureDef)
 
 data Universals = Universals {
   uvars :: [UVar],
-  umeasures :: [UVar]
+  ufuns :: [UVar]
 } deriving (Show, Eq)
 
 -- Term of a polynomial: coefficient * universal
@@ -64,7 +65,7 @@ type ResourceSolution = Map String Formula
 
 -- Map from universally quantified expression (in string form) to its valuation
 data Counterexample = CX {
-  measureInterps :: Map String Formula,
+  funcInterps :: Map String Formula,
   variables :: Map String Formula,
   model :: SMTModel
 } deriving (Eq)
@@ -96,9 +97,9 @@ solveWithCEGIS 0 rfmls universals _ polynomials program = do
   case counterexample of 
     Nothing -> return True
     Just cx -> do
-      --traceM "CEGIS failed on final iteration"
       writeLog 4 $ text "Last counterexample:" <+> pretty (Map.assocs (variables cx)) 
-      writeLog 4 $ text "           measures:" <+> pretty (Map.assocs (measureInterps cx)) </> linebreak
+      writeLog 4 $ text "           measures:" <+> pretty (Map.assocs (funcInterps cx)) </> linebreak
+      --writeLog 4 $ text "       constructors:" <+> pretty (Map.assocs (constructorInterps cx)) </> linebreak
       return False
 
 solveWithCEGIS n rfmls universals examples polynomials program = do
@@ -113,11 +114,11 @@ solveWithCEGIS n rfmls universals examples polynomials program = do
     Just cx ->  
       do 
         writeLog 4 $ text "Counterexample:" <+> pretty (Map.assocs (variables cx))
-        writeLog 4 $ text "      measures:" <+> pretty (Map.assocs (measureInterps cx))
-        --writeLog 4 $ text "         model:" <+> pretty (snd (model cx))
+        writeLog 4 $ text "      measures:" <+> pretty (Map.assocs (funcInterps cx))
+        --writeLog 4 $ text "  constructors:" <+> pretty (Map.assocs (constructorInterps cx)) </> linebreak
         -- Update example list
         -- Attempt to find parameterization holding on all examples
-        -- Assumptions shouldn't be relevant for this query???? (IS THIS TRUE?)
+        -- Assumptions shouldn't be relevant for this query???? 
         (examples', params) <- getParameters rfmls examples polynomials cx 
         case params of
           Nothing -> do 
@@ -149,12 +150,12 @@ getCounterexample rfmls universals polynomials program = do
   writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
   -- Query solver for a counterexample
   model <- runInSolver $ solveAndGetModel cxQuery 
-  writeLog 5 $ text "Solved with model:" <+> text (fromMaybe "" (snd <$> model))
+  writeLog 5 $ text "CX model:" <+> text (fromMaybe "" (snd <$> model))
   assignments <- runInSolver . sequence 
     $ (modelGetAssignment (map fst (uvars universals)) <$> model)
   minterps <- runInSolver . sequence 
-    $ (modelGetAssignment (map fst (umeasures universals)) <$> model)
-  return $ (CX <$> join minterps) <*> join assignments <*> model
+    $ (modelGetAssignment (map fst (ufuns universals)) <$> model)
+  return $ CX <$> join minterps <*> join assignments <*> model
 
 
 -- | 'getParameters' @fml polynomials examples@
@@ -182,7 +183,7 @@ getParameters rfmls pastExamples polynomials counterexample = do
   let allCoefficients = concatMap coefficientsOf (Map.elems polynomials)
   writeLog 7 $ text "CEGIS param query:" </> pretty paramQuery
   model <- runInSolver $ solveAndGetModel (conjunction paramQuery)
-  writeLog 6 $ text "Solved with model:" <+> text (fromMaybe "" (snd <$> model))
+  writeLog 8 $ text "Param model:" <+> text (fromMaybe "" (snd <$> model))
   sol <- join <$> (runInSolver . sequence $ (modelGetAssignment allCoefficients <$> model))
   return (paramQuery, sol)
 
@@ -369,18 +370,20 @@ assignSorts (Just substs) (argSort, formalSort) =
 {- Some utilities -}
 
 mkPForm v@Var{} = v
-mkPForm p = mkMeasureVar p
+mkPForm p = mkFuncVar p
 
-mkMeasureVar m@(Pred s _ _) = Var s $ mkMeasureString m
-mkMeasureVar f = f
+mkFuncVar m@(Pred s _ _) = Var s $ mkFuncString m
+mkFuncVar m@(Cons s _ _) = Var s $ mkFuncString m
+mkFuncVar f = f
 
-mkMeasureString (Pred _ m args) = m ++ show (plain (pretty args))
+mkFuncString (Pred _ m args) = m ++ show (plain (pretty args))
+mkFuncString (Cons _ c args) = c ++ show (plain (pretty args))
 
 -- Turn a list of universally quantified formulas into a list of Universal 
 --   data structures (formula-string pairs)
 formatUniversals univs = zip (map universalToString univs) univs
 
-allVariables (CX ms vs _) = Map.union ms vs
+allVariables (CX ms vs _) = Map.unions [ms, vs]
 
 constantPTerm s = PolynomialTerm (constPolynomialVar s) Nothing
   where
@@ -389,4 +392,4 @@ constantPTerm s = PolynomialTerm (constPolynomialVar s) Nothing
 initialCoefficients = repeat $ IntLit 0
 
 universalToString (Var _ x) = x 
-universalToString p = mkMeasureString p
+universalToString p = mkFuncString p

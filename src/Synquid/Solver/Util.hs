@@ -8,7 +8,7 @@ module Synquid.Solver.Util (
     potentialVars,
     freshId,
     freshVar,
-    freshValueVars,
+    freshValueVarId,
     throwError,
     nonGhostScalars,
     safeAddGhostVar,
@@ -158,13 +158,6 @@ freshVar env prefix = do
 
 freshValueVarId :: Monad s => TCSolver s String
 freshValueVarId = freshId valueVarName
-
--- | Replace occurrences of _v with a fresh variable in a given formula 
-freshValueVars :: Monad s => Formula -> Sort -> TCSolver s (Formula, String)
-freshValueVars fml sort = do 
-  vnew <- freshValueVarId
-  let newVar = Var sort vnew
-  return (substitute (Map.singleton valueVarName newVar) fml, vnew)
 
 nonGhostScalars env = Map.filterWithKey (nonGhost env) $ symbolsOfArity 0 env
 
