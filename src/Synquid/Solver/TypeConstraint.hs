@@ -437,7 +437,7 @@ processConstraint c@(WellFormed env t@(ScalarT baseT fml pot) _)
           tq <- asks _typeQualsGen
           -- Only add qualifiers if it's a new variable; multiple well-formedness constraints could have been added for constructors
           let env' = typeSubstituteEnv tass env
-          -- Should this be ghost?
+          -- Should this be ghost? Probably... Doesn't really matter for well-formed constraints since we're only considering the potential of _v
           let env'' = addVariable valueVarName t env'
           unless (Map.member u qmap) $ addQuals u (tq env'' (Var (toSort baseT) valueVarName) (allScalars env'))
         _ -> return ()

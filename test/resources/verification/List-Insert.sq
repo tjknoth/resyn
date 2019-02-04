@@ -5,7 +5,7 @@ data IList a where
 measure numgt :: x: a -> IList a -> {Int | _v >= 0} where 
   Nil -> 0
   Cons y ys -> 
-    if y >= x 
+    if x > y 
       then 1 + numgt x ys 
       else numgt x ys
 

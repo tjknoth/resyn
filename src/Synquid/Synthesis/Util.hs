@@ -252,7 +252,7 @@ makeResourceVar :: Monad s
                 -> String 
                 -> Explorer s (String, [Formula])
 makeResourceVar env vvtype name = do
-  let universalsInScope = toMonotype <$> TCSolver.nonGhostScalars env --symbolsOfArity 0 env
+  let universalsInScope = toMonotype <$> TCSolver.nonGhostScalars env 
   let mkUFml (x, t) = do
         isRV <- checkResourceVar env x t
         return $ if isRV 
@@ -270,35 +270,34 @@ makeResourceVar env vvtype name = do
 
 insertRVar (name, info) = Map.insert name info
 
--- Variable formula with fresh variable idfreshPot :: MonadHorn s => Explorer s Potential 
 freshPot :: MonadHorn s 
          => Environment 
-         -> Maybe (RBase) 
+         -> Maybe RBase
          -> Explorer s Formula
-freshPot env vtype = do 
-  x <- freshId potentialPrefix
-  rvar <- makeResourceVar env vtype x
-  (typingState . resourceVars) %= insertRVar rvar
-  return $ Var IntS x
+freshPot env vtype = freshResAnnotation env vtype potentialPrefix
 
 freshMul :: MonadHorn s 
          => Environment 
-         -> Maybe (RBase)
+         -> Maybe RBase
          -> Explorer s Formula
-freshMul env vtype = do
-  x <- freshId multiplicityPrefix
-  rvar <- makeResourceVar env vtype x
-  (typingState . resourceVars) %= insertRVar rvar
-  return $ Var IntS x
+freshMul env vtype = freshResAnnotation env vtype multiplicityPrefix
 
 freshFreePotential :: MonadHorn s 
                    => Environment 
                    -> Explorer s Formula
-freshFreePotential env = do
-  fp <- freshId freePotentialPrefix 
-  rvar <- makeResourceVar env Nothing fp
-  (typingState . resourceVars) %= insertRVar rvar
-  return $ Var IntS fp
+freshFreePotential env = freshResAnnotation env Nothing freePotentialPrefix
+
+freshResAnnotation :: MonadHorn s
+                   => Environment
+                   -> Maybe RBase 
+                   -> String
+                   -> Explorer s Formula
+freshResAnnotation env vtype prefix = do 
+  x <- freshId prefix 
+  rvar <- makeResourceVar env vtype x 
+  (typingState . resourceVars) %= insertRVar rvar 
+  return $ Var IntS x
+
 
 -- | 'freshPotentials' @sch r@ : Replace potentials in schema @sch@ by unwrapping the foralls. If @r@, recursively replace potential annotations in the entire type. Otherwise, just replace top-level annotations.
 freshPotentials :: MonadHorn s 

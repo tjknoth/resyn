@@ -462,7 +462,7 @@ retrieveAndCheckVarType name sch typ env = do
     Just sc -> addSubtypeConstraint env (refineBot env $ shape t) (refineTop env sc) False ""
   let p = Program (PSymbol name) t
   checkE env' typ p
-  addCTConstraint env' $ "variable " ++ name
+  addCTConstraint env' $ "VAR " ++ name
   return p
 
 -- | Make environment inconsistent (if possible with current unknown assumptions)

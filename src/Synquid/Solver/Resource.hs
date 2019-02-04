@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 -- | Resource analysis
 module Synquid.Solver.Resource (
@@ -88,9 +88,10 @@ generateFormula' :: (MonadHorn s, RMonad s)
                  => Bool 
                  -> Constraint 
                  -> TCSolver s ProcessedRFormula
-generateFormula' checkMults c = 
+generateFormula' checkMults c = do 
+  writeLog 4 $ indent 2 $ simplePrettyConstraint c <+> operator "~>"
   let mkRForm = RFormula Set.empty Set.empty 
-  in case c of 
+  case c of 
     Subtype{} -> error $ show $ text "generateFormula: subtype constraint present:" <+> pretty c
     RSubtype env pl pr label -> do 
       op <- subtypeOp 
@@ -125,7 +126,7 @@ embedAndProcessConstraint env extra rfml = do
   hasUnivs <- isJust <$> asks _cegisDomain
   let go = insertAssumption extra 
        >=> embedConstraint env 
-       >=> updateVariables 
+       >=> updateVariables env
        >=> instantiateAssumptions
        >=> applyAssumptions
   if hasUnivs
@@ -162,11 +163,12 @@ replaceCons f = f
 
 -- | 'updateVariables' : replace constructor applications with variables, 
 --    generate fresh _v's
-updateVariables :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula 
-updateVariables (RFormula known unknown substs body) = do 
+updateVariables :: MonadHorn s => Environment -> RawRFormula -> TCSolver s RawRFormula 
+updateVariables env (RFormula known unknown substs body) = do 
   -- TODO: the original _v needs to get into the list of universals
   --   For some reason, the substitutions aren't really happening after the first round
-  let adjust = transformFml replaceCons
+  let vvsubst = getValueVarSubst env
+  let adjust = transformFml replaceCons . substitute vvsubst
   let body'  = adjust body
   let known' = Set.map adjust known
   return $ RFormula known' unknown substs body'
@@ -202,7 +204,7 @@ applyAssumptions (RFormula known unknown substs fml) = do
   let finalFml = if isNothing aDomain 
       then fml
       else conjunction ass |=>| fml
-
+  writeLog 4 $ indent 4 $ pretty finalFml
   return $ RFormula () () substs finalFml 
 
 
@@ -234,9 +236,8 @@ satisfyResources universals rfmls = do
       -- Construct list of universally quantified expressions, storing the formula with a string representation
       let universalsWithVars = formatUniversals universals 
       let uMeasures = Map.assocs $ allRMeasures env
-      let possiblePredArgs = filter (not . isValueVar) universals
       -- Initialize polynomials for each resource variable
-      let init name info = initializePolynomial env aDomain uMeasures (name, possiblePredArgs) --(name, info) 
+      let init name info = initializePolynomial env aDomain uMeasures (name, info) -- (name, universals)
       let allPolynomials = Map.mapWithKey init rVars
       -- List of all coefficients in the list of all polynomials
       let allCoefficients = concat $ Map.elems $ fmap coefficientsOf allPolynomials
@@ -310,8 +311,8 @@ partitionType :: Bool
               -> RType
               -> [Constraint]
 partitionType cm l env (x, t@(ScalarT b _ f)) (ScalarT bl _ fl) (ScalarT br _ fr)
-  = let env'  = addAssumption (Var (toSort b) valueVarName |=| Var (toSort b) x) $ 
-                  addVariable valueVarName t env
+  = let vvtype = addRefinement t (varRefinement x (toSort b))
+        env'  = addVariable valueVarName vvtype env {- addAssumption (Var (toSort b) valueVarName |=| Var (toSort b) x) $ -}
     in SharedForm env' f fl fr (x ++ " : " ++ l) : partitionBase cm l env (x, b) bl br
 
 partitionBase cm l env (x, DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _)
@@ -415,8 +416,24 @@ assertCongruence' (pl@(Pred _ ml largs), pr@(Pred _ mr rargs)) =
 assertCongruence' ms = error $ show $ text "assertCongruence: called with non-measure formulas:"
   <+> pretty ms 
 
-isValueVar (Var _ ('_':'v':_)) = True
-isValueVar _                   = False
+-- | 'getValueVarSubst' @env fml@ : Given a context and formula, find the valuation of _v
+--    by inspecting its refinement of the form _v :: { B | _v == x }
+--    and return this substitution [x / _v] 
+getValueVarSubst :: Environment -> Substitution
+getValueVarSubst env = 
+  let newvv = extractValueVar env 
+  in Map.singleton valueVarName newvv
+
+extractValueVar :: Environment -> Formula
+extractValueVar env = 
+  case Map.lookup valueVarName (symbolsOfArity 0 env) of
+    Nothing -> error $ "extractValueVar: _v not found in environment " ++ show (pretty env)
+    Just sc -> getVVFromType (toMonotype sc)
+
+getVVFromType (ScalarT _ ref _) = findVV ref 
+  where findVV (Binary Eq (Var _ "_v") right) = right
+        findVV _ = error $ show $ text "getVVFromType: ill-formed refinement:" <+> pretty ref
+getVVFromType t = error $ show $ text "getVVFromType: non-scalar type:" <+> pretty t
 
 getAnnotationStyle = getAnnotationStyle' . toMonotype 
 
