@@ -63,8 +63,7 @@ solveResourceConstraints accConstraints constraints = do
     writeLog 3 $ linebreak <> text "Generating resource constraints:"
     -- Check satisfiability
     constraintList <- mapM generateFormula constraints
-    universals <- Set.toList <$> use universalFmls
-    b <- satisfyResources universals (accConstraints ++ constraintList) 
+    b <- satisfyResources (accConstraints ++ constraintList) 
     let result = if b then "SAT" else "UNSAT"
     writeLog 5 $ nest 4 $ text "Accumulated resource constraints:" 
       $+$ prettyConjuncts (map rformula accConstraints)
@@ -110,7 +109,7 @@ generateFormula' checkMults c = do
       let fml = mkRForm substs f 
       embedAndProcessConstraint env Nothing fml
     Transfer env env' label -> do 
-      (fmls, substs) <- redistribute env env' 
+      (substs, fmls) <- redistribute env env' 
       let fml = mkRForm substs $ conjunction fmls
       embedAndProcessConstraint env Nothing fml
     _ -> error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
@@ -126,8 +125,9 @@ embedAndProcessConstraint env extra rfml = do
   hasUnivs <- isJust <$> asks _cegisDomain
   let go = insertAssumption extra 
        >=> embedConstraint env 
-       >=> updateVariables env
+       >=> updateValueVar env
        >=> instantiateAssumptions
+       >=> updateVariables
        >=> applyAssumptions
   if hasUnivs
     then go rfml 
@@ -135,19 +135,6 @@ embedAndProcessConstraint env extra rfml = do
       knownAssumptions = (), 
       unknownAssumptions = ()
     }
-
--- Embed context and generate constructor axioms
-embedConstraint :: (MonadHorn s, RMonad s)
-                => Environment 
-                -> RawRFormula 
-                -> TCSolver s RawRFormula
-embedConstraint env rfml = do 
-  useMeasures <- maybe False shouldUseMeasures <$> asks _cegisDomain
-  emb <- Set.filter (not . isUnknownForm) <$> embedSynthesisEnv env (conjunction (varsOf (rformula rfml))) True useMeasures
-  let axioms = if useMeasures 
-      then instantiateConsAxioms env True Nothing (conjunction emb)
-      else Set.empty
-  return $ rfml { knownAssumptions = Set.union emb axioms } 
 
 -- Insert extra assumption, if necessary
 insertAssumption :: Monad s => Maybe Formula -> RawRFormula -> TCSolver s RawRFormula
@@ -157,21 +144,33 @@ insertAssumption (Just extra) (RFormula known unknown substs fml) = return $
     u@Unknown{} -> RFormula known (Set.insert u unknown) substs fml 
     f           -> RFormula (Set.insert f known) unknown substs fml
 
+-- Embed context and generate constructor axioms
+embedConstraint :: (MonadHorn s, RMonad s)
+                => Environment 
+                -> RawRFormula 
+                -> TCSolver s RawRFormula
+embedConstraint env rfml@(RFormula known _ _ _) = do 
+  useMeasures <- maybe False shouldUseMeasures <$> asks _cegisDomain
+  emb <- Set.filter (not . isUnknownForm) <$> embedSynthesisEnv env (conjunction (varsOf (rformula rfml))) True useMeasures
+  let axioms = if useMeasures 
+        then instantiateConsAxioms env True Nothing (conjunction emb)
+        else Set.empty
+  return $ rfml { knownAssumptions = Set.unions [known, emb, axioms] } 
+
+-- | 'updateValueVar' : substitute for _v 
+updateValueVar :: MonadHorn s => Environment -> RawRFormula -> TCSolver s RawRFormula 
+updateValueVar env (RFormula known unknown substs body) = do 
+  let vvsubst = getValueVarSubst env
+  let body'  = substitute vvsubst body
+  let known' = Set.map (substitute vvsubst) known
+  return $ RFormula known' unknown substs body'
+
 
 replaceCons f@Cons{} = mkFuncVar f
 replaceCons f = f
 
--- | 'updateVariables' : replace constructor applications with variables, 
---    generate fresh _v's
-updateVariables :: MonadHorn s => Environment -> RawRFormula -> TCSolver s RawRFormula 
-updateVariables env (RFormula known unknown substs body) = do 
-  -- TODO: the original _v needs to get into the list of universals
-  --   For some reason, the substitutions aren't really happening after the first round
-  let vvsubst = getValueVarSubst env
-  let adjust = transformFml replaceCons . substitute vvsubst
-  let body'  = adjust body
-  let known' = Set.map adjust known
-  return $ RFormula known' unknown substs body'
+replacePred f@Pred{} = mkFuncVar f
+replacePred f = f
 
 -- Instantiate universally quantified expressions
 -- Generate congruence axioms
@@ -181,7 +180,7 @@ instantiateAssumptions (RFormula known unknown substs body) = do
   res <- mapM instantiateForall $ Set.toList known
   let instantiatedEmb = map fst res 
   -- Generate variables for predicate applications
-  let (body', bodyPreds) = adjustAndGatherPreds body
+  let bodyPreds = gatherPreds body
   -- Generate congruence axioms
   let allPreds = Set.unions $ bodyPreds : map snd res
   let congruenceAxioms = generateCongAxioms allPreds
@@ -189,10 +188,18 @@ instantiateAssumptions (RFormula known unknown substs body) = do
   -- Instantiate unknown assumptions
   -- TODO: maybe move this up so that we can replace function apps when 
   --   it's done for known/body?
-  unknown' <- Set.map (transformFml mkFuncVar) <$> assignUnknowns unknown
+  unknown' <- assignUnknowns unknown
   -- Update set of measure applications
   universalMeasures %= Set.union (Set.map mkFuncVar allPreds)
-  return $ RFormula completeEmb unknown' substs body'
+  return $ RFormula completeEmb unknown' substs body
+
+updateVariables :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula 
+updateVariables (RFormula known unknown substs body) = do 
+  let update = Set.map (transformFml mkFuncVar)
+  let unknown' = update unknown
+  let known' = update known 
+  let body' = transformFml mkFuncVar body 
+  return $ RFormula known' unknown' substs body'
 
 applyAssumptions :: MonadHorn s 
                  => RawRFormula 
@@ -211,10 +218,9 @@ applyAssumptions (RFormula known unknown substs fml) = do
 -- | Check the satisfiability of the generated resource constraints, instantiating universally 
 --     quantified expressions as necessary.
 satisfyResources :: RMonad s 
-                 => [Formula] 
-                 -> [ProcessedRFormula]
+                 => [ProcessedRFormula]
                  -> TCSolver s Bool
-satisfyResources universals rfmls = do 
+satisfyResources rfmls = do 
   noUnivs <- isNothing <$> asks _cegisDomain
   if noUnivs 
     then do 
@@ -226,6 +232,7 @@ satisfyResources universals rfmls = do
           writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (snd m'))
           return True 
     else do
+      universals <- Set.toList <$> use universalFmls
       env <- use initEnv
       cMax <- asks _cegisMax
       aDomain <- fromJust <$> asks _cegisDomain
@@ -249,7 +256,9 @@ satisfyResources universals rfmls = do
 
       writeLog 3 $ text "Solving resource constraint with CEGIS:" 
       writeLog 5 $ pretty $ conjunction $ map rformula rfmls
-      writeLog 3 $ indent 2 $ text "Over universally quantified expressions:" <+> hsep (map (pretty . snd) universalsWithVars)
+      writeLog 3 $ indent 2 $ text "Over universally quantified variables:" 
+        <+> hsep (map (pretty . snd) universalsWithVars) 
+        <+> text "and functions:" <+> hsep (map pretty (mApps ++ cApps))
 
       solveWithCEGIS cMax rfmls allUniversals [] allPolynomials initialProgram 
 
@@ -262,26 +271,50 @@ shouldUseMeasures ad = case ad of
 redistribute :: Monad s 
              => Environment 
              -> Environment 
-             -> TCSolver s ([Formula], Map Formula Substitution)
+             -> TCSolver s (PendingRSubst, [Formula])
 redistribute envIn envOut = do
   let fpIn  = _freePotential envIn 
   let fpOut = _freePotential envOut 
   -- All (non-ghost) scalar types 
-  let scalarsOf env = toMonotype <$> nonGhostScalars env
+  --let scalarsOf env = toMonotype <$> nonGhostScalars env
   -- All top-level potential annotations of a map of scalar types
-  let topPotentials = Map.mapMaybe topPotentialOf
+  --let topPotentials = Map.mapMaybe topPotentialOf
   -- Generate pending substitutions 
-  -- TODO: generalize this to potentials that aren't just free variables!
-  let substitutions e = Map.foldlWithKey generateSubst Map.empty (scalarsOf e)
+  --let substitutions e = Map.foldlWithKey generateSubst Map.empty (scalarsOf e)
   -- Sum of all top-level potentials of scalar types in context
-  let envSum env = sumFormulas $ topPotentials $ Map.mapWithKey applySubst $ scalarsOf env
+  let envSum = sumFormulas . substitutePotentials 
+  --let envSum env = sumFormulas $ topPotentials $ Map.mapWithKey substForValueVar $ scalarsOf env
   -- Assert that all potentials are well-formed
-  let wellFormed smap = map (|>=| fzero) ((Map.elems . topPotentials) smap) 
+  let wellFormed env = map (|>=| fzero) (Map.elems (substitutePotentials env))
+  --let wellFormed smap = map (|>=| fzero) ((Map.elems . topPotentials) smap) 
   -- Assert (fresh) potentials in output context are well-formed
-  let wellFormedAssertions = (fpIn |>=| fzero) : (fpOut |>=| fzero) : wellFormed (scalarsOf envOut) 
+  let wellFormedAssertions = (fpIn |>=| fzero) : (fpOut |>=| fzero) : wellFormed envOut 
   --Assert that top-level potentials are re-partitioned
   let transferAssertions = (envSum envIn |+| fpIn) |=| (envSum envOut |+| fpOut)
-  return (transferAssertions : wellFormedAssertions, Map.union (substitutions envIn) (substitutions envOut))
+  return (Map.empty, transferAssertions : wellFormedAssertions)
+  --return (Map.union (substitutions envIn) (substitutions envOut), transferAssertions : wellFormedAssertions)
+
+-- Assert that a context contains zero "free" potential
+assertZeroPotential :: Monad s 
+                    => Environment 
+                    -> TCSolver s (PendingRSubst, Formula) 
+assertZeroPotential env = do 
+  --let scalars = toMonotype <$> nonGhostScalars env 
+  --let topPotentials = Map.mapMaybe topPotentialOf
+  --let substitutions = Map.foldlWithKey generateSubst Map.empty scalars
+  let topLevelPotentials = substitutePotentials env
+  let fml = ((env ^. freePotential) |+| sumFormulas topLevelPotentials) |=| fzero
+  --let fml = ((env ^. freePotential) |+| sumFormulas (topPotentials scalars)) |=| fzero
+  return (Map.empty, fml)
+  --return (substitutions, fml)
+
+-- | 'substitutePotentials' @env@ : substitute [x / _v] in all top-level potential annotations 
+--    of all scalars x in @env@, returning map from variable names to said annotations 
+substitutePotentials :: Environment -> Map String Formula
+substitutePotentials env = 
+  let scalars = Map.mapWithKey substForValueVar $ toMonotype <$> nonGhostScalars env 
+  in Map.mapMaybe topPotentialOf scalars
+
 
 -- Substitute for _v in potential annotation
 generateSubst :: PendingRSubst -> String -> RType -> PendingRSubst
@@ -296,10 +329,12 @@ generateSubst subs x t =
       let value' = Var (toSort (baseTypeOf t)) x 
       in Map.insert p (Map.singleton valueVarName value') subs
 
-applySubst :: String -> RType -> RType 
-applySubst x (ScalarT b r p) = 
+-- | 'substForValueVar' @x t@ : Substitute [@x@ / _v] in the top-level 
+--   potential annotation of @t@
+substForValueVar :: String -> RType -> RType 
+substForValueVar x (ScalarT b r p) = 
   let value' = Var (toSort b) x 
-  in ScalarT b r $ substitute (Map.singleton valueVarName value') p
+  in  ScalarT b r $ substitute (Map.singleton valueVarName value') p
 
 -- Generate sharing constraints, given a type and the two types 
 --   into which it is shared 
@@ -321,17 +356,6 @@ partitionBase cm l env (x, b@(TypeVarT _ _ m)) (TypeVarT _ _ ml) (TypeVarT _ _ m
   = [SharedForm env m ml mr (x ++ " : " ++ l) | cm]
 partitionBase _ _ _ _ _ _ = []
 
-
--- Assert that a context contains zero "free" potential
-assertZeroPotential :: Monad s 
-                    => Environment 
-                    -> TCSolver s (PendingRSubst, Formula) 
-assertZeroPotential env = do 
-  let scalars = toMonotype <$> nonGhostScalars env 
-  let topPotentials = Map.mapMaybe topPotentialOf
-  let substitutions = Map.foldlWithKey generateSubst Map.empty scalars
-  let fml = ((env ^. freePotential) |+| sumFormulas (topPotentials scalars)) |=| fzero
-  return (substitutions, fml)
 
 -- Is given constraint relevant for resource analysis
 isResourceConstraint :: Constraint -> Bool
@@ -358,7 +382,7 @@ refinementOf _                 = error "error: Encountered non-scalar type when 
 --   including new predicate applications, the second is a set of just the instantiated apps 
 instantiateForall :: Monad s => Formula -> TCSolver s ([Formula], Set Formula)
 instantiateForall f@All{} = instantiateForall' f
-instantiateForall f       = return ([f], Set.empty)
+instantiateForall f       = return ([f], gatherPreds f)
 
 instantiateForall' (All f g) = instantiateForall' g
 instantiateForall' f         = instantiatePred f
@@ -372,29 +396,18 @@ instantiatePred fml@(Binary op p@(Pred s x args) axiom) = do
       let substs = allValidCArgs env mdef p
       let allPreds = map (`substitute` p) substs
       let allFmls = map (`substitute` fml) substs
-      return (map (transformFml mkFuncVar) allFmls, Set.fromList allPreds)
+      return (allFmls, Set.fromList allPreds)
 
 -- Replace predicate applications in formula f with appropriate variables,
 --   collecting all such predicate applications present in f
-adjustAndGatherPreds :: Formula -> (Formula, Set Formula)
-adjustAndGatherPreds (Unary op f) = 
-  let (f', ps) = adjustAndGatherPreds f
-  in (Unary op f', ps)
-adjustAndGatherPreds (Binary op f g) = 
-  let (f', fps) = adjustAndGatherPreds f
-      (g', gps) = adjustAndGatherPreds g
-  in (Binary op f' g', fps `Set.union` gps) 
-adjustAndGatherPreds (Ite g t f) = 
-  let (g', gps) = adjustAndGatherPreds g
-      (t', tps) = adjustAndGatherPreds t
-      (f', fps) = adjustAndGatherPreds f
-  in (Ite g' t' f', gps `Set.union` tps `Set.union` fps)
-adjustAndGatherPreds (All f g) = adjustAndGatherPreds g -- maybe should handle quantified fmls...
-adjustAndGatherPreds (SetLit s fs) = 
-  let (fs', fps) = unzip $ map adjustAndGatherPreds fs
-  in (SetLit s fs', Set.unions fps)
-adjustAndGatherPreds f@Pred{} = (mkFuncVar f, Set.singleton f)
-adjustAndGatherPreds f = (f, Set.empty)
+gatherPreds :: Formula -> Set Formula
+gatherPreds (Unary op f) = gatherPreds f
+gatherPreds (Binary op f g) = gatherPreds f `Set.union` gatherPreds g
+gatherPreds (Ite g t f) = Set.unions [gatherPreds g, gatherPreds t, gatherPreds f]
+gatherPreds (All f g) = gatherPreds g -- maybe should handle quantified fmls...
+gatherPreds (SetLit s fs) = Set.unions $ map gatherPreds fs
+gatherPreds f@Pred{} = Set.singleton f 
+gatherPreds f = Set.empty
 
 -- Generate all congruence axioms, given all instantiations of universally quantified
 --   measure applications
@@ -421,14 +434,9 @@ assertCongruence' ms = error $ show $ text "assertCongruence: called with non-me
 --    and return this substitution [x / _v] 
 getValueVarSubst :: Environment -> Substitution
 getValueVarSubst env = 
-  let newvv = extractValueVar env 
-  in Map.singleton valueVarName newvv
-
-extractValueVar :: Environment -> Formula
-extractValueVar env = 
-  case Map.lookup valueVarName (symbolsOfArity 0 env) of
-    Nothing -> error $ "extractValueVar: _v not found in environment " ++ show (pretty env)
-    Just sc -> getVVFromType (toMonotype sc)
+  case Map.lookup valueVarName (symbolsOfArity 0 env) of 
+    Nothing -> Map.empty
+    Just sc -> Map.singleton valueVarName $ getVVFromType (toMonotype sc)
 
 getVVFromType (ScalarT _ ref _) = findVV ref 
   where findVV (Binary Eq (Var _ "_v") right) = right

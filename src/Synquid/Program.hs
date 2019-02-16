@@ -703,30 +703,43 @@ getAllPreds _              = Set.empty
 -- Return a map from the IDs of multi-argument measures to a list of sets of possible 
 --   instantiations of those constant arguments by scraping the schema annotations
 getAllCArgsFromSchema :: Environment -> RSchema -> ArgMap
-getAllCArgsFromSchema env sch = Map.filter (not . null) $
-  let allForms = (allRefinementsOf sch) ++ (allRFormulas True (toMonotype sch))
+getAllCArgsFromSchema env sch = Map.filter (not . null) $ 
+  getAllCArgsFromType env (toMonotype sch)
+
+
+getAllCArgsFromType :: Environment -> RType -> ArgMap 
+getAllCArgsFromType env (FunctionT x argT resT _) = 
+  let vv = Var (toSort (baseTypeOf argT)) x 
       measures = Map.keys (env ^. measureDefs)
-  in Map.unionsWith combineArgLists $ map (getAllCArgs measures) allForms
+      allForms = allRFormulas True argT
+      cargs = Map.unionsWith combineArgLists $ map (getAllCArgs vv) allForms
+  in  Map.union cargs (getAllCArgsFromType env resT) 
+getAllCArgsFromType _ LetT{}    = error "getAllCArgsFromType: Contextual type in top-level schema." 
+getAllCArgsFromType _ ScalarT{} = Map.empty
+getAllCArgsFromType _ AnyT      = Map.empty 
 
 combineArgLists = Set.union 
 
 -- Given a set of all measure IDs, a map from measure IDs to a list of sets of possible 
 --   arguments for each of its constant argument slots
-getAllCArgs :: [Id] -> Formula -> ArgMap
-getAllCArgs ms (Binary op l r) = Map.unionWith combineArgLists (getAllCArgs ms l) (getAllCArgs ms r)
-getAllCArgs ms (Unary _ f)     = getAllCArgs ms f
-getAllCArgs ms (Ite g t f)     = Map.unionsWith combineArgLists [(getAllCArgs ms g), (getAllCArgs ms t), (getAllCArgs ms f)]
-getAllCArgs ms (All _ f)       = getAllCArgs ms f -- Ignore quantifier
-getAllCArgs ms (Pred _ x fs)   = getCArgs ms x fs
+getAllCArgs :: Formula -> Formula -> ArgMap
+getAllCArgs vv (Binary op l r) = Map.unionWith combineArgLists (getAllCArgs vv l) (getAllCArgs vv r)
+getAllCArgs vv (Unary _ f)     = getAllCArgs vv f
+getAllCArgs vv (Ite g t f)     = Map.unionsWith combineArgLists [(getAllCArgs vv g), (getAllCArgs vv t), (getAllCArgs vv f)]
+getAllCArgs vv (All _ f)       = getAllCArgs vv f -- Ignore quantified formula
+getAllCArgs vv (Pred _ x fs)   = getCArgs vv x fs
 getAllCArgs _ _                = Map.empty
 
-getCArgs :: [Id] -> String -> [Formula] -> ArgMap
-getCArgs ms name fs = Map.singleton name $ Set.singleton $
-  if elem name ms
-    then init fs
-    else []
+getCArgs :: Formula -> Id -> [Formula] -> ArgMap
+getCArgs vv name fs = 
+  Map.singleton name $ 
+    Set.singleton $
+      map (substitute (Map.singleton valueVarName vv)) $
+        init fs
 
--- Default set implementation -- Needed to typecheck measures involving sets
+
+{- Set implementation -- used to check refinements on measures over sets -}
+
 defaultSetType :: BareDeclaration
 defaultSetType = DataDecl name typeVars preds cons
   where
@@ -734,7 +747,7 @@ defaultSetType = DataDecl name typeVars preds cons
     typeVars = ["a"]
     preds = []
     cons = [empty,single,insert]
-    empty = ConstructorSig emptySetCtor (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential)
+    empty  = ConstructorSig emptySetCtor (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential)
     single = ConstructorSig singletonCtor (FunctionT "x" (ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential) (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential) defCost)
     insert = ConstructorSig insertSetCtor (FunctionT "x" (ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential) (FunctionT "xs" (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential) (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential) defCost) defCost)
 

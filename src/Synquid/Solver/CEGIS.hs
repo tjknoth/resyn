@@ -41,14 +41,14 @@ type UVar = (String, Formula)
 type UMeasure = (String, MeasureDef)
 
 data Universals = Universals {
-  uvars :: [UVar],
-  ufuns :: [UVar]
+  uvars :: ![UVar],
+  ufuns :: ![UVar]
 } deriving (Show, Eq)
 
 -- Term of a polynomial: coefficient * universal
 data PolynomialTerm = PolynomialTerm {
-  coefficient :: String,
-  universal :: Maybe UVar 
+  coefficient :: !String,
+  universal :: !(Maybe UVar)
 } deriving (Eq, Show, Ord)
 
 -- Polynomial represented as a list of coefficient-variable pairs (where a Nothing in the coefficient position indicates the constant term)
@@ -65,9 +65,9 @@ type ResourceSolution = Map String Formula
 
 -- Map from universally quantified expression (in string form) to its valuation
 data Counterexample = CX {
-  funcInterps :: Map String Formula,
-  variables :: Map String Formula,
-  model :: SMTModel
+  funcInterps :: !(Map String Formula),
+  variables :: !(Map String Formula),
+  model :: !SMTModel
 } deriving (Eq)
 
 {- Instances -}
@@ -195,7 +195,7 @@ substAndApplyPolynomial substs polynomials f =
     v@(Var s x) -> 
       let xpoly = Map.lookup x polynomials
           xsubst = fromMaybe Map.empty $ Map.lookup v substs
-      in fromMaybe f (substitute xsubst <$> xpoly) 
+      in  fromMaybe v (substitute xsubst <$> xpoly) 
     SetLit s fs -> SetLit s $ map sub fs
     Unary op f -> Unary op $ sub f
     Binary op f g -> Binary op (sub f) (sub g)
@@ -206,6 +206,23 @@ substAndApplyPolynomial substs polynomials f =
     All q f -> All q $ sub f
     ASTLit s a str -> ASTLit s a str
     Unknown _ _ -> error "substAndApplyPolynomial: condition unknown present"
+    lit -> lit
+
+applyPolynomial :: Map String Formula -> Formula -> Formula
+applyPolynomial polynomials f = 
+  let sub = applyPolynomial polynomials in
+  case f of 
+    v@(Var s x) -> fromMaybe v (Map.lookup x polynomials)
+    SetLit s fs -> SetLit s $ map sub fs
+    Unary op f -> Unary op $ sub f
+    Binary op f g -> Binary op (sub f) (sub g)
+    Ite g t f -> Ite (sub g) (sub t) (sub f)
+    Pred s x fs -> Pred s x $ map sub fs
+    Cons s x fs -> Cons s x $ map sub fs
+    -- TODO: is this OK?
+    All q f -> All q $ sub f
+    ASTLit s a str -> ASTLit s a str
+    Unknown _ _ -> error "applyPolynomial: condition unknown present"
     lit -> lit
 
 mkCXPolynomial coeffMap poly = sumFormulas <$> mapM (pTermForCX coeffMap) poly
@@ -311,7 +328,7 @@ possibleMeasureApps env universals (m, MeasureDef inS outS defs cargs post) =
 --   unify with the formal type, given the non-constant argument
 allValidCArgs :: Environment
               -> MeasureDef
-              -> Formula 
+              -> Formula
               -> [Substitution]
 allValidCArgs env (MeasureDef inS outS defs cargs post) (Pred s x args) = 
   let possibleCArgs = 
