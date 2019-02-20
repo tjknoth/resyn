@@ -3,7 +3,7 @@ neq :: x: a -> y: a -> {Bool | _v == (x != y)}
 
 data Heap a where
 	Empty :: Heap a
-	Node :: x: a -> l: Heap {a | _v > x} -> r: Heap {a | _v > x} -> Heap a
+	Node :: x: a -> l: Heap {a | _v > x} -> r: Heap {a | _v > x} -[1]-> Heap a
                                                                               
 termination measure size :: Heap a -> {Int | _v >= 0} where
   Empty -> 0
@@ -13,5 +13,5 @@ measure elems :: Heap a -> Set a where
   Empty -> []
   Node x l r -> elems l + elems r + [x]
  
-tripleton :: x: a -> y: a -> z: a -> {Heap a | elems _v == [x, y, z]}
+tripleton :: x: {a| |1} -> y: {a| |1} -> z: {a| |1} -> {Heap a | elems _v == [x, y, z]}
 tripleton = ??

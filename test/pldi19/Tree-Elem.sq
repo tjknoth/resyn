@@ -16,10 +16,4 @@ or :: x: Bool -> y: Bool -> {Bool | _v == (x || y)}
 qualifier {x == y}
 	
 elem :: x: a -> t: Tree {a| |2} -[1]-> {Bool | _v == (x in telems t)}
-elem = \x . \t . 
-  match t with
-    Empty -> false
-    Node x4 x5 x6 -> 
-      if x4 == x
-        then not false
-        else or (elem x x5) (elem x x6)
+elem = ?? 

@@ -177,6 +177,7 @@ ALL_BENCHMARKS = [
         Benchmark('Tree-Flatten', 'preorder', 'append'),
         Benchmark('Tree-ToList', 'to list'),
         Benchmark('Tree-Elem', 'member', '', ['--multiplicities=false'] ),
+        #Benchmark('Tree-Count', 'size')
         ]),
     BenchmarkGroup("BST", [], [
         Benchmark('BST-Member', 'member', 'true, false, $\\leq$, $\\neq$'),

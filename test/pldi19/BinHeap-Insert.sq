@@ -12,5 +12,5 @@ measure elems :: Heap a -> Set a where
   Empty -> []
   Node x l r -> elems l + elems r + [x]    
 
-insert :: t: Heap a -> x: a -> {Heap a | elems _v == elems t + [x]}
+insert :: t: Heap {a| |1} -> x: a -[1]-> {Heap a | elems _v == elems t + [x]}
 insert = ??

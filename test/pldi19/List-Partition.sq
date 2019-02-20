@@ -21,5 +21,5 @@ measure elems :: List a -> Set a where
   Nil -> []
   Cons x xs -> [x] + elems xs
 	
-partition :: p: a -> xs: List a -> {Pair (List {a | _v <= p}) (List {a | _v > p}) | len (fst _v) + len (snd _v) == len xs && elems (fst _v) + elems (snd _v) == elems xs }
+partition :: p: a -> xs: List {a| |1} -[1]-> {Pair (List {a | _v <= p}) (List {a | _v > p}) | len (fst _v) + len (snd _v) == len xs && elems (fst _v) + elems (snd _v) == elems xs }
 partition = ??

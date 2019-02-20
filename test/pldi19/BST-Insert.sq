@@ -12,5 +12,5 @@ measure telems :: BST a -> Set a where
   Empty -> []
   Node x l r -> telems l + telems r + [x]
 	
-insert :: x: a -> t: BST a -> {BST a | telems _v == telems t + [x]}
+insert :: x: a -> t: BST {a| |1} -[1]-> {BST a | telems _v == telems t + [x]}
 insert = ??

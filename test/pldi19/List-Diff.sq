@@ -22,8 +22,8 @@ measure ielems :: IList a -> Set a where
   INil -> []
   ICons x xs -> [x] + ielems xs
 
-member :: x: a -> xs: IList {1 ** a | | 1} -> {Bool | _v == (x in ielems xs)}
+member :: x: a -> xs: IList {a | |1} -> {Bool | _v == (x in ielems xs)}
 qualifier { x < y }
 
-diff :: l1: IList a -> l2: IList a -> {List a | elems _v == (ielems l1 - ielems l2)}
+diff :: l1: IList {a| |1} -> l2: IList {a| |1} -[1]-> {List a | elems _v == (ielems l1 - ielems l2)}
 diff = ??
