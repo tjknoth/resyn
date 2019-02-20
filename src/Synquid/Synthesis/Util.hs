@@ -245,7 +245,6 @@ checkResourceVar env x t = do
   let isRV = TCSolver.isResourceVariable env tstate (_cegisDomain tparams) x t 
   return isRV
 
--- THIS IS FUCKED
 makeResourceVar :: Monad s  
                 => Environment 
                 -> Maybe (RBase) 
@@ -397,21 +396,21 @@ shareFreePotential env genConstraint fp@(Ite g _ _) label = do
   fp4 <- freshFreePotential env
   let fp' = Ite g fp1 fp3 
   let fp'' = Ite g fp2 fp4
-  let env = emptyEnv { _freePotential = fp }
-  let env' = emptyEnv { _freePotential = fp' }
-  let env'' = emptyEnv { _freePotential = fp'' }
+  let env1 = env { _freePotential = fp }
+  let env2 = env { _freePotential = fp' }
+  let env3 = env { _freePotential = fp'' }
   when genConstraint $
-    addConstraint $ SharedEnv env env' env'' label
+    addConstraint $ SharedEnv env1 env2 env3 label
   return (fp', fp'')
 shareFreePotential env genConstraint fp label = do 
   fp' <- freshFreePotential env
   fp'' <- freshFreePotential env
-  let env = emptyEnv { _freePotential = fp }
-  let env' = emptyEnv { _freePotential = fp' }
-  let env'' = emptyEnv { _freePotential = fp'' }
+  let env1 = env { _freePotential = fp }
+  let env2 = env { _freePotential = fp' }
+  let env3 = env { _freePotential = fp'' }
 
   when genConstraint $ 
-    addConstraint $ SharedEnv env env' env'' label
+    addConstraint $ SharedEnv env1 env2 env3 label
   return (fp', fp'')
 
 -- Transfer potential between variables in a context if necessary

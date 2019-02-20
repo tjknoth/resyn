@@ -169,14 +169,12 @@ safeAddGhostVar name t@AnyT{} env = return $ addGhostVariable name t env
 safeAddGhostVar name t env = do 
   tstate <- get 
   adomain <- asks _cegisDomain 
-  return $ addGhostVariable name t env
-  {-
+  --return $ addGhostVariable name t env
   if isResourceVariable env tstate adomain name t
     then do 
       universalFmls %= Set.insert (Var (toSort (baseTypeOf t)) name)
       return $ addGhostVariable name t env
     else return $ addGhostVariable name t env
-  -}
 
 isResourceVariable :: Environment 
                    -> TypingState 
@@ -186,7 +184,7 @@ isResourceVariable :: Environment
                    -> Bool 
 isResourceVariable _ _ Nothing _ _ = False
 isResourceVariable env tstate (Just adomain) x t = 
-  not (Map.member x (_unresolvedConstants env))
+  (x /= valueVarName) && not (Map.member x (_unresolvedConstants env))
   {-
   let varName (Var _ n) = n
       cargs = env ^. measureConstArgs

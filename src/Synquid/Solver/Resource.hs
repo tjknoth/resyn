@@ -66,7 +66,7 @@ solveResourceConstraints accConstraints constraints = do
     b <- satisfyResources (accConstraints ++ constraintList) 
     let result = if b then "SAT" else "UNSAT"
     writeLog 5 $ nest 4 $ text "Accumulated resource constraints:" 
-      $+$ prettyConjuncts (map rformula accConstraints)
+      $+$ pretty (map rformula accConstraints)
     writeLog 3 $ nest 4 $ text "Solved resource constraint after conjoining formulas:" 
       <+> text result $+$ prettyConjuncts (map rformula constraintList)
     return $ if b 
@@ -151,7 +151,9 @@ embedConstraint :: (MonadHorn s, RMonad s)
                 -> TCSolver s RawRFormula
 embedConstraint env rfml@(RFormula known _ _ _) = do 
   useMeasures <- maybe False shouldUseMeasures <$> asks _cegisDomain
-  emb <- Set.filter (not . isUnknownForm) <$> embedSynthesisEnv env (conjunction (varsOf (rformula rfml))) True useMeasures
+  -- Get assumptions related to all non-ghost scalar variables in context
+  vars <- use universalFmls
+  emb <- Set.filter (not . isUnknownForm) <$> embedSynthesisEnv env (conjunction vars) True useMeasures
   let axioms = if useMeasures 
         then instantiateConsAxioms env True Nothing (conjunction emb)
         else Set.empty
@@ -361,7 +363,7 @@ partitionBase _ _ _ _ _ _ = []
 isResourceConstraint :: Constraint -> Bool
 isResourceConstraint (Subtype _ ScalarT{} ScalarT{} _ _) = False-- True
 isResourceConstraint RSubtype{}    = True
-isResourceConstraint WellFormed{}  = True
+isResourceConstraint WellFormed{}  = False -- True
 isResourceConstraint SharedEnv{}   = False -- should never be present by now
 isResourceConstraint SharedForm{}  = True
 isResourceConstraint ConstantRes{} = True

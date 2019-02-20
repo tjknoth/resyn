@@ -119,7 +119,7 @@ solveWithCEGIS n rfmls universals examples polynomials program = do
         -- Update example list
         -- Attempt to find parameterization holding on all examples
         -- Assumptions shouldn't be relevant for this query???? 
-        (examples', params) <- getParameters rfmls examples polynomials cx 
+        (examples', params) <- getCoefficients rfmls examples polynomials cx 
         case params of
           Nothing -> do 
             cMax <- lift $ asks _cegisMax
@@ -158,15 +158,15 @@ getCounterexample rfmls universals polynomials program = do
   return $ CX <$> join minterps <*> join assignments <*> model
 
 
--- | 'getParameters' @fml polynomials examples@
+-- | 'getCoefficients' @fml polynomials examples@
 --   Find a valuation for all coefficients such that @fml@ holds on all @examples@
-getParameters :: RMonad s 
-              => [ProcessedRFormula]
-              -> [Formula]
-              -> PolynomialSkeletons 
-              -> Counterexample
-              -> TCSolver s ([Formula], Maybe ResourceSolution)
-getParameters rfmls pastExamples polynomials counterexample = do
+getCoefficients :: RMonad s 
+                => [ProcessedRFormula]
+                -> [Formula]
+                -> PolynomialSkeletons 
+                -> Counterexample
+                -> TCSolver s ([Formula], Maybe ResourceSolution)
+getCoefficients rfmls pastExamples polynomials counterexample = do
   let runInSolver = lift . lift . lift
   -- For each example, substitute its value for the universally quantified expressions in each polynomial skeleton
   paramPolynomials <- runInSolver $ mapM (mkParamPolynomial counterexample) polynomials
