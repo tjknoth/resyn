@@ -332,6 +332,7 @@ simplifyConstraint' _ _ c@(Subtype env (ScalarT baseT _ _) (ScalarT baseT' _ _) 
 simplifyConstraint' _ _ c@(WellFormed _ (ScalarT baseT _ _) _) = simpleConstraints %= (c :)
 simplifyConstraint' _ _ c@(WellFormedCond _ _) = simpleConstraints %= (c :)
 simplifyConstraint' _ _ c@(WellFormedMatchCond _ _) = simpleConstraints %= (c :)
+simplifyConstraint' _ _ c@SharedForm{} = simpleConstraints %= (c :)
 -- Otherwise (shape mismatch): fail
 simplifyConstraint' _ _ (Subtype _ t t' _ _) = 
   throwError $ text  "Cannot match shape" <+> squotes (pretty $ shape t) $+$ text "with shape" <+> squotes (pretty $ shape t')
@@ -480,7 +481,7 @@ processConstraint (ConstantRes env l) = do
   tass <- use typeAssignment
   let env' = over symbols (scalarSubstituteEnv tass) env
   simpleConstraints %= (ConstantRes env' l :)
-processConstraint c@SharedForm{}  = return () -- don't do shit 
+processConstraint c@SharedForm{} = simpleConstraints %= (c :)
 processConstraint (Transfer envIn envOut l) = do 
   tass <- use typeAssignment
   let envIn' = over symbols (scalarSubstituteEnv tass) envIn

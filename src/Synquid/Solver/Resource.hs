@@ -149,7 +149,7 @@ embedConstraint :: (MonadHorn s, RMonad s)
                 => Environment 
                 -> RawRFormula 
                 -> TCSolver s RawRFormula
-embedConstraint env rfml@(RFormula known _ _ _) = do 
+embedConstraint env rfml@(RFormula known _ _ f) = do 
   useMeasures <- maybe False shouldUseMeasures <$> asks _cegisDomain
   -- Get assumptions related to all non-ghost scalar variables in context
   vars <- use universalFmls
@@ -209,7 +209,6 @@ applyAssumptions :: MonadHorn s
 applyAssumptions (RFormula known unknown substs fml) = do 
   aDomain <- asks _cegisDomain
   let ass = Set.union known unknown
-
   let finalFml = if isNothing aDomain 
       then fml
       else conjunction ass |=>| fml

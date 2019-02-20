@@ -419,7 +419,7 @@ enumerateAt env typ d = do
     generateApp genFun genArg = do
       x <- freshId "X"
       let fp = env ^. freePotential 
-      (fp', fp'') <- shareFreePotential env True fp $ show $ text "genApp ::" <+> plain (pretty typ)
+      (fp', fp'') <- shareFreePotential env fp $ show $ text "genApp ::" <+> plain (pretty typ)
       (env1, env2) <- shareContext (env { _freePotential = fp' }) $ show $ text "genApp ::" <+> plain (pretty typ)
       fun <- inContext (\p -> Program (PApp p uHole) typ)
              $ genFun env1 (FunctionT x AnyT typ defCost) -- Find all functions that unify with (? -> typ)

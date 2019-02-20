@@ -374,7 +374,7 @@ shareContext env label = do
   --traceM $ show $ symbolsOfArity 0 env 
   symsl <- safeFreshPotentials env False
   symsr <- safeFreshPotentials env False
-  (fpl, fpr) <- shareFreePotential env False (env ^. freePotential) label
+  (fpl, fpr) <- shareFreePotential env (env ^. freePotential) label
   
   let ghosts = _ghostSymbols env
 
@@ -385,32 +385,29 @@ shareContext env label = do
 
 shareFreePotential :: (MonadHorn s, MonadSMT s)
                    => Environment
-                   -> Bool
                    -> Formula 
                    -> String
                    -> Explorer s (Formula, Formula) 
-shareFreePotential env genConstraint fp@(Ite g _ _) label = do 
+shareFreePotential env fp@(Ite g _ _) label = do 
   fp1 <- freshFreePotential env
   fp2 <- freshFreePotential env
   fp3 <- freshFreePotential env
   fp4 <- freshFreePotential env
   let fp' = Ite g fp1 fp3 
   let fp'' = Ite g fp2 fp4
-  let env1 = env { _freePotential = fp }
-  let env2 = env { _freePotential = fp' }
-  let env3 = env { _freePotential = fp'' }
-  when genConstraint $
-    addConstraint $ SharedEnv env1 env2 env3 label
+  --let env1 = env { _freePotential = fp }
+  --let env2 = env { _freePotential = fp' }
+  --let env3 = env { _freePotential = fp'' }
+  addConstraint $ SharedForm env fp fp' fp'' label
   return (fp', fp'')
-shareFreePotential env genConstraint fp label = do 
+shareFreePotential env fp label = do 
   fp' <- freshFreePotential env
   fp'' <- freshFreePotential env
-  let env1 = env { _freePotential = fp }
-  let env2 = env { _freePotential = fp' }
-  let env3 = env { _freePotential = fp'' }
-
-  when genConstraint $ 
-    addConstraint $ SharedEnv env1 env2 env3 label
+  --let env1 = env { _freePotential = fp }
+  --let env2 = env { _freePotential = fp' }
+  --let env3 = env { _freePotential = fp'' }
+  addConstraint $ SharedForm env fp fp' fp'' label
+    --addConstraint $ SharedEnv env1 env2 env3 label
   return (fp', fp'')
 
 -- Transfer potential between variables in a context if necessary
