@@ -13,11 +13,11 @@ from statistics import median
 
 # Globals
 if platform.system() in ['Linux', 'Darwin']:
-    SYNQUID_CMD = ['stack', 'exec', '--', 'synquid']            # Command to call Synquid
+    SYNQUID_CMD = ['stack', 'exec', '--', 'resyn']              # Command to call Resyn
     TIMEOUT_CMD = ['timeout']                                   # Timeout command
     TIMEOUT = ['300']                                           # Timeout value (seconds)    
 else:
-    SYNQUID_CMD = ['Synquid.exe']
+    SYNQUID_CMD = ['Resyn.exe']
     TIMEOUT_CMD = ['']
     TIMEOUT = ['']
 
@@ -168,6 +168,7 @@ ALL_BENCHMARKS = [
     BenchmarkGroup("Sorted list", ['-f=AllArguments'], [
         Benchmark('StrictIncList-Insert', 'insert', '$<$'),
         Benchmark('StrictIncList-Delete', 'delete', '$<$'),
+        #Benchmark('List-Diff', 'difference', 'member, $<$', ['--backtrack', '-f=AllArguments']),
         #Benchmark('List-Diff', 'difference', 'member, $<$', ['--backtrack', '-f=AllArguments', '-a=2']),
         #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member',['-f=AllArguments','--backtrack','-m=3'])
         Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments']),
@@ -548,4 +549,4 @@ if __name__ == '__main__':
 
     # Copy results to paper directory
     shutil.copy('./' + LATEX_FILE, PAPER_PATH + LATEX_FILE)
-    #shutil.copy('./' + MICRO_LATEX_FILE, PAPER_PATH + MICRO_LATEX_FILE)
+    shutil.copy('./' + MICRO_LATEX_FILE, PAPER_PATH + MICRO_LATEX_FILE)

@@ -1,6 +1,6 @@
 flags:
-  synquid:
-    synquid: true
+  resyn:
+    resyn: true
 packages:
   - '.'
 resolver: lts-6.21

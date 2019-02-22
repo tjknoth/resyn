@@ -10,8 +10,8 @@ import subprocess
 from colorama import init, Fore, Back, Style
 
 # Parameters
-SYNQUID_PATH_LINUX = ['stack', 'exec', '--', 'synquid']
-SYNQUID_PATH_WINDOWS = ['Synquid.exe']
+SYNQUID_PATH_LINUX = ['stack', 'exec', '--', 'resyn']
+SYNQUID_PATH_WINDOWS = ['Resyn.exe']
 BENCH_PATH = '.'
 LOGFILE_NAME = 'results.log'
 ORACLE_NAME = 'oracle'
@@ -231,7 +231,7 @@ class SynthesisResult:
 def cmdline():
     import argparse
     a = argparse.ArgumentParser()
-    a.add_argument('--synquid', help='synquid command')
+    a.add_argument('--resyn', help='resyn command')
     a.add_argument('--unit', action='store_true', help='run unit tests')
     a.add_argument('--check', action='store_true', help='run type checking tests')
     a.add_argument('--synt', action='store_true', help='run synthesis tests')

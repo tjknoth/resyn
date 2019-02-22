@@ -1,8 +1,8 @@
-name:                 synquid
-version:              0.4
+name:                 resyn  
+version:              0.1
 synopsis:             Program Synthesis from Refinement Types
-description:          Synquid is a simple functional programming language with refinement types.
-                      In Synquid the programmer must provide the type signature for each top-level function,
+description:          Resyn is a simple functional programming language with refinement types.
+                      In Resyn the programmer must provide the type signature for each top-level function,
                       but can leave parts (or all) of the implementation out for the system to fill in.
 -- license:
 -- license-file:         LICENSE
@@ -13,11 +13,11 @@ build-type:           Simple
 extra-source-files:   README.md
 cabal-version:        >=1.10
 
-flag synquid 
-  Description: Build the synquid executable
+flag resyn 
+  Description: Build the resyn executable
   Default:     True
 
-executable synquid 
+executable resyn 
   main-is:            Synquid.hs
 
   other-extensions:   TemplateHaskell
@@ -49,11 +49,10 @@ executable synquid
                     , tuple >= 0.3
                     , keys >= 3.11
                     , extra >= 1.4
-                    , bifunctors >= 5.0
 
   ghc-options: -O2 
 
   hs-source-dirs:     src
   default-language:   Haskell2010
-  If !flag(synquid)
+  If !flag(resyn)
     buildable: False
