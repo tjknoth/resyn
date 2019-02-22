@@ -149,10 +149,10 @@ ALL_BENCHMARKS = [
         Benchmark('List-Reverse', 'reverse', 'insert at end'),
         Benchmark('IncList-Insert', 'insert (sorted)', '$\\leq$, $\\neq$'),
         Benchmark('List-ExtractMin', 'extract minimum', '$\\leq$, $\\neq$', ['-a=2', '-m=3']),
-        Benchmark('List-Range', 'range', 'inc,dec,$\geq$'),
+        #Benchmark('List-Range', 'range', 'inc,dec,$\geq$'),
         #Benchmark('List-Foldr', 'foldr'),
         #Benchmark('List-Map', 'map'),
-        Benchmark('List-Split', 'split list', '', ['-m=3'])
+        #Benchmark('List-Split', 'split list', '', ['-m=3'])
         # Try it by hand!
         #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member', ['-f=AllArguments', '-m=3'])
         ]),
