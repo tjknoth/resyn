@@ -526,10 +526,10 @@ if __name__ == '__main__':
     # Generate CSV
     write_csv()            
     # Generate Latex table
-    write_latex()
+    #write_latex()
 
     write_micro_csv()
-    write_micro_latex()
+    #write_micro_latex()
 
     # Compare with previous solutions and print the diff
     if os.path.isfile(ORACLE_FILE) and (not cl_opts.small):
@@ -548,5 +548,5 @@ if __name__ == '__main__':
 
 
     # Copy results to paper directory
-    shutil.copy('./' + LATEX_FILE, PAPER_PATH + LATEX_FILE)
-    shutil.copy('./' + MICRO_LATEX_FILE, PAPER_PATH + MICRO_LATEX_FILE)
+    #shutil.copy('./' + LATEX_FILE, PAPER_PATH + LATEX_FILE)
+    #shutil.copy('./' + MICRO_LATEX_FILE, PAPER_PATH + MICRO_LATEX_FILE)
