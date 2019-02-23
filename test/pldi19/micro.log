@@ -53,3 +53,24 @@ compress = \xs .
 (Solution size: 64)
 (Number of resource constraints: 214)
 List-Intersect
+intersect :: l1:{IList {1**a||1}||0} -> l2:{IList {1**a||1}||0} -[1]-> {List {1**a||0}|elems _v == ielems l1 * ielems l2|0}
+intersect = \l1 . \l2 . 
+    match l1 with
+      INil -> Nil
+      ICons x4 x5 -> 
+        match l2 with
+          INil -> Nil
+          ICons x8 x9 -> 
+            if x4 < x8
+              then intersect x5 (ICons x8 x9)
+              else 
+                if x8 < x4
+                  then intersect (ICons x4 x5) x9
+                  else Cons x4 (intersect x5 x9)
+
+(Goals: 5)
+(Measures: 4)
+(Spec size: 14)
+(Solution size: 95)
+(Number of resource constraints: 349)
+List-Diff

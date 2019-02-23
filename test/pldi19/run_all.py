@@ -171,7 +171,7 @@ ALL_BENCHMARKS = [
         #Benchmark('List-Diff', 'difference', 'member, $<$', ['--backtrack', '-f=AllArguments']),
         #Benchmark('List-Diff', 'difference', 'member, $<$', ['--backtrack', '-f=AllArguments', '-a=2']),
         #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member',['-f=AllArguments','--backtrack','-m=3'])
-        Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments']),
+        Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments', '--backtrack']),
         ]),
     BenchmarkGroup("Tree",  [], [
         Benchmark('Tree-Count', 'node count', '0, 1, +'),
