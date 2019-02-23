@@ -7,4 +7,49 @@ triple = \xs . append xs (append
 (Measures: 2)
 (Spec size: 14)
 (Solution size: 34)
-(Number of resource constraints: 52)
+(Number of resource constraints: 55)
+List-Triple2
+triple :: xs:{List {1**a||2}||0} -> {List {1**a||0}|len _v == (len xs + len xs) + len xs|0}
+triple = \xs . 
+  match xs with
+    Nil -> Nil
+    Cons x3 x4 -> append (append xs
+                            x4) (Cons x3 xs)
+
+(Goals: 3)
+(Measures: 2)
+(Spec size: 14)
+(Solution size: 41)
+(Number of resource constraints: 78)
+List-Concat
+concat :: xss:{ListOfLists {1**a||1}||0} -> acc:{List {1**a||0}||0} -> {List {1**a||0}|len _v == sumLen xss + len acc|0}
+concat = \xss . \acc . 
+    match xss with
+      Nil2 -> acc
+      Cons2 x3 x4 -> append x3 (concat
+                                  x4 acc)
+
+(Goals: 4)
+(Measures: 3)
+(Spec size: 17)
+(Solution size: 49)
+(Number of resource constraints: 185)
+List-Compress
+compress :: xs:{List {1**a||1}||0} -[1]-> {CList {1**a||0}|elems _v == elems xs|0}
+compress = \xs . 
+  match xs with
+    Nil -> Nil
+    Cons x3 x4 -> 
+      match compress x4 with
+        Nil -> Cons x3 Nil
+        Cons x11 x12 -> 
+          if x3 == x11
+            then Cons x11 x12
+            else Cons x3 (Cons x11 x12)
+
+(Goals: 4)
+(Measures: 3)
+(Spec size: 11)
+(Solution size: 64)
+(Number of resource constraints: 214)
+List-Intersect
