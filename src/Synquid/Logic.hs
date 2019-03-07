@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, Rank2Types #-}
+{-# LANGUAGE TemplateHaskell, Rank2Types, DeriveFunctor, DeriveFoldable, DeriveTraversable, TypeFamilies #-}
 
 -- | Formulas of the refinement logic
 module Synquid.Logic where
@@ -11,8 +11,10 @@ import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
+import Data.Functor.Foldable (Recursive(..), Corecursive(..), Base(..))
+import Data.Functor.Foldable.TH
 
-import Control.Lens hiding (both)
+import Control.Lens hiding (both, para)
 import Control.Monad
 import Z3.Monad (AST)
 
@@ -136,6 +138,15 @@ data Formula =
   ASTLit !Sort !AST !String            -- ^ Z3 AST literal (only used to solve resource constraints), and its string version
   deriving (Show, Eq, Ord)
 
+makeBaseFunctor ''Formula
+
+embedLit :: String -> FormulaF a -> Formula
+embedLit _ (BoolLitF b)      = BoolLit b
+embedLit _ (IntLitF b)       = IntLit b
+embedLit _ (ASTLitF s x str) = ASTLit s x str
+embedLit err _               = error $ unwords ["embedLit: non-literal base functor in context", err]
+
+
 dontCare = "_"
 valueVarName = "_v"
 unknownName (Unknown _ name) = name
@@ -150,6 +161,7 @@ isVar _ = False
 isCons (Cons _ _ _) = True
 isCons _ = False
 
+ftrue :: Formula
 ftrue = BoolLit True
 ffalse = BoolLit False
 boolVar = Var BoolS
@@ -178,6 +190,8 @@ fone = IntLit 1
 (|=>|) = Binary Implies
 (|<=>|) = Binary Iff
 
+
+andClean :: Formula -> Formula -> Formula
 andClean l r = if l == ftrue then r else (if r == ftrue then l else (if l == ffalse || r == ffalse then ffalse else l |&| r))
 orClean l r = if l == ffalse then r else (if r == ffalse then l else (if l == ftrue || r == ftrue then ftrue else l ||| r))
 conjunction :: Foldable t => t Formula -> Formula
@@ -201,28 +215,35 @@ infix 4 |<=>|
 fmax f g = Ite (f |>=| g) f g
 fmin f g = Ite (f |<=| g) f g
 
--- | 'varsOf' @fml@ : set of all input variables of @fml@
-varsOf :: Formula -> Set Formula
-varsOf (SetLit _ elems) = Set.unions $ map varsOf elems
-varsOf v@(Var _ _) = Set.singleton v
-varsOf (Unary _ e) = varsOf e
-varsOf (Binary _ e1 e2) = varsOf e1 `Set.union` varsOf e2
-varsOf (Ite e0 e1 e2) = varsOf e0 `Set.union` varsOf e1 `Set.union` varsOf e2
-varsOf (Pred _ _ es) = Set.unions $ map varsOf es
-varsOf (Cons _ _ es) = Set.unions $ map varsOf es
-varsOf (All x e) = Set.delete x (varsOf e)
-varsOf _ = Set.empty
+  
+varsOf :: Formula -> Set Formula 
+varsOf = 
+  let combine = Set.unions . map snd 
+      vSetRAlg (VarF s x)      = Set.singleton $ Var s x     
+      vSetRAlg (SetLitF _ xs)  = combine xs 
+      vSetRAlg (UnaryF _ x)    = snd x
+      vSetRAlg (BinaryF _ x y) = snd x `Set.union` snd y
+      vSetRAlg (IteF x y z)    = combine [x, y, z] 
+      vSetRAlg (PredF _ _ xs)  = combine xs 
+      vSetRAlg (ConsF _ _ xs)  = combine xs 
+      vSetRAlg (AllF x e)      = Set.delete (fst x) (snd e)
+      vSetRAlg f               = Set.empty
+  in para vSetRAlg 
 
--- | 'unknownsOf' @fml@ : set of all predicate unknowns of @fml@
-unknownsOf :: Formula -> Set Formula
-unknownsOf u@(Unknown _ _) = Set.singleton u
-unknownsOf (Unary Not e) = unknownsOf e
-unknownsOf (Binary _ e1 e2) = unknownsOf e1 `Set.union` unknownsOf e2
-unknownsOf (Ite e0 e1 e2) = unknownsOf e0 `Set.union` unknownsOf e1 `Set.union` unknownsOf e2
-unknownsOf (Pred _ _ es) = Set.unions $ map unknownsOf es
-unknownsOf (Cons _ _ es) = Set.unions $ map unknownsOf es
-unknownsOf (All _ e) = unknownsOf e
-unknownsOf _ = Set.empty
+
+unknownsOf :: Formula -> Set Formula 
+unknownsOf = 
+  let uSetAlg (UnknownF s x)  = Set.singleton $ Unknown s x
+      uSetAlg (SetLitF _ xs)  = Set.unions xs 
+      uSetAlg (UnaryF _ x)    = x
+      uSetAlg (BinaryF _ x y) = x `Set.union` y
+      uSetAlg (IteF x y z)    = Set.unions [x, y, z] 
+      uSetAlg (PredF _ _ xs)  = Set.unions xs 
+      uSetAlg (ConsF _ _ xs)  = Set.unions xs 
+      uSetAlg (AllF _ e)      = e 
+      uSetAlg f               = Set.empty
+  in cata uSetAlg
+
 
 -- | 'posNegUnknowns' @fml@: sets of positive and negative predicate unknowns in @fml@
 posNegUnknowns :: Formula -> (Set Id, Set Id)
@@ -249,35 +270,39 @@ posNegPreds _ = (Set.empty, Set.empty)
 posPreds = fst . posNegPreds
 negPreds = snd . posNegPreds
 
-predsOf :: Formula -> Set Id
-predsOf (Pred _ p es) = Set.insert p (Set.unions $ map predsOf es)
-predsOf (SetLit _ elems) = Set.unions $ map predsOf elems
-predsOf (Unary _ e) = predsOf e
-predsOf (Binary _ e1 e2) = predsOf e1 `Set.union` predsOf e2
-predsOf (Ite e0 e1 e2) = predsOf e0 `Set.union` predsOf e1 `Set.union` predsOf e2
-predsOf (All _ e) = predsOf e
-predsOf _ = Set.empty
+predsOf :: Formula -> Set String
+predsOf = 
+  let pSetAlg (PredF _ p xs)  = Set.insert p $ Set.unions xs  
+      pSetAlg (SetLitF _ xs)  = Set.unions xs 
+      pSetAlg (UnaryF _ x)    = x
+      pSetAlg (BinaryF _ x y) = x `Set.union` y
+      pSetAlg (IteF x y z)    = Set.unions [x, y, z] 
+      pSetAlg (AllF _ e)      = e 
+      pSetAlg f               = Set.empty
+  in cata pSetAlg 
 
--- Does a formula contain a predicate application
-predsOnly :: Formula -> Bool
-predsOnly (Pred _ p es) = True 
-predsOnly (SetLit _ elems) = any predsOnly elems
-predsOnly (Unary _ e) = predsOnly e
-predsOnly (Binary _ e1 e2) = predsOnly e1 || predsOnly e2
-predsOnly (Ite e0 e1 e2) = predsOnly e0 || predsOnly e1 || predsOnly e2
-predsOnly (All _ e) = predsOnly e
-predsOnly _ = False
+hasPred :: Formula -> Bool 
+hasPred = 
+  let pAlg PredF{}           = True
+      pAlg (SetLitF _ xs)    = or xs 
+      pAlg (UnaryF _ e)      = e 
+      pAlg (BinaryF _ e1 e2) = e1 || e2
+      pAlg (IteF e1 e2 e3)   = e1 || e2 || e3
+      pAlg (AllF _ e)        = e
+      pAlg _                 = False
+  in cata pAlg
 
--- Does a formula contain a variable (not as an argument to a predicate)
-varsOnly :: Formula -> Bool
-varsOnly (SetLit _ elems) = any varsOnly elems
-varsOnly v@(Var _ _) = True
-varsOnly (Unary _ e) = varsOnly e
-varsOnly (Binary _ e1 e2) = varsOnly e1 || varsOnly e2
-varsOnly (Ite e0 e1 e2) = varsOnly e0 || varsOnly e1 || varsOnly e2
-varsOnly (Pred _ _ es) = False 
-varsOnly (All x e) = varsOnly e
-varsOnly _ = False
+hasVar :: Formula -> Bool
+hasVar = 
+  let vAlg VarF{}            = True
+      vAlg PredF{}           = False
+      vAlg (SetLitF _ xs)    = or xs 
+      vAlg (UnaryF _ e)      = e 
+      vAlg (BinaryF _ e1 e2) = e1 || e2
+      vAlg (IteF e1 e2 e3)   = e1 || e2 || e3
+      vAlg (AllF _ e)        = e
+      vAlg _                 = False
+  in cata vAlg
 
 -- | 'leftHandSide' @fml@ : left-hand side of a binary expression
 leftHandSide (Binary _ l _) = l
@@ -308,16 +333,40 @@ sortOf (All _ _)                                 = BoolS
 sortOf (ASTLit s _ _)                            = s
 
 isExecutable :: Formula -> Bool
-isExecutable (SetLit _ _) = False
-isExecutable (Unary _ e) = isExecutable e
-isExecutable (Binary _ e1 e2) = isExecutable e1 && isExecutable e2
-isExecutable (Ite e0 e1 e2) = False
-isExecutable (Pred _ _ _) = False
-isExecutable (All _ _) = False
-isExecutable _ = True
+isExecutable = 
+  let exAlg SetLitF{}       = False
+      exAlg IteF{}          = False
+      exAlg PredF{}         = False
+      exAlg AllF{}          = False
+      exAlg (UnaryF _ x)    = x
+      exAlg (BinaryF _ x y) = x && y
+      exAlg _               = True
+  in cata exAlg
 
 -- | 'substitute' @subst fml@: Replace first-order variables in @fml@ according to @subst@
 substitute :: Substitution -> Formula -> Formula
+substitute subst = 
+  let sAlg (SetLitF s xs)   = SetLit s $ map snd xs
+      sAlg (VarF s name)    = 
+        case Map.lookup name subst of 
+          Just f           -> f 
+          Nothing          -> Var s name
+      sAlg (UnknownF s x)   = Unknown (s `composeSubstitutions` subst) x
+      sAlg (UnaryF op x)    = Unary op (snd x)
+      sAlg (BinaryF op x y) = Binary op (snd x) (snd y)
+      sAlg (IteF x y z)     = Ite (snd x) (snd y) (snd z)
+      sAlg (PredF s x xs)   = Pred s x $ map snd xs
+      sAlg (ConsF s x xs)   = Cons s x $ map snd xs
+      sAlg (AllF (v, v') e) = 
+        case v of 
+          (Var s x) -> 
+            if x `Map.member` subst 
+              then error $ unwords ["Scoped variable clashes with substitution variable", x]
+              else All v (snd e) 
+          _     -> All v' (snd e)
+      sAlg f = embedLit "substitute" f
+  in para sAlg
+{-
 substitute subst fml = case fml of
   SetLit b elems -> SetLit b $ map (substitute subst) elems
   Var s name -> case Map.lookup name subst of
@@ -333,7 +382,7 @@ substitute subst fml = case fml of
                             then error $ unwords ["Scoped variable clashes with substitution variable", x]
                             else All v (substitute subst e)
   otherwise -> fml
-
+-}
 -- | Compose substitutions
 composeSubstitutions old new =
   let new' = removeId new
@@ -345,6 +394,17 @@ composeSubstitutions old new =
 deBrujns = map (\i -> dontCare ++ show i) [0..]
 
 sortSubstituteFml :: SortSubstitution -> Formula -> Formula
+sortSubstituteFml subst = 
+  let sub = sortSubstitute subst 
+      sAlg (SetLitF s xs)    = SetLit (sub s) xs
+      sAlg (VarF s name)     = Var (sub s) name
+      sAlg (UnknownF s name) = Unknown (fmap (sortSubstituteFml subst) s) name 
+      sAlg (PredF s name es) = Pred (sub s) name es
+      sAlg (ConsF s name es) = Cons (sub s) name es 
+      sAlg base              = embed base
+  in cata sAlg
+
+{-
 sortSubstituteFml subst fml = case fml of
   SetLit el es -> SetLit (sortSubstitute subst el) (map (sortSubstituteFml subst) es)
   Var s name -> Var (sortSubstitute subst s) name
@@ -356,13 +416,23 @@ sortSubstituteFml subst fml = case fml of
   Cons s name es -> Cons (sortSubstitute subst s) name (map (sortSubstituteFml subst) es)
   All x e -> All (sortSubstituteFml subst x) (sortSubstituteFml subst e)
   _ -> fml
+-}
 
 noncaptureSortSubstFml :: [Id] -> [Sort] -> Formula -> Formula
 noncaptureSortSubstFml sVars sArgs fml =
   let fmlFresh = sortSubstituteFml (Map.fromList $ zip sVars (map VarS distinctTypeVars)) fml
   in sortSubstituteFml (Map.fromList $ zip distinctTypeVars sArgs) fmlFresh
 
+
 substitutePredicate :: Substitution -> Formula -> Formula
+substitutePredicate subs = 
+  let sAlg (PredF s name args) = 
+        case Map.lookup name subs of 
+          Nothing -> Pred s name args
+          Just val -> substitute (Map.fromList (zip deBrujns args)) (substitutePredicate subs val)
+      sAlg f                   = embed f 
+  in cata sAlg
+{-
 substitutePredicate pSubst fml = case fml of
   Pred b name args -> case Map.lookup name pSubst of
                       Nothing -> Pred b name (map (substitutePredicate pSubst) args)
@@ -372,6 +442,7 @@ substitutePredicate pSubst fml = case fml of
   Ite e0 e1 e2 -> Ite (substitutePredicate pSubst e0) (substitutePredicate pSubst e1) (substitutePredicate pSubst e2)
   All v e -> All v (substitutePredicate pSubst e)
   _ -> fml
+-}
 
 -- | Negation normal form of a formula:
 -- no negation above boolean connectives, no boolean connectives except @&&@ and @||@
@@ -428,14 +499,6 @@ splitByPredicate preds arg fmls = foldM (\m fml -> checkFml fml m fml) Map.empty
       Cons _ _ args -> foldM (checkFml whole) m args
       _ -> return m
 
-
--- | 'setToPredicate' @x s@: predicate equivalent to @x in s@, which does not contain comprehensions
-setToPredicate :: Formula -> Formula -> Formula
-setToPredicate x (Binary Union sl sr) = Binary Or (setToPredicate x sl) (setToPredicate x sr)
-setToPredicate x (Binary Intersect sl sr) = Binary And (setToPredicate x sl) (setToPredicate x sr)
-setToPredicate x (Binary Diff sl sr) = Binary And (setToPredicate x sl) (Unary Not (setToPredicate x sr))
-setToPredicate x (Ite c t e) = Ite c (setToPredicate x t) (setToPredicate x e)
-setToPredicate x s = Binary Member x s
 
 {- Qualifiers -}
 
@@ -495,6 +558,14 @@ valuation sol (Unknown s u) = case Map.lookup u sol of
 
 -- | 'applySolution' @sol fml@ : Substitute solutions from sol for all predicate variables in fml
 applySolution :: Solution -> Formula -> Formula
+applySolution sol = 
+  let solAlg (UnknownF s name) = 
+        case Map.lookup name sol of 
+          Just qs -> substitute s $ conjunction qs
+          Nothing -> Unknown s name
+      solAlg base = embed base
+  in cata solAlg
+{-
 applySolution sol fml = case fml of
   Unknown s ident -> case Map.lookup ident sol of
     Just quals -> substitute s $ conjunction quals
@@ -504,7 +575,7 @@ applySolution sol fml = case fml of
   Ite e0 e1 e2 -> Ite (applySolution sol e0) (applySolution sol e1) (applySolution sol e2)
   All x e -> All x (applySolution sol e)
   otherwise -> fml
-
+-}
 -- | 'merge' @sol sol'@ : element-wise conjunction of @sol@ and @sol'@
 merge :: Solution -> Solution -> Solution
 merge sol sol' = Map.unionWith Set.union sol sol'
@@ -540,7 +611,8 @@ instance Ord Candidate where
 -- 'transformFml' @transform f@ : apply some transformation @transform@ to each 
 --    node in the Formula AST
 transformFml :: (Formula -> Formula) -> Formula -> Formula 
-transformFml transform f = 
+transformFml transform = cata (transform . embed)
+  {-
   let update = transformFml transform
   in transform $ case f of 
     (Unary op f)    -> Unary op $ update f
@@ -551,7 +623,7 @@ transformFml transform f =
     (All f g)       -> All (update f) (update g) 
     (SetLit s fs)   -> SetLit s $ map transform (map update fs)
     atom            -> transform atom
-
+  -}
 
 isUnknownForm :: Formula -> Bool
 isUnknownForm (Unknown _ _) = True
@@ -588,3 +660,4 @@ isAdditiveId _          = False
 
 fmlGe (IntLit f) (IntLit g) = f >= g
 fmlGe _ _ = False
+

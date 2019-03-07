@@ -1,7 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 
 -- | The parser for Synquid's program specification DSL.
-module Synquid.Parser (parseFromFile, parseProgram, toErrorMessage, parseFmlFromFile) where
+module Synquid.Parser (parseFromFile, parseProgram, toErrorMessage, readFormula) where
 
 import Synquid.Logic
 import Synquid.Type
@@ -35,12 +35,11 @@ parseProgram = whiteSpace *> option [] (block parseDeclaration) <* eof
 parseFromFile :: Parser a -> String -> IO (Either ParseError a)
 parseFromFile aParser fname = do
   input <- readFile fname
-  return $ runIndent fname $ runParserT aParser () fname input
+  return $ runIndentParser aParser () fname input -- $ runParserT aParser () fname input
 
-parseFmlFromFile :: String -> IO (Either ParseError Formula)
-parseFmlFromFile file = do 
-  input <- readFile file
-  return $ runIndent file $ runParserT parseFormula () file input
+-- Used for testing
+readFormula :: String -> IO (Either ParseError Formula)
+readFormula str = return $ runIndentParser parseFormula () "" str
 
 toErrorMessage :: ParseError -> ErrorMessage
 toErrorMessage err = ErrorMessage ParseError (errorPos err)
@@ -57,7 +56,7 @@ opStart = nub (map head opNames)
 opLetter :: [Char]
 opLetter = nub (concatMap tail opNames)
 
-synquidDef :: Token.GenLanguageDef String st (State SourcePos)
+--synquidDef :: Token.GenLanguageDef String st (State SourcePos)
 synquidDef = Token.LanguageDef
   commentStart
   commentEnd
@@ -71,7 +70,7 @@ synquidDef = Token.LanguageDef
   opNames
   True
 
-lexer :: Token.GenTokenParser String st (State SourcePos)
+--lexer :: Token.GenTokenParser String st (ReaderT SourcePos)
 lexer = Token.makeTokenParser synquidDef
 
 identifier = Token.identifier lexer
@@ -501,11 +500,6 @@ attachPosBefore :: Parser a -> Parser (Pos a)
 attachPosBefore = liftM2 Pos getPosition
 
 {- Debug -}
-
-printRefPos :: String -> Parser ()
-printRefPos msg = do
-  pos <- get
-  trace (msg ++ show pos) $ return ()
 
 printCurPos :: String -> Parser ()
 printCurPos msg = do

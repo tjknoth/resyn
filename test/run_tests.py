@@ -61,7 +61,7 @@ BENCHMARKS = {
               ('List-Compress',       []),
               # Insertion sort
               ('List-InsertSort',     []),
-              ('List-Fold-Sort',      ['-m=1', '-a=2', '-e']),
+              ('List-Fold-Sort',      ['-m=1', '-a=2', '--explicit-match']),
               # Merge sort
               ('List-Split',          ['-m=3']),
               ('IncList-Merge',       ['-f=AllArguments']),
@@ -108,16 +108,16 @@ BENCHMARKS = {
               ('AVL-BalR0',           ['-a 2']),
               ('AVL-BalRL',           ['-a 2', '-u']),
               ('AVL-BalRR',           ['-a 2', '-u']),
-              ('AVL-Balance',         ['-a 2', '-e']),
+              ('AVL-Balance',         ['-a 2', '--explicit-match']),
               ('AVL-Insert',          ['-a 2']),
               ('AVL-ExtractMin',      ['-a 2']),
               ('AVL-Delete',          ['-a 2', '-m 1']),
           ],
   'rbt' : [
     # Red-black trees
-    ('RBT-BalanceL',        ['-a 2', '-u', '-z']),
-    ('RBT-BalanceR',        ['-a 2', '-u', '-z']),
-    ('RBT-Insert',          ['-a 2', '-m 1', '-z']),
+    ('RBT-BalanceL',        ['-a 2', '-u']),
+    ('RBT-BalanceR',        ['-a 2', '-u']),
+    ('RBT-Insert',          ['-a 2', '-m 1']),
           ]
 }
 
@@ -141,7 +141,7 @@ DEMO_BENCHMARKS = [
     ('List-Replicate',      []),
     ('List-Reverse',        []),
     ('NNF',                 []),
-    ('Sort-Fold',           ['-m 1', '-a 2', '-e']),
+    ('Sort-Fold',           ['-m 1', '-a 2', '--explicit-match']),
 ]
 
 RESOURCE_VERIFICATION_BENCHMARKS = [
@@ -232,6 +232,7 @@ def cmdline():
     import argparse
     a = argparse.ArgumentParser()
     a.add_argument('--resyn', help='resyn command')
+    a.add_argument('--nr', action='store_true', help='disable resource analysis')
     a.add_argument('--unit', action='store_true', help='run unit tests')
     a.add_argument('--check', action='store_true', help='run type checking tests')
     a.add_argument('--synt', action='store_true', help='run synthesis tests')
@@ -273,7 +274,7 @@ def run_benchmark(name, opts, path='.'):
         print()
 
 def run_resyn_benchmark(name, opts, path='.'):
-    global total_time 
+    global total_time
     print (name, end=' ')
 
     with open(LOGFILE_NAME, 'a+') as logfile:
@@ -284,7 +285,7 @@ def run_resyn_benchmark(name, opts, path='.'):
         end = time.time()
         rtime = res_end - start
         print ('{0:0.2f}'.format(rtime), end=' ')
-        total_time = total_time + rtime 
+        total_time = total_time + rtime
 
         logfile.seek(0, os.SEEK_END)
         logfile.write(with_res.stdout)
@@ -307,7 +308,7 @@ def run_test(name, path='.'):
 
     with open(LOGFILE_NAME, 'a+') as logfile:
       logfile.seek(0, os.SEEK_END)
-      subprocess.call(synquid_path + COMMON_OPTS + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
+      subprocess.call(synquid_path + COMMON_OPTS + RESOURCE_FALSE + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
 
 def write_times(benchmarks):
     with open(OUTFILE_NAME, 'w') as outfile:
@@ -359,8 +360,8 @@ if __name__ == '__main__':
     a = cmdline()
 
     # Determine the synquid command to use:
-    if a.synquid:
-        synquid_path = a.synquid
+    if a.resyn:
+        synquid_path = a.resyn
     if platform.system() in ['Linux', 'Darwin']:
         synquid_path = SYNQUID_PATH_LINUX
     else:
@@ -373,7 +374,7 @@ if __name__ == '__main__':
       a.synt = True
 
     sections = [s.lower() for s in a.sections]
-    try: 
+    try:
         os.chdir('test')
     except Exception:
         pass
@@ -382,7 +383,7 @@ if __name__ == '__main__':
         # Run unit tests
         os.chdir('unit')
         print(os.getcwd())
-        clear_log() 
+        clear_log()
         for name in os.listdir('.'):
             filename, file_extension = os.path.splitext(name)
             if file_extension == '.sq':
@@ -393,34 +394,36 @@ if __name__ == '__main__':
     if not fail and a.check:
         # Run type checking benchmarks
         os.chdir('checking')
-        clear_log() 
+        clear_log()
         for (name, args) in CHECKING_BENCHMARKS:
+            args += RESOURCE_FALSE
             run_benchmark(name, args)
         fail = check_diff()
         os.chdir('..')
 
     if not fail and a.demo:
         # Test online demos
-        os.chdir('demo') 
-        clear_log() 
+        os.chdir('demo')
+        clear_log()
         for (name, args) in DEMO_BENCHMARKS:
+            args += RESOURCE_FALSE
             run_benchmark(name, args)
         fail = check_diff()
         os.chdir('..')
 
     if not fail and a.res_verif:
-        # Run resource-aware verification benchmarks
+        # Run resource-aware verification tests
         os.chdir('resources/verification')
-        clear_log() 
+        clear_log()
         for (name, args) in RESOURCE_VERIFICATION_BENCHMARKS:
             run_benchmark(name, args)
         fail = check_diff()
         os.chdir('../..')
 
     if not fail and a.res_synth:
-        # Run resource-aware synthesis benchmarks
+        # Run resource-aware synthesis tests
         os.chdir('resources/synthesis')
-        clear_log() 
+        clear_log()
         for (name, args) in RESOURCE_SYNTHESIS_BENCHMARKS:
             if a.optimize:
                 run_resyn_benchmark(name, args)
@@ -432,10 +435,12 @@ if __name__ == '__main__':
     if not fail and a.synt:
         # Run synthesis benchmarks in 'current' directory
         os.chdir('current')
-        clear_log() 
+        clear_log()
         for sec in SECTIONS:
             if sec in sections or 'all' in sections:
                 for (name, args) in BENCHMARKS[sec]:
+                    if a.nr:
+                        args += RESOURCE_FALSE
                     run_benchmark(name, args, sec)
 
         print('TOTAL', '{0:0.2f}'.format(total_time))

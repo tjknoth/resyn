@@ -17,8 +17,35 @@ flag resyn
   Description: Build the resyn executable
   Default:     True
 
-executable resyn 
-  main-is:            Synquid.hs
+
+Library 
+  ghc-options:        -O2 
+  hs-source-dirs:     src
+  default-language:   Haskell2010
+
+  exposed-modules:    Synquid.Codegen
+                    , Synquid.Error
+                    , Synquid.HtmlOutput
+                    , Synquid.Logic
+                    , Synquid.Parser
+                    , Synquid.Pretty
+                    , Synquid.Program
+                    , Synquid.Resolver
+                    , Synquid.Solver.CEGIS
+                    , Synquid.Solver.HornClause
+                    , Synquid.Solver.Monad
+                    , Synquid.Solver.Resource
+                    , Synquid.Solver.TypeConstraint
+                    , Synquid.Solver.Util
+                    , Synquid.Stats
+                    , Synquid.Synthesis.Explorer
+                    , Synquid.Synthesis.Synthesizer
+                    , Synquid.Synthesis.TypeChecker
+                    , Synquid.Synthesis.Util
+                    , Synquid.Tokens
+                    , Synquid.Type
+                    , Synquid.Util
+                    , Synquid.Z3
 
   other-extensions:   TemplateHaskell
                     , Rank2Types
@@ -26,12 +53,12 @@ executable resyn
                     , TypeSynonymInstances
                     , FlexibleContexts
 
-  build-depends:      base >=4.6 && <4.9
-                    , containers >=0.5 && <0.6
-                    , mtl >=2.2 && <2.3
-                    , transformers >=0.3 && <0.5
-                    , transformers-compat ==0.4.*
-                    , lens >=3.7
+  build-depends:      base 
+                    , containers >= 0.5 && < 0.6
+                    , mtl >= 2.2 && < 2.3
+                    , transformers
+                    , transformers-compat 
+                    , lens >= 3.7
                     , ansi-wl-pprint >=0.6 && <0.7
                     , ansi-terminal >=0.6
                     , html ==1.*
@@ -39,8 +66,7 @@ executable resyn
                     , z3 > 4.0
                     , logict >= 0.5
                     , parsec == 3.1.*
-                    , indents == 0.3.*
-                    , cmdargs ==0.10.*
+                    , indents == 0.4.*
                     , filepath
                     , time
                     , haskell-src-exts == 1.17.*
@@ -50,10 +76,42 @@ executable resyn
                     , keys >= 3.11
                     , extra >= 1.4
                     , bifunctors >= 5.0
+                    , recursion-schemes > 5.0
+  
 
-  ghc-options: -O2 
+executable resyn 
+  ghc-options:        -O2 
+  main-is:            Synquid.hs
 
-  hs-source-dirs:     src
+  build-depends:      resyn
+                    , containers >= 0.5 && < 0.6
+                    , time
+                    , lens >= 3.7 
+                    , filepath
+                    , split
+                    , cmdargs == 0.10.*
+
+  other-extensions:   TemplateHaskell
+                    , Rank2Types
+                    , FlexibleInstances
+                    , TypeSynonymInstances
+                    , FlexibleContexts
+
+  build-depends:      base
+                    , containers >= 0.5 && < 0.6
+
+  hs-source-dirs:     bin
   default-language:   Haskell2010
   If !flag(resyn)
     buildable: False
+
+test-suite test
+  default-language: Haskell2010
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   test 
+  main-is:          Test.hs
+  build-depends:    base
+                  , tasty
+                  , tasty-hunit
+                  , resyn
+                  , containers >= 0.5 && < 0.6

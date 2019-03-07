@@ -1,11 +1,12 @@
-flags:
+flags: 
   resyn:
     resyn: true
 packages:
   - '.'
-resolver: lts-6.21
-extra-deps:
+resolver: lts-8.0
+extra-deps: 
   - z3-4.3.1
+  - haskell-src-exts-1.17.1
 # extra-include-dirs:
 #  - <z3-home>/src/api
 # extra-lib-dirs:

@@ -41,7 +41,7 @@ main = do
     (Synthesis file libs onlyGoals
                appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency symmetry
                lfp bfs
-               out_file out_module outFormat resolve 
+               out_file out_module outFormat resolve
                print_spec print_stats log_ resources mult forall cut nump constTime cegisMax ec) -> do
                   let resArgs = defaultResourceArgs {
                     _checkRes = resources,
@@ -315,7 +315,7 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
       -- Generate output if requested
       --let libsWithDecls = collectLibDecls libs declsByFile
       --codegen (fillinCodegenParams file libsWithDecls codegenParams) (map fst results)
-  
+
   where
     parseFromFiles [] = return []
     parseFromFiles (file:rest) = do
@@ -345,13 +345,13 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
           return result
     assembleResult stats goal ps = SynthesisResult (fst (head ps)) (snd (head ps)) (tail ps) stats goal
     updateLogLevel goal orig = if gSynthesize goal then orig else 0 -- prevent logging while type checking measures
-    
-    updateExplorerParams eParams goal = 
-      let eParams' = explorerLogLevel %~ updateLogLevel goal $ eParams 
+
+    updateExplorerParams eParams goal =
+      let eParams' = explorerLogLevel %~ updateLogLevel goal $ eParams
       in resourceArgs . checkRes .~ ((gSynthesize goal) && (eParams ^. (resourceArgs . checkRes))) $ eParams'
 
     updateSolverParams sParams goal = sParams { solverLogLevel = (updateLogLevel goal (solverLogLevel sParams))}
-    
+
     printStats results declsByFile = do
       let env = gEnvironment $ goal (head results)
       let measureCount = Map.size $ env^.measureDefs
@@ -387,4 +387,4 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
                   parens (text "Number of resource constraints:" <+> pretty numC)
                 ] ++
               [empty]
-    
+

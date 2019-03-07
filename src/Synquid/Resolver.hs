@@ -214,30 +214,33 @@ resolveSignatures (DataDecl dtName tParams pParams ctors) = mapM_ resolveConstru
           environment %= addPolyConstant name sch''
         else throwResError (commaSep [text "Constructor" <+> text name <+> text "must return type" <+> pretty nominalType, text "got" <+> pretty returnType])
 resolveSignatures (MeasureDecl measureName _ _ post defCases args _) = do
-  (outSort : mArgs) <- uses (environment . globalPredicates) (Map.! measureName)
-  case last mArgs of 
-    inSort@(DataS dtName sArgs) -> do
-      datatype <- uses (environment . datatypes) (Map.! dtName)
-      post' <- resolveTypeRefinement outSort post
-      pos <- use currentPosition
-      let ctors = datatype ^. constructors
-      if length defCases /= length ctors
-        then throwResError $ text "Definition of measure" <+> text measureName <+> text "must include one case per constructor of" <+> text dtName
-        else do
-          freshConsts <- mapM (uncurry freshId) args
-          let constSubst = zip (fmap fst args) freshConsts
-          defs' <- mapM (resolveMeasureDef ctors constSubst) defCases
-          mapM_ (\(MeasureCase _ _ impl) -> checkMeasureCase measureName args impl) defCases
-          sch <- uses environment ((Map.! measureName) . allSymbols)
-          sch' <- resolveSchema sch
-          environment %= addPolyConstant measureName sch'
-          defCases' <- mapM (\(MeasureCase n args body) -> do
-            body' <- resolveMeasureFormula body
-            return (MeasureCase n args body')) defCases
-          let args' = fmap (\(Var s x) -> (x, s)) freshConsts
-          environment %= addMeasure measureName (MeasureDef inSort outSort defs' args' post')
-          checkingGoals %= (++ [(measureName, (impl (MeasureDef inSort outSort defCases' args post'), pos))])
-    _ -> throwResError $ text "Last input of measure" <+> text measureName <+> text "must be a datatype"
+  sorts <- uses (environment . globalPredicates) (Map.! measureName)
+  case sorts of 
+    [] -> throwResError $ text "Measure" <+> text measureName <+> text "has scalar sort"
+    (outSort : mArgs) -> do 
+      case last mArgs of 
+        inSort@(DataS dtName sArgs) -> do
+          datatype <- uses (environment . datatypes) (Map.! dtName)
+          post' <- resolveTypeRefinement outSort post
+          pos <- use currentPosition
+          let ctors = datatype ^. constructors
+          if length defCases /= length ctors
+            then throwResError $ text "Definition of measure" <+> text measureName <+> text "must include one case per constructor of" <+> text dtName
+            else do
+              freshConsts <- mapM (uncurry freshId) args
+              let constSubst = zip (fmap fst args) freshConsts
+              defs' <- mapM (resolveMeasureDef ctors constSubst) defCases
+              mapM_ (\(MeasureCase _ _ impl) -> checkMeasureCase measureName args impl) defCases
+              sch <- uses environment ((Map.! measureName) . allSymbols)
+              sch' <- resolveSchema sch
+              environment %= addPolyConstant measureName sch'
+              defCases' <- mapM (\(MeasureCase n args body) -> do
+                body' <- resolveMeasureFormula body
+                return (MeasureCase n args body')) defCases
+              let args' = fmap (\(Var s x) -> (x, s)) freshConsts
+              environment %= addMeasure measureName (MeasureDef inSort outSort defs' args' post')
+              checkingGoals %= (++ [(measureName, (impl (MeasureDef inSort outSort defCases' args post'), pos))])
+        _ -> throwResError $ text "Last input of measure" <+> text measureName <+> text "must be a datatype"
   where
     impl def = normalizeProgram $ measureProg measureName def
     resolveMeasureDef allCtors cSub (MeasureCase ctorName binders body) =
@@ -553,17 +556,20 @@ resolveFormula (Pred _ name argFmls) = do
     Just (args, body) -> resolveFormula (substitute (Map.fromList $ zip args argFmls) body)
     Nothing -> do
       ps <- uses environment allPredicates
-      (resSort : argSorts) <- case Map.lookup name ps of
-                                Nothing -> throwResError $ text "Predicate or measure" <+> text name <+> text "is undefined"
-                                Just sorts -> ifM (Map.member name <$> use (environment . globalPredicates))
-                                                (instantiate sorts) -- if global, treat type variables as free
-                                                (return sorts) -- otherwise, treat type variables as bound
-      if length argFmls /= length argSorts
-          then throwResError $ text "Expected" <+> pretty (length argSorts) <+> text "arguments for predicate or measure" <+> text name <+> text "and got" <+> pretty (length argFmls)
-          else do
-            argFmls' <- mapM resolveFormula argFmls
-            zipWithM_ enforceSame (map sortOf argFmls') argSorts
-            return $ Pred resSort name argFmls'
+      sorts <- case Map.lookup name ps of
+                  Nothing -> throwResError $ text "Predicate or measure" <+> text name <+> text "is undefined"
+                  Just sorts -> ifM (Map.member name <$> use (environment . globalPredicates))
+                                  (instantiate sorts) -- if global, treat type variables as free
+                                  (return sorts) -- otherwise, treat type variables as bound
+      case sorts of 
+        [] -> throwResError $ text "Predicate or measure" <+> text name <+> text "has no arguments"
+        (resSort : argSorts) -> do  
+          if length argFmls /= length argSorts
+              then throwResError $ text "Expected" <+> pretty (length argSorts) <+> text "arguments for predicate or measure" <+> text name <+> text "and got" <+> pretty (length argFmls)
+              else do
+                argFmls' <- mapM resolveFormula argFmls
+                zipWithM_ enforceSame (map sortOf argFmls') argSorts
+                return $ Pred resSort name argFmls'
 
 resolveFormula (Cons _ name argFmls) = do
   syms <- uses environment allSymbols
@@ -571,13 +577,16 @@ resolveFormula (Cons _ name argFmls) = do
     Nothing -> throwResError $ text "Data constructor" <+> text name <+> text "is undefined"
     Just consSch -> do
       let consT = toMonotype consSch
-      (resSort : argSorts) <- instantiate $ map (toSort . baseTypeOf) $ lastType consT : allArgTypes consT
-      if length argSorts /= length argFmls
-        then throwResError $ text "Constructor" <+> text name <+> text "expected" <+> pretty (length argSorts) <+> text "arguments and got" <+> pretty (length argFmls)
-        else do
-            argFmls' <- mapM resolveFormula argFmls
-            zipWithM_ enforceSame (map sortOf argFmls') argSorts
-            return $ Cons resSort name argFmls'
+      sorts <- instantiate $ map (toSort . baseTypeOf) $ lastType consT : allArgTypes consT
+      case sorts of 
+        [] -> throwResError $ text "Data constructor" <+> text name <+> text "has scalar sort"
+        (resSort : argSorts) -> do 
+          if length argSorts /= length argFmls
+            then throwResError $ text "Constructor" <+> text name <+> text "expected" <+> pretty (length argSorts) <+> text "arguments and got" <+> pretty (length argFmls)
+            else do
+                argFmls' <- mapM resolveFormula argFmls
+                zipWithM_ enforceSame (map sortOf argFmls') argSorts
+                return $ Cons resSort name argFmls'
 
 resolveFormula fml = return fml
 

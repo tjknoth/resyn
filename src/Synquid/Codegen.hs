@@ -16,6 +16,7 @@ import Safe
 import System.IO
 
 import Language.Haskell.Exts.Syntax hiding (Case, PApp, DataDecl)
+import Language.Haskell.Exts.SrcLoc
 import qualified Language.Haskell.Exts.Syntax as Hs
 import Language.Haskell.Exts.Pretty
 

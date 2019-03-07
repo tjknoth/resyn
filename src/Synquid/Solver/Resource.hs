@@ -448,7 +448,7 @@ getAnnotationStyle = getAnnotationStyle' . toMonotype
 
 getAnnotationStyle' t = 
   let rforms = conjunction $ allRFormulas True t
-  in case (varsOnly rforms, predsOnly rforms) of 
+  in case (hasVar rforms, hasPred rforms) of 
       (True, True)  -> Just Both 
       (False, True) -> Just Measure
       (True, _)     -> Just Variable

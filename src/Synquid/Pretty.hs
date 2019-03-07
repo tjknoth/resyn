@@ -73,6 +73,7 @@ import qualified Text.PrettyPrint.ANSI.Leijen as L
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import Data.Map (Map)
+import Data.Set (Set)
 import Data.List
 import Data.Maybe (fromMaybe)
 
@@ -232,8 +233,10 @@ simpleFmlDocAt n fml = condHlParens (n' <= n) (
 
 instance Pretty Formula where pretty = fmlDoc
 
-instance Pretty Valuation where
-  pretty val = braces $ commaSep $ map pretty $ Set.toList val
+--instance Pretty Valuation where
+--  pretty val = braces $ commaSep $ map pretty $ Set.toList val
+instance Pretty a => Pretty (Set a) where 
+   pretty xs = braces $ commaSep $ map pretty $ Set.toList xs
 
 instance Pretty Solution where
   pretty = hMapDoc text pretty
@@ -561,3 +564,4 @@ lfill w d        = case renderCompact d of
 -- Helper for printing conjunctions line-by-line for readability
 prettyConjuncts :: [Formula] -> Doc
 prettyConjuncts fmls = vsep $ fmap simpleFmlDoc fmls
+
