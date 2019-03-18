@@ -192,7 +192,7 @@ instantiateAssumptions (RFormula known unknown substs body) = do
   --   it's done for known/body?
   unknown' <- assignUnknowns unknown
   -- Update set of measure applications
-  universalMeasures %= Set.union (Set.map mkFuncVar allPreds)
+  universalMeasures %= Set.union (Set.map (transformFml mkFuncVar) allPreds)
   return $ RFormula completeEmb unknown' substs body
 
 updateVariables :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula 
@@ -259,7 +259,7 @@ satisfyResources rfmls = do
       writeLog 5 $ pretty $ conjunction $ map rformula rfmls
       writeLog 3 $ indent 2 $ text "Over universally quantified variables:" 
         <+> hsep (map (pretty . snd) universalsWithVars) 
-        <+> text "and functions:" <+> hsep (map pretty (mApps ++ cApps))
+        <+> text "and functions:" <+> hsep (map (pretty . snd) ((map formatPred mApps) ++ (map formatCons cApps)))
 
       solveWithCEGIS cMax rfmls allUniversals [] allPolynomials initialProgram 
 
@@ -402,13 +402,13 @@ instantiatePred fml@(Binary op p@(Pred s x args) axiom) = do
 -- Replace predicate applications in formula f with appropriate variables,
 --   collecting all such predicate applications present in f
 gatherPreds :: Formula -> Set Formula
-gatherPreds (Unary op f) = gatherPreds f
+gatherPreds (Unary op f)    = gatherPreds f
 gatherPreds (Binary op f g) = gatherPreds f `Set.union` gatherPreds g
-gatherPreds (Ite g t f) = Set.unions [gatherPreds g, gatherPreds t, gatherPreds f]
-gatherPreds (All f g) = gatherPreds g -- maybe should handle quantified fmls...
-gatherPreds (SetLit s fs) = Set.unions $ map gatherPreds fs
-gatherPreds f@Pred{} = Set.singleton f 
-gatherPreds f = Set.empty
+gatherPreds (Ite g t f)     = Set.unions [gatherPreds g, gatherPreds t, gatherPreds f]
+gatherPreds (All f g)       = gatherPreds g -- maybe should handle quantified fmls...
+gatherPreds (SetLit s fs)   = Set.unions $ map gatherPreds fs
+gatherPreds f@Pred{}        = Set.singleton f 
+gatherPreds f               = Set.empty
 
 -- Generate all congruence axioms, given all instantiations of universally quantified
 --   measure applications
@@ -426,7 +426,9 @@ assertCongruence allApps = map assertCongruence' (pairs allApps)
     pairs xs = [(x, y) | (x:ys) <- tails xs, y <- ys]
 
 assertCongruence' (pl@(Pred _ ml largs), pr@(Pred _ mr rargs)) =
-  conjunction (zipWith (|=|) largs rargs) |=>| (mkFuncVar pl |=| mkFuncVar pr) 
+  conjunction (zipWith (|=|) largs rargs) |=>| (mkvar pl |=| mkvar pr) 
+  where 
+    mkvar = transformFml mkFuncVar
 assertCongruence' ms = error $ show $ text "assertCongruence: called with non-measure formulas:"
   <+> pretty ms 
 
