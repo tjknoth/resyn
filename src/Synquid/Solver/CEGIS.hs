@@ -343,8 +343,6 @@ allValidCArgs env (MeasureDef inS outS defs cargs post) (Pred s x args) =
       validCArgs = mapMaybe checkValid possibleCArgs
   in  map constructSubst validCArgs 
       
-      
-
 -- Attempt to unify two sorts
 assignSorts :: Maybe SortSubstitution -> (Sort, Sort) -> Maybe SortSubstitution
 assignSorts Nothing _ = Nothing

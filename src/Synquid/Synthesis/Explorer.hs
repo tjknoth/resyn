@@ -443,7 +443,7 @@ enumerateAt env typ d = do
       checkE env typ pApp
       return pApp
 
--- | Given a name, schema, and environment, retrieve the variable type from the environment and split it into left and right types with fresh potential variables, generating constraints accordingly.
+-- | Given a name, schema, and environment, retrieve the variable type from the environment and check against the provided goal type 
 retrieveAndCheckVarType :: (MonadHorn s, MonadSMT s, RMonad s) 
                         => Id 
                         -> RSchema 

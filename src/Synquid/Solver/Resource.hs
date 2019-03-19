@@ -276,22 +276,15 @@ redistribute :: Monad s
 redistribute envIn envOut = do
   let fpIn  = _freePotential envIn 
   let fpOut = _freePotential envOut 
-  -- All (non-ghost) scalar types 
-  --let scalarsOf env = toMonotype <$> nonGhostScalars env
-  -- All top-level potential annotations of a map of scalar types
-  --let topPotentials = Map.mapMaybe topPotentialOf
-  -- Generate pending substitutions 
-  --let substitutions e = Map.foldlWithKey generateSubst Map.empty (scalarsOf e)
-  -- Sum of all top-level potentials of scalar types in context
+  -- Sum of top-level potential annotations
   let envSum = sumFormulas . substitutePotentials 
-  --let envSum env = sumFormulas $ topPotentials $ Map.mapWithKey substForValueVar $ scalarsOf env
   -- Assert that all potentials are well-formed
   let wellFormed env = map (|>=| fzero) (Map.elems (substitutePotentials env))
-  --let wellFormed smap = map (|>=| fzero) ((Map.elems . topPotentials) smap) 
   -- Assert (fresh) potentials in output context are well-formed
   let wellFormedAssertions = (fpIn |>=| fzero) : (fpOut |>=| fzero) : wellFormed envOut 
   --Assert that top-level potentials are re-partitioned
   let transferAssertions = (envSum envIn |+| fpIn) |=| (envSum envOut |+| fpOut)
+  -- No pending substitutions for now
   return (Map.empty, transferAssertions : wellFormedAssertions)
   --return (Map.union (substitutions envIn) (substitutions envOut), transferAssertions : wellFormedAssertions)
 
@@ -300,12 +293,9 @@ assertZeroPotential :: Monad s
                     => Environment 
                     -> TCSolver s (PendingRSubst, Formula) 
 assertZeroPotential env = do 
-  --let scalars = toMonotype <$> nonGhostScalars env 
-  --let topPotentials = Map.mapMaybe topPotentialOf
   --let substitutions = Map.foldlWithKey generateSubst Map.empty scalars
   let topLevelPotentials = substitutePotentials env
   let fml = ((env ^. freePotential) |+| sumFormulas topLevelPotentials) |=| fzero
-  --let fml = ((env ^. freePotential) |+| sumFormulas (topPotentials scalars)) |=| fzero
   return (Map.empty, fml)
   --return (substitutions, fml)
 

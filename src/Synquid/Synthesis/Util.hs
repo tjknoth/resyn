@@ -240,7 +240,7 @@ checkResourceVar :: Monad s
                  -> Explorer s Bool 
 checkResourceVar env x t = do 
   tstate <- use typingState 
-  -- TODO: figure out how to use lenses so I can skip the intermediate bind lmao
+  -- TODO: figure out how to use lenses so I can skip the intermediate bind 
   tparams <- asks . view $ _2 
   let isRV = TCSolver.isResourceVariable env tstate (_cegisDomain tparams) x t 
   return isRV
@@ -371,7 +371,6 @@ shareContext :: (MonadHorn s, MonadSMT s)
              -> String 
              -> Explorer s (Environment, Environment)
 shareContext env label = do
-  --traceM $ show $ symbolsOfArity 0 env 
   symsl <- safeFreshPotentials env False
   symsr <- safeFreshPotentials env False
   (fpl, fpr) <- shareFreePotential env (env ^. freePotential) label
@@ -395,19 +394,12 @@ shareFreePotential env fp@(Ite g _ _) label = do
   fp4 <- freshFreePotential env
   let fp' = Ite g fp1 fp3 
   let fp'' = Ite g fp2 fp4
-  --let env1 = env { _freePotential = fp }
-  --let env2 = env { _freePotential = fp' }
-  --let env3 = env { _freePotential = fp'' }
   addConstraint $ SharedForm env fp fp' fp'' label
   return (fp', fp'')
 shareFreePotential env fp label = do 
   fp' <- freshFreePotential env
   fp'' <- freshFreePotential env
-  --let env1 = env { _freePotential = fp }
-  --let env2 = env { _freePotential = fp' }
-  --let env3 = env { _freePotential = fp'' }
   addConstraint $ SharedForm env fp fp' fp'' label
-    --addConstraint $ SharedEnv env1 env2 env3 label
   return (fp', fp'')
 
 -- Transfer potential between variables in a context if necessary
@@ -416,25 +408,13 @@ transferPotential :: (MonadHorn s, MonadSMT s)
                   -> String 
                   -> Explorer s Environment
 transferPotential env label = do 
-  fp <- freshFreePotential env --transferFreePotential env 
+  fp <- freshFreePotential env 
   syms' <- safeFreshPotentials env True
   let env' = mkResourceEnv syms' (_ghostSymbols env) fp
   
   addConstraint $ Transfer env env' label
   return $ env { _symbols = syms', _freePotential = fp }
 
-transferFreePotential :: (MonadHorn s, MonadSMT s)
-                      => Environment
-                      -> Explorer s Formula
-transferFreePotential env = do 
-  let scalars = Map.elems $ TCSolver.nonGhostScalars env 
-  let conds = mapMaybe (getConditional . toMonotype) scalars
-  case conds of 
-    [] -> freshFreePotential env
-    Ite g _ _ : _ -> do 
-      fpt <- freshFreePotential env 
-      fpf <- freshFreePotential env 
-      return $ Ite g fpt fpf
 
 safeFreshPotentials :: (MonadHorn s, MonadSMT s)
                     => Environment
