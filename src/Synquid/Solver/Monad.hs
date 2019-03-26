@@ -58,6 +58,7 @@ type PendingRSubst = Map Formula Substitution
 data RFormula a = RFormula {
   knownAssumptions :: !a,
   unknownAssumptions :: !a,
+  varSubsts :: !Substitution,
   pendingSubsts :: !PendingRSubst,
   rformula :: !Formula
 } deriving (Eq, Show, Ord)
@@ -65,7 +66,7 @@ data RFormula a = RFormula {
 type RawRFormula = RFormula (Set Formula) 
 type ProcessedRFormula = RFormula ()
 
-instance Pretty a => Pretty (RFormula a) where 
+instance Pretty (RFormula a) where 
   pretty = pretty . rformula
 
 data Z3Env = Z3Env {
@@ -96,8 +97,6 @@ class Declarable a where
 {- Monadic structure of solvers -}
 
 
-
-
 class (Monad s, Applicative s) => MonadSMT s where  
   initSolver :: Environment -> s ()                                                  -- ^ Initialize solver  
   isSat :: Formula -> s Bool                                                         -- ^ 'isSat' @fml@: is @fml@ satisfiable?
@@ -107,7 +106,7 @@ class (Monad s, Applicative s) => RMonad s where
   solveAndGetModel :: Formula -> s (Maybe SMTModel)                                  -- ^ 'solveAndGetModel' @fml@: Evaluate @fml@ and, if satisfiable, return the model object
   solveAndGetAssignment :: Formula -> [String] -> s (Maybe (Map String Formula))     -- ^ 'solveAndGetAssignment' @fml@ @vars@: If @fml@ is satsiable, return the assignments of variables @vars@
   modelGetAssignment :: [String] -> SMTModel -> s (Maybe (Map String Formula))       -- ^ 'modelGetAssignment' @vals@ @m@: Get assignments of all variables @vals@ in model @m@
-  evalInModel :: [Formula] -> SMTModel -> Z3UFun -> s Formula
+  checkPredWithModel :: Formula -> SMTModel -> s Bool                                -- ^ 'checkWithModel' @fml model@: check if boolean-sorted formula holds under a given model
 
 class (Monad s, Applicative s) => MonadHorn s where
   initHornSolver :: Environment -> s Candidate                                                -- ^ Initial candidate solution

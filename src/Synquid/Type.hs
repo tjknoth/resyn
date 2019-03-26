@@ -43,7 +43,7 @@ instance Bifunctor BaseType where
   bimap _ _ IntT = IntT
 
 instance Bifoldable TypeSkeleton where 
-  bifoldMap f g (ScalarT b r p) = f r `mappend` g p
+  bifoldMap f g (ScalarT b r p) = f r `mappend` g p `mappend` bifoldMap f g b
   bifoldMap f g (FunctionT x argT resT c) = bifoldMap f g argT `mappend` bifoldMap f g resT
   bifoldMap f g (LetT x t bodyT) = bifoldMap f g bodyT 
   bifoldMap _ _ AnyT = mempty

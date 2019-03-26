@@ -82,7 +82,7 @@ instance (Monad s, Applicative s, RMonad s) => RMonad (FixPointSolver s) where
   solveAndGetModel = lift . solveAndGetModel
   solveAndGetAssignment q f = lift $ solveAndGetAssignment q f
   modelGetAssignment s m = lift $ modelGetAssignment s m
-  evalInModel fs m measure = lift $ evalInModel fs m measure
+  checkPredWithModel f m = lift $ checkPredWithModel f m
 
  
 {- Implementation -}

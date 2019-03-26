@@ -9,6 +9,7 @@ module Synquid.Solver.Util (
     freshId,
     freshVar,
     freshValueVarId,
+    freshValueVarSub,
     throwError,
     nonGhostScalars,
     safeAddGhostVar,
@@ -50,11 +51,11 @@ embedding env vars includeQuantified substituteValueVars = do
     let allVars = vars `Set.union` potentialVars qmap (conjunction ass)
     return $ addBindings env tass pass qmap ass allVars
   where
-    addBindings env tass pass qmap fmls vars =
+    addBindings env tass pass qmap fmls vars = 
       if Set.null vars
         then fmls
         else let (x, rest) = Set.deleteFindMin vars in
-              case Map.lookup x (allSymbols env) of
+             case Map.lookup x (allSymbols env) of
                 Nothing -> addBindings env tass pass qmap fmls rest -- Variable not found (useful to ignore value variables)
                 Just (Monotype t) -> case typeSubstitute tass t of
                   ScalarT baseT fml pot ->
@@ -156,6 +157,9 @@ freshVar env prefix = do
     then freshVar env prefix
     else return x
 
+freshValueVarSub :: Monad s => Sort -> TCSolver s Substitution
+freshValueVarSub s = Map.singleton valueVarName <$> (Var s <$> freshValueVarId)
+
 freshValueVarId :: Monad s => TCSolver s String
 freshValueVarId = freshId valueVarName
 
@@ -169,14 +173,12 @@ safeAddGhostVar name t@AnyT{} env = return $ addGhostVariable name t env
 safeAddGhostVar name t env = do 
   tstate <- get 
   adomain <- asks _cegisDomain 
-  return $ addGhostVariable name t env
-  {-
+  --return $ addGhostVariable name t env
   if isResourceVariable env tstate adomain name t
     then do 
       universalFmls %= Set.insert (Var (toSort (baseTypeOf t)) name)
       return $ addGhostVariable name t env
     else return $ addGhostVariable name t env
-  -}
 
 isResourceVariable :: Environment 
                    -> TypingState 

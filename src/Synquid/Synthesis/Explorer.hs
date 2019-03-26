@@ -75,7 +75,7 @@ generateMaybeIf env t = ifte generateThen (uncurry6 generateElse) (generateMatch
   where
     -- | Guess an E-term and abduce a condition for it
     generateThen = do
-      (cEnv, bEnv) <- shareContext env $ show $ text "generateMaybeIf :: " <+> plain (pretty t)
+      (cEnv, bEnv) <- shareContext env 
       cUnknown <- Unknown Map.empty <$> freshId "C"
       addConstraint $ WellFormedCond bEnv cUnknown
       -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
@@ -149,10 +149,9 @@ generateMatch env t = do
     then mzero
     else do
       -- guard, and branch environments (if-abduction)
-      (ifCEnv, ifBEnv) <- shareContext env "generateMatch -- then branch "
+      (ifCEnv, ifBEnv) <- shareContext env 
       -- scrutinee, case environments (match expression)
-      (matchCEnv, matchBEnv) <- shareContext ifBEnv $ show 
-        $ text "generateMatch ::" <+> plain (pretty t)
+      (matchCEnv, matchBEnv) <- shareContext ifBEnv 
       (Program p tScr) <- local (over _1 (\params -> set eGuessDepth (view scrutineeDepth params) params))
                       $ inContext (\p -> Program (PMatch p []) t)
                       $ generateIE matchCEnv anyDatatype -- Generate a scrutinee of an arbitrary type
@@ -254,10 +253,8 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
   where
     -- | Guess an E-term and abduce a condition and a match-condition for it
     generateOneBranch = do
-      (ifCEnv, ifBEnv) <- shareContext env $ show 
-        $ text "generateMaybeMatchIf ::" <+> plain (pretty t)
-      (matchCEnv, matchBEnv) <- shareContext ifBEnv $ show 
-        $ text "generateMaybeMatchIf ::" <+> plain (pretty t)
+      (ifCEnv, ifBEnv) <- shareContext env 
+      (matchCEnv, matchBEnv) <- shareContext ifBEnv 
       -- TODO: hopefully not an issue that we use env here?
       matchUnknown <- Unknown Map.empty <$> freshId "M"
       addConstraint $ WellFormedMatchCond matchBEnv matchUnknown
@@ -317,7 +314,7 @@ generateIE :: (MonadSMT s, MonadHorn s, RMonad s)
            -> RType 
            -> Explorer s RProgram
 generateIE env typ = do 
-  env' <- transferPotential env "" 
+  env' <- transferPotential env 
   generateE env' typ 
 
 -- | 'generateE' @env typ@ : explore all elimination terms of type @typ@ in environment @env@
@@ -375,11 +372,11 @@ checkE env typ p@(Program pTerm pTyp) = do
   
   -- Add subtyping check, unless it's a function type and incremental checking is diasbled:
   when (incremental || arity typ == 0)
-    $ addSubtypeConstraint env pTyp typ False (show (plain (pretty pTerm)))
+    $ addSubtypeConstraint env pTyp typ False 
 
   -- Add consistency constraint for function types:
   when (consistency && arity typ > 0) 
-    (addSubtypeConstraint env pTyp typ True (show (pretty pTerm))) 
+    (addSubtypeConstraint env pTyp typ True)
   fTyp <- runInSolver $ finalizeType typ
   pos <- asks . view $ _1 . sourcePos
   typingState . errorContext .= (pos, text "when checking" </> pretty p </> text "::" </> pretty fTyp </> text "in" $+$ pretty (ctx p))
@@ -419,8 +416,10 @@ enumerateAt env typ d = do
     generateApp genFun genArg = do
       x <- freshId "X"
       let fp = env ^. freePotential 
-      (fp', fp'') <- shareFreePotential env fp $ show $ text "genApp ::" <+> plain (pretty typ)
-      (env1, env2) <- shareContext (env { _freePotential = fp' }) $ show $ text "genApp ::" <+> plain (pretty typ)
+      let cfps = env ^. condFreePotential 
+      --(fp', fp'') <- shareFreePotential env fp $ show $ text "genApp ::" <+> plain (pretty typ)
+      --(env1, env2) <- shareContext (env { _freePotential = fp' }) $ show $ text "genApp ::" <+> plain (pretty typ)
+      (env1, env2, fp'') <- shareAndExtractFP env fp cfps 
       fun <- inContext (\p -> Program (PApp p uHole) typ)
              $ genFun env1 (FunctionT x AnyT typ defCost) -- Find all functions that unify with (? -> typ)
       let tp@(FunctionT x tArg tRes _) = typeOf fun
@@ -459,10 +458,10 @@ retrieveAndCheckVarType name sch typ env = do
   symbolUseCount %= Map.insertWith (+) name 1
   case Map.lookup name (env ^. shapeConstraints) of
     Nothing -> return ()
-    Just sc -> addSubtypeConstraint env (refineBot env $ shape t) (refineTop env sc) False ""
+    Just sc -> addSubtypeConstraint env (refineBot env $ shape t) (refineTop env sc) False 
   let p = Program (PSymbol name) t
   checkE env' typ p
-  addCTConstraint env' $ "VAR " ++ name
+  addCTConstraint env'
   return p
 
 -- | Make environment inconsistent (if possible with current unknown assumptions)
@@ -474,7 +473,7 @@ generateError env = do
   writeLog 1 $ text "Checking" <+> pretty (show errorProgram) <+> text "in" $+$ pretty (ctx errorProgram)
   tass <- use (typingState . typeAssignment)
   let env' = typeSubstituteEnv tass env
-  addSubtypeConstraint env (int $ conjunction $ map trivial (allScalars env')) (int ffalse) False "Generate Error"
+  addSubtypeConstraint env (int $ conjunction $ map trivial (allScalars env')) (int ffalse) False 
   pos <- asks . view $ _1 . sourcePos
   typingState . errorContext .= (pos, text "when checking" </> pretty errorProgram </> text "in" $+$ pretty (ctx errorProgram))
   runInSolver solveTypeConstraints 

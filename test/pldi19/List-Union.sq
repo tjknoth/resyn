@@ -21,4 +21,4 @@ union = \xs . \ys .
     Cons x xxs -> 
       match ys with
         Nil -> xs
-        Cons y yys -> Cons x (Cons y (append xxs yys))
+        Cons y yys -> Cons x (Cons y (union xxs yys))

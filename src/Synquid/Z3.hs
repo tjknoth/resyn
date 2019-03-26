@@ -73,6 +73,16 @@ instance MonadSMT Z3State where
 instance RMonad Z3State where
   solveAndGetModel fml = do
     (r, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
+   
+    {-
+    (r, m) <- local $ do  
+      ast <- fmlToAST fml
+      setASTPrintMode Z3_PRINT_SMTLIB_FULL
+      smtlib <- astToString ast
+      traceM $ "START\n\n" ++ smtlib ++ "\n\n"
+      assert ast 
+      solverCheckAndGetModel
+    -}
     setASTPrintMode Z3_PRINT_SMTLIB_FULL
     fmlAst <- fmlToAST fml
     astStr <- astToString fmlAst
@@ -96,7 +106,7 @@ instance RMonad Z3State where
         modelGetAssignment vals (md, mstr)
 
   modelGetAssignment vals (m, mstr) = 
-    (Just . Map.fromList . catMaybes) <$> mapM (getAssignment m) vals
+    Just . Map.fromList . catMaybes <$> mapM (getAssignment m) vals
     where 
       astS = IntS -- TODO: maybe be smarter about this!
       varFun s = fmlToAST (Var astS s) -- Z3 AST node for variable 
@@ -108,19 +118,14 @@ instance RMonad Z3State where
           Just ast -> do 
             astLit <- mkASTLit astS ast
             return $ Just (name, astLit)
+  
+  checkPredWithModel fml (model, _) = do 
+    ast <- fmlToAST fml
+    val <- modelEval model ast True
+    case val of 
+      Nothing -> return False
+      Just res -> getBool res
 
-  evalInModel fs (model, modelStr) measure = do 
-    let eval x = modelEval model x True
-    -- Attempt to evaluate all arguments
-    maybeArgs <- mapM (fmlToAST >=> eval) fs
-    -- Construct list of AST literals (if all were evaluated successfully)
-    args <- mapM (\a -> sequence (mkASTLit IntS <$> a)) maybeArgs
-    case sequence args of 
-      Nothing -> error $ "Error evaluating arguments to " ++ modelStr ++ " " ++ show (pretty fs)
-      Just as -> 
-        case Map.lookup as (_entries measure) of 
-          Nothing -> return $ measure^.defaultVal
-          Just res -> return res
 
 mkASTLit :: Sort -> AST -> Z3State Formula
 mkASTLit s ast = ASTLit s ast <$> astToString ast

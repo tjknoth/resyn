@@ -304,6 +304,20 @@ hasVar =
       vAlg _                 = False
   in cata vAlg
 
+isNumeric :: Formula -> Bool
+isNumeric = 
+  let vAlg VarF{}            = True
+      vAlg (PredF IntS _ _)  = True
+      vAlg (PredF _ _ _)     = False
+      vAlg (SetLitF _ xs)    = and xs 
+      vAlg (UnaryF _ e)      = e 
+      vAlg (BinaryF _ e1 e2) = e1 && e2
+      vAlg (IteF e1 e2 e3)   = e1 && e2 && e3
+      vAlg (AllF _ e)        = e
+      vAlg _                 = True
+  in cata vAlg
+
+
 -- | 'leftHandSide' @fml@ : left-hand side of a binary expression
 leftHandSide (Binary _ l _) = l
 -- | 'rightHandSide' @fml@ : right-hand side of a binary expression

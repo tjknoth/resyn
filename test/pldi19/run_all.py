@@ -7,7 +7,7 @@ import time
 import re
 import difflib
 import pickle
-from subprocess import run, PIPE 
+from subprocess import run, PIPE
 from colorama import init, Fore, Back, Style
 from statistics import median
 
@@ -15,7 +15,7 @@ from statistics import median
 if platform.system() in ['Linux', 'Darwin']:
     SYNQUID_CMD = ['stack', 'exec', '--', 'resyn']              # Command to call Resyn
     TIMEOUT_CMD = ['timeout']                                   # Timeout command
-    TIMEOUT = ['300']                                           # Timeout value (seconds)    
+    TIMEOUT = ['300']                                           # Timeout value (seconds)
 else:
     SYNQUID_CMD = ['Resyn.exe']
     TIMEOUT_CMD = ['']
@@ -26,14 +26,14 @@ MICRO_LOGFILE = 'micro.log'                                     # Log file
 DUMPFILE = 'results'                                            # Result serialization file
 MICRO_DUMPFILE = 'micro'                                        # you know
 CSV_FILE = 'results.csv'                                        # CSV-output file
-MICRO_CSV_FILE = 'micro.csv'                                    # CSV-output file (micro benchmarks)      
+MICRO_CSV_FILE = 'micro.csv'                                    # CSV-output file (micro benchmarks)
 LATEX_FILE = 'results.tex'                                      # Latex-output file
 MICRO_LATEX_FILE = 'micro.tex'                                  # Latex-output file (micro benchmarks)
 ORACLE_FILE = 'solutions'                                       # Solutions file
 MICRO_ORACLE_FILE = 'micro_solutions'                           # you know
 COMMON_OPTS = ['--print-stats']                                 # Options to use for all benchmarks
 RESOURCE_OPTS = []
-RESOURCES_OFF_OPT = ['-r=false']                                # Option to disable resource analysis 
+RESOURCES_OFF_OPT = ['-r=false']                                # Option to disable resource analysis
 FNULL = open(os.devnull, 'w')                                   # Null file
 
 PAPER_PATH = '/home/tristan/Research/resyn/paper/'
@@ -55,8 +55,8 @@ class MBenchmark:
         self.name = name                # file to test
         self.description = description  # Description (in the table)
         self.signature = signature      # Type signature
-        self.complexity = complexity 
-        self.complexity_nr = complexity_nr 
+        self.complexity = complexity
+        self.complexity_nr = complexity_nr
         self.components = components    # Description of components used (in the table)
         self.options = options          # Command-line options to use for this benchmark when running in individual context
         self.eac = eac
@@ -80,7 +80,7 @@ INSERT_FG_TYPE = '$\\forall\\alpha .\
                        {\\tsubset{\\tilist{\\alpha}}{\T{elems} \ \\nu = [x] \\cup \T{elems} \ xs}}}$'
 LEN_COMPARE_TYPE = '$\\forall\\alpha .\
                        \\tarrow{ys}{\\tlist{\\tpot{\\alpha}{1}}}\
-                         {\\tarrow{zs}{\\tlist{\\alpha}}{\\tsubset{\\tlist{\\alpha}}{\\nu = ( \T{len} \ ys = \T{len} ) \ zs}}} $' 
+                         {\\tarrow{zs}{\\tlist{\\alpha}}{\\tsubset{\\tlist{\\alpha}}{\\nu = ( \T{len} \ ys = \T{len} ) \ zs}}} $'
 REPLICATE_TYPE  = '$\\forall\\alpha .\
              \\tarrow{n}{\T{Nat}}\
                {\\tarrow{x}{n \\times \\tpot{\\alpha}{n}}}\
@@ -88,20 +88,20 @@ REPLICATE_TYPE  = '$\\forall\\alpha .\
 INTERSECT_TYPE  = '$\\forall\\alpha .\
              \\tarrow{ys}{\\tilist{\\tpot{\\alpha}{1}}}\
                {\\tarrow{zs}{\\tilist{\\alpha}}\
-                 {\\tsubset{\\tlist{\\alpha}}{\T{elems} \ \\nu = \T{elems} \ ys \\cap \T{elems} \ zs}}}$' 
+                 {\\tsubset{\\tlist{\\alpha}}{\T{elems} \ \\nu = \T{elems} \ ys \\cap \T{elems} \ zs}}}$'
 RANGE_TYPE  = '$\\tarrow{lo}{\T{Int}}\
                  {\\tarrow{hi}{\\tsubset{\\tpot{\T{Int}}{\\nu - lo}}{\\nu \geq lo}}\
                    {\\tsubset{\\tilist{\\tsubset{\T{Int}}{lo \leq \\nu \leq hi}}}{\T{len} \\nu = hi - lo}}}\
-                   {}  $' 
+                   {}  $'
 COMPRESS_TYPE  = '$\\forall \\alpha .\
                     \\tarrow{xs}{\\tlist{\\tpot{\\alpha}{1}}}\
-                      {\\tsubset{\\tclist{\\alpha}}{\T{elems} \ xs = \T{elems} \ \\nu}}$' 
+                      {\\tsubset{\\tclist{\\alpha}}{\T{elems} \ xs = \T{elems} \ \\nu}}$'
 TRIPLE_TYPE  = '$\\forall \\alpha .\
                     \\tarrow{xs}{\\tlist{\\tpot{\\alpha}{2}}}\
-                      {\\tsubset{\\tlist{\\alpha}}{\T{len} \ \\nu = \T{len} \ xs + \T{len} \ xs + \T{len} \ xs }}$'  
+                      {\\tsubset{\\tlist{\\alpha}}{\T{len} \ \\nu = \T{len} \ xs + \T{len} \ xs + \T{len} \ xs }}$'
 TRIPLE_TYPE  = '$\\forall \\alpha .\
                     \\tarrow{xs}{\\tlist{\\tpot{\\alpha}{2}}}\
-                      {\\tsubset{\\tlist{\\alpha}}{\T{len} \ \\nu = \T{len} \ xs + \T{len} \ xs + \T{len} \ xs }}$'  
+                      {\\tsubset{\\tlist{\\alpha}}{\T{len} \ \\nu = \T{len} \ xs + \T{len} \ xs + \T{len} \ xs }}$'
 CONCAT_TYPE = '$\\forall\\alpha .\
              \\tarrow{xxs}{\\tlist{\\tlist{\\tpot{\\alpha}{1}}}}\
                {\\tarrow{acc}{\\tlist{\\alpha}}\
@@ -111,7 +111,7 @@ DIFF_TYPE  = '$\\forall\\alpha .\
                {\\tarrow{zs}{\\tilist{\\alpha}}\
                  {\\tsubset{\\tlist{\\alpha}}{\T{elems} \ \\nu = \T{elems} \ ys \\ \T{elems} \ zs}}}$'
 
-MICRO_BENCHMARKS = [    
+MICRO_BENCHMARKS = [
     MBenchmark('List-Triple1', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$', 1),
     MBenchmark('List-Triple2', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$', 1),
     MBenchmark('List-Concat', 'concat list of lists', CONCAT_TYPE, 'append', [], '$\mid xxs \mid$', '$\mid xxs \mid^2$',1),
@@ -199,14 +199,14 @@ class SynthesisResult:
     def __init__(self, name, time, goal_count, code_size, spec_size, measure_count, num_constraints):
         self.name = name                        # Benchmark name
         self.time = time                        # Synthesis time (seconds)
-        self.goal_count = goal_count            # Number of synthesis goals 
+        self.goal_count = goal_count            # Number of synthesis goals
         self.code_size = code_size              # Cumulative synthesized code size (in AST nodes)
         self.spec_size = spec_size              # Cumulative specification size (in AST nodes)
         self.measure_count = measure_count      # Number of measures defined
-        self.optimized = False 
-        self.nres_code_size = '-' 
-        self.nres_time = -3.0 
-        self.eac_time = -3.0 
+        self.optimized = False
+        self.nres_code_size = '-'
+        self.nres_time = -3.0
+        self.eac_time = -3.0
         self.pct_slowdown = 0.0
         self.num_constraints = num_constraints
 
@@ -236,7 +236,7 @@ def run_benchmark(name, opts, default_opts):
           goal_count = re.match("\(Goals: (\d+)\).*$", lastLines[0]).group(1)
           measure_count = re.match("\(Measures: (\d+)\).*$", lastLines[1]).group(1)
           spec_size = re.match("\(Spec size: (\d+)\).*$", lastLines[2]).group(1)
-          solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)                    
+          solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)
           num_constraints = re.match("\(Number of resource constraints: (\d+)\).*$", lastLines[4]).group(1)
           results [name] = SynthesisResult(name, (end - start), goal_count, solution_size, spec_size, measure_count, num_constraints)
           print(Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL, end = ' ')
@@ -274,7 +274,7 @@ def run_micro_benchmark(name, opts, default_opts, eac):
           goal_count = re.match("\(Goals: (\d+)\).*$", lastLines[0]).group(1)
           measure_count = re.match("\(Measures: (\d+)\).*$", lastLines[1]).group(1)
           spec_size = re.match("\(Spec size: (\d+)\).*$", lastLines[2]).group(1)
-          solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)                    
+          solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)
           num_constraints = re.match("\(Number of resource constraints: (\d+)\).*$", lastLines[4]).group(1)
           micro_results [name] = SynthesisResult(name, (end - start), goal_count, solution_size, spec_size, measure_count, num_constraints)
           print(Back.GREEN + Fore.GREEN + Style.BRIGHT + 'OK' + Style.RESET_ALL, end = ' ')
@@ -282,7 +282,7 @@ def run_micro_benchmark(name, opts, default_opts, eac):
       variant_options = [   # Command-line options to use for each variant of Synquid
             ('nres', opts + RESOURCES_OFF_OPT),
         ]
-      
+
       # Run each variant: (now there's only one, should probably change this...)
       for (variant_id, opts) in variant_options:
           run_version(name, variant_id, opts, logfile, str(synthesis_output), micro_results)
@@ -315,7 +315,7 @@ def run_version(name, variant_id, variant_opts, logfile, with_res, results_file)
       results_file[name].nres_time = -2
     else: # Synthesis succeeded: record time for variant
       lastLines = synthesis_res.stdout.split('\n')[-6:]
-      solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)   
+      solution_size = re.match("\(Solution size: (\d+)\).*$", lastLines[3]).group(1)
       results_file[name].nres_time = (end - start)
       pct_slower = results_file[name].time / (end - start)
       results_file[name].pct_slowdown = pct_slower
@@ -342,14 +342,14 @@ def run_eac_version(name, logfile, results_file):
     print('{0:0.2f}'.format(end - start), end = ' ')
     if synthesis_res.returncode == 124:  # Timeout: record timeout
       print(Back.RED + Fore.RED + Style.BRIGHT + 'EAC TIMEOUT' + Style.RESET_ALL, end = ' ')
-      results_file[name].eac_time = 'TO' 
+      results_file[name].eac_time = 'TO'
     elif synthesis_res.returncode: # Synthesis failed: record failure
       print(Back.RED + Fore.RED + Style.BRIGHT + 'EAC FAIL' + Style.RESET_ALL, end = ' ')
       results_file[name].eac_time = -2
     else: # Synthesis succeeded: record time for variant
       results_file[name].eac_time = (end - start)
       print(Back.GREEN + Fore.GREEN + Style.BRIGHT + 'EAC OK' + Style.RESET_ALL, end=' ')
-      
+
 def format_time(t):
     if isinstance(t, str):
         return t
@@ -394,7 +394,7 @@ def write_csv():
 
 def write_micro_latex():
     '''Generate Latex table from the results dictionary'''
-    
+
     total_count = 0
     to_def = 0
     to_nres = 0
@@ -402,7 +402,7 @@ def write_micro_latex():
     with open(MICRO_LATEX_FILE, 'w') as outfile:
         rownum = 1
         for b in MICRO_BENCHMARKS:
-            result = micro_results [b.name]                
+            result = micro_results [b.name]
             optstr = 'Yes' if result.optimized else '-'
             row = str(rownum) +\
                 ' & ' + b.description +\
@@ -421,14 +421,14 @@ def write_micro_latex():
             outfile.write (row)
             outfile.write ('\n')
             rownum = rownum + 1
-            
+
             total_count = total_count + 1
-            
+
     print('Total:', total_count)
 
 def write_latex():
     '''Generate Latex table from the results dictionary'''
-    
+
     total_count = 0
     to_def = 0
     to_nres = 0
@@ -439,10 +439,10 @@ def write_latex():
             outfile.write (str(group.benchmarks.__len__()))
             outfile.write ('}{*}{\\parbox{1cm}{\\vspace{-0.85\\baselineskip}\center{')
             outfile.write (group.name)
-            outfile.write ('}}}')            
+            outfile.write ('}}}')
 
             for b in group.benchmarks:
-                result = results [b.name]                
+                result = results [b.name]
                 optstr = 'Yes' if result.optimized else '-'
                 row = \
                     ' & ' + b.description +\
@@ -458,28 +458,28 @@ def write_latex():
                     #' & ' + optstr + ' \\\\'
                 outfile.write (row)
                 outfile.write ('\n')
-                
+
                 total_count = total_count + 1
                 if result.nres_time < 0.0:
-                   to_nres = to_nres + 1 
-                
+                   to_nres = to_nres + 1
+
             outfile.write ('\\hline')
-            
+
     print('Total:', total_count)
     print('TO nres:', to_nres)
-    
+
 def cmdline():
     import argparse
     a = argparse.ArgumentParser()
     a.add_argument('--medium', action='store_true')
     a.add_argument('--small', action='store_true')
-    return a.parse_args()    
+    return a.parse_args()
 
 if __name__ == '__main__':
     init()
-    
+
     cl_opts = cmdline()
-    
+
     # Check if there are serialized results
     if os.path.isfile(DUMPFILE):
         results = pickle.load(open(DUMPFILE, 'rb'))
@@ -502,14 +502,14 @@ if __name__ == '__main__':
     groups = ALL_BENCHMARKS[:1] if cl_opts.small else ALL_BENCHMARKS
 
     for group in groups:
-        for b in group.benchmarks: 
+        for b in group.benchmarks:
             if b.name in results:
                 print(b.str() + Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'SKIPPED' + Style.RESET_ALL)
             else:
                 print(b.str())
                 run_benchmark(b.name, b.options, group.default_options)
                 with open(DUMPFILE, 'wb') as data_dump:
-                    pickle.dump(results, data_dump)    
+                    pickle.dump(results, data_dump)
 
     for b in MICRO_BENCHMARKS:
         if b.name in micro_results:
@@ -518,13 +518,13 @@ if __name__ == '__main__':
             print(b.str())
             run_micro_benchmark(b.name, b.options, group.default_options, b.eac)
             with open(MICRO_DUMPFILE, 'wb') as data_dump:
-                pickle.dump(micro_results, data_dump)    
+                pickle.dump(micro_results, data_dump)
 
-    med_slowdown = median([results[b.name].pct_slowdown for g in groups for b in g.benchmarks]) 
+    med_slowdown = median([results[b.name].pct_slowdown for g in groups for b in g.benchmarks])
     print('Median slowdown = ' + str(med_slowdown))
 
     # Generate CSV
-    write_csv()            
+    write_csv()
     # Generate Latex table
     write_latex()
 

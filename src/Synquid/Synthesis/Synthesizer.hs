@@ -24,6 +24,7 @@ import Control.Monad.State
 import Control.Lens
 import qualified Data.Set as Set
 import qualified Data.Map as Map
+import Debug.Trace
 
 type HornSolver = FixPointSolver Z3State
 

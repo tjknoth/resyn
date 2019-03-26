@@ -170,7 +170,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
   -}   
    
   PIf (Program PHole AnyT) iThen iElse -> do
-    (cEnv, bEnv) <- shareContext env "if ??"
+    (cEnv, bEnv) <- shareContext env 
     cUnknown <- Unknown Map.empty <$> freshId "C"
     addConstraint $ WellFormedCond bEnv cUnknown
     pThen <- inContext (\p -> Program (PIf (Program PHole boolAll) p (Program PHole t)) t) 
@@ -183,7 +183,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
     return $ Program (PIf pCond pThen pElse) t
   
   PIf iCond iThen iElse -> do
-    (cEnv, bEnv) <- shareContext env $ show $ text "if" <+> plain (pretty iCond)
+    (cEnv, bEnv) <- shareContext env 
     pCond <- inContext (\p -> Program (PIf p (Program PHole t) (Program PHole t)) t) 
       $ reconstructIE cEnv (ScalarT BoolT ftrue defPotential) iCond
     let (bEnv', ScalarT BoolT cond pot) = embedContext bEnv $ typeOf pCond
@@ -196,7 +196,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
   PMatch iScr iCases -> do
     (consNames, consTypes) <- unzip <$> checkCases Nothing iCases
     let scrT = refineTop env $ shape $ lastType $ head consTypes
-    (cEnv, bEnv) <- shareContext env $ show $ text "match" <+> plain (pretty iScr)
+    (cEnv, bEnv) <- shareContext env 
     pScrutinee <- inContext (\p -> Program (PMatch p []) t) 
       $ reconstructIE cEnv scrT iScr
     let (bEnv', tScr) = embedContext bEnv (typeOf pScrutinee)
@@ -258,7 +258,7 @@ reconstructIE :: (MonadSMT s, MonadHorn s, RMonad s)
               -> UProgram
               -> Explorer s RProgram
 reconstructIE env typ p = do 
-  env' <- transferPotential env ""
+  env' <- transferPotential env 
   reconstructETopLevel env' typ p
 
 -- | 'reconstructE' @env t impl@ :: reconstruct unknown types and terms in a judgment @env@ |- @impl@ :: @t@ where @impl@ is an elimination term
@@ -295,8 +295,10 @@ reconstructE' env typ (PSymbol name) =
 reconstructE' env typ p@(PApp iFun iArg) = do
   x <- freshVar env "x"
   let fp = env ^. freePotential
-  (fp', fp'') <- shareFreePotential env fp $ show $ plain $ pretty p
-  (env1, env2) <- shareContext (env { _freePotential = fp' }) $ show $ plain $ pretty p
+  let cfps = env ^. condFreePotential
+  --(fp', fp'') <- shareFreePotential env fp $ show $ plain $ pretty p
+  --(env1, env2) <- shareContext (env { _freePotential = fp' }) $ show $ plain $ pretty p
+  (env1, env2, fp'') <- shareAndExtractFP env fp cfps 
   pFun <- inContext (\p -> Program (PApp p uHole) typ) 
     $ reconstructE env1 (FunctionT x AnyT typ defCost) iFun
   let tp@(FunctionT x tArg tRes _) = typeOf pFun
@@ -347,7 +349,7 @@ checkAnnotation env t t' p = do
     Right t'' -> do
       ctx <- asks . view $ _1 . context
       writeLog 2 $ text "Checking consistency of type annotation" <+> pretty t'' <+> text "with" <+> pretty t <+> text "in" $+$ pretty (ctx (Program p t''))
-      addSubtypeConstraint env t'' t True (show (plain (pretty p)))
+      addSubtypeConstraint env t'' t True 
 
       fT <- runInSolver $ finalizeType t
       fT'' <- runInSolver $ finalizeType t''

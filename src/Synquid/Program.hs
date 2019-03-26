@@ -229,6 +229,7 @@ data Environment = Environment {
   _symbols :: SymbolMap,                     -- ^ Variables and constants (with their refinement types), indexed by arity
   _ghostSymbols :: (Set Id),                 -- ^ Set of names of variables that do not carry potential -- ignored in sharing and transfer constraints
   _freePotential :: Formula,                 -- ^ Extra free potential, used only for weakening
+  _condFreePotential :: [Formula],           -- ^ Possible conditional structures for free potential expressions
   _boundTypeVars :: [Id],                    -- ^ Bound type variables
   _boundPredicates :: [PredSig],             -- ^ Argument sorts of bound abstract refinements
   _assumptions :: (Set Formula),             -- ^ Unknown assumptions
@@ -260,6 +261,7 @@ emptyEnv = Environment {
   _symbols = Map.empty,
   _ghostSymbols = Set.empty,
   _freePotential = fzero,
+  _condFreePotential = [],
   _boundTypeVars = [],
   _boundPredicates = [],
   _assumptions = Set.empty,
@@ -279,12 +281,16 @@ emptyEnv = Environment {
 
 -- Used to carry around symbols, list of ghosts, and free potential expression 
 --   in resource constraints without storing all the extra stuff.
-mkResourceEnv syms ghosts fp = 
+mkResourceEnv syms ghosts fp cfps = 
   emptyEnv {
     _symbols = syms,
     _ghostSymbols = ghosts,
-    _freePotential = fp
+    _freePotential = fp,
+    _condFreePotential = cfps
   }
+
+totalConditionalFP :: Environment -> Formula 
+totalConditionalFP = sumFormulas . _condFreePotential
 
 -- | 'symbolsOfArity' @n env@: all symbols of arity @n@ in @env@
 symbolsOfArity n env = Map.findWithDefault Map.empty n (env ^. symbols)
@@ -465,12 +471,12 @@ allRMeasuresOf dtName env = Map.filterWithKey checkM $ env ^. measureDefs
 
 allRMeasures env = Map.filterWithKey (\m _ -> m `Set.member` (env ^. resourceMeasures)) $ env ^. measureDefs
 
-rMeasuresFromSch :: RSchema -> Set String 
-rMeasuresFromSch sch = rMeasuresFromSch' (toMonotype sch) 
+rMeasuresFromSch :: RSchema -> Set String
+rMeasuresFromSch sch = rMeasuresFromSch' (toMonotype sch)
 
-rMeasuresFromSch' typ = 
+rMeasuresFromSch' typ =
   let rforms = allRFormulas True typ
-  in  Set.unions $ map getAllPreds rforms
+  in  Set.unions $ map getAllRPreds rforms
 
 -- | 'allMeasurePostconditions' @baseT env@ : all nontrivial postconditions of measures of @baseT@ in case it is a datatype
 allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env =
@@ -481,8 +487,6 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
                    if isAbstract then map contentProperties allMeasures else [] ++
                    if includeQuanitifed then map elemProperties allMeasures else []
   where
-    allPossibleArgs (_, sort) = map (Var sort) $ Map.keys $ allScalarsOfSort env sort 
-
     extractPost (mName, MeasureDef _ outSort _ [] fml) =
       if fml == ftrue
         then [Nothing]
@@ -580,37 +584,29 @@ isSynthesisGoal _ = False
 
 -- | Typing constraints
 data Constraint = 
-  Subtype !Environment !RType !RType !Bool !Id
-  | RSubtype !Environment !Formula !Formula !Id
-  | WellFormed !Environment !RType !Id
+  Subtype !Environment !RType !RType !Bool 
+  | RSubtype !Environment !Formula !Formula 
+  | WellFormed !Environment !RType 
   | WellFormedCond !Environment !Formula
   | WellFormedMatchCond !Environment !Formula
   | WellFormedPredicate !Environment ![Sort] !Id
-  | SharedEnv !Environment !Environment !Environment !Id
-  | SharedForm !Environment !Formula !Formula !Formula !Id
-  | Transfer !Environment !Environment !Id
-  | ConstantRes !Environment !Id
+  | SharedEnv !Environment !Environment !Environment 
+  | SharedForm !Environment !Formula !Formula !Formula 
+  | Transfer !Environment !Environment
+  | ConstantRes !Environment
   deriving (Show, Eq, Ord)
 
 
 
-labelOf (Subtype _ _ _ _ l)    = l
-labelOf (RSubtype _ _ _ l)     = l
-labelOf (WellFormed _ _ l)     = l
-labelOf (SharedEnv _ _ _ l)    = l
-labelOf (SharedForm _ _ _ _ l) = l
-labelOf (Transfer _ _ l)       = l
-labelOf _                      = ""
-
-envFrom (Subtype e _ _ _ _)         = e
-envFrom (RSubtype e _ _ _)          = e
-envFrom (WellFormed e _ _)          = e
+envFrom (Subtype e _ _ _)           = e
+envFrom (RSubtype e _ _)            = e
+envFrom (WellFormed e _)            = e
 envFrom (WellFormedCond e _)        = e
 envFrom (WellFormedPredicate e _ _) = e
-envFrom (SharedEnv e _ _ _)         = e
-envFrom (SharedForm e _ _ _ _)      = e
-envFrom (ConstantRes e _)           = e
-envFrom (Transfer e _ _)            = e
+envFrom (SharedEnv e _ _)           = e
+envFrom (SharedForm e _ _ _)        = e
+envFrom (ConstantRes e)             = e
+envFrom (Transfer e _)              = e
 
 isCTConstraint ConstantRes{} = True
 isCTConstraint _             = False
@@ -692,13 +688,14 @@ genSkeleton name preds inSorts outSort post = Monotype $ uncurry 0 inSorts
     pforms = fmap predform preds
     predform x = Pred AnyS x []
 
-getAllPreds :: Formula -> Set Id
-getAllPreds (Binary _ l r) = getAllPreds l `Set.union` getAllPreds r
-getAllPreds (Unary _ f)    = getAllPreds f
-getAllPreds (Ite g t f)    = getAllPreds g `Set.union` getAllPreds t `Set.union` getAllPreds f 
-getAllPreds (All _ f)      = getAllPreds f
-getAllPreds (Pred _ x fs)  = Set.insert x (Set.unions (map getAllPreds fs))
-getAllPreds _              = Set.empty 
+getAllRPreds :: Formula -> Set Id
+getAllRPreds (Binary _ l r) = getAllRPreds l `Set.union` getAllRPreds r
+getAllRPreds (Unary _ f)    = getAllRPreds f
+getAllRPreds (Ite g t f)    = getAllRPreds g `Set.union` getAllRPreds t `Set.union` getAllRPreds f 
+getAllRPreds (All _ f)      = getAllRPreds f
+getAllRPreds (Pred IntS x fs)  = Set.insert x (Set.unions (map getAllRPreds fs))
+getAllRPreds (Pred _ x fs)  = Set.empty
+getAllRPreds _              = Set.empty 
 
 -- Return a map from the IDs of multi-argument measures to a list of sets of possible 
 --   instantiations of those constant arguments by scraping the schema annotations
