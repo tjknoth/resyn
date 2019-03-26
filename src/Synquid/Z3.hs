@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, TupleSections #-}
 
 -- | Interface to Z3
 module Synquid.Z3 (
@@ -103,21 +103,13 @@ instance RMonad Z3State where
       Nothing -> return Nothing 
       Just md -> do 
         mstr <- modelToString md 
-        modelGetAssignment vals (md, mstr)
+        Just <$> modelGetAssignment vals (md, mstr)
 
-  modelGetAssignment vals (m, mstr) = 
-    Just . Map.fromList . catMaybes <$> mapM (getAssignment m) vals
+  modelGetAssignment vals (m, _) = 
+    Map.fromList . catMaybes <$> mapM (getAssignmentForVar m . Var astS) vals
     where 
       astS = IntS -- TODO: maybe be smarter about this!
       varFun s = fmlToAST (Var astS s) -- Z3 AST node for variable 
-      getAssignment model name = do 
-        vFun <- varFun name
-        c <- modelEval model vFun True
-        case c of 
-          Nothing -> return Nothing 
-          Just ast -> do 
-            astLit <- mkASTLit astS ast
-            return $ Just (name, astLit)
   
   checkPredWithModel fml (model, _) = do 
     ast <- fmlToAST fml
@@ -125,6 +117,26 @@ instance RMonad Z3State where
     case val of 
       Nothing -> return False
       Just res -> getBool res
+
+  filterPreds rfmls (model, _) = do 
+    all <- mapM checkAndGetAssignment rfmls
+    return (mapMaybe fst all, Map.unions (map snd all))
+    where
+      checkAndGetAssignment rfml = do 
+        let vars = Map.elems . _varSubsts $ rfml 
+        let isRelevant f = isJust <$> modelEval model f False -- No model completion
+        let getAll vars = Map.fromList . catMaybes <$> mapM (getAssignmentForVar model) vars
+        vfuns <- mapM fmlToAST vars
+        ifM (anyM isRelevant vfuns)
+          ((Just rfml,) <$> getAll vars) -- get interpretations of all variables
+          (return (Nothing, Map.empty))
+
+getAssignmentForVar :: Z3.Model -> Formula -> Z3State (Maybe (String, Formula))
+getAssignmentForVar model v@(Var s x) = do 
+  var <- fmlToAST v
+  val <- modelEval model var True 
+  fml <- sequence $ mkASTLit s <$> val 
+  return $ (x,) <$> fml
 
 
 mkASTLit :: Sort -> AST -> Z3State Formula

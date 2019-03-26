@@ -54,20 +54,23 @@ class UF a where
 
 type PendingRSubst = Map Formula Substitution
 
--- RFormula : Logical formula and a set of pending substitutions
+-- RFormula : Logical formula and meta-info
 data RFormula a = RFormula {
-  knownAssumptions :: !a,
-  unknownAssumptions :: !a,
-  varSubsts :: !Substitution,
-  pendingSubsts :: !PendingRSubst,
-  rformula :: !Formula
+  _knownAssumptions :: !a,
+  _unknownAssumptions :: !a,
+  _renamedPreds :: !(Set Formula),
+  _varSubsts :: !Substitution,
+  _pendingSubsts :: !PendingRSubst,
+  _rformula :: !Formula
 } deriving (Eq, Show, Ord)
+
+makeLenses ''RFormula
 
 type RawRFormula = RFormula (Set Formula) 
 type ProcessedRFormula = RFormula ()
 
 instance Pretty (RFormula a) where 
-  pretty = pretty . rformula
+  pretty = pretty . _rformula
 
 data Z3Env = Z3Env {
   envSolver  :: Z3.Solver,
@@ -105,8 +108,9 @@ class (Monad s, Applicative s) => MonadSMT s where
 class (Monad s, Applicative s) => RMonad s where
   solveAndGetModel :: Formula -> s (Maybe SMTModel)                                  -- ^ 'solveAndGetModel' @fml@: Evaluate @fml@ and, if satisfiable, return the model object
   solveAndGetAssignment :: Formula -> [String] -> s (Maybe (Map String Formula))     -- ^ 'solveAndGetAssignment' @fml@ @vars@: If @fml@ is satsiable, return the assignments of variables @vars@
-  modelGetAssignment :: [String] -> SMTModel -> s (Maybe (Map String Formula))       -- ^ 'modelGetAssignment' @vals@ @m@: Get assignments of all variables @vals@ in model @m@
+  modelGetAssignment :: [String] -> SMTModel -> s (Map String Formula)               -- ^ 'modelGetAssignment' @vals@ @m@: Get assignments of all variables @vals@ in model @m@
   checkPredWithModel :: Formula -> SMTModel -> s Bool                                -- ^ 'checkWithModel' @fml model@: check if boolean-sorted formula holds under a given model
+  filterPreds :: [ProcessedRFormula] -> SMTModel -> s ([ProcessedRFormula], Map String Formula)
 
 class (Monad s, Applicative s) => MonadHorn s where
   initHornSolver :: Environment -> s Candidate                                                -- ^ Initial candidate solution

@@ -94,7 +94,7 @@ solveWithCEGIS :: RMonad s
                -> TCSolver s Bool
 solveWithCEGIS 0 rfmls universals _ polynomials program = do
   -- Base case: If there is a counterexample, @fml@ is UNSAT, SAT otherwise
-  counterexample <- getCounterexample rfmls universals polynomials program
+  counterexample <- verify rfmls universals polynomials program
   case counterexample of
     Nothing -> return True
     Just cx -> do
@@ -104,7 +104,7 @@ solveWithCEGIS 0 rfmls universals _ polynomials program = do
 
 solveWithCEGIS n rfmls universals examples polynomials program = do
   -- Attempt to find point for which current parameterization fails
-  counterexample <- getCounterexample rfmls universals polynomials program
+  counterexample <- verify rfmls universals polynomials program
   case counterexample of
     Nothing -> do
       pstr <- lift . lift . lift $ printParams program polynomials
@@ -120,8 +120,8 @@ solveWithCEGIS n rfmls universals examples polynomials program = do
         -- Attempt to find parameterization holding on all examples
         --rfmls' <- getRelevantPreds rfmls cx program polynomials
         --writeLog 5 $ text "Violated formulas:" </> pretty (map rformula rfmls')
-        --(examples', params) <- getCoefficients rfmls' examples polynomials cx
-        (examples', params) <- getCoefficients rfmls examples polynomials cx
+        --(examples', params) <- synthesize rfmls' examples polynomials cx
+        (examples', params) <- synthesize rfmls examples polynomials cx
         case params of
           Nothing -> do
             cMax <- lift $ asks _cegisMax
@@ -134,21 +134,21 @@ solveWithCEGIS n rfmls universals examples polynomials program = do
             writeLog 6 $ text "Params:" <+> pstr
             solveWithCEGIS (n - 1) rfmls universals examples' polynomials prog'
 
--- | 'getCounterexample' @fml universals polynomials program@
+-- | 'verify' @fml universals polynomials program@
 --    Find a valuation for @universals@ such that (not @formula@) holds, under parameter valuation @program@
-getCounterexample :: RMonad s
-                  => [ProcessedRFormula]
-                  -> Universals
-                  -> PolynomialSkeletons
-                  -> ResourceSolution
-                  -> TCSolver s (Maybe Counterexample)
-getCounterexample rfmls universals polynomials program = do
+verify :: RMonad s
+       => [ProcessedRFormula]
+       -> Universals
+       -> PolynomialSkeletons
+       -> ResourceSolution
+       -> TCSolver s (Maybe Counterexample)
+verify rfmls universals polynomials program = do
   let runInSolver = lift . lift . lift
   -- Generate polynomials by substituting parameter valuations for coefficients
   cxPolynomials <- runInSolver $ mapM (mkCXPolynomial program) polynomials
   -- Replace resource variables with appropriate polynomials (with pending substitutions applied)
   --   and negate the resource constraint
-  let substRFml (RFormula _ _ subs pending f) = 
+  let substRFml (RFormula _ _ _ subs pending f) = 
         runInSolver $ applyPolynomial mkCXPolynomial program polynomials pending subs f
   fml <- conjunction <$> mapM substRFml rfmls
   let cxQuery = fnot $ substitute program fml
@@ -156,11 +156,11 @@ getCounterexample rfmls universals polynomials program = do
   -- Query solver for a counterexample
   model <- runInSolver $ solveAndGetModel cxQuery
   writeLog 5 $ text "CX model:" <+> text (maybe "" snd model)
-  assignments <- runInSolver . sequence
+  vars <- runInSolver . sequence
     $ (modelGetAssignment (map fst (uvars universals)) <$> model)
-  minterps <- runInSolver . sequence
+  measures <- runInSolver . sequence
     $ (modelGetAssignment (map fst (ufuns universals)) <$> model)
-  return $ CX <$> join minterps <*> join assignments <*> model
+  return $ CX <$> measures <*> vars <*> model
 
 -- | 'getRelevantPreds' @rfml cx program polynomials@
 -- Given a counterexample @cx@, a @program@, and a list of verification conditions @rfmls@
@@ -174,25 +174,25 @@ getRelevantPreds :: RMonad s
 getRelevantPreds rfmls cx program polynomials = do
   let runInSolver = lift . lift . lift
   evalPolynomials <- runInSolver $ mapM (mkEvalPolynomial program cx) polynomials
-  let substRFml (RFormula _ _ subs pending f) = substAndApplyPolynomial pending evalPolynomials f
+  let substRFml (RFormula _ _ _ subs pending f) = substAndApplyPolynomial pending evalPolynomials f
   let isRelevant rfml = not <$> checkPredWithModel (substRFml rfml) (model cx)
   runInSolver $ filterM isRelevant rfmls
 
 
--- | 'getCoefficients' @fml polynomials examples@
+-- | 'synthesize' @fml polynomials examples@
 --   Find a valuation for all coefficients such that @fml@ holds on all @examples@
-getCoefficients :: RMonad s
-                => [ProcessedRFormula]
-                -> [Formula]
-                -> PolynomialSkeletons
-                -> Counterexample
-                -> TCSolver s ([Formula], Maybe ResourceSolution)
-getCoefficients rfmls pastExamples polynomials counterexample = do
+synthesize :: RMonad s
+           => [ProcessedRFormula]
+           -> [Formula]
+           -> PolynomialSkeletons
+           -> Counterexample
+           -> TCSolver s ([Formula], Maybe ResourceSolution)
+synthesize rfmls pastExamples polynomials counterexample = do
   let runInSolver = lift . lift . lift
   -- For each example, substitute its value for the universally quantified expressions in each polynomial skeleton
   paramPolynomials <- runInSolver $ mapM (mkParamPolynomial (allVariables counterexample)) polynomials
   -- Replace resource variables with appropriate polynomials after applying pending substitutions
-  let substRFml (RFormula _ _ subs pending f) = 
+  let substRFml (RFormula _ _ _ subs pending f) = 
         runInSolver $ applyPolynomial mkParamPolynomial (allVariables counterexample) polynomials pending subs f
   fml <- conjunction <$> mapM substRFml rfmls
   -- Substitute example valuations of universally quantified expressions in resource constraint
@@ -207,7 +207,7 @@ getCoefficients rfmls pastExamples polynomials counterexample = do
   writeLog 7 $ text "CEGIS param query:" </> pretty paramQuery
   model <- runInSolver $ solveAndGetModel (conjunction paramQuery)
   writeLog 8 $ text "Param model:" <+> text (maybe "" snd model)
-  sol <- join <$> (runInSolver . sequence $ (modelGetAssignment allCoefficients <$> model))
+  sol <- runInSolver . sequence $ (modelGetAssignment allCoefficients <$> model)
   return (paramQuery, sol)
 
 applyPolynomial :: RMonad s 
