@@ -393,7 +393,7 @@ enumerateAt env typ 0 = do
     let symbols = Map.toList $ symbolsOfArity (arity typ) env
     useCounts <- use symbolUseCount
     -- Filter set constructors out of symbols for enumeration 
-    let symbols' = filter (\(x, _) -> notElem x setConstructors) $ if arity typ == 0
+    let symbols' = filter (\(x, _) -> x `notElem` setConstructors) $ if arity typ == 0
         then sortBy (mappedCompare (\(x, _) -> (Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
          else sortBy (mappedCompare (\(x, _) -> (not $ Set.member x (env ^. constants), Map.findWithDefault 0 x useCounts))) symbols
     msum $ map pickSymbol symbols'

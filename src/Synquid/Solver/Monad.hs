@@ -158,6 +158,7 @@ data TypingState = TypingState {
   _candidates :: [Candidate],                   -- ^ Current set of candidate liquid assignments to unknowns
   _initEnv :: Environment,                      -- ^ Initial environment
   _idCount :: Map String Int,                   -- ^ Number of unique identifiers issued so far
+  _versionCount :: Map String Int,              -- ^ Number of unique identifiers issued so far
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
   _resourceConstraints :: [ProcessedRFormula],  -- ^ Constraints relevant to resource analysis
   _resourceVars :: Map String [Formula],        -- ^ Set of variables created to replace potential/multiplicity annotations
@@ -167,7 +168,7 @@ data TypingState = TypingState {
   _hornClauses :: [Formula],                    -- ^ Horn clauses generated from subtyping constraints
   _consistencyChecks :: [Formula],              -- ^ Formulas generated from type consistency constraints
   _errorContext :: (SourcePos, Doc),            -- ^ Information to be added to all type errors
-  _universalFmls :: Set Formula,                -- ^ Set of universally quantified resource expressions, if there are any
+  _universalVars :: Set Id,                     -- ^ Set of universally quantified resource expressions, if there are any
   _universalMeasures :: Set Formula             -- ^ Set of universally quantified measure applications, in string form
 }
 

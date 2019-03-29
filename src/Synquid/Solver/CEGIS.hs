@@ -98,38 +98,39 @@ solveWithCEGIS 0 rfmls universals _ polynomials program = do
   case counterexample of
     Nothing -> return True
     Just cx -> do
-      writeLog 4 $ text "Last counterexample:" <+> pretty (Map.assocs (variables cx))
-      writeLog 4 $ text "           measures:" <+> pretty (Map.assocs (funcInterps cx)) </> linebreak
+      traceM "warning: CEGIS failed on last iteration"
+      writeLog 4 $ text "Last counterexample:" <+> text (maybe "" (snd . model) counterexample)
+      --writeLog 4 $ text "Last counterexample:" <+> pretty (Map.assocs (variables cx))
+      --writeLog 4 $ text "           measures:" <+> pretty (Map.assocs (funcInterps cx)) </> linebreak
       return False
 
 solveWithCEGIS n rfmls universals examples polynomials program = do
   -- Attempt to find point for which current parameterization fails
   counterexample <- verify rfmls universals polynomials program
+  --res <- verifyOnePass rfmls universals polynomials program
   case counterexample of
+  --case res of 
     Nothing -> do
       pstr <- lift . lift . lift $ printParams program polynomials
       cMax <- lift $ asks _cegisMax
       writeLog 4 $ text "Solution on iteration" <+> pretty (cMax - n) <+> operator ":" <+> pstr
       return True -- No counterexamples exist, polynomials hold on all inputs
     Just cx ->
+    --Just (rfmls', cx) ->
       do
-        writeLog 4 $ text "Counterexample:" <+> pretty (Map.assocs (variables cx))
-        writeLog 4 $ text "      measures:" <+> pretty (Map.assocs (funcInterps cx))
-        --writeLog 4 $ text "  constructors:" <+> pretty (Map.assocs (constructorInterps cx)) </> linebreak
         -- Update example list
         -- Attempt to find parameterization holding on all examples
-        --rfmls' <- getRelevantPreds rfmls cx program polynomials
-        --writeLog 5 $ text "Violated formulas:" </> pretty (map rformula rfmls')
-        --(examples', params) <- synthesize rfmls' examples polynomials cx
-        (examples', params) <- synthesize rfmls examples polynomials cx
+        rfmls' <- getRelevantPreds rfmls cx program polynomials
+        writeLog 5 $ text "Violated formulas:" </> pretty (map _rformula rfmls')
+        (examples', params) <- synthesize rfmls' examples polynomials cx
         case params of
           Nothing -> do
             cMax <- lift $ asks _cegisMax
             writeLog 3 $ text "CEGIS failed on iteration " <+> pretty (cMax - n)
             return False -- No parameters exist, formula is unsatisfiable
           Just p  -> do
-            --let prog' = Map.union p program
-            let prog' = p
+            let prog' = Map.union p program
+            --let prog' = p
             pstr <- lift . lift . lift $ printParams prog' polynomials
             writeLog 6 $ text "Params:" <+> pstr
             solveWithCEGIS (n - 1) rfmls universals examples' polynomials prog'
@@ -149,18 +150,40 @@ verify rfmls universals polynomials program = do
   -- Replace resource variables with appropriate polynomials (with pending substitutions applied)
   --   and negate the resource constraint
   let substRFml (RFormula _ _ _ subs pending f) = 
-        runInSolver $ applyPolynomial mkCXPolynomial program polynomials pending subs f
+        runInSolver $ applyPolynomial (mkCXPolynomial program) polynomials pending subs f
   fml <- conjunction <$> mapM substRFml rfmls
   let cxQuery = fnot $ substitute program fml
   writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
   -- Query solver for a counterexample
   model <- runInSolver $ solveAndGetModel cxQuery
-  writeLog 5 $ text "CX model:" <+> text (maybe "" snd model)
+  writeLog 4 $ text "CX model:" <+> text (maybe "" snd model)
   vars <- runInSolver . sequence
     $ (modelGetAssignment (map fst (uvars universals)) <$> model)
   measures <- runInSolver . sequence
     $ (modelGetAssignment (map fst (ufuns universals)) <$> model)
   return $ CX <$> measures <*> vars <*> model
+
+-- Version of verify that returns a counterexample and the set of 
+--   verification conditions that were violated
+verifyOnePass :: RMonad s
+              => [ProcessedRFormula]
+              -> Universals
+              -> PolynomialSkeletons
+              -> ResourceSolution
+              -> TCSolver s (Maybe ([ProcessedRFormula], Counterexample))
+verifyOnePass rfmls universals polynomials program = do
+  let runInSolver = lift . lift . lift
+  let substRFml (RFormula _ _ _ subs pending f) = 
+        runInSolver $ applyPolynomial (mkCXPolynomial program) polynomials pending subs f
+  fml <- conjunction <$> mapM substRFml rfmls
+  let cxQuery = fnot $ substitute program fml
+  writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
+  model <- runInSolver $ solveAndGetModel cxQuery
+  writeLog 4 $ text "CX model:" <+> text (maybe "" snd model)
+  -- TODO: this will NOT work for measures!!
+  res <- runInSolver . sequence $ filterPreds rfmls <$> model 
+  let mkOutput (cs, vars) m = (cs, CX Map.empty vars m)
+  return $ mkOutput <$> res <*> model
 
 -- | 'getRelevantPreds' @rfml cx program polynomials@
 -- Given a counterexample @cx@, a @program@, and a list of verification conditions @rfmls@
@@ -173,11 +196,10 @@ getRelevantPreds :: RMonad s
                  -> TCSolver s [ProcessedRFormula]
 getRelevantPreds rfmls cx program polynomials = do
   let runInSolver = lift . lift . lift
-  evalPolynomials <- runInSolver $ mapM (mkEvalPolynomial program cx) polynomials
-  let substRFml (RFormula _ _ _ subs pending f) = substAndApplyPolynomial pending evalPolynomials f
-  let isRelevant rfml = not <$> checkPredWithModel (substRFml rfml) (model cx)
+  let substRFml (RFormula _ _ _ subs pending f) = 
+        applyPolynomial (mkEvalPolynomial program cx) polynomials pending subs f
+  let isRelevant rfml = not <$> ((`checkPredWithModel` model cx) =<< substRFml rfml)
   runInSolver $ filterM isRelevant rfmls
-
 
 -- | 'synthesize' @fml polynomials examples@
 --   Find a valuation for all coefficients such that @fml@ holds on all @examples@
@@ -190,10 +212,10 @@ synthesize :: RMonad s
 synthesize rfmls pastExamples polynomials counterexample = do
   let runInSolver = lift . lift . lift
   -- For each example, substitute its value for the universally quantified expressions in each polynomial skeleton
-  paramPolynomials <- runInSolver $ mapM (mkParamPolynomial (allVariables counterexample)) polynomials
+  -- paramPolynomials <- runInSolver $ mapM (mkParamPolynomial (allVariables counterexample)) polynomials
   -- Replace resource variables with appropriate polynomials after applying pending substitutions
   let substRFml (RFormula _ _ _ subs pending f) = 
-        runInSolver $ applyPolynomial mkParamPolynomial (allVariables counterexample) polynomials pending subs f
+        runInSolver $ applyPolynomial (mkParamPolynomial (allVariables counterexample)) polynomials pending subs f
   fml <- conjunction <$> mapM substRFml rfmls
   -- Substitute example valuations of universally quantified expressions in resource constraint
   -- TODO: this was commented out for some reason!! why???
@@ -211,15 +233,14 @@ synthesize rfmls pastExamples polynomials counterexample = do
   return (paramQuery, sol)
 
 applyPolynomial :: RMonad s 
-                => (Map String Formula -> Polynomial -> s Formula)
-                -> Map String Formula
+                => (Polynomial -> s Formula)
                 -> PolynomialSkeletons
                 -> Map Formula Substitution
                 -> Substitution
                 -> Formula 
                 -> s Formula
-applyPolynomial mkPolynomial vals polynomials pendingSubs subs f = 
-  let sub = applyPolynomial mkPolynomial vals polynomials pendingSubs subs in 
+applyPolynomial mkPolynomial polynomials pendingSubs subs f = 
+  let sub = applyPolynomial mkPolynomial polynomials pendingSubs subs in 
   case f of 
     v@(Var s x)   -> 
       case Map.lookup x polynomials of 
@@ -228,7 +249,7 @@ applyPolynomial mkPolynomial vals polynomials pendingSubs subs f =
           let pending = fromMaybe Map.empty (Map.lookup v pendingSubs)
               subst   = composeSubstitutions pending subs
               p'      = substPolynomial x subst p in
-          mkPolynomial vals p' 
+          mkPolynomial p' 
     SetLit s fs   -> SetLit s <$> mapM sub fs
     Unary op f    -> Unary op <$> sub f
     Binary op f g -> Binary op <$> sub f <*> sub g 

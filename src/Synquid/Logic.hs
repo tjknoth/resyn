@@ -215,7 +215,6 @@ infix 4 |<=>|
 fmax f g = Ite (f |>=| g) f g
 fmin f g = Ite (f |<=| g) f g
 
-  
 varsOf :: Formula -> Set Formula 
 varsOf = 
   let combine = Set.unions . map snd 

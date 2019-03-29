@@ -7,6 +7,7 @@ module Synquid.Solver.Util (
     instantiateConsAxioms,
     potentialVars,
     freshId,
+    freshVersion,
     freshVar,
     freshValueVarId,
     freshValueVarSub,
@@ -150,6 +151,15 @@ freshId prefix = do
   idCount %= Map.insert prefix (i + 1)
   return $ prefix ++ show i
 
+-- | 'freshId' @prefix@ : fresh identifier starting with @prefix@, using an underscore
+--    to differentiate from normal freshIds -- only used for resource constraints.
+freshVersion :: Monad s => String -> TCSolver s String
+freshVersion prefix = do
+  i <- uses versionCount (Map.findWithDefault 0 prefix)
+  versionCount %= Map.insert prefix (i + 1)
+  return $ prefix ++ "_" ++ show i
+
+
 freshVar :: Monad s => Environment -> String -> TCSolver s String
 freshVar env prefix = do
   x <- freshId prefix
@@ -176,7 +186,7 @@ safeAddGhostVar name t env = do
   --return $ addGhostVariable name t env
   if isResourceVariable env tstate adomain name t
     then do 
-      universalFmls %= Set.insert (Var (toSort (baseTypeOf t)) name)
+      universalVars %= Set.insert name -- (Var (toSort (baseTypeOf t)) name)
       return $ addGhostVariable name t env
     else return $ addGhostVariable name t env
 

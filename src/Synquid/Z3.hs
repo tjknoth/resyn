@@ -125,10 +125,10 @@ instance RMonad Z3State where
       checkAndGetAssignment rfml = do 
         let vars = Map.elems . _varSubsts $ rfml 
         let isRelevant f = isJust <$> modelEval model f False -- No model completion
-        let getAll vars = Map.fromList . catMaybes <$> mapM (getAssignmentForVar model) vars
+        let getAll vs = Map.fromList . catMaybes <$> mapM (getAssignmentForVar model) vs
         vfuns <- mapM fmlToAST vars
         ifM (anyM isRelevant vfuns)
-          ((Just rfml,) <$> getAll vars) -- get interpretations of all variables
+          ((Just rfml,) <$> getAll vars)
           (return (Nothing, Map.empty))
 
 getAssignmentForVar :: Z3.Model -> Formula -> Z3State (Maybe (String, Formula))
@@ -137,7 +137,6 @@ getAssignmentForVar model v@(Var s x) = do
   val <- modelEval model var True 
   fml <- sequence $ mkASTLit s <$> val 
   return $ (x,) <$> fml
-
 
 mkASTLit :: Sort -> AST -> Z3State Formula
 mkASTLit s ast = ASTLit s ast <$> astToString ast

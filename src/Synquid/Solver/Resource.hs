@@ -154,18 +154,16 @@ embedConstraint :: (MonadHorn s, RMonad s)
 embedConstraint env rfml = do 
   useMeasures <- maybe False shouldUseMeasures <$> asks _cegisDomain
   -- Get assumptions related to all non-ghost scalar variables in context
-  vars <- use universalFmls
+  vars <- use universalVars
   -- THIS IS A HACK -- need to ensure we grab the assumptions related to _v
-  let vars' = Set.insert (Var IntS valueVarName) vars
+  -- Note that sorts DO NOT matter here -- the embedder will ignore them.
+  let vars' = Set.insert (Var AnyS valueVarName) $ Set.map (Var AnyS) vars
   emb <- Set.filter (\f -> not (isUnknownForm f) && isNumeric f) <$> embedSynthesisEnv env (conjunction vars') True useMeasures
   let axioms = if useMeasures
         then instantiateConsAxioms (env { _measureDefs = allRMeasures env } ) True Nothing (conjunction emb)
         else Set.empty
   let extra = Set.union emb axioms
   return $ over knownAssumptions (Set.union extra) rfml 
-    where 
-      modifyVV (Var s x) = if valueVarName `isPrefixOf` x then Var s valueVarName else Var s x
-      modifyVV f         = f
 
 
 instantiateAssumptions :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
@@ -199,8 +197,10 @@ updateVars :: MonadHorn s => (RawRFormula, Set Formula) -> TCSolver s RawRFormul
 updateVars (rfml, allPreds) = do
   -- substitute all universally quantified expressions in body, known, and allPreds  
   let substs = _varSubsts rfml
+  cons <- use matchCases
+  let format = Set.map (transformFml mkFuncVar . substitute substs)
   universalMeasures %= Set.union (Set.map (transformFml mkFuncVar) (Set.map (substitute substs) allPreds))
-  return $ set renamedPreds (Set.map (transformFml mkFuncVar . substitute substs) allPreds) 
+  return $ set renamedPreds (format (cons `Set.union` allPreds))
          $ over knownAssumptions (Set.map (substitute substs)) 
          $ over rformula (substitute substs) rfml
 
@@ -242,18 +242,19 @@ satisfyResources rfmls = do
           writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (snd m'))
           return True
     else do
-      --universals <- Set.toList <$> use universalFmls
-      universals <- (\fs -> Set.toList fs ++ collectUniversals rfmls) <$> use universalFmls
+      --universals <- Set.toList <$> use universalVars
+      --universals <- (\fs -> Set.toList fs ++ collectUniversals rfmls) <$> use universalVars
       --let universals = collectUniversals rfmls
+      universals <- collectUniversals' rfmls
       env <- use initEnv
       cMax <- asks _cegisMax
       aDomain <- fromJust <$> asks _cegisDomain
       rVars <- use resourceVars
-      mApps <- Set.toList <$> use universalMeasures
-      cApps <- Set.toList <$> use matchCases
+      --mApps <- Set.toList <$> use universalMeasures
+      --cApps <- Set.toList <$> use matchCases
 
       -- Construct list of universally quantified expressions, storing the formula with a string representation
-      let universalsWithVars = formatUniversals universals
+      --let universalsWithVars = formatUniversals universals
       let uMeasures = Map.assocs $ allRMeasures env
       -- Initialize polynomials for each resource variable
       let init name info = initializePolynomial env aDomain uMeasures (name, info) -- (name, universals)
@@ -262,20 +263,35 @@ satisfyResources rfmls = do
       let allCoefficients = concat $ Map.elems $ fmap coefficientsOf allPolynomials
       -- Initialize all coefficient values -- the starting value should not matter
       let initialProgram = Map.fromList $ zip allCoefficients initialCoefficients
-      let formatPred (Var s x) = (x, Var s x)
-      let formatCons c@Cons{}  = (mkFuncString c, mkFuncVar c)
-      let allUniversals = Universals universalsWithVars (map formatPred mApps ++ map formatCons cApps)
+      --let formatPred (Var s x) = (x, Var s x)
+      --let formatCons c@Cons{}  = (mkFuncString c, mkFuncVar c)
+      --let allUniversals = Universals universalsWithVars (map formatPred mApps ++ map formatCons cApps)
 
       writeLog 3 $ text "Solving resource constraint with CEGIS:"
       writeLog 5 $ pretty $ conjunction $ map _rformula rfmls
       writeLog 3 $ indent 2 $ text "Over universally quantified variables:"
-        <+> hsep (map (pretty . snd) universalsWithVars)
-        <+> text "and functions:" <+> hsep (map (pretty . snd) (map formatPred mApps ++ map formatCons cApps))
-
-      solveWithCEGIS cMax rfmls allUniversals [] allPolynomials initialProgram
+        <+> hsep (map (pretty . snd) (uvars universals)) <+> text "and functions:" 
+        <+> hsep (map (pretty . snd) (ufuns universals))
+      --  <+> hsep (map (pretty . snd) (map formatPred mApps ++ map formatCons cApps))
+      
+      --solveWithCEGIS cMax rfmls allUniversals [] allPolynomials initialProgram
+      solveWithCEGIS cMax rfmls universals [] allPolynomials initialProgram
 
 collectUniversals :: [ProcessedRFormula] -> [Formula]
 collectUniversals = concatMap (Map.elems . _varSubsts) 
+
+-- Given a list of resource constraints, assemble the relevant universally quantified 
+--   expressions for the CEGIS solver: renamed variables, constructor and measure applications
+collectUniversals' :: Monad s => [ProcessedRFormula] -> TCSolver s Universals
+collectUniversals' rfmls = do 
+  let preds = map (\(Var s x) -> (x, Var s x)) (collectUFs rfmls) 
+  return $ Universals (formatUniversals (collectVars rfmls)) preds
+
+collectVars :: [ProcessedRFormula] -> [Formula]
+collectVars = concatMap (Map.elems . _varSubsts)
+
+collectUFs :: [ProcessedRFormula] -> [Formula]
+collectUFs = concatMap (Set.toList . _renamedPreds)
 
 shouldUseMeasures :: AnnotationDomain -> Bool
 shouldUseMeasures ad = case ad of
@@ -326,14 +342,15 @@ allPotentials env = Map.mapMaybeWithKey substTopPotential $ toMonotype <$> nonGh
 
 generateFreshUniversals :: Monad s => Environment -> TCSolver s Substitution
 generateFreshUniversals env = do 
-  let univs = nonGhostScalars env
-  let univs' = Map.filterWithKey (\k _ -> k == valueVarName) univs
-  --Map.traverseWithKey freshen univs
-  Map.traverseWithKey freshen univs'
+  relevant <- use universalVars
+  let univs = Map.filterWithKey (\x _ -> x `Set.member` relevant) $ symbolsOfArity 0 env
+  --let univs' = Map.filterWithKey (\k _ -> k == valueVarName) univs
+  Map.traverseWithKey freshen univs
+  --Map.traverseWithKey freshen univs'
   where 
     sortFrom = toSort . baseTypeOf . toMonotype
     freshen x sch = do 
-      x' <- freshId x 
+      x' <- freshVersion x 
       return $ Var (sortFrom sch) x'
   
 -- Given a list of resource annotations, substitutes a fresh [_v' / _v] in each variable
@@ -397,7 +414,7 @@ partitionType :: Bool
               -> [Constraint]
 partitionType cm env (x, t@(ScalarT b _ f)) (ScalarT bl _ fl) (ScalarT br _ fr)
   = let vvtype = addRefinement t (varRefinement x (toSort b))
-        env'  = addVariable valueVarName vvtype env {- addAssumption (Var (toSort b) valueVarName |=| Var (toSort b) x) $ -}
+        env'   = addVariable valueVarName vvtype env {- addAssumption (Var (toSort b) valueVarName |=| Var (toSort b) x) $ -}
     in SharedForm env' f fl fr : partitionBase cm env (x, b) bl br
 
 partitionBase cm env (x, DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _)

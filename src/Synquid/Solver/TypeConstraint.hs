@@ -63,6 +63,7 @@ initTypingState goal = do
     _candidates = [initCand],
     _initEnv = env,
     _idCount = Map.empty,
+    _versionCount = Map.empty,
     _isFinal = False,
     _resourceConstraints = [],
     _resourceVars = Map.empty,
@@ -71,12 +72,14 @@ initTypingState goal = do
     _hornClauses = [],
     _consistencyChecks = [],
     _errorContext = (noPos, empty),
-    _universalFmls = initialFormulas env, -- Set.singleton $ Var IntS valueVarName,
+    _universalVars = initialFormulas env, -- Set.singleton $ Var IntS valueVarName,
     _universalMeasures = Set.empty
   }
 
-initialFormulas :: Environment -> Set Formula 
-initialFormulas = Set.fromList . Map.elems . Map.mapWithKey toFml . symbolsOfArity 0 
+-- Sorta hacky to make sure we look at _v as well as other relevant universally quantified
+--   expressions
+initialFormulas :: Environment -> Set Id
+initialFormulas = Set.insert valueVarName . Set.fromList . Map.keys . nonGhostScalars -- . Map.mapWithKey toFml . nonGhostScalars 
   where 
     schToSort = toSort . baseTypeOf . toMonotype
     toFml x sch = Var (schToSort sch) x
