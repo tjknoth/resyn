@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, FlexibleContexts, TupleSections #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, TupleSections, TemplateHaskell #-}
 
 -- | Interface to Z3
 module Synquid.Z3 (
@@ -13,6 +13,7 @@ import Synquid.Logic
 import Synquid.Type
 import Synquid.Program
 import Synquid.Solver.Monad
+import Synquid.Solver.Types
 import Synquid.Util
 import Synquid.Pretty
 import Z3.Monad hiding (Z3Env, newEnv, Sort)
@@ -33,6 +34,27 @@ import Control.Lens hiding (both)
 import Debug.Trace
 import Control.Monad.State.Class (MonadState)
 
+data Z3Env = Z3Env {
+  envSolver  :: Z3.Solver,
+  envContext :: Z3.Context
+}
+
+-- | Z3 state while building constraints
+data Z3Data = Z3Data {
+  _mainEnv :: Z3Env,                          -- ^ Z3 environment for the main solver
+  _sorts :: Map Sort Z3.Sort,                 -- ^ Mapping from Synquid sorts to Z3 sorts
+  _vars :: Map Id Z3.AST,                     -- ^ AST nodes for scalar variables
+  _functions :: Map Id Z3.FuncDecl,           -- ^ Function declarations for measures, predicates, and constructors
+  _storedDatatypes :: Set Id,                 -- ^ Datatypes mapped directly to Z3 datatypes (monomorphic and non-recursive)
+  _controlLiterals :: Bimap Formula Z3.AST,   -- ^ Control literals for computing UNSAT cores
+  _auxEnv :: Z3Env,                           -- ^ Z3 environment for the auxiliary solver
+  _boolSortAux :: Maybe Z3.Sort,              -- ^ Boolean sort in the auxiliary solver
+  _controlLiteralsAux :: Bimap Formula Z3.AST -- ^ Control literals for computing UNSAT cores in the auxiliary solver
+}
+
+makeLenses ''Z3Data
+
+type Z3State = StateT Z3Data IO
 
 initZ3Data env env' renv = Z3Data {
   _mainEnv = env,

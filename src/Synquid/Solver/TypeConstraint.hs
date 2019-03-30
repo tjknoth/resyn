@@ -38,6 +38,7 @@ import Synquid.Resolver (addAllVariables)
 import Synquid.Solver.Monad
 import Synquid.Solver.Util
 import Synquid.Solver.Resource
+import Synquid.Solver.CEGIS (initCEGISState)
 
 import Data.Maybe
 import Data.List
@@ -68,6 +69,7 @@ initTypingState goal = do
     _resourceConstraints = [],
     _resourceVars = Map.empty,
     _matchCases = Set.empty,
+    _cegisState = initCEGISState, 
     _simpleConstraints = [],
     _hornClauses = [],
     _consistencyChecks = [],

@@ -42,3 +42,4 @@ experiments/*
 *.pdf
 micro
 results
+*.smt2

@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances #-}
 
 -- | Solver for second-order constraints
 module Synquid.Solver.HornClause (
@@ -14,7 +14,6 @@ import Synquid.Logic
 import Synquid.Solver.Monad
 import Synquid.Util
 import Synquid.Pretty
-import Synquid.Solver.CEGIS (RMonad(..))
 
 import Data.List
 import Data.Maybe

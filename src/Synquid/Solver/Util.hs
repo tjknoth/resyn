@@ -27,6 +27,7 @@ import Synquid.Util
 import Synquid.Pretty
 import Synquid.Error
 import Synquid.Solver.Monad
+import Synquid.Solver.Types
 
 import Data.List 
 import Data.Maybe 
@@ -199,24 +200,7 @@ isResourceVariable :: Environment
 isResourceVariable _ _ Nothing _ _ = False
 isResourceVariable env tstate (Just adomain) x t = 
   (x /= valueVarName) && not (Map.member x (_unresolvedConstants env))
-  {-
-  let varName (Var _ n) = n
-      cargs = env ^. measureConstArgs
-      rmeasures = tstate ^. resourceMeasures 
-      rsorts = map _inSort $ Map.elems rmeasures
-      allCArgs = Set.unions $ mapMaybe (`Map.lookup` cargs) (Map.keys rmeasures)  
-      resourceCArgs = map varName $ concat allCArgs
-      isUnresolved = Map.member x (_unresolvedConstants env)
-      isInt t = 
-        case baseTypeOf t of 
-          IntT -> True 
-          _    -> False
-  in 
-    not isUnresolved && case adomain of 
-      Variable -> isInt t
-      Measure  -> x `elem` resourceCArgs 
-      Both     -> isInt t || x `elem` resourceCArgs
-  -}
+
 
 -- | Signal type error
 throwError :: MonadHorn s => Doc -> TCSolver s ()

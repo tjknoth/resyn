@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell, FlexibleContexts #-}
 
--- | Basically just a ton of types used throughout the various solvers
+-- | Monadic structure of solvers
 module Synquid.Solver.Monad where
 
 import Synquid.Logic
@@ -9,6 +9,7 @@ import Synquid.Type
 import Synquid.Pretty
 import Synquid.Util
 import Synquid.Error
+import Synquid.Solver.Types
 
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -21,74 +22,6 @@ import Control.Monad.Trans.Except
 import qualified Z3.Monad as Z3 
 import qualified Data.Bimap as Bimap
 import Data.Bimap (Bimap)
-
-{- Types for interacting with Z3 -}
-
-data AnnotationDomain = 
-  Variable | Measure | Both
-  deriving (Show, Eq)
-
--- | Wrapper for Z3 Model data structure
-type SMTModel = (Z3.Model, String)
-
--- Interpretation of an uniterpreted function in a Z3 model
-data Z3UFun = Z3UFun {
-  _functionName :: String,
-  _entries :: Map [Formula] Formula,
-  _defaultVal :: Formula
-} deriving (Show, Eq)
-
-makeLenses ''Z3UFun
-
-instance Pretty Z3UFun where
-  pretty (Z3UFun m es defVal) = text "measure" <+> text m </> prettyEntries es </> prettydef 
-    where 
-      prettyEntries es = nest 2 $ pretty $ Map.assocs es
-      prettydef = nest 2 $ pretty defVal 
-
-{- Types for solving resource formulas -}
-
-type PendingRSubst = Map Formula Substitution
-
--- RFormula : Logical formula and meta-info
-data RFormula a = RFormula {
-  _knownAssumptions :: !a,
-  _unknownAssumptions :: !a,
-  _renamedPreds :: !(Set Formula),
-  _varSubsts :: !Substitution,
-  _pendingSubsts :: !PendingRSubst,
-  _rformula :: !Formula
-} deriving (Eq, Show, Ord)
-
-makeLenses ''RFormula
-
-type RawRFormula = RFormula (Set Formula) 
-type ProcessedRFormula = RFormula ()
-
-instance Pretty (RFormula a) where 
-  pretty = pretty . _rformula
-
-data Z3Env = Z3Env {
-  envSolver  :: Z3.Solver,
-  envContext :: Z3.Context
-}
-
--- | Z3 state while building constraints
-data Z3Data = Z3Data {
-  _mainEnv :: Z3Env,                          -- ^ Z3 environment for the main solver
-  _sorts :: Map Sort Z3.Sort,                 -- ^ Mapping from Synquid sorts to Z3 sorts
-  _vars :: Map Id Z3.AST,                     -- ^ AST nodes for scalar variables
-  _functions :: Map Id Z3.FuncDecl,           -- ^ Function declarations for measures, predicates, and constructors
-  _storedDatatypes :: Set Id,                 -- ^ Datatypes mapped directly to Z3 datatypes (monomorphic and non-recursive)
-  _controlLiterals :: Bimap Formula Z3.AST,   -- ^ Control literals for computing UNSAT cores
-  _auxEnv :: Z3Env,                           -- ^ Z3 environment for the auxiliary solver
-  _boolSortAux :: Maybe Z3.Sort,              -- ^ Boolean sort in the auxiliary solver
-  _controlLiteralsAux :: Bimap Formula Z3.AST -- ^ Control literals for computing UNSAT cores in the auxiliary solver
-}
-
-makeLenses ''Z3Data
-
-type Z3State = StateT Z3Data IO
 
 {- Monadic structure of solvers -}
 
@@ -155,6 +88,7 @@ data TypingState = TypingState {
   _resourceConstraints :: [ProcessedRFormula],  -- ^ Constraints relevant to resource analysis
   _resourceVars :: Map String [Formula],        -- ^ Set of variables created to replace potential/multiplicity annotations
   _matchCases :: Set Formula,                   -- ^ Set of all generated match cases
+  _cegisState :: CEGISState,                    -- ^ Current state of CEGIS solver
   -- Temporary state:
   _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
   _hornClauses :: [Formula],                    -- ^ Horn clauses generated from subtyping constraints

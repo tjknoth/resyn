@@ -1,7 +1,6 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 
 module Synquid.Solver.CEGIS (
-  RMonad(..),
   Universals(..),
   coefficient,
   solveWithCEGIS,
@@ -12,62 +11,35 @@ module Synquid.Solver.CEGIS (
   initialCoefficients,
   mkFuncVar,
   mkFuncString,
-  mkCXPolynomial
+  mkCXPolynomial,
+  updateCEGISState,
+  initCEGISState,
+  runCEGIS
 ) where
 
-import Synquid.Type
+import Synquid.Type hiding (set)
 import Synquid.Logic
 import Synquid.Pretty
-import Synquid.Solver.Monad
-import Synquid.Solver.Util
-import qualified Synquid.Z3 as Z3
 import Synquid.Program
+import Synquid.Solver.Monad
+import Synquid.Solver.Types
+import qualified Synquid.Z3 as Z3
 
-import Control.Monad.State
 import Data.Maybe
-import qualified Data.Map as Map
 import Data.Map (Map)
-import qualified Data.Set as Set
+import qualified Data.Map as Map
 import Data.Set (Set)
+import qualified Data.Set as Set
 import Control.Lens
-import Debug.Trace
+import Control.Monad.State
 import Control.Monad.Reader (asks)
+import qualified Z3.Monad as Z3
+import Debug.Trace
 
-{- Data structures for CEGIS solver -}
+type CEGISSolver s = StateT CEGISState s
 
--- Universally quantified variable
-type UVar = (String, Formula)
-
--- Uninterpreted function (measure) relevant for constraint solving
-type UMeasure = (String, MeasureDef)
-
-data Universals = Universals {
-  uvars :: ![UVar],
-  ufuns :: ![UVar]
-} deriving (Show, Eq)
-
--- Term of a polynomial: coefficient * universal
-data PolynomialTerm = PolynomialTerm {
-  coefficient :: !String,
-  universal :: !(Maybe UVar)
-} deriving (Eq, Show, Ord)
-
--- Polynomial represented as a list of coefficient-variable pairs (where a Nothing in the coefficient position indicates the constant term)
-type Polynomial = [PolynomialTerm]
-
--- Map from resource variable name to its corresponding polynomial
-type PolynomialSkeletons = Map String Polynomial
-
--- Coefficient valuations in a valid program
-type ResourceSolution = Map String Formula
-
--- Map from universally quantified expression (in string form) to its valuation
-data Counterexample = CX {
-  funcInterps :: !(Map String Formula),
-  variables :: !(Map String Formula),
-  model :: !SMTModel
-} deriving (Eq)
-
+runCEGIS :: CEGISSolver s a -> CEGISState -> s (a, CEGISState)
+runCEGIS = runStateT
 
 {- Top-level interface -}
 
@@ -77,12 +49,10 @@ solveWithCEGIS :: RMonad s
                -> [ProcessedRFormula]
                -> Universals
                -> [Formula]
-               -> PolynomialSkeletons
-               -> ResourceSolution
-               -> TCSolver s Bool
-solveWithCEGIS 0 rfmls universals _ polynomials program = do
+               -> CEGISSolver s Bool
+solveWithCEGIS 0 rfmls universals _ = do
   -- Base case: If there is a counterexample, @fml@ is UNSAT, SAT otherwise
-  counterexample <- verify rfmls universals polynomials program
+  counterexample <- verify rfmls universals 
   case counterexample of
     Nothing -> return True
     Just cx -> do
@@ -90,59 +60,57 @@ solveWithCEGIS 0 rfmls universals _ polynomials program = do
       writeLog 4 $ text "Last counterexample:" <+> text (maybe "" (snd . model) counterexample)
       return False
 
-solveWithCEGIS n rfmls universals examples polynomials program = do
+solveWithCEGIS n rfmls universals examples = do
   -- Attempt to find point for which current parameterization fails
-  counterexample <- verify rfmls universals polynomials program
+  counterexample <- verify rfmls universals 
   --res <- verifyOnePass rfmls universals polynomials program
   case counterexample of
   --case res of 
     Nothing -> do
-      pstr <- runInSolver $ printParams program polynomials
-      cMax <- lift $ asks _cegisMax
-      writeLog 4 $ text "Solution on iteration" <+> pretty (cMax - n) <+> operator ":" <+> pstr
+      pstr <- printParams 
+      writeLog 4 $ text "Solution wth" <+> pretty n <+> text "iterations left:" <+> pstr
       return True -- No counterexamples exist, polynomials hold on all inputs
     Just cx ->
     --Just (rfmls', cx) ->
       do
         -- Update example list, attempt to find parameterization holding on all examples
-        rfmls' <- getRelevantPreds rfmls cx program polynomials
+        rfmls' <- getRelevantPreds rfmls cx 
         writeLog 5 $ text "Violated formulas:" </> pretty (map _rformula rfmls')
-        (examples', params) <- synthesize rfmls' examples polynomials cx
+        (examples', params) <- synthesize rfmls' examples cx
         case params of
           Nothing -> do
-            cMax <- lift $ asks _cegisMax
-            writeLog 3 $ text "CEGIS failed on iteration " <+> pretty (cMax - n)
+            writeLog 3 $ text "CEGIS failed with" <+> pretty n <+> text "iterations left"
             return False -- No parameters exist, formula is unsatisfiable
           Just p  -> do
-            let prog' = Map.union p program
-            pstr <- runInSolver $ printParams prog' polynomials
+            updateProgram p
+            pstr <- printParams 
             writeLog 6 $ text "Params:" <+> pstr
-            solveWithCEGIS (n - 1) rfmls universals examples' polynomials prog'
+            solveWithCEGIS (n - 1) rfmls universals examples' 
 
 -- | 'verify' @fml universals polynomials program@
 --    Find a valuation for @universals@ such that (not @formula@) holds, under parameter valuation @program@
 verify :: RMonad s
        => [ProcessedRFormula]
        -> Universals
-       -> PolynomialSkeletons
-       -> ResourceSolution
-       -> TCSolver s (Maybe Counterexample)
-verify rfmls universals polynomials program = do
+       -> CEGISSolver s (Maybe Counterexample)
+verify rfmls universals = do
+  polys <- use polynomials
+  prog <- use rprogram
   -- Generate polynomials by substituting parameter valuations for coefficients
-  cxPolynomials <- runInSolver $ mapM (mkCXPolynomial program) polynomials
+  cxPolynomials <- mapM mkCXPolynomial polys
   -- Replace resource variables with appropriate polynomials (with pending substitutions applied)
   --   and negate the resource constraint
   let substRFml (RFormula _ _ _ subs pending f) = 
-        runInSolver $ applyPolynomial (mkCXPolynomial program) polynomials pending subs f
+        applyPolynomial mkCXPolynomial pending subs f
   fml <- conjunction <$> mapM substRFml rfmls
-  let cxQuery = fnot $ substitute program fml
+  let cxQuery = fnot $ substitute prog fml
   writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
   -- Query solver for a counterexample
-  model <- runInSolver $ solveAndGetModel cxQuery
+  model <- lift $ solveAndGetModel cxQuery
   writeLog 4 $ text "CX model:" <+> text (maybe "" snd model)
-  vars <- runInSolver . sequence
+  vars <- lift . sequence
     $ (modelGetAssignment (map fst (uvars universals)) <$> model)
-  measures <- runInSolver . sequence
+  measures <- lift . sequence
     $ (modelGetAssignment (map fst (ufuns universals)) <$> model)
   return $ CX <$> measures <*> vars <*> model
 
@@ -151,19 +119,18 @@ verify rfmls universals polynomials program = do
 verifyOnePass :: RMonad s
               => [ProcessedRFormula]
               -> Universals
-              -> PolynomialSkeletons
               -> ResourceSolution
-              -> TCSolver s (Maybe ([ProcessedRFormula], Counterexample))
-verifyOnePass rfmls universals polynomials program = do
-  let substRFml (RFormula _ _ _ subs pending f) = 
-        runInSolver $ applyPolynomial (mkCXPolynomial program) polynomials pending subs f
+              -> CEGISSolver s (Maybe ([ProcessedRFormula], Counterexample))
+verifyOnePass rfmls universals program = do
+  let substRFml (RFormula _ _ _ subs pending f) =
+        applyPolynomial mkCXPolynomial pending subs f
   fml <- conjunction <$> mapM substRFml rfmls
   let cxQuery = fnot $ substitute program fml
   writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
-  model <- runInSolver $ solveAndGetModel cxQuery
+  model <- lift $ solveAndGetModel cxQuery
   writeLog 4 $ text "CX model:" <+> text (maybe "" snd model)
-  -- TODO: this will NOT work for measures!!
-  res <- runInSolver . sequence $ filterPreds rfmls <$> model 
+  -- TODO: this will NOT work for measures!! (or will it...)
+  res <- lift . sequence $ filterPreds rfmls <$> model 
   let mkOutput (cs, vars) m = (cs, CX Map.empty vars m)
   return $ mkOutput <$> res <*> model
 
@@ -173,27 +140,26 @@ verifyOnePass rfmls universals polynomials program = do
 getRelevantPreds :: RMonad s
                  => [ProcessedRFormula]
                  -> Counterexample
-                 -> ResourceSolution
-                 -> PolynomialSkeletons
-                 -> TCSolver s [ProcessedRFormula]
-getRelevantPreds rfmls cx program polynomials = do
-  let substRFml (RFormula _ _ _ subs pending f) = 
-        applyPolynomial (mkEvalPolynomial program cx) polynomials pending subs f
-  let isRelevant rfml = not <$> ((`checkPredWithModel` model cx) =<< substRFml rfml)
-  runInSolver $ filterM isRelevant rfmls
+                 -> CEGISSolver s [ProcessedRFormula]
+getRelevantPreds rfmls cx = do
+  prog <- use rprogram
+  let substRFml (RFormula _ _ _ subs pending f) =
+        applyPolynomial (mkEvalPolynomial prog cx) pending subs f
+  let check f = lift $ f `checkPredWithModel` model cx
+  let isSatisfied rfml = check =<< substRFml rfml
+  filterM (fmap not . isSatisfied) rfmls
 
 -- | 'synthesize' @fml polynomials examples@
 --   Find a valuation for all coefficients such that @fml@ holds on all @examples@
 synthesize :: RMonad s
            => [ProcessedRFormula]
            -> [Formula]
-           -> PolynomialSkeletons
            -> Counterexample
-           -> TCSolver s ([Formula], Maybe ResourceSolution)
-synthesize rfmls pastExamples polynomials counterexample = do
+           -> CEGISSolver s ([Formula], Maybe ResourceSolution)
+synthesize rfmls pastExamples counterexample = do
   -- Replace resource variables with appropriate polynomials after applying pending substitutions
-  let substRFml (RFormula _ _ _ subs pending f) = 
-        runInSolver $ applyPolynomial (mkParamPolynomial (allVariables counterexample)) polynomials pending subs f
+  let substRFml (RFormula _ _ _ subs pending f) =
+        applyPolynomial (mkParamPolynomial counterexample) pending subs f
   fml <- conjunction <$> mapM substRFml rfmls
   -- Substitute example valuations of universally quantified expressions in resource constraint
   let fml' = substitute (allVariables counterexample) fml
@@ -201,26 +167,26 @@ synthesize rfmls pastExamples polynomials counterexample = do
   -- Assert that any parameterization must hold for all examples
   let paramQuery = fml' : pastExamples
   -- Collect all parameters
-  let allCoefficients = concatMap coefficientsOf (Map.elems polynomials)
+  allCoefficients <- use coefficients
   writeLog 7 $ text "CEGIS param query:" </> pretty paramQuery
-  model <- runInSolver $ solveAndGetModel (conjunction paramQuery)
+  model <- lift $ solveAndGetModel (conjunction paramQuery)
   writeLog 8 $ text "Param model:" <+> text (maybe "" snd model)
-  sol <- runInSolver . sequence $ (modelGetAssignment allCoefficients <$> model)
+  sol <- lift . sequence $ (modelGetAssignment allCoefficients <$> model)
   return (paramQuery, sol)
 
 -- TODO: are examples ever applied to the actual variables?? not in polynomials?
 applyPolynomial :: RMonad s 
-                => (Polynomial -> s Formula)
-                -> PolynomialSkeletons
+                => (Polynomial -> CEGISSolver s Formula)
                 -> Map Formula Substitution
                 -> Substitution
                 -> Formula 
-                -> s Formula
-applyPolynomial mkPolynomial polynomials pendingSubs subs f = 
-  let sub = applyPolynomial mkPolynomial polynomials pendingSubs subs in 
+                -> CEGISSolver s Formula
+applyPolynomial mkPolynomial pendingSubs subs f = 
+  let sub = applyPolynomial mkPolynomial pendingSubs subs in 
   case f of 
-    v@(Var s x)   -> 
-      case Map.lookup x polynomials of 
+    v@(Var s x)   -> do 
+      polys <- use polynomials
+      case Map.lookup x polys of 
         Nothing -> return v 
         Just p  -> 
           let pending = fromMaybe Map.empty (Map.lookup v pendingSubs)
@@ -247,11 +213,23 @@ substPolynomial rvar subs = map subPterm
         u' = substitute subs u 
         ustr' = universalToString u'  
 
-mkCXPolynomial coeffMap poly = sumFormulas <$> mapM (pTermForCX coeffMap) poly
-mkParamPolynomial cx poly = sumFormulas <$> mapM (pTermForProg cx) poly
-mkSimplePolynomial cx poly = sumFormulas <$> mapM (pTermForPrinting cx) poly
-mkEvalPolynomial coeffMap cx poly = sumFormulas <$> mapM (pTermForEval coeffMap cx) poly
+mkCXPolynomial :: RMonad s => Polynomial -> CEGISSolver s Formula 
+mkCXPolynomial poly = do 
+  prog <- use rprogram
+  sumFormulas <$> mapM (pTermForCX prog) poly
 
+mkEvalPolynomial :: RMonad s => ResourceSolution -> Counterexample -> Polynomial -> CEGISSolver s Formula 
+mkEvalPolynomial coeffMap cx poly = do 
+  prog <- use rprogram
+  sumFormulas <$> mapM (pTermForEval coeffMap (allVariables cx)) poly
+
+mkParamPolynomial :: RMonad s => Counterexample -> Polynomial -> CEGISSolver s Formula
+mkParamPolynomial cx poly = sumFormulas <$> mapM (pTermForProg (allVariables cx)) poly
+
+mkSimplePolynomial :: RMonad s => Map String Formula -> Polynomial -> CEGISSolver s Formula
+mkSimplePolynomial cx poly = sumFormulas <$> mapM (pTermForPrinting cx) poly
+
+polynomialVars :: Polynomial -> Formula
 polynomialVars poly = sumFormulas $ mapMaybe (fmap snd . universal) poly 
 
 -- | Assemble a polynomial term, given a variable prefix and a universally quantified expression
@@ -265,21 +243,21 @@ coefficientsOf = map coefficient
 
 defaultInterp = fzero
 
-pTermForEval :: RMonad s => ResourceSolution -> Counterexample -> PolynomialTerm -> s Formula
+pTermForEval :: RMonad s => ResourceSolution -> Map String Formula -> PolynomialTerm -> CEGISSolver s Formula
 pTermForEval coeffVals cx (PolynomialTerm c Nothing) =
   return $ exprValue coeffVals c
 pTermForEval coeffVals cx (PolynomialTerm c (Just u)) =
-  return $ exprValue coeffVals c |*| exprValue (allVariables cx) (fst u)
+  return $ exprValue coeffVals c |*| exprValue cx (fst u)
 
 -- | Convert PolynomialTerm into a formula for use in the counterexample query (ie instantiate the coefficients)
-pTermForCX :: RMonad s => ResourceSolution -> PolynomialTerm -> s Formula
+pTermForCX :: RMonad s => ResourceSolution -> PolynomialTerm -> CEGISSolver s Formula
 pTermForCX coeffVals (PolynomialTerm coeff Nothing)  =
   return $ exprValue coeffVals coeff
 pTermForCX coeffVals (PolynomialTerm coeff (Just u)) =
   return $ exprValue coeffVals coeff |*| mkPForm (snd u)
 
 -- | Convert PolynomialTerm into a formula for use in the program query (ie instantiate the universals)
-pTermForProg :: RMonad s => Map String Formula -> PolynomialTerm -> s Formula
+pTermForProg :: RMonad s => Map String Formula -> PolynomialTerm -> CEGISSolver s Formula
 pTermForProg cx (PolynomialTerm coeff Nothing)  =
   return $ Var IntS coeff
 pTermForProg cx (PolynomialTerm coeff (Just u)) =
@@ -302,12 +280,18 @@ exprValue valAssignments val =
     (Map.lookup val valAssignments)
 
 -- | Helper to print the parameters alongside the actual resource polynomial
-printParams :: RMonad s => ResourceSolution -> PolynomialSkeletons -> s Doc
-printParams prog polynomials = pretty <$> mapM str (Map.assocs polynomials)
+printParams :: RMonad s => CEGISSolver s Doc
+printParams = do 
+  polys <- use polynomials
+  prog <- use rprogram
+  printParams' polys prog
+
+printParams' :: RMonad s => PolynomialSkeletons -> ResourceSolution -> CEGISSolver s Doc
+printParams' polys prog = pretty <$> mapM toDoc (Map.assocs polys) 
   where
-    str (rvar, poly)  = (\p -> text rvar <+> pretty (varsIn poly) <+> operator "=" <+> p) <$> printPolynomial poly
-    varsIn p = fst <$> mapMaybe universal p
-    printPolynomial p = pretty <$> mkSimplePolynomial prog p
+    toDoc (rvar, poly)  = (\p -> text rvar <+> pretty (varsIn poly) <+> operator "=" <+> p) <$> printPolynomial poly
+    varsIn = fmap fst . mapMaybe universal
+    printPolynomial = fmap pretty . mkSimplePolynomial prog 
 
 -- Coefficient variables for resource polynomial
 mkPolynomialVar :: String -> Formula -> String
@@ -316,6 +300,38 @@ mkPolynomialVar annotation f = textFrom f ++ "_" ++ toText annotation
     textFrom (Var _ x) = x
     textFrom (Pred _ x fs) = x ++ show (plain (pretty fs))
     toText f = show (pretty f)
+
+-- Given a set of universally quantified expressions and newly generated resource
+--   variables, update the state of the CEGIS solver
+-- TODO: use NEW resource variables, not ALL
+updateCEGISState :: Monad s => TCSolver s CEGISState
+updateCEGISState = do  
+  ll <- asks _tcSolverLogLevel
+  newRVs <- use resourceVars
+  st <- use cegisState
+  env <- use initEnv 
+  aDomain <- fromJust <$> asks _cegisDomain
+  let uMeasures = Map.assocs $ allRMeasures env
+  let init name info = initializePolynomial env aDomain uMeasures (name, info)
+  let newPolynomials = Map.mapWithKey init newRVs
+  let newCoefficients = concat $ Map.elems $ fmap coefficientsOf newPolynomials 
+  let newParameters = Map.fromList $ zip newCoefficients initialCoefficients 
+  return $ 
+    over polynomials (Map.union newPolynomials) $
+    over rprogram (Map.union newParameters) $ 
+    over coefficients (++ newCoefficients) $ 
+    set cegisSolverLogLevel ll st
+
+updateProgram :: Monad s => ResourceSolution -> CEGISSolver s ()
+updateProgram prog = rprogram %= (Map.union prog) 
+
+initCEGISState :: CEGISState 
+initCEGISState = CEGISState {
+    _rprogram = Map.empty,
+    _polynomials = Map.empty,
+    _coefficients = [],
+    _cegisSolverLogLevel = 0
+  }
 
 -- Initialize polynomial over universally quantified @fmls@, using variable prefix @s@
 initializePolynomial :: Environment
@@ -415,9 +431,6 @@ assignSorts (Just substs) (argSort, formalSort) =
 
 {- Some utilities -}
 
-runInSolver :: RMonad s => s a -> TCSolver s a
-runInSolver = lift . lift . lift
-
 mkPForm v@Var{} = v
 mkPForm p = mkFuncVar p
 
@@ -442,3 +455,7 @@ initialCoefficients = repeat $ IntLit 0
 
 universalToString (Var _ x) = x
 universalToString p = mkFuncString p
+
+writeLog level msg = do
+  maxLevel <- use cegisSolverLogLevel
+  when (level <= maxLevel) $ traceShow (plain msg) $ return () 

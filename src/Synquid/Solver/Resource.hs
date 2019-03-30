@@ -15,14 +15,15 @@ import Synquid.Type hiding (set)
 import Synquid.Program
 import Synquid.Solver.Monad
 import Synquid.Pretty
-import Synquid.Solver.Util hiding (writeLog)
 import Synquid.Solver.CEGIS
+import Synquid.Solver.Types
+import Synquid.Solver.Util hiding (writeLog)
 
 import Data.Maybe
-import qualified Data.Set as Set
 import Data.Set (Set)
-import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.List (tails, union, isPrefixOf)
 import Data.Tuple.Extra (first)
 import Control.Monad.Logic
@@ -231,11 +232,12 @@ satisfyResources :: RMonad s
                  => [ProcessedRFormula]
                  -> TCSolver s Bool
 satisfyResources rfmls = do
+  let runInSolver = lift . lift . lift
   noUnivs <- isNothing <$> asks _cegisDomain
   if noUnivs
     then do
       let fml = conjunction $ map _rformula rfmls
-      model <- lift . lift . lift $ solveAndGetModel fml
+      model <- runInSolver $ solveAndGetModel fml
       case model of
         Nothing -> return False
         Just m' -> do
@@ -243,28 +245,16 @@ satisfyResources rfmls = do
           return True
     else do
       universals <- collectUniversals' rfmls
-      env <- use initEnv
       cMax <- asks _cegisMax
-      aDomain <- fromJust <$> asks _cegisDomain
-      rVars <- use resourceVars
-
-      -- Construct list of universally quantified expressions, storing the formula with a string representation
-      let uMeasures = Map.assocs $ allRMeasures env
-      -- Initialize polynomials for each resource variable
-      let init name info = initializePolynomial env aDomain uMeasures (name, info) -- (name, universals)
-      let allPolynomials = Map.mapWithKey init rVars
-      -- List of all coefficients in the list of all polynomials
-      let allCoefficients = concat $ Map.elems $ fmap coefficientsOf allPolynomials
-      -- Initialize all coefficient values -- the starting value should not matter
-      let initialProgram = Map.fromList $ zip allCoefficients initialCoefficients
+      cstate <- updateCEGISState
 
       writeLog 3 $ text "Solving resource constraint with CEGIS:"
       writeLog 5 $ pretty $ conjunction $ map _rformula rfmls
-      writeLog 3 $ indent 2 $ text "Over universally quantified variables:"
-        <+> hsep (map (pretty . snd) (uvars universals)) <+> text "and functions:" 
-        <+> hsep (map (pretty . snd) (ufuns universals))
+      logUniversals
       
-      solveWithCEGIS cMax rfmls universals [] allPolynomials initialProgram
+      let go = solveWithCEGIS cMax rfmls universals []
+      runInSolver $ fst <$> runCEGIS go cstate
+
 
 collectUniversals :: [ProcessedRFormula] -> [Formula]
 collectUniversals = concatMap (Map.elems . _varSubsts) 
@@ -474,6 +464,15 @@ subtypeOp :: Monad s => TCSolver s (Formula -> Formula -> Formula)
 subtypeOp = do
   ct <- asks _constantRes
   return $ if ct then (|=|) else (|>=|)
+
+logUniversals :: Monad s => TCSolver s ()
+logUniversals = do 
+  uvars <- Set.toList <$> use universalVars
+  ufuns <- Set.toList <$> use universalMeasures
+  capps <- Set.toList <$> use matchCases
+  writeLog 3 $ indent 2 $ text "Over universally quantified variables:"
+    <+> hsep (map pretty uvars) <+> text "and functions:"
+    <+> hsep (map pretty (ufuns ++ capps))
 
 writeLog level msg = do
   maxLevel <- asks _tcSolverLogLevel
