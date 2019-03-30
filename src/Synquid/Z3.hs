@@ -3,7 +3,6 @@
 -- | Interface to Z3
 module Synquid.Z3 (
   Z3State,
-  Declarable(..),
   evalZ3State,
   modelGetAssignment,
   function,
@@ -74,15 +73,6 @@ instance RMonad Z3State where
   solveAndGetModel fml = do
     (r, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
    
-    {-
-    (r, m) <- local $ do  
-      ast <- fmlToAST fml
-      setASTPrintMode Z3_PRINT_SMTLIB_FULL
-      smtlib <- astToString ast
-      traceM $ "START\n\n" ++ smtlib ++ "\n\n"
-      assert ast 
-      solverCheckAndGetModel
-    -}
     setASTPrintMode Z3_PRINT_SMTLIB_FULL
     fmlAst <- fmlToAST fml
     astStr <- astToString fmlAst
@@ -239,10 +229,6 @@ withAuxSolver c = do
 
 evalZ3State :: Z3State a -> IO a
 evalZ3State f = do
-  -- env <- newEnv (Just QF_AUFLIA) stdOpts
-  -- env' <- newEnv (Just QF_AUFLIA) stdOpts
-  --env <- newEnv (Just AUFLIA) stdOpts
-  --env' <- newEnv (Just AUFLIA) stdOpts
   env <- newEnv Nothing stdOpts
   env' <- newEnv Nothing stdOpts
   renv <- newEnv Nothing stdOpts

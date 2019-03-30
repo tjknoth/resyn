@@ -46,10 +46,6 @@ instance Pretty Z3UFun where
       prettyEntries es = nest 2 $ pretty $ Map.assocs es
       prettydef = nest 2 $ pretty defVal 
 
-class UF a where 
-  argSorts :: a -> [Sort]
-  resSort :: a -> Sort
-
 {- Types for solving resource formulas -}
 
 type PendingRSubst = Map Formula Substitution
@@ -94,11 +90,7 @@ makeLenses ''Z3Data
 
 type Z3State = StateT Z3Data IO
 
-class Declarable a where 
-  declare :: (Z3.MonadZ3 s, MonadState Z3Data s) => a -> (Sort -> String -> [Sort] -> s Z3.FuncDecl)
-
 {- Monadic structure of solvers -}
-
 
 class (Monad s, Applicative s) => MonadSMT s where  
   initSolver :: Environment -> s ()                                                  -- ^ Initialize solver  

@@ -242,19 +242,13 @@ satisfyResources rfmls = do
           writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (snd m'))
           return True
     else do
-      --universals <- Set.toList <$> use universalVars
-      --universals <- (\fs -> Set.toList fs ++ collectUniversals rfmls) <$> use universalVars
-      --let universals = collectUniversals rfmls
       universals <- collectUniversals' rfmls
       env <- use initEnv
       cMax <- asks _cegisMax
       aDomain <- fromJust <$> asks _cegisDomain
       rVars <- use resourceVars
-      --mApps <- Set.toList <$> use universalMeasures
-      --cApps <- Set.toList <$> use matchCases
 
       -- Construct list of universally quantified expressions, storing the formula with a string representation
-      --let universalsWithVars = formatUniversals universals
       let uMeasures = Map.assocs $ allRMeasures env
       -- Initialize polynomials for each resource variable
       let init name info = initializePolynomial env aDomain uMeasures (name, info) -- (name, universals)
@@ -263,18 +257,13 @@ satisfyResources rfmls = do
       let allCoefficients = concat $ Map.elems $ fmap coefficientsOf allPolynomials
       -- Initialize all coefficient values -- the starting value should not matter
       let initialProgram = Map.fromList $ zip allCoefficients initialCoefficients
-      --let formatPred (Var s x) = (x, Var s x)
-      --let formatCons c@Cons{}  = (mkFuncString c, mkFuncVar c)
-      --let allUniversals = Universals universalsWithVars (map formatPred mApps ++ map formatCons cApps)
 
       writeLog 3 $ text "Solving resource constraint with CEGIS:"
       writeLog 5 $ pretty $ conjunction $ map _rformula rfmls
       writeLog 3 $ indent 2 $ text "Over universally quantified variables:"
         <+> hsep (map (pretty . snd) (uvars universals)) <+> text "and functions:" 
         <+> hsep (map (pretty . snd) (ufuns universals))
-      --  <+> hsep (map (pretty . snd) (map formatPred mApps ++ map formatCons cApps))
       
-      --solveWithCEGIS cMax rfmls allUniversals [] allPolynomials initialProgram
       solveWithCEGIS cMax rfmls universals [] allPolynomials initialProgram
 
 collectUniversals :: [ProcessedRFormula] -> [Formula]
@@ -318,7 +307,6 @@ redistribute envIn envOut = do
   --Assert that top-level potentials are re-partitioned
   let transferAssertions = (envSum envIn |+| fpIn |+| cfpIn) |=| (envSum envOut |+| fpOut |+| cfpOut)
   -- No pending substitutions for now
-  --return (Map.empty, transferAssertions : wellFormedAssertions)
   let substitutions e = Map.foldlWithKey generateSubstFromType Map.empty (toMonotype <$> nonGhostScalars e) 
   return (Map.union (substitutions envIn) (substitutions envOut), transferAssertions : wellFormedAssertions)
 
@@ -328,10 +316,8 @@ assertZeroPotential :: Monad s
                     -> TCSolver s (PendingRSubst, Formula)
 assertZeroPotential env = do
   let substitutions = Map.foldlWithKey generateSubstFromType Map.empty (toMonotype <$> nonGhostScalars env)
-  --let topLevelPotentials = substitutePotentials env
   let envSum = sumFormulas . allPotentials 
   let fml = ((env ^. freePotential) |+| envSum env) |=| fzero
-  --return (Map.empty, fml)
   return (substitutions, fml)
 
 allPotentials :: Environment -> Map String Formula 
@@ -344,48 +330,12 @@ generateFreshUniversals :: Monad s => Environment -> TCSolver s Substitution
 generateFreshUniversals env = do 
   relevant <- use universalVars
   let univs = Map.filterWithKey (\x _ -> x `Set.member` relevant) $ symbolsOfArity 0 env
-  --let univs' = Map.filterWithKey (\k _ -> k == valueVarName) univs
   Map.traverseWithKey freshen univs
-  --Map.traverseWithKey freshen univs'
   where 
     sortFrom = toSort . baseTypeOf . toMonotype
     freshen x sch = do 
       x' <- freshVersion x 
       return $ Var (sortFrom sch) x'
-  
--- Given a list of resource annotations, substitutes a fresh [_v' / _v] in each variable
-generateVVSubst :: Monad s => Maybe Formula -> [Formula] -> TCSolver s PendingRSubst
-generateVVSubst Nothing _     = return Map.empty
-generateVVSubst (Just vv') fs = do 
-  mapM_ (updateVarDomain vv') fs 
-  return $ foldl genSubst Map.empty fs
-  where
-    genSubst subs (Ite g p q) = Map.insert p (Map.singleton valueVarName vv') $ 
-                                Map.insert q (Map.singleton valueVarName vv') subs
-    genSubst subs v@Var{}     = Map.insert v (Map.singleton valueVarName vv') subs
-    genSubst subs f           = subs 
-
-updateVarDomain :: Monad s => Formula -> Formula -> TCSolver s ()  
-updateVarDomain vv' (Var _ x) = do 
-  rvs <- use resourceVars
-  let rename vars = vv' : filter (\(Var _ name) -> name /= valueVarName) vars
-  resourceVars %= Map.adjust rename x  
--- This case is sketchy but should be sufficient:
-updateVarDomain vv' f =
-  case f of 
-    Binary _ f g -> do 
-      updateVarDomain vv' f 
-      updateVarDomain vv' g
-    Unary _ f -> 
-      updateVarDomain vv' f
-    Ite c f g -> do 
-      updateVarDomain vv' f 
-      updateVarDomain vv' g
-    Pred{}   -> return () 
-    Cons{}   -> return ()
-    IntLit{} -> return ()
-    f -> traceShow (text "warning: updateVarDomain given resource variable" <+> pretty f) (return ())
-
 
 -- Substitute for _v in potential annotation
 generateSubstFromType :: PendingRSubst -> String -> RType -> PendingRSubst
@@ -394,10 +344,7 @@ generateSubstFromType subs x t =
     Nothing -> subs
     Just (Ite g p q) ->
       let value' = Var (toSort (baseTypeOf t)) x
-          --subs' = Map.insert p (Map.singleton valueVarName value') subs
           sub = Map.singleton valueVarName value'
-      --in Map.insert q (Map.singleton valueVarName value') subs'
-      --in Map.fromList [(p, sub), (q, sub)]
       in Map.insert p sub $ Map.insert q sub subs
     Just p ->
       let value' = Var (toSort (baseTypeOf t)) x
@@ -414,7 +361,7 @@ partitionType :: Bool
               -> [Constraint]
 partitionType cm env (x, t@(ScalarT b _ f)) (ScalarT bl _ fl) (ScalarT br _ fr)
   = let vvtype = addRefinement t (varRefinement x (toSort b))
-        env'   = addVariable valueVarName vvtype env {- addAssumption (Var (toSort b) valueVarName |=| Var (toSort b) x) $ -}
+        env'   = addVariable valueVarName vvtype env 
     in SharedForm env' f fl fr : partitionBase cm env (x, b) bl br
 
 partitionBase cm env (x, DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _)

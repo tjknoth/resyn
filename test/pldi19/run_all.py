@@ -113,7 +113,7 @@ DIFF_TYPE  = '$\\forall\\alpha .\
 
 MICRO_BENCHMARKS = [
     MBenchmark('List-Triple1', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$', 1),
-    MBenchmark('List-Triple2', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$', 1),
+    MBenchmark('List-Triple2', 'triple append\'', TRIPLE_TYPE, 'append\'', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid^2$', 1),
     MBenchmark('List-Concat', 'concat list of lists', CONCAT_TYPE, 'append', [], '$\mid xxs \mid$', '$\mid xxs \mid^2$',1),
     MBenchmark('List-Compress', 'compress', COMPRESS_TYPE, '$=$,$\\neq$', [], '$\mid xs \mid$', '$2^{ \mid xs \mid }$',1),
     MBenchmark('List-Intersect', 'common', INTERSECT_TYPE, '$<$, member', ['-f=AllArguments', '-a=2', '--backtrack'], '$\mid ys \mid + \mid zs \mid$', '$\mid ys \mid \mid zs \mid$', 1),

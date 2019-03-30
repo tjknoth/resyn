@@ -379,23 +379,7 @@ substitute subst =
           _     -> All v' (snd e)
       sAlg f = embedLit "substitute" f
   in para sAlg
-{-
-substitute subst fml = case fml of
-  SetLit b elems -> SetLit b $ map (substitute subst) elems
-  Var s name -> case Map.lookup name subst of
-    Just f -> f
-    Nothing -> fml
-  Unknown s name -> Unknown (s `composeSubstitutions` subst) name
-  Unary op e -> Unary op (substitute subst e)
-  Binary op e1 e2 -> Binary op (substitute subst e1) (substitute subst e2)
-  Ite e0 e1 e2 -> Ite (substitute subst e0) (substitute subst e1) (substitute subst e2)
-  Pred b name args -> Pred b name $ map (substitute subst) args
-  Cons b name args -> Cons b name $ map (substitute subst) args
-  All v@(Var _ x) e -> if x `Map.member` subst
-                            then error $ unwords ["Scoped variable clashes with substitution variable", x]
-                            else All v (substitute subst e)
-  otherwise -> fml
--}
+
 -- | Compose substitutions
 composeSubstitutions old new =
   let new' = removeId new
@@ -417,19 +401,6 @@ sortSubstituteFml subst =
       sAlg base              = embed base
   in cata sAlg
 
-{-
-sortSubstituteFml subst fml = case fml of
-  SetLit el es -> SetLit (sortSubstitute subst el) (map (sortSubstituteFml subst) es)
-  Var s name -> Var (sortSubstitute subst s) name
-  Unknown s name -> Unknown (Map.map (sortSubstituteFml subst) s) name
-  Unary op e -> Unary op (sortSubstituteFml subst e)
-  Binary op l r -> Binary op (sortSubstituteFml subst l) (sortSubstituteFml subst r)
-  Ite c l r -> Ite (sortSubstituteFml subst c) (sortSubstituteFml subst l) (sortSubstituteFml subst r)
-  Pred s name es -> Pred (sortSubstitute subst s) name (map (sortSubstituteFml subst) es)
-  Cons s name es -> Cons (sortSubstitute subst s) name (map (sortSubstituteFml subst) es)
-  All x e -> All (sortSubstituteFml subst x) (sortSubstituteFml subst e)
-  _ -> fml
--}
 
 noncaptureSortSubstFml :: [Id] -> [Sort] -> Formula -> Formula
 noncaptureSortSubstFml sVars sArgs fml =
@@ -445,17 +416,6 @@ substitutePredicate subs =
           Just val -> substitute (Map.fromList (zip deBrujns args)) (substitutePredicate subs val)
       sAlg f                   = embed f 
   in cata sAlg
-{-
-substitutePredicate pSubst fml = case fml of
-  Pred b name args -> case Map.lookup name pSubst of
-                      Nothing -> Pred b name (map (substitutePredicate pSubst) args)
-                      Just value -> substitute (Map.fromList $ zip deBrujns args) (substitutePredicate pSubst value)
-  Unary op e -> Unary op (substitutePredicate pSubst e)
-  Binary op e1 e2 -> Binary op (substitutePredicate pSubst e1) (substitutePredicate pSubst e2)
-  Ite e0 e1 e2 -> Ite (substitutePredicate pSubst e0) (substitutePredicate pSubst e1) (substitutePredicate pSubst e2)
-  All v e -> All v (substitutePredicate pSubst e)
-  _ -> fml
--}
 
 -- | Negation normal form of a formula:
 -- no negation above boolean connectives, no boolean connectives except @&&@ and @||@
@@ -578,17 +538,7 @@ applySolution sol =
           Nothing -> Unknown s name
       solAlg base = embed base
   in cata solAlg
-{-
-applySolution sol fml = case fml of
-  Unknown s ident -> case Map.lookup ident sol of
-    Just quals -> substitute s $ conjunction quals
-    Nothing -> fml
-  Unary op e -> Unary op (applySolution sol e)
-  Binary op e1 e2 -> Binary op (applySolution sol e1) (applySolution sol e2)
-  Ite e0 e1 e2 -> Ite (applySolution sol e0) (applySolution sol e1) (applySolution sol e2)
-  All x e -> All x (applySolution sol e)
-  otherwise -> fml
--}
+
 -- | 'merge' @sol sol'@ : element-wise conjunction of @sol@ and @sol'@
 merge :: Solution -> Solution -> Solution
 merge sol sol' = Map.unionWith Set.union sol sol'
@@ -625,18 +575,7 @@ instance Ord Candidate where
 --    node in the Formula AST
 transformFml :: (Formula -> Formula) -> Formula -> Formula 
 transformFml transform = cata (transform . embed)
-  {-
-  let update = transformFml transform
-  in transform $ case f of 
-    (Unary op f)    -> Unary op $ update f
-    (Binary op f g) -> Binary op (update f) (update g) 
-    (Ite g t f)     -> Ite (update g) (update t) (update f)
-    (Pred s x fs)   -> Pred s x $ map transform (map update fs)
-    (Cons s x fs)   -> Cons s x $ map transform (map update fs) 
-    (All f g)       -> All (update f) (update g) 
-    (SetLit s fs)   -> SetLit s $ map transform (map update fs)
-    atom            -> transform atom
-  -}
+  
 
 isUnknownForm :: Formula -> Bool
 isUnknownForm (Unknown _ _) = True

@@ -385,7 +385,7 @@ resolveType (FunctionT x tArg tRes c)
 resolveType AnyT = return AnyT
 
 
-resolveBaseType :: RBase -> Resolver (RBase)
+resolveBaseType :: RBase -> Resolver RBase
 resolveBaseType (TypeVarT subs name mult) = do
   mult' <- resolveTypePotential (VarS name) mult
   return $ TypeVarT subs name mult'

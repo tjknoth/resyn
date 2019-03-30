@@ -58,9 +58,6 @@ type Polynomial = [PolynomialTerm]
 -- Map from resource variable name to its corresponding polynomial
 type PolynomialSkeletons = Map String Polynomial
 
--- Map from resource variable name to its corresponding polynomial (as a formula)
-type RPolynomials = Map String Formula
-
 -- Coefficient valuations in a valid program
 type ResourceSolution = Map String Formula
 
@@ -71,15 +68,6 @@ data Counterexample = CX {
   model :: !SMTModel
 } deriving (Eq)
 
-{- Instances -}
-
--- Uninterpreted function instance for measures
-instance UF MeasureDef where
-  argSorts mdef = map snd (_constantArgs mdef) ++ [_inSort mdef]
-  resSort = _outSort
-
-instance Declarable MeasureDef where
-  declare _ = Z3.function
 
 {- Top-level interface -}
 
@@ -100,8 +88,6 @@ solveWithCEGIS 0 rfmls universals _ polynomials program = do
     Just cx -> do
       traceM "warning: CEGIS failed on last iteration"
       writeLog 4 $ text "Last counterexample:" <+> text (maybe "" (snd . model) counterexample)
-      --writeLog 4 $ text "Last counterexample:" <+> pretty (Map.assocs (variables cx))
-      --writeLog 4 $ text "           measures:" <+> pretty (Map.assocs (funcInterps cx)) </> linebreak
       return False
 
 solveWithCEGIS n rfmls universals examples polynomials program = do
@@ -111,15 +97,14 @@ solveWithCEGIS n rfmls universals examples polynomials program = do
   case counterexample of
   --case res of 
     Nothing -> do
-      pstr <- lift . lift . lift $ printParams program polynomials
+      pstr <- runInSolver $ printParams program polynomials
       cMax <- lift $ asks _cegisMax
       writeLog 4 $ text "Solution on iteration" <+> pretty (cMax - n) <+> operator ":" <+> pstr
       return True -- No counterexamples exist, polynomials hold on all inputs
     Just cx ->
     --Just (rfmls', cx) ->
       do
-        -- Update example list
-        -- Attempt to find parameterization holding on all examples
+        -- Update example list, attempt to find parameterization holding on all examples
         rfmls' <- getRelevantPreds rfmls cx program polynomials
         writeLog 5 $ text "Violated formulas:" </> pretty (map _rformula rfmls')
         (examples', params) <- synthesize rfmls' examples polynomials cx
@@ -130,8 +115,7 @@ solveWithCEGIS n rfmls universals examples polynomials program = do
             return False -- No parameters exist, formula is unsatisfiable
           Just p  -> do
             let prog' = Map.union p program
-            --let prog' = p
-            pstr <- lift . lift . lift $ printParams prog' polynomials
+            pstr <- runInSolver $ printParams prog' polynomials
             writeLog 6 $ text "Params:" <+> pstr
             solveWithCEGIS (n - 1) rfmls universals examples' polynomials prog'
 
@@ -144,7 +128,6 @@ verify :: RMonad s
        -> ResourceSolution
        -> TCSolver s (Maybe Counterexample)
 verify rfmls universals polynomials program = do
-  let runInSolver = lift . lift . lift
   -- Generate polynomials by substituting parameter valuations for coefficients
   cxPolynomials <- runInSolver $ mapM (mkCXPolynomial program) polynomials
   -- Replace resource variables with appropriate polynomials (with pending substitutions applied)
@@ -172,7 +155,6 @@ verifyOnePass :: RMonad s
               -> ResourceSolution
               -> TCSolver s (Maybe ([ProcessedRFormula], Counterexample))
 verifyOnePass rfmls universals polynomials program = do
-  let runInSolver = lift . lift . lift
   let substRFml (RFormula _ _ _ subs pending f) = 
         runInSolver $ applyPolynomial (mkCXPolynomial program) polynomials pending subs f
   fml <- conjunction <$> mapM substRFml rfmls
@@ -195,7 +177,6 @@ getRelevantPreds :: RMonad s
                  -> PolynomialSkeletons
                  -> TCSolver s [ProcessedRFormula]
 getRelevantPreds rfmls cx program polynomials = do
-  let runInSolver = lift . lift . lift
   let substRFml (RFormula _ _ _ subs pending f) = 
         applyPolynomial (mkEvalPolynomial program cx) polynomials pending subs f
   let isRelevant rfml = not <$> ((`checkPredWithModel` model cx) =<< substRFml rfml)
@@ -210,16 +191,11 @@ synthesize :: RMonad s
            -> Counterexample
            -> TCSolver s ([Formula], Maybe ResourceSolution)
 synthesize rfmls pastExamples polynomials counterexample = do
-  let runInSolver = lift . lift . lift
-  -- For each example, substitute its value for the universally quantified expressions in each polynomial skeleton
-  -- paramPolynomials <- runInSolver $ mapM (mkParamPolynomial (allVariables counterexample)) polynomials
   -- Replace resource variables with appropriate polynomials after applying pending substitutions
   let substRFml (RFormula _ _ _ subs pending f) = 
         runInSolver $ applyPolynomial (mkParamPolynomial (allVariables counterexample)) polynomials pending subs f
   fml <- conjunction <$> mapM substRFml rfmls
   -- Substitute example valuations of universally quantified expressions in resource constraint
-  -- TODO: this was commented out for some reason!! why???
-  --   shouldn't be necessary...
   let fml' = substitute (allVariables counterexample) fml
   -- Evaluate the measure applications within the model from the counterexample
   -- Assert that any parameterization must hold for all examples
@@ -232,6 +208,7 @@ synthesize rfmls pastExamples polynomials counterexample = do
   sol <- runInSolver . sequence $ (modelGetAssignment allCoefficients <$> model)
   return (paramQuery, sol)
 
+-- TODO: are examples ever applied to the actual variables?? not in polynomials?
 applyPolynomial :: RMonad s 
                 => (Polynomial -> s Formula)
                 -> PolynomialSkeletons
@@ -260,26 +237,6 @@ applyPolynomial mkPolynomial polynomials pendingSubs subs f =
     Unknown{}     -> error "applySynthesisPolynomial: condition unknown present"
     lit           -> return lit
 
-
-substAndApplyPolynomial :: Map Formula Substitution -> Map String Formula -> Formula -> Formula
-substAndApplyPolynomial substs polynomials f =
-  let sub = substAndApplyPolynomial substs polynomials in
-  case f of
-    v@(Var s x) ->
-      let xpoly = Map.lookup x polynomials
-          xsubst = fromMaybe Map.empty $ Map.lookup v substs
-      in  maybe v (substitute xsubst) xpoly
-    SetLit s fs    -> SetLit s $ map sub fs
-    Unary op f     -> Unary op $ sub f
-    Binary op f g  -> Binary op (sub f) (sub g)
-    Ite g t f      -> Ite (sub g) (sub t) (sub f)
-    Pred s x fs    -> Pred s x $ map sub fs
-    Cons s x fs    -> Cons s x $ map sub fs
-    -- TODO: is this OK?
-    All q f        -> All q $ sub f
-    ASTLit s a str -> ASTLit s a str
-    Unknown _ _    -> error "substAndApplyPolynomial: condition unknown present"
-    lit            -> lit
 
 substPolynomial :: String -> Substitution -> Polynomial -> Polynomial 
 substPolynomial rvar subs = map subPterm
@@ -457,6 +414,9 @@ assignSorts (Just substs) (argSort, formalSort) =
         _    -> Nothing
 
 {- Some utilities -}
+
+runInSolver :: RMonad s => s a -> TCSolver s a
+runInSolver = lift . lift . lift
 
 mkPForm v@Var{} = v
 mkPForm p = mkFuncVar p

@@ -170,7 +170,7 @@ synt = Synthesis {
   backtrack           = False           &= help ("Backtrack past successfully synthesized branches (default: False)") &= name "b",
   num_programs        = 1               &= help ("Number of programs to produce if possible (default: 1)"),
   ct                  = False           &= help ("Require that all branching expressions consume a constant amount of resources (default: False)"),
-  cegis_max           = 10              &= help ("Maximum number of iterations through the CEGIS loop (default: 10)"),
+  cegis_max           = 50              &= help ("Maximum number of iterations through the CEGIS loop (default: 50)"),
   eac                 = False           &= help ("Enumerate-and-check instead of round-trip resource analysis (default: False)")
   } &= auto &= help "Synthesize goals specified in the input file"
     where
