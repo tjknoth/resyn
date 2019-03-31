@@ -282,6 +282,12 @@ freshFreePotential :: MonadHorn s
                    -> Explorer s Formula
 freshFreePotential env = freshResAnnotation env Nothing freePotentialPrefix
 
+freshCondFreePotential :: MonadHorn s
+                       => Environment
+                       -> Explorer s Formula
+freshCondFreePotential env = freshResAnnotation env Nothing condFreePotentialPrefix
+
+
 freshResAnnotation :: MonadHorn s
                    => Environment
                    -> Maybe RBase
@@ -375,8 +381,9 @@ shareContext env = do
   (cfpl, cfpr) <- shareCondFP env (env ^. condFreePotential) 
   let ghosts = _ghostSymbols env
 
-  let envl = mkResourceEnv symsl ghosts fpl cfpl
-  let envr = mkResourceEnv symsr ghosts fpr cfpr
+  -- Don't need to re-share fp and cfp:
+  let envl = mkResourceEnv symsl ghosts fzero []
+  let envr = mkResourceEnv symsr ghosts fzero []
   addConstraint $ SharedEnv env envl envr 
   return (env { _symbols = symsl, _freePotential = fpl, _condFreePotential = cfpl }
         , env { _symbols = symsr, _freePotential = fpr, _condFreePotential = cfpr })
@@ -400,7 +407,7 @@ shareFreePotential env fp@(Ite g _ _) =
 shareFreePotential env fp = do
   fp' <- freshFreePotential env
   fp'' <- freshFreePotential env
-  --addConstraint $ SharedForm env fp fp' fp'' Nothing
+  addConstraint $ SharedForm env fp fp' fp'' 
   return (fp', fp'')
 
 shareCondFP :: (MonadHorn s, MonadSMT s)
@@ -424,7 +431,7 @@ transferPotential env = do
   (syms', cfps) <- freshRestructuredPotentials env
   let env' = mkResourceEnv syms' (_ghostSymbols env) fp cfps
   addConstraint $ Transfer env env' 
-  return $ env { _symbols = syms', _freePotential = fp }
+  return $ env { _symbols = syms', _freePotential = fp, _condFreePotential = cfps }
 
 -- When transferring potentials, replace top-level annotations but also
 --   collect all conditional top-level annotations from the top-level to
@@ -475,7 +482,7 @@ freshCondFP env (Ite g f1 f2) = do
   f1' <- freshCondFP env f1
   f2' <- freshCondFP env f2
   return $ Ite g f1' f2'
-freshCondFP env _ = freshFreePotential env
+freshCondFP env _ = freshCondFreePotential env
 
 
 safeFreshPotentials :: (MonadHorn s, MonadSMT s)
@@ -514,7 +521,9 @@ toVar env (Program _ t) = do
   g <- freshId "G"
   return (Var (toSort $ baseTypeOf t) g, addLetBound g t env)
 
+
 freePotentialPrefix = "fp"
+condFreePotentialPrefix = "cfp"
 
 writeLog level msg = do
   maxLevel <- asks . view $ _1 . explorerLogLevel

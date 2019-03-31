@@ -142,6 +142,7 @@ embedAndProcessConstraint env extra rfml = do
 
 translateAndSimplify :: RMonad s => RawRFormula -> TCSolver s ProcessedRFormula 
 translateAndSimplify rfml = do 
+  writeLog 4 $ indent 4 $ pretty (_rformula rfml)
   z3lit <- lift . lift . lift $ translate $ _rformula rfml
   return $ rfml {
     _knownAssumptions = (),
