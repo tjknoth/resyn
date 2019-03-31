@@ -57,7 +57,8 @@ data TypingParams = TypingParams {
   _constantRes :: Bool,                                             -- ^ Check constant-timedness or not
   _cegisMax :: Int,                                                 -- ^ Maximum depth of CEGIS solver 
   _cegisDomain :: Maybe AnnotationDomain,
-  _enumAndCheck ::Bool
+  _enumAndCheck ::Bool,
+  _incrementalCEGIS :: Bool
 }
 
 makeLenses ''TypingParams
@@ -68,7 +69,8 @@ data ResourceArgs = ResourceArgs {
   _checkMults :: Bool,
   _constantTime :: Bool,
   _cegisBound :: Int,
-  _enumerate :: Bool
+  _enumerate :: Bool,
+  _increment :: Bool
 } 
 
 makeLenses ''ResourceArgs

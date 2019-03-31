@@ -30,8 +30,8 @@ import Debug.Trace
 
 import Data.List.Split
 
-programName = "synquid"
-versionName = "0.4"
+programName = "resyn"
+versionName = "0.1"
 releaseDate = fromGregorian 2016 8 11
 
 -- | Type-check and synthesize a program, according to command-line arguments
@@ -42,13 +42,15 @@ main = do
                appMax scrutineeMax matchMax auxMax fix genPreds explicitMatch unfoldLocals partial incremental consistency symmetry
                lfp bfs
                out_file out_module outFormat resolve
-               print_spec print_stats log_ resources mult forall cut nump constTime cegisMax ec) -> do
+               print_spec print_stats log_ 
+               resources mult forall cut nump constTime cegis_max ec inc_cegis) -> do
                   let resArgs = defaultResourceArgs {
                     _checkRes = resources,
                     _checkMults = mult,
                     _constantTime = constTime,
-                    _cegisBound = cegisMax,
-                    _enumerate = ec
+                    _cegisBound = cegis_max,
+                    _enumerate = ec,
+                    _increment = inc_cegis
                   }
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
@@ -135,7 +137,8 @@ data CommandLineArgs
         num_programs :: Int,
         ct :: Bool,
         cegis_max :: Int,
-        eac :: Bool
+        eac :: Bool,
+        inc_cegis :: Bool
       }
   deriving (Data, Typeable, Show, Eq)
 
@@ -170,8 +173,9 @@ synt = Synthesis {
   backtrack           = False           &= help ("Backtrack past successfully synthesized branches (default: False)") &= name "b",
   num_programs        = 1               &= help ("Number of programs to produce if possible (default: 1)"),
   ct                  = False           &= help ("Require that all branching expressions consume a constant amount of resources (default: False)"),
-  cegis_max           = 50              &= help ("Maximum number of iterations through the CEGIS loop (default: 50)"),
-  eac                 = False           &= help ("Enumerate-and-check instead of round-trip resource analysis (default: False)")
+  cegis_max           = 1000            &= help ("Maximum number of iterations through the CEGIS loop (default: 1000)"),
+  eac                 = False           &= help ("Enumerate-and-check instead of round-trip resource analysis (default: False)"),
+  inc_cegis           = True            &= help ("Incremental CEGIS solving (default: True)")
   } &= auto &= help "Synthesize goals specified in the input file"
     where
       defaultFormat = outputFormat defaultSynquidParams
@@ -210,8 +214,9 @@ defaultResourceArgs = ResourceArgs {
   _checkRes = True,
   _checkMults = True,
   _constantTime = False,
-  _cegisBound = 10,
-  _enumerate = False
+  _cegisBound = 100,
+  _enumerate = False,
+  _increment = True
 }
 
 -- | Parameters for constraint solving

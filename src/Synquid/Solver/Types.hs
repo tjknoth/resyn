@@ -77,10 +77,10 @@ data Counterexample = CX {
 } deriving (Eq)
 
 data CEGISState = CEGISState {
-  _rprogram :: ResourceSolution,
-  _polynomials :: PolynomialSkeletons,
-  _coefficients :: [String],
-  _cegisSolverLogLevel :: Int
+  _rprogram :: !ResourceSolution,
+  _polynomials :: !PolynomialSkeletons,
+  _coefficients :: ![String],
+  _cegisSolverLogLevel :: !Int
 } deriving (Show, Eq, Ord)
 
 makeLenses ''CEGISState

@@ -253,7 +253,17 @@ satisfyResources rfmls = do
       logUniversals
       
       let go = solveWithCEGIS cMax rfmls universals []
-      runInSolver $ fst <$> runCEGIS go cstate
+      (sat, cstate') <- runInSolver $ runCEGIS go cstate
+      storeCEGISState cstate'
+      return sat
+
+storeCEGISState :: Monad s => CEGISState -> TCSolver s ()
+storeCEGISState st = do 
+  cegisState .= st
+  incremental <- asks _incrementalCEGIS
+  -- For non-incremental solving, don't reset resourceVars
+  when incremental $
+    resourceVars .= Map.empty
 
 
 collectUniversals :: [ProcessedRFormula] -> [Formula]

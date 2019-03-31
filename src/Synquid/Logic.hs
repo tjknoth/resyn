@@ -16,7 +16,7 @@ import Data.Functor.Foldable.TH
 
 import Control.Lens hiding (both, para)
 import Control.Monad
-import Z3.Monad (AST)
+import qualified Z3.Monad as Z3 
 
 {- Sorts -}
 
@@ -135,16 +135,16 @@ data Formula =
   Pred !Sort !Id ![Formula] |          -- ^ Logic function application
   Cons !Sort !Id ![Formula] |          -- ^ Constructor application
   All !Formula !Formula |              -- ^ Universal quantification
-  ASTLit !Sort !AST !String            -- ^ Z3 AST literal (only used to solve resource constraints), and its string version
+  Z3Lit !Sort !Z3.AST !String            -- ^ Z3 AST literal (only used to solve resource constraints), and its string version
   deriving (Show, Eq, Ord)
 
 makeBaseFunctor ''Formula
 
 embedLit :: String -> FormulaF a -> Formula
-embedLit _ (BoolLitF b)      = BoolLit b
-embedLit _ (IntLitF b)       = IntLit b
-embedLit _ (ASTLitF s x str) = ASTLit s x str
-embedLit err _               = error $ unwords ["embedLit: non-literal base functor in context", err]
+embedLit _ (BoolLitF b)     = BoolLit b
+embedLit _ (IntLitF b)      = IntLit b
+embedLit _ (Z3LitF s x str) = Z3Lit s x str
+embedLit err _              = error $ unwords ["embedLit: non-literal base functor in context", err]
 
 
 dontCare = "_"
@@ -343,7 +343,7 @@ sortOf (Ite _ e1 _)                              = sortOf e1
 sortOf (Pred s _ _)                              = s
 sortOf (Cons s _ _)                              = s
 sortOf (All _ _)                                 = BoolS
-sortOf (ASTLit s _ _)                            = s
+sortOf (Z3Lit s _ _)                             = s
 
 isExecutable :: Formula -> Bool
 isExecutable = 

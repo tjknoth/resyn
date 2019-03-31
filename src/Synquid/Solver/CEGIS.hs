@@ -323,7 +323,7 @@ updateCEGISState = do
     set cegisSolverLogLevel ll st
 
 updateProgram :: Monad s => ResourceSolution -> CEGISSolver s ()
-updateProgram prog = rprogram %= (Map.union prog) 
+updateProgram prog = rprogram %= Map.union prog 
 
 initCEGISState :: CEGISState 
 initCEGISState = CEGISState {

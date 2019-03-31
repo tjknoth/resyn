@@ -200,7 +200,7 @@ fmlDocAt n fml = condHlParens (n' <= n) (
     Pred b name args -> text name <+> hsep (map (fmlDocAt n') args)
     Cons b name args -> hlParens (text name <+> hsep (map (fmlDocAt n') args))
     All x e -> keyword "forall" <+> pretty x <+> operator "." <+> fmlDoc e
-    ASTLit _ a s -> text s 
+    Z3Lit _ a s -> text s 
   )
   where
     n' = power fml
@@ -225,7 +225,7 @@ simpleFmlDocAt n fml = condHlParens (n' <= n) (
     Pred b name args -> text name <+> hsep (map (simpleFmlDocAt n') args)
     Cons b name args -> hlParens (text name <+> hsep (map (simpleFmlDocAt n') args))
     All x e -> keyword "forall" <+> pretty x <+> operator "." <+> simpleFmlDoc e
-    ASTLit _ a s -> text s 
+    Z3Lit _ a s -> text s 
   )
   where
     n' = power fml

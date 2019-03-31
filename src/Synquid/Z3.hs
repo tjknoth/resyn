@@ -151,7 +151,7 @@ getAssignmentForVar model v@(Var s x) = do
   return $ (x,) <$> fml
 
 mkASTLit :: Sort -> AST -> Z3State Formula
-mkASTLit s ast = ASTLit s ast <$> astToString ast
+mkASTLit s ast = Z3Lit s ast <$> astToString ast
 
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
 convertDatatypes _ [] = return ()
@@ -285,7 +285,7 @@ toAST expr = case expr of
     decl <- typeConstructor s name tArgs
     mapM toAST args >>= mkApp decl
   All v e -> accumAll [v] e
-  ASTLit _ a _ -> return a
+  Z3Lit _ a _ -> return a
   where
     setLiteral el xs = do
       emp <- toZ3Sort el >>= mkEmptySet
