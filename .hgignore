@@ -17,7 +17,7 @@ test/security/conference/ConferenceVerification.hs
 test/security/conference/ConferenceRepair.hs
 test/security/conference/Security.hs
 test/difflib
-*/results.log
+*.log
 */npm-debug.log
 */os.path
 */platform

@@ -1,2 +1,6 @@
-List-Triple1,14,34,1.19,0.30,-,-,
-List-Triple2,14,41,4.32,0.30,-,34,
+List-Triple1,14,34,1.13,0.25,-,-,
+List-Triple2,14,41,3.87,0.24,-,34,
+List-Concat,17,49,4.91,0.49,-,49,
+List-Compress,11,64,5.75,1.15,-,62,
+List-Intersect,14,95,66.48,1.14,-,87,
+List-Diff,

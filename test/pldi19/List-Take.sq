@@ -16,4 +16,3 @@ termination measure len :: List a -> {Int | _v >= 0} where
 	
 take :: n: Nat -> xs: {List a | len _v >= n | n} -[1]-> {List a | len _v == n}
 take = ??
-

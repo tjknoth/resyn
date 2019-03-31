@@ -141,7 +141,7 @@ ALL_BENCHMARKS = [
         Benchmark('List-Concat', 'concat list of lists', 'append'),
         Benchmark('List-Delete', 'delete value', '$=$, $\\neq$'),
         Benchmark('List-Zip', 'zip'),
-        #Benchmark('List-ZipWith', 'zip with'),
+        Benchmark('List-ZipWith', 'zip with'),
         Benchmark('List-Ith', '$i$-th element', '0, inc, dec, $\\leq$, $\\neq$'),
         Benchmark('List-ElemIndex', 'index of element', '0, inc, dec, $=$, $\\neq$'),
         Benchmark('List-Snoc', 'insert at end'),
@@ -150,8 +150,10 @@ ALL_BENCHMARKS = [
         Benchmark('IncList-Insert', 'insert (sorted)', '$\\leq$, $\\neq$'),
         Benchmark('List-ExtractMin', 'extract minimum', '$\\leq$, $\\neq$', ['-a=2', '-m=3']),
         #Benchmark('List-Range', 'range', 'inc,dec,$\geq$'),
-        #Benchmark('List-Foldr', 'foldr'),
-        #Benchmark('List-Map', 'map'),
+        Benchmark('List-Foldr', 'foldr'),
+        Benchmark('List-Fold-Length', 'length using fold', '0, inc, dec', ['-m=0']),
+        Benchmark('List-Fold-Append', 'append using fold', '', ['-m=0'])
+        Benchmark('List-Map', 'map'),
         #Benchmark('List-Split', 'split list', '', ['-m=3'])
         # Try it by hand!
         #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member', ['-f=AllArguments', '-m=3'])
@@ -444,18 +446,19 @@ def write_latex():
             for b in group.benchmarks:
                 result = results [b.name]
                 optstr = 'Yes' if result.optimized else '-'
-                row = \
-                    ' & ' + b.description +\
-                    ' & ' + result.goal_count +\
-                    ' & ' + str(b.components) + \
-                    ' & ' + result.measure_count + \
-                    ' & ' + result.code_size + \
-                    ' & ' + format_time(result.time) + \
+                row = ( 
+                    ' & ' + b.description + 
+                    # ' & ' + result.goal_count + \
+                    ' & ' + str(b.components) + 
+                    #' & ' + result.measure_count + \
+                    ' & ' + result.code_size + 
+                    ' & ' + format_time(result.time) + 
                     ' & ' + format_time(result.nres_time) + ' \\\\'
                     #' & ' + result.nres_code_size + \
                     #' & ' + str(b.num_programs) + \
                     #' & ' + format_time(result.eac_time) + ' \\\\'
                     #' & ' + optstr + ' \\\\'
+                )
                 outfile.write (row)
                 outfile.write ('\n')
 
@@ -511,14 +514,14 @@ if __name__ == '__main__':
                 with open(DUMPFILE, 'wb') as data_dump:
                     pickle.dump(results, data_dump)
 
-    for b in MICRO_BENCHMARKS:
-        if b.name in micro_results:
-            print(b.str() + Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'SKIPPED' + Style.RESET_ALL)
-        else:
-            print(b.str())
-            run_micro_benchmark(b.name, b.options, group.default_options, b.eac)
-            with open(MICRO_DUMPFILE, 'wb') as data_dump:
-                pickle.dump(micro_results, data_dump)
+    #for b in MICRO_BENCHMARKS:
+    #    if b.name in micro_results:
+    #        print(b.str() + Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'SKIPPED' + Style.RESET_ALL)
+    #    else:
+    #        print(b.str())
+    #        run_micro_benchmark(b.name, b.options, group.default_options, b.eac)
+    #        with open(MICRO_DUMPFILE, 'wb') as data_dump:
+    #            pickle.dump(micro_results, data_dump)
 
     med_slowdown = median([results[b.name].pct_slowdown for g in groups for b in g.benchmarks])
     print('Median slowdown = ' + str(med_slowdown))
