@@ -36,6 +36,7 @@ class (Monad s, Applicative s) => RMonad s where
   modelGetAssignment :: [String] -> SMTModel -> s (Map String Formula)               -- ^ 'modelGetAssignment' @vals@ @m@: Get assignments of all variables @vals@ in model @m@
   checkPredWithModel :: Formula -> SMTModel -> s Bool                                -- ^ 'checkWithModel' @fml model@: check if boolean-sorted formula holds under a given model
   filterPreds :: [ProcessedRFormula] -> SMTModel -> s ([ProcessedRFormula], Map String Formula)
+  translate :: Formula -> s Formula
 
 class (Monad s, Applicative s) => MonadHorn s where
   initHornSolver :: Environment -> s Candidate                                                -- ^ Initial candidate solution

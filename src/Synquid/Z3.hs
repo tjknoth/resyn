@@ -142,6 +142,11 @@ instance RMonad Z3State where
         ifM (anyM isRelevant vfuns)
           ((Just rfml,) <$> getAll vars)
           (return (Nothing, Map.empty))
+  translate fml = do 
+    f' <- local $ fmlToAST fml
+    setASTPrintMode Z3_PRINT_SMTLIB_FULL
+    str <- astToString f' 
+    return $ Z3Lit AnyS f' str
 
 getAssignmentForVar :: Z3.Model -> Formula -> Z3State (Maybe (String, Formula))
 getAssignmentForVar model v@(Var s x) = do 

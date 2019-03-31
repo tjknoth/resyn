@@ -135,7 +135,7 @@ data Formula =
   Pred !Sort !Id ![Formula] |          -- ^ Logic function application
   Cons !Sort !Id ![Formula] |          -- ^ Constructor application
   All !Formula !Formula |              -- ^ Universal quantification
-  Z3Lit !Sort !Z3.AST !String            -- ^ Z3 AST literal (only used to solve resource constraints), and its string version
+  Z3Lit !Sort !Z3.AST !String          -- ^ Z3 AST literal (only used to solve resource constraints), and its string version
   deriving (Show, Eq, Ord)
 
 makeBaseFunctor ''Formula

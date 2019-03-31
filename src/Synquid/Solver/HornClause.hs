@@ -83,6 +83,7 @@ instance (Monad s, Applicative s, RMonad s) => RMonad (FixPointSolver s) where
   modelGetAssignment s m = lift $ modelGetAssignment s m
   checkPredWithModel f m = lift $ checkPredWithModel f m
   filterPreds fs m  = lift $ filterPreds fs m
+  translate = lift . translate
 
  
 {- Implementation -}

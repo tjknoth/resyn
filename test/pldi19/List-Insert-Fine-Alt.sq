@@ -10,7 +10,7 @@ measure ielems :: IList a -> Set a where
   INil -> []
   ICons x xs -> [x] + ielems xs
 	
-qualifier { x > y }
+qualifier { x < y }
 
 insert :: x: a -> xs: IList {a| |if x > _v then 1 else 0} -[1]-> {IList a | ielems _v == ielems xs + [x]}
 insert = \x. \xs. 

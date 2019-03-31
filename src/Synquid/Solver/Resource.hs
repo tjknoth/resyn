@@ -134,10 +134,20 @@ embedAndProcessConstraint env extra rfml = do
        >=> applyAssumptions
   if hasUnivs
     then go rfml
-    else return $ rfml {
+    else translateAndSimplify rfml
+    {- else return $ rfml {
       _knownAssumptions = (),
       _unknownAssumptions = ()
-    }
+    } -}
+
+translateAndSimplify :: RMonad s => RawRFormula -> TCSolver s ProcessedRFormula 
+translateAndSimplify rfml = do 
+  z3lit <- lift . lift . lift $ translate $ _rformula rfml
+  return $ rfml {
+    _knownAssumptions = (),
+    _unknownAssumptions = (),
+    _rformula = z3lit
+  }
 
 -- Insert extra assumption, if necessary
 insertAssumption :: Monad s => Maybe Formula -> RawRFormula -> TCSolver s RawRFormula
