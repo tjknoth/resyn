@@ -136,8 +136,8 @@ ALL_BENCHMARKS = [
         Benchmark('List-Stutter', 'duplicate each element'),
         Benchmark('List-Replicate', 'replicate', '0, inc, dec, $\\leq$, $\\neq$'),
         Benchmark('List-Append', 'append two lists', ''),
-        Benchmark('List-Take', 'take first $n$ elements', '0, inc, dec, $\\leq$, $\\neq$'),
-        Benchmark('List-Drop', 'drop first $n$ elements', '0, inc, dec, $\\leq$, $\\neq$'),
+        Benchmark('List-Take', 'take first $n$ elements', '0, inc, dec, $\\leq$, $\\neq$', ['--cegis-max=50']),
+        Benchmark('List-Drop', 'drop first $n$ elements', '0, inc, dec, $\\leq$, $\\neq$', ['--cegis-max=50']),
         Benchmark('List-Concat', 'concat list of lists', 'append'),
         Benchmark('List-Delete', 'delete value', '$=$, $\\neq$'),
         Benchmark('List-Zip', 'zip'),
@@ -152,7 +152,7 @@ ALL_BENCHMARKS = [
         #Benchmark('List-Range', 'range', 'inc,dec,$\geq$'),
         Benchmark('List-Foldr', 'foldr'),
         Benchmark('List-Fold-Length', 'length using fold', '0, inc, dec', ['-m=0']),
-        Benchmark('List-Fold-Append', 'append using fold', '', ['-m=0'])
+        Benchmark('List-Fold-Append', 'append using fold', '', ['-m=0']),
         Benchmark('List-Map', 'map'),
         #Benchmark('List-Split', 'split list', '', ['-m=3'])
         # Try it by hand!

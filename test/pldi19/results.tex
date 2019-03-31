@@ -1,11 +1,14 @@
-\multirow{15}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{List}}} & is empty & true, false & 16 & 0.19 & 0.12 \\
+\multirow{22}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{List}}} & is empty & true, false & 16 & 0.19 & 0.12 \\
  & member & true, false, $=$, $\neq$ & 41 & 0.23 & 0.16 \\
  & duplicate each element &  & 39 & 0.48 & 0.19 \\
  & replicate & 0, inc, dec, $\leq$, $\neq$ & 31 & 2.16 & 0.16 \\
  & append two lists &  & 38 & 2.09 & 0.31 \\
+ & take first $n$ elements & 0, inc, dec, $\leq$, $\neq$ & 34 & 38.88 & 0.22 \\
+ & drop first $n$ elements & 0, inc, dec, $\leq$, $\neq$ & 30 & 30.24 & 0.30 \\
  & concat list of lists & append & 49 & 5.19 & 0.52 \\
  & delete value & $=$, $\neq$ & 49 & 0.83 & 0.21 \\
  & zip &  & 32 & 0.45 & 0.16 \\
+ & zip with &  & 35 & 0.84 & 0.18 \\
  & $i$-th element & 0, inc, dec, $\leq$, $\neq$ & 30 & 0.27 & 0.16 \\
  & index of element & 0, inc, dec, $=$, $\neq$ & 43 & 0.54 & 0.20 \\
  & insert at end &  & 42 & 0.36 & 0.21 \\
@@ -13,6 +16,10 @@
  & reverse & insert at end & 35 & 0.41 & 0.27 \\
  & insert (sorted) & $\leq$, $\neq$ & 57 & 2.90 & 0.56 \\
  & extract minimum & $\leq$, $\neq$ & 71 & 24.50 & 5.96 \\
+ & foldr &  & 43 & 3.37 & 0.43 \\
+ & length using fold & 0, inc, dec & 39 & 0.28 & 0.18 \\
+ & append using fold &  & 42 & 0.38 & 0.22 \\
+ & map &  & 27 & 0.29 & 0.15 \\
 \hline\multirow{5}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Unique list}}} & insert & $=$, $\neq$ & 49 & 0.84 & 0.32 \\
  & delete & $=$, $\neq$ & 45 & 0.47 & 0.23 \\
  & remove adjacent dupl. & $=$, $\neq$ & 64 & 7.18 & 1.24 \\
