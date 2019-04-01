@@ -485,11 +485,11 @@ processConstraint (SharedEnv env envl envr)
       let scalarsr = Map.elems $ substAndGetScalars envr
       cm <- asks _checkMultiplicities
       let cs = zipWith3 (partitionType cm env) scalars scalarsl scalarsr
-      let fpc = SharedForm env (_freePotential env) (_freePotential envl) (_freePotential envr)
-      let cfpc = SharedForm env (totalConditionalFP env) (totalConditionalFP envl) (totalConditionalFP envr)
+      --let fpc = SharedForm env (_freePotential env) (_freePotential envl) (_freePotential envr)
+      --let cfpc = SharedForm env (totalConditionalFP env) (totalConditionalFP envl) (totalConditionalFP envr)
       simpleConstraints %= (concat cs ++)
-      simpleConstraints %= (fpc :)
-      simpleConstraints %= (cfpc :)
+      --simpleConstraints %= (fpc :)
+      --simpleConstraints %= (cfpc :)
 processConstraint (ConstantRes env) = do
   tass <- use typeAssignment
   let env' = over symbols (scalarSubstituteEnv tass) env

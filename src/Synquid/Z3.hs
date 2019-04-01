@@ -56,7 +56,7 @@ makeLenses ''Z3Data
 
 type Z3State = StateT Z3Data IO
 
-initZ3Data env env' renv = Z3Data {
+initZ3Data env env' = Z3Data {
   _mainEnv = env,
   _sorts = Map.empty,
   _vars = Map.empty,
@@ -130,18 +130,17 @@ instance RMonad Z3State where
       Nothing -> return False
       Just res -> getBool res
 
-  filterPreds rfmls (model, _) = do 
-    all <- mapM checkAndGetAssignment rfmls
-    return (mapMaybe fst all, Map.unions (map snd all))
+  filterPreds rfmls (model, _) = mapMaybeM checkAndGetAssignment rfmls
     where
+      checkAndGetAssignment :: ProcessedRFormula -> Z3State (Maybe ProcessedRFormula)
       checkAndGetAssignment rfml = do 
         let vars = Map.elems . _varSubsts $ rfml 
         let isRelevant f = isJust <$> modelEval model f False -- No model completion
-        let getAll vs = Map.fromList . catMaybes <$> mapM (getAssignmentForVar model) vs
         vfuns <- mapM fmlToAST vars
         ifM (anyM isRelevant vfuns)
-          ((Just rfml,) <$> getAll vars)
-          (return (Nothing, Map.empty))
+          (return (Just rfml))
+          (return Nothing)
+
   translate fml = do 
     f' <- local $ fmlToAST fml
     setASTPrintMode Z3_PRINT_SMTLIB_FULL
@@ -258,8 +257,7 @@ evalZ3State :: Z3State a -> IO a
 evalZ3State f = do
   env <- newEnv Nothing stdOpts
   env' <- newEnv Nothing stdOpts
-  renv <- newEnv Nothing stdOpts
-  evalStateT f $ initZ3Data env env' renv
+  evalStateT f $ initZ3Data env env' 
 
 -- | Convert a first-order constraint to a Z3 AST.
 fmlToAST :: Formula -> Z3State AST

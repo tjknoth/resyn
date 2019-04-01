@@ -255,13 +255,22 @@ satisfyResources rfmls = do
           writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (snd m'))
           return True
     else do
-      universals <- collectUniversals' rfmls
+      --ufmls <- map (Var IntS) . Set.toList <$> use universalVars
+      --traceM $ "vars: " ++ show (plain (pretty ufmls))
+      universals <- collectUniversals rfmls -- ufmls
       cMax <- asks _cegisMax
       cstate <- updateCEGISState
 
       writeLog 3 $ text "Solving resource constraint with CEGIS:"
       writeLog 5 $ pretty $ conjunction $ map _rformula rfmls
-      logUniversals
+      --logUniversals  
+      --uvars <- Set.toList <$> use universalVars
+      --ufuns <- Set.toList <$> use universalMeasures
+      --capps <- Set.toList <$> use matchCases
+      writeLog 3 $ indent 2 $ text "Over universally quantified variables:"
+        <+> hsep (map pretty (map fst (uvars universals))) <+> text "and functions:"
+        <+> hsep (map pretty (map fst (ufuns universals)))
+
       
       let go = solveWithCEGIS cMax rfmls universals []
       (sat, cstate') <- runInSolver $ runCEGIS go cstate
@@ -276,16 +285,17 @@ storeCEGISState st = do
   when incremental $
     resourceVars .= Map.empty
 
-
-collectUniversals :: [ProcessedRFormula] -> [Formula]
-collectUniversals = concatMap (Map.elems . _varSubsts) 
-
 -- Given a list of resource constraints, assemble the relevant universally quantified 
 --   expressions for the CEGIS solver: renamed variables, constructor and measure applications
-collectUniversals' :: Monad s => [ProcessedRFormula] -> TCSolver s Universals
-collectUniversals' rfmls = do 
+collectUniversals :: Monad s => [ProcessedRFormula] -> TCSolver s Universals
+collectUniversals rfmls = do 
   let preds = map (\(Var s x) -> (x, Var s x)) (collectUFs rfmls) 
   return $ Universals (formatUniversals (collectVars rfmls)) preds
+
+collectUniversals' :: Monad s => [ProcessedRFormula] -> [Formula] -> TCSolver s Universals
+collectUniversals' rfmls extra = do 
+  let preds = map (\(Var s x) -> (x, Var s x)) (collectUFs rfmls) 
+  return $ Universals (formatUniversals (extra ++ collectVars rfmls)) preds
 
 collectVars :: [ProcessedRFormula] -> [Formula]
 collectVars = concatMap (Map.elems . _varSubsts)
@@ -341,6 +351,7 @@ generateFreshUniversals :: Monad s => Environment -> TCSolver s Substitution
 generateFreshUniversals env = do 
   relevant <- use universalVars
   let univs = Map.filterWithKey (\x _ -> x `Set.member` relevant) $ symbolsOfArity 0 env
+  --let univs = Map.filterWithKey (\x _ -> x == valueVarName) $ symbolsOfArity 0 env
   Map.traverseWithKey freshen univs
   where 
     sortFrom = toSort . baseTypeOf . toMonotype

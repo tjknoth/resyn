@@ -36,7 +36,7 @@ RESOURCE_OPTS = []
 RESOURCES_OFF_OPT = ['-r=false']                                # Option to disable resource analysis
 FNULL = open(os.devnull, 'w')                                   # Null file
 
-PAPER_PATH = '/home/tristan/Research/resyn/paper/'
+PAPER_PATH = '/home/tristan/Research/resource-paper/'
 
 class Benchmark:
     def __init__(self, name, description, components='', options=[], np = '-'):
@@ -245,7 +245,7 @@ def run_benchmark(name, opts, default_opts):
       logfile.write(name + '\n')
       logfile.seek(0, os.SEEK_END)
       # Run Synquid on the benchmark:
-      synthesis_res = run(SYNQUID_CMD + COMMON_OPTS + RESOURCE_OPTS + opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
+      synthesis_res = run(TIMEOUT_CMD + SYNQUID_CMD + COMMON_OPTS + RESOURCE_OPTS + opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
       end = time.time()
 
       print('{0:0.2f}'.format(end - start), end = ' ')
@@ -283,9 +283,7 @@ def run_micro_benchmark(name, opts, default_opts, eac, incremental):
       logfile.write(name + '\n')
       logfile.seek(0, os.SEEK_END)
       # Run Synquid on the benchmark:
-      # TEMPORARY
-      synthesis_res = run(SYNQUID_CMD + COMMON_OPTS + RESOURCE_OPTS + ['-r=false'] + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
-      # synthesis_res = run(SYNQUID_CMD + COMMON_OPTS + RESOURCE_OPTS + opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
+      synthesis_res = run(TIMEOUT_CMD + TIMEOUT + SYNQUID_CMD + COMMON_OPTS + RESOURCE_OPTS + opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
       end = time.time()
 
       print('{0:0.2f}'.format(end - start), end = ' ')
@@ -375,9 +373,7 @@ def run_micro_version(name, logfile, version, opts, set_time):
     start = time.time()
     logfile.seek(0, os.SEEK_END)
     # Run Synquid on the benchmark, mute output:
-    # TEMPORARY
-    synthesis_res = run(TIMEOUT_CMD + TIMEOUT + SYNQUID_CMD + COMMON_OPTS + ['-r=false'] + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
-    #synthesis_res = run(TIMEOUT_CMD + TIMEOUT + SYNQUID_CMD + COMMON_OPTS + opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
+    synthesis_res = run(TIMEOUT_CMD + TIMEOUT + SYNQUID_CMD + COMMON_OPTS + opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
     end = time.time()
     print('{0:0.2f}'.format(end - start), end = ' ')
     if synthesis_res.returncode == 124:  # Timeout: record timeout
@@ -550,15 +546,15 @@ if __name__ == '__main__':
     # Run experiments
     groups = ALL_BENCHMARKS[:1] if cl_opts.small else ALL_BENCHMARKS
 
-    #for group in groups:
-    #    for b in group.benchmarks:
-    #        if b.name in results:
-    #            print(b.str() + Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'SKIPPED' + Style.RESET_ALL)
-    #        else:
-    #            print(b.str())
-    #            run_benchmark(b.name, b.options, group.default_options)
-    #            with open(DUMPFILE, 'wb') as data_dump:
-    #                pickle.dump(results, data_dump)
+    for group in groups:
+        for b in group.benchmarks:
+            if b.name in results:
+                print(b.str() + Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'SKIPPED' + Style.RESET_ALL)
+            else:
+                print(b.str())
+                run_benchmark(b.name, b.options, group.default_options)
+                with open(DUMPFILE, 'wb') as data_dump:
+                    pickle.dump(results, data_dump)
 
     for b in MICRO_BENCHMARKS:
         if b.name in micro_results:
@@ -569,13 +565,13 @@ if __name__ == '__main__':
             with open(MICRO_DUMPFILE, 'wb') as data_dump:
                 pickle.dump(micro_results, data_dump)
 
-    #med_slowdown = median([results[b.name].pct_slowdown for g in groups for b in g.benchmarks])
-    #print('Median slowdown = ' + str(med_slowdown))
+    med_slowdown = median([results[b.name].pct_slowdown for g in groups for b in g.benchmarks])
+    print('Median slowdown = ' + str(med_slowdown))
 
     # Generate CSV
-    #write_csv()
+    write_csv()
     # Generate Latex table
-    #write_latex()
+    write_latex()
 
     write_micro_csv()
     write_micro_latex()

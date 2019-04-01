@@ -145,7 +145,7 @@ DEMO_BENCHMARKS = [
 ]
 
 RESOURCE_VERIFICATION_BENCHMARKS = [
-    #('BST-Contains-Bad',    []),
+    ('BST-Contains-Bad',    []),
     ('BST-Contains',        []),
     ('BST-Delete-Bad',      []),
     ('BST-Delete',          []),

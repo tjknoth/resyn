@@ -1,6 +1,6 @@
 data List a where 
   Nil :: List a 
-  Cons :: x: a -[1]-> xs: List a -> List a 
+  Cons :: x: a -> xs: List a -[1]-> List a 
 
 termination measure len :: List a -> {Int | _v >= 0} where 
   Nil -> 0
@@ -11,4 +11,4 @@ measure elems :: List a -> Set a where
   Cons x xs -> [x] + elems xs
 
 stutter :: xs: List {2 ** a| |2} -> {List a | len _v == 2 * len xs && elems _v == elems xs}
-stutter = ?? 
+stutter = ??

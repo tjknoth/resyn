@@ -81,6 +81,6 @@ data CEGISState = CEGISState {
   _polynomials :: !PolynomialSkeletons,
   _coefficients :: ![String],
   _cegisSolverLogLevel :: !Int
-} deriving (Show, Eq, Ord)
+} -- deriving (Show, Eq, Ord)
 
 makeLenses ''CEGISState
