@@ -58,6 +58,7 @@ data TypingParams = TypingParams {
   _constantRes :: Bool,                                             -- ^ Check constant-timedness or not
   _cegisMax :: Int,                                                 -- ^ Maximum depth of CEGIS solver 
   _cegisDomain :: Maybe AnnotationDomain,
+  _polynomialDomain :: Maybe AnnotationDomain,
   _enumAndCheck ::Bool,
   _incrementalCEGIS :: Bool
 }

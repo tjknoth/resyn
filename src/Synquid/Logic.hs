@@ -291,6 +291,17 @@ hasPred =
       pAlg _                 = False
   in cata pAlg
 
+hasPredITE :: Formula -> Bool 
+hasPredITE = 
+  let pAlg PredF{}           = True
+      pAlg (SetLitF _ xs)    = or xs 
+      pAlg (UnaryF _ e)      = e 
+      pAlg (BinaryF _ e1 e2) = e1 || e2
+      pAlg (IteF e1 e2 e3)   = e2 || e3
+      pAlg (AllF _ e)        = e
+      pAlg _                 = False
+  in cata pAlg
+
 hasVar :: Formula -> Bool
 hasVar = 
   let vAlg VarF{}            = True
@@ -299,6 +310,18 @@ hasVar =
       vAlg (UnaryF _ e)      = e 
       vAlg (BinaryF _ e1 e2) = e1 || e2
       vAlg (IteF e1 e2 e3)   = e1 || e2 || e3
+      vAlg (AllF _ e)        = e
+      vAlg _                 = False
+  in cata vAlg
+
+hasVarITE :: Formula -> Bool
+hasVarITE = 
+  let vAlg VarF{}            = True
+      vAlg PredF{}           = False
+      vAlg (SetLitF _ xs)    = or xs 
+      vAlg (UnaryF _ e)      = e 
+      vAlg (BinaryF _ e1 e2) = e1 || e2
+      vAlg (IteF e1 e2 e3)   = e2 || e3
       vAlg (AllF _ e)        = e
       vAlg _                 = False
   in cata vAlg

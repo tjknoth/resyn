@@ -393,12 +393,12 @@ intersection isBound (FunctionT x tArg tRes c) (FunctionT y tArg' tRes' c') = Fu
 
 -- Move cost annotations to next arrow or to scalar argument type before applying function
 shiftCost :: RType -> RType
-shiftCost (FunctionT x argT resT c) = 
-  if isScalarType resT
-    then FunctionT x (addPotential argT (IntLit c)) resT 0 
-    else FunctionT x argT (addCostToArrow resT) 0
-  where 
-    addCostToArrow (FunctionT y a r cost) = FunctionT y a r (cost + c)
+shiftCost (FunctionT x argT resT c) = FunctionT x (addPotential argT (IntLit c)) resT 0
+  --if isScalarType resT
+  --  then FunctionT x (addPotential argT (IntLit c)) resT 0 
+  --  else FunctionT x argT (addCostToArrow resT) 0
+  --where 
+  --  addCostToArrow (FunctionT y a r cost) = FunctionT y a r (cost + c)
 
 -- | Instantiate unknowns in a type
 -- TODO: eventually will need to instantiate potential variables as well

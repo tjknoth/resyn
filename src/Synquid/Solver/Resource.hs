@@ -7,6 +7,7 @@ module Synquid.Solver.Resource (
   allRMeasures,
   partitionType,
   getAnnotationStyle,
+  getPolynomialDomain,
   replaceCons
 ) where
 
@@ -142,7 +143,7 @@ embedAndProcessConstraint env extra rfml = do
 
 translateAndSimplify :: RMonad s => RawRFormula -> TCSolver s ProcessedRFormula 
 translateAndSimplify rfml = do 
-  writeLog 4 $ indent 4 $ pretty (_rformula rfml)
+  writeLog 3 $ indent 4 $ pretty (_rformula rfml)
   z3lit <- lift . lift . lift $ translate $ _rformula rfml
   return $ rfml {
     _knownAssumptions = (),
@@ -170,18 +171,24 @@ embedConstraint env rfml = do
   -- THIS IS A HACK -- need to ensure we grab the assumptions related to _v
   -- Note that sorts DO NOT matter here -- the embedder will ignore them.
   let vars' = Set.insert (Var AnyS valueVarName) $ Set.map (Var AnyS) vars
-  emb <- Set.filter (\f -> not (isUnknownForm f) && isNumeric f) <$> embedSynthesisEnv env (conjunction vars') True useMeasures
+  ass <- embedSynthesisEnv env (conjunction vars') True useMeasures
+  --emb <- Set.filter (\f -> not (isUnknownForm f) && isNumeric f) <$> embedSynthesisEnv env (conjunction vars') True useMeasures
+  --unk <- Set.filter isUnknownForm ass
+  let emb = Set.filter (not . isUnknownForm) ass
+  let unk = Set.filter isUnknownForm ass
   let axioms = if useMeasures
         then instantiateConsAxioms (env { _measureDefs = allRMeasures env } ) True Nothing (conjunction emb)
         else Set.empty
   let extra = Set.union emb axioms
-  return $ over knownAssumptions (Set.union extra) rfml 
+  return $ over knownAssumptions (Set.union extra) 
+         $ over unknownAssumptions (Set.union unk) rfml
 
 
 instantiateAssumptions :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
 instantiateAssumptions rfml = do 
   unknown' <- assignUnknowns (_unknownAssumptions rfml)
-  return $ set unknownAssumptions unknown' rfml
+  return $ set unknownAssumptions Set.empty
+         $ over knownAssumptions (Set.union unknown') rfml
 
 
 replaceCons f@Cons{} = mkFuncVar f
@@ -263,14 +270,7 @@ satisfyResources rfmls = do
 
       writeLog 3 $ text "Solving resource constraint with CEGIS:"
       writeLog 5 $ pretty $ conjunction $ map _rformula rfmls
-      --logUniversals  
-      --uvars <- Set.toList <$> use universalVars
-      --ufuns <- Set.toList <$> use universalMeasures
-      --capps <- Set.toList <$> use matchCases
-      writeLog 3 $ indent 2 $ text "Over universally quantified variables:"
-        <+> hsep (map pretty (map fst (uvars universals))) <+> text "and functions:"
-        <+> hsep (map pretty (map fst (ufuns universals)))
-
+      logUniversals  
       
       let go = solveWithCEGIS cMax rfmls universals []
       (sat, cstate') <- runInSolver $ runCEGIS go cstate
@@ -491,6 +491,17 @@ getAnnotationStyle' t =
       (False, True) -> Just Measure
       (True, _)     -> Just Variable
       _             -> Nothing
+
+getPolynomialDomain = getPolynomialDomain' . toMonotype
+
+getPolynomialDomain' t = 
+  let rforms = conjunction $ allRFormulas True t 
+  in case (hasVarITE rforms, hasPredITE rforms) of 
+      (True, True)  -> Just Both
+      (False, True) -> Just Measure
+      (True, _)     -> Just Variable
+      _             -> Nothing
+
 
 subtypeOp :: Monad s => TCSolver s (Formula -> Formula -> Formula)
 subtypeOp = do

@@ -318,13 +318,14 @@ mkPolynomialVar annotation f = textFrom f ++ "_" ++ toText annotation
 -- TODO: use NEW resource variables, not ALL
 updateCEGISState :: Monad s => TCSolver s CEGISState
 updateCEGISState = do  
+  pDomain <- asks _polynomialDomain
   ll <- asks _tcSolverLogLevel
   newRVs <- use resourceVars
   st <- use cegisState
   env <- use initEnv 
   aDomain <- fromJust <$> asks _cegisDomain
   let uMeasures = Map.assocs $ allRMeasures env
-  let init name info = initializePolynomial env aDomain uMeasures (name, info)
+  let init name info = initializePolynomial env pDomain uMeasures (name, info)
   let newPolynomials = Map.mapWithKey init newRVs
   let newCoefficients = concat $ Map.elems $ fmap coefficientsOf newPolynomials 
   let newParameters = Map.fromList $ zip newCoefficients initialCoefficients 
@@ -347,11 +348,12 @@ initCEGISState = CEGISState {
 
 -- Initialize polynomial over universally quantified @fmls@, using variable prefix @s@
 initializePolynomial :: Environment
-                     -> AnnotationDomain
+                     -> Maybe AnnotationDomain
                      -> [UMeasure]
                      -> (String, [Formula])
                      -> Polynomial
-initializePolynomial env sty ms (name, uvars) =
+initializePolynomial env Nothing _ (name, _) = [constantPTerm name]
+initializePolynomial env (Just sty) ms (name, uvars) =
   constantPTerm name : initializePolynomial' env sty ms (name, uvars)
 
 initializePolynomial' env Variable _ (name, uvars) = map (mkPTerm name) uvars

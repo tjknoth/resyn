@@ -198,7 +198,7 @@ isResourceVariable :: Environment
                    -> RType 
                    -> Bool 
 isResourceVariable _ _ Nothing _ _ = False
-isResourceVariable env tstate (Just adomain) x t = 
+isResourceVariable env tstate (Just _) x t = 
   (x /= valueVarName) && not (Map.member x (_unresolvedConstants env))
 
 
