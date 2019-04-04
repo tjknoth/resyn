@@ -38,6 +38,7 @@ Library
                     , Synquid.Solver.TypeConstraint
                     , Synquid.Solver.Util
                     , Synquid.Solver.Types
+                    , Synquid.Solver.LP
                     , Synquid.Stats
                     , Synquid.Synthesis.Explorer
                     , Synquid.Synthesis.Synthesizer
@@ -78,6 +79,8 @@ Library
                     , extra >= 1.4
                     , bifunctors >= 5.0
                     , recursion-schemes > 5.0
+                    , limp >= 0.3
+                    , limp-cbc >= 0.3
   
 
 executable resyn 

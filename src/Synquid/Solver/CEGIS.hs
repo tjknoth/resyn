@@ -101,8 +101,8 @@ verify rfmls universals = do
   cxPolynomials <- mapM mkCXPolynomial polys
   -- Replace resource variables with appropriate polynomials (with pending substitutions applied)
   --   and negate the resource constraint
-  let substRFml (RFormula _ _ _ subs pending f) = 
-        applyPolynomial mkCXPolynomial pending subs f
+  let substRFml (RFormula ass _ _ subs pending f) = 
+        applyPolynomial mkCXPolynomial pending subs (ass |=>| f)
   fml <- conjunction <$> mapM substRFml rfmls
   let cxQuery = fnot $ substitute prog fml
   writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
@@ -149,8 +149,8 @@ getRelevantPreds :: RMonad s
                  -> CEGISSolver s [ProcessedRFormula]
 getRelevantPreds rfmls cx = do
   prog <- use rprogram
-  let substRFml (RFormula _ _ _ subs pending f) =
-        applyPolynomial (mkEvalPolynomial prog cx) pending subs f
+  let substRFml (RFormula ass _ _ subs pending f) =
+        applyPolynomial (mkEvalPolynomial prog cx) pending subs (ass |=>| f)
   let check f = lift $ f `checkPredWithModel` model cx
   let isSatisfied rfml = check =<< substRFml rfml
   filterM (fmap not . isSatisfied) rfmls

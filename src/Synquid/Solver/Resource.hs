@@ -146,7 +146,7 @@ translateAndSimplify rfml = do
   writeLog 3 $ indent 4 $ pretty (_rformula rfml)
   z3lit <- lift . lift . lift $ translate $ _rformula rfml
   return $ rfml {
-    _knownAssumptions = (),
+    _knownAssumptions = ftrue,
     _unknownAssumptions = (),
     _rformula = z3lit
   }
@@ -236,12 +236,9 @@ applyAssumptions :: MonadHorn s
                  -> TCSolver s ProcessedRFormula
 applyAssumptions (RFormula known unknown preds substs pending fml) = do
   aDomain <- asks _cegisDomain
-  let ass = Set.union known unknown
-  let finalFml = if isNothing aDomain
-      then fml
-      else conjunction ass |=>| fml
-  writeLog 4 $ indent 4 $ pretty finalFml
-  return $ RFormula () () preds substs pending finalFml
+  let ass = conjunction $ Set.union known unknown
+  writeLog 4 $ indent 4 $ pretty (ass |=>| fml)
+  return $ RFormula ass () preds substs pending fml
 
 
 -- | Check the satisfiability of the generated resource constraints, instantiating universally
@@ -269,7 +266,7 @@ satisfyResources rfmls = do
       cstate <- updateCEGISState
 
       writeLog 3 $ text "Solving resource constraint with CEGIS:"
-      writeLog 5 $ pretty $ conjunction $ map _rformula rfmls
+      writeLog 5 $ pretty $ conjunction $ map assemble rfmls
       logUniversals  
       
       let go = solveWithCEGIS cMax rfmls universals []
@@ -501,6 +498,9 @@ getPolynomialDomain' t =
       (False, True) -> Just Measure
       (True, _)     -> Just Variable
       _             -> Nothing
+
+assemble :: ProcessedRFormula -> Formula
+assemble (RFormula known _ _ _ _ fml) = known |=>| fml
 
 
 subtypeOp :: Monad s => TCSolver s (Formula -> Formula -> Formula)

@@ -24,9 +24,9 @@ data AnnotationDomain =
 type PendingRSubst = Map Formula Substitution
 
 -- RFormula : Logical formula and meta-info
-data RFormula a = RFormula {
+data RFormula a b = RFormula {
   _knownAssumptions :: !a,
-  _unknownAssumptions :: !a,
+  _unknownAssumptions :: !b,
   _renamedPreds :: !(Set Formula),
   _varSubsts :: !Substitution,
   _pendingSubsts :: !PendingRSubst,
@@ -35,10 +35,10 @@ data RFormula a = RFormula {
 
 makeLenses ''RFormula
 
-type RawRFormula = RFormula (Set Formula) 
-type ProcessedRFormula = RFormula () 
+type RawRFormula = RFormula (Set Formula) (Set Formula)
+type ProcessedRFormula = RFormula Formula () 
 
-instance Pretty (RFormula a) where 
+instance Pretty (RFormula a b) where 
   pretty = pretty . _rformula
 
 {- Types for CEGIS solver -}

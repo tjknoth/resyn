@@ -16,8 +16,6 @@ import Synquid.Solver.Monad
 import Synquid.Solver.Types
 import Synquid.Util
 import Synquid.Pretty
-import Z3.Monad hiding (Z3Env, newEnv, Sort)
-import qualified Z3.Base as Z3
 
 import Data.Maybe
 import Data.List
@@ -33,6 +31,10 @@ import Control.Monad.Trans.State
 import Control.Lens hiding (both)
 import Debug.Trace
 import Control.Monad.State.Class (MonadState)
+import Z3.Monad hiding (Z3Env, newEnv, Sort)
+import qualified Z3.Base as Z3
+
+
 
 data Z3Env = Z3Env {
   envSolver  :: Z3.Solver,
@@ -108,14 +110,6 @@ instance RMonad Z3State where
       Just md -> do 
         mdStr <- modelToString md 
         return $ Just (md, mdStr)
-
-  solveAndGetAssignment fml vals = do 
-    (_, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
-    case m of 
-      Nothing -> return Nothing 
-      Just md -> do 
-        mstr <- modelToString md 
-        Just <$> modelGetAssignment vals (md, mstr)
 
   modelGetAssignment vals (m, _) = 
     Map.fromList . catMaybes <$> mapM (getAssignmentForVar m . Var astS) vals

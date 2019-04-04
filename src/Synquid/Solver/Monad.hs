@@ -32,7 +32,6 @@ class (Monad s, Applicative s) => MonadSMT s where
 
 class (Monad s, Applicative s) => RMonad s where
   solveAndGetModel :: Formula -> s (Maybe SMTModel)                                  -- ^ 'solveAndGetModel' @fml@: Evaluate @fml@ and, if satisfiable, return the model object
-  solveAndGetAssignment :: Formula -> [String] -> s (Maybe (Map String Formula))     -- ^ 'solveAndGetAssignment' @fml@ @vars@: If @fml@ is satsiable, return the assignments of variables @vars@
   modelGetAssignment :: [String] -> SMTModel -> s (Map String Formula)               -- ^ 'modelGetAssignment' @vals@ @m@: Get assignments of all variables @vals@ in model @m@
   checkPredWithModel :: Formula -> SMTModel -> s Bool                                -- ^ 'checkWithModel' @fml model@: check if boolean-sorted formula holds under a given model
   filterPreds :: [ProcessedRFormula] -> SMTModel -> s [ProcessedRFormula]
