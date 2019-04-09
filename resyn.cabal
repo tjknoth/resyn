@@ -38,7 +38,6 @@ Library
                     , Synquid.Solver.TypeConstraint
                     , Synquid.Solver.Util
                     , Synquid.Solver.Types
-                    , Synquid.Solver.LP
                     , Synquid.Stats
                     , Synquid.Synthesis.Explorer
                     , Synquid.Synthesis.Synthesizer

@@ -75,7 +75,7 @@ solveWithCEGIS n rfmls universals examples = do
       do
         -- Update example list, attempt to find parameterization holding on all examples
         rfmls' <- getRelevantPreds rfmls cx 
-        writeLog 5 $ text "Violated formulas:" </> pretty (map _rformula rfmls')
+        writeLog 5 $ text "Violated formulas:" </> pretty (map bodyFml rfmls')
         (examples', params) <- synthesize rfmls' examples cx
         case params of
           Nothing -> do
@@ -101,8 +101,7 @@ verify rfmls universals = do
   cxPolynomials <- mapM mkCXPolynomial polys
   -- Replace resource variables with appropriate polynomials (with pending substitutions applied)
   --   and negate the resource constraint
-  let substRFml (RFormula ass _ _ subs pending f) = 
-        applyPolynomial mkCXPolynomial pending subs (ass |=>| f)
+  let substRFml = applyPolynomial mkCXPolynomial completeFml
   fml <- conjunction <$> mapM substRFml rfmls
   let cxQuery = fnot $ substitute prog fml
   writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
@@ -121,8 +120,7 @@ verifyOnePass :: RMonad s
               -> CEGISSolver s (Maybe ([ProcessedRFormula], Counterexample))
 verifyOnePass rfmls = do 
   prog <- use rprogram
-  let substRFml (RFormula _ _ _ subs pending f) = 
-        applyPolynomial mkCXPolynomial pending subs f 
+  let substRFml = applyPolynomial mkCXPolynomial completeFml
   fml <- conjunction <$> mapM substRFml rfmls 
   let cxQuery = fnot $ substitute prog fml
   writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
@@ -149,8 +147,7 @@ getRelevantPreds :: RMonad s
                  -> CEGISSolver s [ProcessedRFormula]
 getRelevantPreds rfmls cx = do
   prog <- use rprogram
-  let substRFml (RFormula ass _ _ subs pending f) =
-        applyPolynomial (mkEvalPolynomial prog cx) pending subs (ass |=>| f)
+  let substRFml = applyPolynomial (mkEvalPolynomial prog cx) completeFml
   let check f = lift $ f `checkPredWithModel` model cx
   let isSatisfied rfml = check =<< substRFml rfml
   filterM (fmap not . isSatisfied) rfmls
@@ -181,20 +178,21 @@ applyCounterexample :: RMonad s
                     -> Counterexample
                     -> CEGISSolver s Formula 
 applyCounterexample rfmls cx = do 
-  let substRFml (RFormula _ _ _ subs pending f) = 
-        applyPolynomial (mkParamPolynomial cx) pending subs f
+  let substRFml = applyPolynomial (mkParamPolynomial cx) bodyFml
   fml <- conjunction <$> mapM substRFml rfmls
   return $ substitute (allVariables cx) fml
 
 -- TODO: are examples ever applied to the actual variables?? not in polynomials?
 applyPolynomial :: RMonad s 
                 => (Polynomial -> CEGISSolver s Formula)
-                -> Map Formula Substitution
-                -> Substitution
-                -> Formula 
+                -> (ProcessedRFormula -> Formula)
+                -> ProcessedRFormula
                 -> CEGISSolver s Formula
-applyPolynomial mkPolynomial pendingSubs subs f = 
-  let sub = applyPolynomial mkPolynomial pendingSubs subs in 
+applyPolynomial mkPolynomial mkFormula rfml =
+  applyPolynomial' mkPolynomial (_pendingSubsts rfml) (_varSubsts rfml) (mkFormula rfml)
+
+applyPolynomial' mkPolynomial pendingSubs subs f = 
+  let sub = applyPolynomial' mkPolynomial pendingSubs subs in 
   case f of 
     v@(Var s x)   -> do 
       polys <- use polynomials

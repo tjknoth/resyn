@@ -143,12 +143,12 @@ embedAndProcessConstraint env extra rfml = do
 
 translateAndSimplify :: RMonad s => RawRFormula -> TCSolver s ProcessedRFormula 
 translateAndSimplify rfml = do 
-  writeLog 3 $ indent 4 $ pretty (_rformula rfml)
-  z3lit <- lift . lift . lift $ translate $ _rformula rfml
+  writeLog 3 $ indent 4 $ pretty (bodyFml rfml)
+  z3lit <- lift . lift . lift $ translate $ bodyFml rfml
   return $ rfml {
     _knownAssumptions = ftrue,
     _unknownAssumptions = (),
-    _rformula = z3lit
+    _rconstraints = z3lit
   }
 
 -- Insert extra assumption, if necessary

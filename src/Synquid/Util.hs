@@ -155,7 +155,7 @@ setPartitionM f s = both Set.fromList `liftM` partitionM f (Set.toList s)
 -- | 'pairGetter' @g1 g2@ : combine two getters into one that gets a pair
 pairGetter g1 g2 = to (\x -> (view g1 x, view g2 x))
 
-asInteger :: String -> Maybe Integer
+asInteger :: String -> Maybe Int
 asInteger s = if all isDigit s then Just $ read s else Nothing
 
 {- Debug output -}

@@ -125,7 +125,7 @@ type Substitution = Map Id Formula
 -- | Formulas of the refinement logic
 data Formula =
   BoolLit !Bool |                      -- ^ Boolean literal
-  IntLit !Integer |                    -- ^ Integer literal
+  IntLit !Int |                    -- ^ Integer literal
   SetLit !Sort ![Formula] |            -- ^ Set literal ([1, 2, 3])
   Var !Sort !Id |                      -- ^ Input variable (universally quantified first-order variable)
   Unknown !Substitution !Id |          -- ^ Predicate unknown (with a pending substitution)

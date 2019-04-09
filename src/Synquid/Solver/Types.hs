@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, DeriveFunctor, DataKinds #-}
 
 -- | Different types used to interface between the different solvers
 module Synquid.Solver.Types where
@@ -11,6 +11,31 @@ import Data.Set (Set)
 import Data.Map (Map)
 import qualified Z3.Monad as Z3
 import Control.Lens
+import Numeric.Limp.Program.Linear
+import Numeric.Limp.Program.ResultKind (K(..))
+import Numeric.Limp.Rep.IntDouble
+import qualified Numeric.Limp.Program.Constraint as C
+
+-- Resource Constraint body AST
+
+data LinearExp a = 
+    LA !a !a               -- Atom: product of coefficient and variable
+  | LS !Int ![LinearExp a] -- Sum of atoms
+  deriving (Eq, Ord, Show, Functor)
+
+data LinearConstraint a =
+  LC !BinOp !(LinearExp a) !(LinearExp a)
+  deriving (Eq, Ord, Show, Functor)
+
+type FmlLE = LinearExp Formula
+type FmlLC = LinearConstraint Formula
+
+instance Pretty a => Pretty (LinearExp a) where 
+  pretty (LA x y) = pretty x <+> text "*" <+> pretty y
+  pretty (LS c xs) = pretty c <+> text "+" <+> (hsep . punctuate (text "+")) (map pretty xs)
+
+instance Pretty a => Pretty (LinearConstraint a) where 
+  pretty (LC op f g) = pretty f <+> pretty op <+> pretty g
 
 -- | Wrapper for Z3 Model data structure
 type SMTModel = (Z3.Model, String)
@@ -30,7 +55,7 @@ data RFormula a b = RFormula {
   _renamedPreds :: !(Set Formula),
   _varSubsts :: !Substitution,
   _pendingSubsts :: !PendingRSubst,
-  _rformula :: !Formula
+  _rconstraints :: ![FmlLC]
 } deriving (Eq, Show, Ord)
 
 makeLenses ''RFormula
@@ -39,7 +64,7 @@ type RawRFormula = RFormula (Set Formula) (Set Formula)
 type ProcessedRFormula = RFormula Formula () 
 
 instance Pretty (RFormula a b) where 
-  pretty = pretty . _rformula
+  pretty = pretty . _rconstraints
 
 {- Types for CEGIS solver -}
 
@@ -84,3 +109,73 @@ data CEGISState = CEGISState {
 } -- deriving (Show, Eq, Ord)
 
 makeLenses ''CEGISState
+
+-----------------------------------------------
+-----------------------------------------------
+-- Linear expressions as potential annotations
+-----------------------------------------------
+-----------------------------------------------
+
+($=$)  = LC Eq
+($>=$) = LC Ge 
+($<=$) = LC Le 
+($>$)  = LC Gt
+($<$)  = LC Lt
+
+makeLE :: Formula -> FmlLE
+makeLE = LA (IntLit 1)
+
+leToFml :: FmlLE -> Formula 
+leToFml (LA f g) = f |*| g
+leToFml (LS const fs)  = IntLit const |+| sumFormulas (map leToFml fs)
+
+lcToFml :: FmlLC -> Formula 
+lcToFml (LC op fs gs) = Binary op (leToFml fs) (leToFml gs)
+
+bodyFml :: RFormula a b -> Formula 
+bodyFml = conjunction . map lcToFml . _rconstraints
+
+completeFml :: RFormula Formula b -> Formula
+completeFml f = _knownAssumptions f |=>| bodyFml f
+
+-- Combine literals when possible
+multiplyLE :: Formula -> FmlLE -> FmlLE
+multiplyLE f (LA coeff g) = 
+  case (f, coeff) of 
+    (IntLit x, IntLit y) -> LA (IntLit (x * y)) g
+    _                    -> LA (f |*| coeff) g
+multiplyLE f (LS c fs) = 
+  case f of 
+    (IntLit x) -> LS (c * x) $ map (multiplyLE f) fs
+    _          -> LS 0 $ LA (IntLit c) f : map (multiplyLE f) fs
+
+negateLE :: FmlLE -> FmlLE
+negateLE = multiplyLE (IntLit (-1))
+
+addLE :: FmlLE -> FmlLE -> FmlLE
+addLE f@LA{}    g@LA{}    = LS 0 [f, g]
+addLE f@LA{}    (LS c fs) = LS c (f:fs)
+addLE (LS c fs) f@LA{}    = LS c (f:fs)
+addLE (LS c fs) (LS d gs) = LS (c + d) (fs ++ gs)
+
+subtractLE :: FmlLE -> Formula -> FmlLE
+subtractLE le f = addLE le (negateLE (makeLE f))
+
+lcToConstraint :: FmlLC -> C.Constraint String r IntDouble
+lcToConstraint (LC op f g) = leToLinear f `op'` leToLinear g
+  where 
+    op' = case op of 
+      Eq -> (C.:==)
+      Ge -> (C.:>=) 
+      Le -> (C.:<=) 
+      Gt -> (C.:>)
+      Lt -> (C.:<)
+
+leToLinear :: FmlLE -> Linear String r IntDouble 'KZ 
+leToLinear f@LA{}    = LZ [makeAtom f] (Z 0)
+leToLinear (LS c fs) = LZ (map makeAtom fs) (Z c)
+
+makeAtom :: FmlLE -> (String, Z IntDouble)
+makeAtom (LA (IntLit x) (Var _ name)) = (name, Z x)
+makeAtom a@LA{} = error $ show $ text "makeAtom: non-canonical atomic term" <+> pretty a
+makeAtom a      = error $ show $ text "makeAtom: non-atomic term" <+> pretty a

@@ -25,7 +25,7 @@ data BaseType r p =
 -- | Type skeletons (parametrized by refinements, potentials)
 data TypeSkeleton r p =
   ScalarT !(BaseType r p) !r !p |
-  FunctionT !Id !(TypeSkeleton r p) !(TypeSkeleton r p) !Integer |
+  FunctionT !Id !(TypeSkeleton r p) !(TypeSkeleton r p) !Int |
   LetT !Id !(TypeSkeleton r p) !(TypeSkeleton r p) |
   AnyT
   deriving (Show, Eq, Ord)
@@ -84,7 +84,7 @@ equalShape t t' = t == t'
 
 defPotential = IntLit 0
 defMultiplicity = IntLit 1 
-defCost = 0
+defCost = 0 :: Int
 
 potentialPrefix = "p"
 multiplicityPrefix = "m"
