@@ -48,9 +48,8 @@ solveWithCEGIS :: RMonad s
                => Int
                -> [ProcessedRFormula]
                -> Universals
-               -> [Formula]
                -> CEGISSolver s Bool
-solveWithCEGIS 0 rfmls universals _ = do
+solveWithCEGIS 0 rfmls universals = do
   -- Base case: If there is a counterexample, @fml@ is UNSAT, SAT otherwise
   counterexample <- verify rfmls universals 
   case counterexample of
@@ -60,7 +59,7 @@ solveWithCEGIS 0 rfmls universals _ = do
       writeLog 4 $ text "Last counterexample:" <+> text (maybe "" (snd . model) counterexample)
       return False
 
-solveWithCEGIS n rfmls universals examples = do
+solveWithCEGIS n rfmls universals = do
   -- Attempt to find point for which current parameterization fails
   counterexample <- verify rfmls universals 
   --res <- verifyOnePass rfmls 
@@ -76,7 +75,7 @@ solveWithCEGIS n rfmls universals examples = do
         -- Update example list, attempt to find parameterization holding on all examples
         rfmls' <- getRelevantPreds rfmls cx 
         writeLog 5 $ text "Violated formulas:" </> pretty (map bodyFml rfmls')
-        (examples', params) <- synthesize rfmls' examples cx
+        params <- synthesize rfmls' cx
         case params of
           Nothing -> do
             writeLog 3 $ text "CEGIS failed with" <+> pretty n <+> text "iterations left"
@@ -85,7 +84,8 @@ solveWithCEGIS n rfmls universals examples = do
             updateProgram p
             pstr <- printParams 
             writeLog 6 $ text "Params:" <+> pstr
-            solveWithCEGIS (n - 1) rfmls universals examples' 
+            solveWithCEGIS (n - 1) rfmls universals
+
 
 
 -- | 'verify' @fml universals polynomials program@
@@ -156,21 +156,20 @@ getRelevantPreds rfmls cx = do
 --   Find a valuation for all coefficients such that @fml@ holds on all @examples@
 synthesize :: RMonad s
            => [ProcessedRFormula]
-           -> [Formula]
            -> Counterexample
-           -> CEGISSolver s ([Formula], Maybe ResourceSolution)
-synthesize rfmls pastExamples counterexample = do
+           -> CEGISSolver s (Maybe ResourceSolution)
+synthesize rfmls counterexample = do
   cxfml <- applyCounterexample rfmls counterexample
- -- Evaluate the measure applications within the model from the counterexample
+  counterexamples %= (cxfml :)
+  paramQuery <- use counterexamples
+  -- Evaluate the measure applications within the model from the counterexample
   -- Assert that any parameterization must hold for all examples
-  let paramQuery = cxfml : pastExamples
   -- Collect all parameters
   allCoefficients <- use coefficients
-  writeLog 7 $ text "CEGIS param query:" </> pretty paramQuery
+  writeLog 7 $ text "CEGIS param query:" </> pretty paramQuery 
   model <- lift $ solveAndGetModel (conjunction paramQuery)
   writeLog 8 $ text "Param model:" <+> text (maybe "" snd model)
-  sol <- lift . sequence $ (modelGetAssignment allCoefficients <$> model)
-  return (paramQuery, sol)
+  lift . sequence $ (modelGetAssignment allCoefficients <$> model)
 
 -- | Substitute a counterexample into a set of resource formulas
 applyCounterexample :: RMonad s 
@@ -313,7 +312,6 @@ mkPolynomialVar annotation f = textFrom f ++ "_" ++ toText annotation
 
 -- Given a set of universally quantified expressions and newly generated resource
 --   variables, update the state of the CEGIS solver
--- TODO: use NEW resource variables, not ALL
 updateCEGISState :: Monad s => TCSolver s CEGISState
 updateCEGISState = do  
   pDomain <- asks _polynomialDomain
@@ -341,7 +339,8 @@ initCEGISState = CEGISState {
     _rprogram = Map.empty,
     _polynomials = Map.empty,
     _coefficients = [],
-    _cegisSolverLogLevel = 0
+    _cegisSolverLogLevel = 0,
+    _counterexamples = []
   }
 
 -- Initialize polynomial over universally quantified @fmls@, using variable prefix @s@

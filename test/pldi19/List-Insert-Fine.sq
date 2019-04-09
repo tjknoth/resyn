@@ -20,10 +20,14 @@ measure numgt :: x: a -> IList a -> {Int | _v >= 0} where
 qualifier { x < y }
 
 insert :: x: a -> xs: {IList a| |numgt x _v} -[1]-> {IList a | ielems _v == ielems xs + [x]}
-insert = ?? {- \x. \xs. 
+insert = \x. \xs. 
   match xs with
     INil -> ICons x INil
     ICons y ys -> 
-      if x > y
+      if x < y 
+        then ICons x (ICons y ys)
+        else ICons y (insert x ys)
+{-      if x > y
         then ICons y (insert x ys) 
-        else ICons x (ICons y ys) -}
+        else ICons x (ICons y ys) 
+-}

@@ -33,6 +33,7 @@ Library
                     , Synquid.Resolver
                     , Synquid.Solver.CEGIS
                     , Synquid.Solver.HornClause
+                    , Synquid.Solver.LP
                     , Synquid.Solver.Monad
                     , Synquid.Solver.Resource
                     , Synquid.Solver.TypeConstraint

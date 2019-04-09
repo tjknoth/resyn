@@ -594,6 +594,13 @@ instance Ord Candidate where
 ---------------------------------------
 ---------------------------------------
 
+negateFml :: Formula -> Formula
+negateFml x@IntLit{}        = Unary Neg x
+negateFml x@Var{}           = Unary Neg x
+negateFml (Ite g t f)       = Ite g (negateFml t) (negateFml f)
+negateFml (Binary Plus f g) = Binary Plus (negateFml f) (negateFml g)
+negateFml f                 = error $ "negateFml: Unexpected expression " ++ show f
+
 -- 'transformFml' @transform f@ : apply some transformation @transform@ to each 
 --    node in the Formula AST
 transformFml :: (Formula -> Formula) -> Formula -> Formula 

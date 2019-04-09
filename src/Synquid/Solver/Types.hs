@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, DeriveFunctor, DataKinds #-}
+{-# LANGUAGE TemplateHaskell, DeriveFunctor #-}
 
 -- | Different types used to interface between the different solvers
 module Synquid.Solver.Types where
@@ -11,10 +11,6 @@ import Data.Set (Set)
 import Data.Map (Map)
 import qualified Z3.Monad as Z3
 import Control.Lens
-import Numeric.Limp.Program.Linear
-import Numeric.Limp.Program.ResultKind (K(..))
-import Numeric.Limp.Rep.IntDouble
-import qualified Numeric.Limp.Program.Constraint as C
 
 -- Resource Constraint body AST
 
@@ -55,7 +51,7 @@ data RFormula a b = RFormula {
   _renamedPreds :: !(Set Formula),
   _varSubsts :: !Substitution,
   _pendingSubsts :: !PendingRSubst,
-  _rconstraints :: ![FmlLC]
+  _rconstraints :: !Formula -- ![FmlLC]
 } deriving (Eq, Show, Ord)
 
 makeLenses ''RFormula
@@ -105,7 +101,8 @@ data CEGISState = CEGISState {
   _rprogram :: !ResourceSolution,
   _polynomials :: !PolynomialSkeletons,
   _coefficients :: ![String],
-  _cegisSolverLogLevel :: !Int
+  _cegisSolverLogLevel :: !Int,
+  _counterexamples :: ![Formula]
 } -- deriving (Show, Eq, Ord)
 
 makeLenses ''CEGISState
@@ -133,7 +130,7 @@ lcToFml :: FmlLC -> Formula
 lcToFml (LC op fs gs) = Binary op (leToFml fs) (leToFml gs)
 
 bodyFml :: RFormula a b -> Formula 
-bodyFml = conjunction . map lcToFml . _rconstraints
+bodyFml = _rconstraints -- conjunction . map lcToFml . _rconstraints
 
 completeFml :: RFormula Formula b -> Formula
 completeFml f = _knownAssumptions f |=>| bodyFml f
@@ -160,22 +157,3 @@ addLE (LS c fs) (LS d gs) = LS (c + d) (fs ++ gs)
 
 subtractLE :: FmlLE -> Formula -> FmlLE
 subtractLE le f = addLE le (negateLE (makeLE f))
-
-lcToConstraint :: FmlLC -> C.Constraint String r IntDouble
-lcToConstraint (LC op f g) = leToLinear f `op'` leToLinear g
-  where 
-    op' = case op of 
-      Eq -> (C.:==)
-      Ge -> (C.:>=) 
-      Le -> (C.:<=) 
-      Gt -> (C.:>)
-      Lt -> (C.:<)
-
-leToLinear :: FmlLE -> Linear String r IntDouble 'KZ 
-leToLinear f@LA{}    = LZ [makeAtom f] (Z 0)
-leToLinear (LS c fs) = LZ (map makeAtom fs) (Z c)
-
-makeAtom :: FmlLE -> (String, Z IntDouble)
-makeAtom (LA (IntLit x) (Var _ name)) = (name, Z x)
-makeAtom a@LA{} = error $ show $ text "makeAtom: non-canonical atomic term" <+> pretty a
-makeAtom a      = error $ show $ text "makeAtom: non-atomic term" <+> pretty a

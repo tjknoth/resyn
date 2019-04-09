@@ -314,7 +314,7 @@ addPotential (LetT x tDef tBody) f    = LetT x tDef (addPotential tBody f)
 addPotential t _ = t
 
 subtractPotential :: RType -> Formula -> RType
-subtractPotential (ScalarT base ref pot) f = ScalarT base ref (addFormulas pot (fneg f))
+subtractPotential (ScalarT base ref pot) f = ScalarT base ref (addFormulas pot (fneg f)) -- (negateFml f))
 subtractPotential (LetT x tDef tBody) f = LetT x tDef (subtractPotential tBody f)
 subtractPotential t _ = t
 

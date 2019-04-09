@@ -67,9 +67,9 @@ solveResourceConstraints accConstraints constraints = do
     b <- satisfyResources (accConstraints ++ constraintList)
     let result = if b then "SAT" else "UNSAT"
     writeLog 5 $ nest 4 $ text "Accumulated resource constraints:"
-      $+$ pretty (map _rformula accConstraints)
+      $+$ pretty (map bodyFml accConstraints)
     writeLog 3 $ nest 4 $ text "Solved resource constraint after conjoining formulas:"
-      <+> text result $+$ prettyConjuncts (map _rformula constraintList)
+      <+> text result $+$ prettyConjuncts (map bodyFml constraintList)
     return $ if b
       then Just constraintList -- $ Just $ if hasUniversals
       else Nothing
@@ -135,14 +135,14 @@ embedAndProcessConstraint env extra rfml = do
        >=> applyAssumptions
   if hasUnivs
     then go rfml
-    else translateAndSimplify rfml
+    else translateAndFinalize rfml
     {- else return $ rfml {
       _knownAssumptions = (),
       _unknownAssumptions = ()
     } -}
 
-translateAndSimplify :: RMonad s => RawRFormula -> TCSolver s ProcessedRFormula 
-translateAndSimplify rfml = do 
+translateAndFinalize :: RMonad s => RawRFormula -> TCSolver s ProcessedRFormula 
+translateAndFinalize rfml = do 
   writeLog 3 $ indent 4 $ pretty (bodyFml rfml)
   z3lit <- lift . lift . lift $ translate $ bodyFml rfml
   return $ rfml {
@@ -205,7 +205,7 @@ elaborateAssumptions rfml = do
   res <- mapM instantiateForall $ Set.toList (_knownAssumptions rfml)
   let instantiatedEmb = map fst res
   -- Generate variables for predicate applications
-  let bodyPreds = gatherPreds (_rformula rfml)
+  let bodyPreds = gatherPreds (_rconstraints rfml)
   -- Generate congruence axioms
   let allPreds = Set.unions $ bodyPreds : map snd res
   let congruenceAxioms = generateCongAxioms allPreds
@@ -221,7 +221,7 @@ updateVars (rfml, allPreds) = do
   universalMeasures %= Set.union (Set.map (transformFml mkFuncVar) (Set.map (substitute substs) allPreds))
   return $ set renamedPreds (format (cons `Set.union` allPreds))
          $ over knownAssumptions (Set.map (substitute substs)) 
-         $ over rformula (substitute substs) rfml
+         $ over rconstraints (substitute substs) rfml
 
 
 formatVariables :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
@@ -229,7 +229,7 @@ formatVariables rfml = do
   let update = Set.map (transformFml mkFuncVar)
   return $ over unknownAssumptions update 
          $ over knownAssumptions update 
-         $ over rformula (transformFml mkFuncVar) rfml
+         $ over rconstraints (transformFml mkFuncVar) rfml
 
 applyAssumptions :: MonadHorn s
                  => RawRFormula
@@ -237,8 +237,8 @@ applyAssumptions :: MonadHorn s
 applyAssumptions (RFormula known unknown preds substs pending fml) = do
   aDomain <- asks _cegisDomain
   let ass = conjunction $ Set.union known unknown
-  writeLog 4 $ indent 4 $ pretty (ass |=>| fml)
-  return $ RFormula ass () preds substs pending fml
+  writeLog 4 $ indent 4 $ pretty (ass |=>| fml) -- conjunction (map lcToFml lcs))
+  return $ RFormula ass () preds substs pending fml 
 
 
 -- | Check the satisfiability of the generated resource constraints, instantiating universally
@@ -251,7 +251,7 @@ satisfyResources rfmls = do
   noUnivs <- isNothing <$> asks _cegisDomain
   if noUnivs
     then do
-      let fml = conjunction $ map _rformula rfmls
+      let fml = conjunction $ map bodyFml rfmls
       model <- runInSolver $ solveAndGetModel fml
       case model of
         Nothing -> return False
@@ -266,10 +266,10 @@ satisfyResources rfmls = do
       cstate <- updateCEGISState
 
       writeLog 3 $ text "Solving resource constraint with CEGIS:"
-      writeLog 5 $ pretty $ conjunction $ map assemble rfmls
+      writeLog 5 $ pretty $ conjunction $ map completeFml rfmls
       logUniversals  
       
-      let go = solveWithCEGIS cMax rfmls universals []
+      let go = solveWithCEGIS cMax rfmls universals
       (sat, cstate') <- runInSolver $ runCEGIS go cstate
       storeCEGISState cstate'
       return sat
@@ -498,9 +498,6 @@ getPolynomialDomain' t =
       (False, True) -> Just Measure
       (True, _)     -> Just Variable
       _             -> Nothing
-
-assemble :: ProcessedRFormula -> Formula
-assemble (RFormula known _ _ _ _ fml) = known |=>| fml
 
 
 subtypeOp :: Monad s => TCSolver s (Formula -> Formula -> Formula)
