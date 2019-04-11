@@ -399,16 +399,6 @@ shareFreePotential :: (MonadHorn s, MonadSMT s)
                    -> Explorer s (Formula, Formula)
 shareFreePotential env fp@(Ite g _ _) =
   error "shareFreePotential: conditional expression"
-  {-do
-  fp1 <- freshFreePotential env
-  fp2 <- freshFreePotential env
-  fp3 <- freshFreePotential env
-  fp4 <- freshFreePotential env
-  let fp' = Ite g fp1 fp3
-  let fp'' = Ite g fp2 fp4
-  addConstraint $ SharedForm env fp fp' fp'' label
-  return (fp', fp'')
-  -}
 shareFreePotential env fp = do
   fp' <- freshFreePotential env
   fp'' <- freshFreePotential env
@@ -489,24 +479,7 @@ freshCondFP env (Ite g f1 f2) = do
   return $ Ite g f1' f2'
 freshCondFP env _ = freshCondFreePotential env
 
-{-
-safeFreshPotentials :: MonadHorn s
-                    => Environment
-                    -> Bool
-                    -> Explorer s SymbolMap
-safeFreshPotentials env isTransfer = do
-  let ghosts = env ^. ghostSymbols
-  let replace (x, sch) = if x `Set.member` ghosts
-      then return (x, sch)
-      else do
-        sch' <- freshPotentials env sch isTransfer
-        return (x, sch')
-  let syms = env ^. symbols
-  let scalars = Map.assocs $ fromMaybe Map.empty $ Map.lookup 0 syms
-  scalars' <- mapM replace scalars
-  return $ Map.insert 0 (Map.fromList scalars') syms
--}
-
+-- When sharing, share 0 \/ 0,0 to reduce number of constraints
 freshSharingPotential :: MonadHorn s => Environment -> Explorer s SymbolMap
 freshSharingPotential env = do 
   let ghosts = env ^. ghostSymbols
@@ -520,6 +493,7 @@ freshSharingPotential env = do
   scalars' <- mapM replace scalars 
   return $ Map.insert 0 (Map.fromList scalars') syms
 
+-- When transferring, replace top-level annotations with zeros -- all potential flows into "free potential"
 zeroTopLevel :: Environment -> SymbolMap
 zeroTopLevel env = 
   let remove (ScalarT b r _) = ScalarT b r fzero 

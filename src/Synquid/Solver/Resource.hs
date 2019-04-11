@@ -330,7 +330,7 @@ redistribute envIn envOut = do
   -- Assert (fresh) potentials in output context are well-formed
   let wellFormedAssertions = wellFormedFP ++ wellFormed envOut
   --Assert that top-level potentials are re-partitioned
-  -- let transferAssertions = (envSum envIn |+| fpIn |+| cfpIn) |=| (envSum envOut |+| fpOut |+| cfpOut)
+  let transferAssertions = (envSum envIn |+| fpIn |+| cfpIn) |=| (envSum envOut |+| fpOut |+| cfpOut)
   -- No pending substitutions for now
   let substitutions e = Map.foldlWithKey generateSubstFromType Map.empty (toMonotype <$> nonGhostScalars e) 
   return (Map.union (substitutions envIn) (substitutions envOut), transferAssertions : wellFormedAssertions)
