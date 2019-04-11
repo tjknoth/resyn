@@ -51,7 +51,7 @@ data RFormula a b = RFormula {
   _renamedPreds :: !(Set Formula),
   _varSubsts :: !Substitution,
   _pendingSubsts :: !PendingRSubst,
-  _rconstraints :: !Formula -- ![FmlLC]
+  _rconstraints :: ![Formula] -- ![FmlLC]
 } deriving (Eq, Show, Ord)
 
 makeLenses ''RFormula
@@ -130,7 +130,7 @@ lcToFml :: FmlLC -> Formula
 lcToFml (LC op fs gs) = Binary op (leToFml fs) (leToFml gs)
 
 bodyFml :: RFormula a b -> Formula 
-bodyFml = _rconstraints -- conjunction . map lcToFml . _rconstraints
+bodyFml = conjunction . _rconstraints -- conjunction . map lcToFml . _rconstraints
 
 completeFml :: RFormula Formula b -> Formula
 completeFml f = _knownAssumptions f |=>| bodyFml f

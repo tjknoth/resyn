@@ -226,8 +226,8 @@ varsOf =
       vSetRAlg (PredF _ _ xs)  = combine xs 
       vSetRAlg (ConsF _ _ xs)  = combine xs 
       vSetRAlg (AllF x e)      = Set.delete (fst x) (snd e)
-      vSetRAlg f               = Set.empty
-  in para vSetRAlg 
+      vSetRAlg f               = Set.empty in
+  para vSetRAlg 
 
 
 unknownsOf :: Formula -> Set Formula 
@@ -240,8 +240,8 @@ unknownsOf =
       uSetAlg (PredF _ _ xs)  = Set.unions xs 
       uSetAlg (ConsF _ _ xs)  = Set.unions xs 
       uSetAlg (AllF _ e)      = e 
-      uSetAlg f               = Set.empty
-  in cata uSetAlg
+      uSetAlg f               = Set.empty in
+  cata uSetAlg
 
 
 -- | 'posNegUnknowns' @fml@: sets of positive and negative predicate unknowns in @fml@
@@ -277,8 +277,8 @@ predsOf =
       pSetAlg (BinaryF _ x y) = x `Set.union` y
       pSetAlg (IteF x y z)    = Set.unions [x, y, z] 
       pSetAlg (AllF _ e)      = e 
-      pSetAlg f               = Set.empty
-  in cata pSetAlg 
+      pSetAlg f               = Set.empty in
+  cata pSetAlg 
 
 hasPred :: Formula -> Bool 
 hasPred = 
@@ -288,8 +288,8 @@ hasPred =
       pAlg (BinaryF _ e1 e2) = e1 || e2
       pAlg (IteF e1 e2 e3)   = e1 || e2 || e3
       pAlg (AllF _ e)        = e
-      pAlg _                 = False
-  in cata pAlg
+      pAlg _                 = False in
+  cata pAlg
 
 hasPredITE :: Formula -> Bool 
 hasPredITE = 
@@ -299,8 +299,8 @@ hasPredITE =
       pAlg (BinaryF _ e1 e2) = e1 || e2
       pAlg (IteF e1 e2 e3)   = e2 || e3
       pAlg (AllF _ e)        = e
-      pAlg _                 = False
-  in cata pAlg
+      pAlg _                 = False in
+  cata pAlg
 
 hasVar :: Formula -> Bool
 hasVar = 
@@ -311,8 +311,8 @@ hasVar =
       vAlg (BinaryF _ e1 e2) = e1 || e2
       vAlg (IteF e1 e2 e3)   = e1 || e2 || e3
       vAlg (AllF _ e)        = e
-      vAlg _                 = False
-  in cata vAlg
+      vAlg _                 = False in
+  cata vAlg
 
 hasVarITE :: Formula -> Bool
 hasVarITE = 
@@ -323,8 +323,8 @@ hasVarITE =
       vAlg (BinaryF _ e1 e2) = e1 || e2
       vAlg (IteF e1 e2 e3)   = e2 || e3
       vAlg (AllF _ e)        = e
-      vAlg _                 = False
-  in cata vAlg
+      vAlg _                 = False in
+  cata vAlg
 
 isNumeric :: Formula -> Bool
 isNumeric = 
@@ -336,8 +336,8 @@ isNumeric =
       vAlg (BinaryF _ e1 e2) = e1 && e2
       vAlg (IteF e1 e2 e3)   = e1 && e2 && e3
       vAlg (AllF _ e)        = e
-      vAlg _                 = True
-  in cata vAlg
+      vAlg _                 = True in
+  cata vAlg
 
 
 -- | 'leftHandSide' @fml@ : left-hand side of a binary expression
@@ -376,8 +376,8 @@ isExecutable =
       exAlg AllF{}          = False
       exAlg (UnaryF _ x)    = x
       exAlg (BinaryF _ x y) = x && y
-      exAlg _               = True
-  in cata exAlg
+      exAlg _               = True in
+  cata exAlg
 
 -- | 'substitute' @subst fml@: Replace first-order variables in @fml@ according to @subst@
 substitute :: Substitution -> Formula -> Formula
@@ -400,8 +400,8 @@ substitute subst =
               then error $ unwords ["Scoped variable clashes with substitution variable", x]
               else All v (snd e) 
           _     -> All v' (snd e)
-      sAlg f = embedLit "substitute" f
-  in para sAlg
+      sAlg f = embedLit "substitute" f in
+  para sAlg
 
 -- | Compose substitutions
 composeSubstitutions old new =
@@ -421,14 +421,14 @@ sortSubstituteFml subst =
       sAlg (UnknownF s name) = Unknown (fmap (sortSubstituteFml subst) s) name 
       sAlg (PredF s name es) = Pred (sub s) name es
       sAlg (ConsF s name es) = Cons (sub s) name es 
-      sAlg base              = embed base
-  in cata sAlg
+      sAlg base              = embed base in
+  cata sAlg
 
 
 noncaptureSortSubstFml :: [Id] -> [Sort] -> Formula -> Formula
 noncaptureSortSubstFml sVars sArgs fml =
-  let fmlFresh = sortSubstituteFml (Map.fromList $ zip sVars (map VarS distinctTypeVars)) fml
-  in sortSubstituteFml (Map.fromList $ zip distinctTypeVars sArgs) fmlFresh
+  let fmlFresh = sortSubstituteFml (Map.fromList $ zip sVars (map VarS distinctTypeVars)) fml in
+  sortSubstituteFml (Map.fromList $ zip distinctTypeVars sArgs) fmlFresh
 
 
 substitutePredicate :: Substitution -> Formula -> Formula
@@ -437,8 +437,8 @@ substitutePredicate subs =
         case Map.lookup name subs of 
           Nothing -> Pred s name args
           Just val -> substitute (Map.fromList (zip deBrujns args)) (substitutePredicate subs val)
-      sAlg f                   = embed f 
-  in cata sAlg
+      sAlg f                   = embed f in
+  cata sAlg
 
 -- | Negation normal form of a formula:
 -- no negation above boolean connectives, no boolean connectives except @&&@ and @||@

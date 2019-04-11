@@ -30,7 +30,8 @@ import Data.Tuple.Extra (first)
 import Control.Monad.Logic
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Lens
+import Control.Lens hiding (para)
+import Data.Functor.Foldable (Recursive(..), Corecursive(..), Base(..)) 
 import Debug.Trace
 
 -- | Check resource bounds: attempt to find satisfying expressions for multiplicity and potential annotations
@@ -97,23 +98,23 @@ generateFormula' checkMults c = do
     RSubtype env pl pr -> do
       op <- subtypeOp
       substs <- generateFreshUniversals env
-      let fml = mkRForm substs Map.empty $ pl `op` pr
+      let fml = mkRForm substs Map.empty [pl `op` pr]
       embedAndProcessConstraint env Nothing fml
     SharedForm env f fl fr -> do
       let sharingFml = f |=| (fl |+| fr)
-      let wf = conjunction [f |>=| fzero, fl |>=| fzero, fr |>=| fzero]
+      let wf = [f |>=| fzero, fl |>=| fzero, fr |>=| fzero]
       substs <- generateFreshUniversals env
-      let fml = mkRForm substs Map.empty (wf |&| sharingFml)
+      let fml = mkRForm substs Map.empty (sharingFml : wf) 
       embedAndProcessConstraint env Nothing fml
     ConstantRes env -> do
       substs <- generateFreshUniversals env
-      (pending, f) <- assertZeroPotential env
-      let fml = mkRForm substs pending f
+      (pending, fmls) <- assertZeroPotential env
+      let fml = mkRForm substs pending fmls
       embedAndProcessConstraint env Nothing fml
     Transfer env env' -> do
       substs <- generateFreshUniversals env
       (pending, fmls) <- redistribute env env'
-      let fml = mkRForm substs pending $ conjunction fmls
+      let fml = mkRForm substs pending fmls
       embedAndProcessConstraint env Nothing fml
     _ -> error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
 
@@ -149,7 +150,7 @@ translateAndFinalize rfml = do
   return $ rfml {
     _knownAssumptions = ftrue,
     _unknownAssumptions = (),
-    _rconstraints = z3lit
+    _rconstraints = [z3lit]
   }
 
 -- Insert extra assumption, if necessary
@@ -212,7 +213,7 @@ elaborateAssumptions rfml = do
   res <- mapM instantiateForall $ Set.toList (_knownAssumptions rfml)
   let instantiatedEmb = map fst res
   -- Generate variables for predicate applications
-  let bodyPreds = gatherPreds (_rconstraints rfml)
+  let bodyPreds = gatherPreds (bodyFml rfml)
   -- Generate congruence axioms
   let allPreds = Set.unions $ bodyPreds : map snd res
   let congruenceAxioms = generateCongAxioms allPreds
@@ -228,7 +229,7 @@ updateVars (rfml, allPreds) = do
   universalMeasures %= Set.union (Set.map (transformFml mkFuncVar) (Set.map (substitute substs) allPreds))
   return $ set renamedPreds (format (cons `Set.union` allPreds))
          $ over knownAssumptions (Set.map (substitute substs)) 
-         $ over rconstraints (substitute substs) rfml
+         $ over rconstraints (map (substitute substs)) rfml
 
 
 formatVariables :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
@@ -236,16 +237,18 @@ formatVariables rfml = do
   let update = Set.map (transformFml mkFuncVar)
   return $ over unknownAssumptions update 
          $ over knownAssumptions update 
-         $ over rconstraints (transformFml mkFuncVar) rfml
+         $ over rconstraints (map (transformFml mkFuncVar)) rfml
 
 applyAssumptions :: MonadHorn s
                  => RawRFormula
                  -> TCSolver s ProcessedRFormula
-applyAssumptions (RFormula known unknown preds substs pending fml) = do
+applyAssumptions rfml = do -- @(RFormula known unknown preds substs pending fml) = do
   aDomain <- asks _cegisDomain
-  let ass = conjunction $ Set.union known unknown
-  writeLog 4 $ indent 4 $ pretty (ass |=>| fml) -- conjunction (map lcToFml lcs))
-  return $ RFormula ass () preds substs pending fml 
+  let ass = conjunction $ Set.union (_knownAssumptions rfml) (_unknownAssumptions rfml)
+  let rfml' = set unknownAssumptions () 
+            $ set knownAssumptions ass rfml
+  writeLog 4 $ indent 4 $ pretty (completeFml rfml') 
+  return rfml'
 
 
 -- | Check the satisfiability of the generated resource constraints, instantiating universally
@@ -338,12 +341,12 @@ redistribute envIn envOut = do
 -- Assert that a context contains zero "free" potential
 assertZeroPotential :: Monad s
                     => Environment
-                    -> TCSolver s (PendingRSubst, Formula)
+                    -> TCSolver s (PendingRSubst, [Formula])
 assertZeroPotential env = do
   let substitutions = Map.foldlWithKey generateSubstFromType Map.empty (toMonotype <$> nonGhostScalars env)
   let envSum = sumFormulas . allPotentials 
   let fml = ((env ^. freePotential) |+| envSum env) |=| fzero
-  return (substitutions, fml)
+  return (substitutions, [fml])
 
 allPotentials :: Environment -> Map String Formula 
 allPotentials env = Map.mapMaybeWithKey substTopPotential $ toMonotype <$> nonGhostScalars env
@@ -442,14 +445,19 @@ instantiatePred fml@(Binary op p@(Pred s x args) axiom) = do
 
 -- Replace predicate applications in formula f with appropriate variables,
 --   collecting all such predicate applications present in f
-gatherPreds :: Formula -> Set Formula
-gatherPreds (Unary op f)    = gatherPreds f
-gatherPreds (Binary op f g) = gatherPreds f `Set.union` gatherPreds g
-gatherPreds (Ite g t f)     = Set.unions [gatherPreds g, gatherPreds t, gatherPreds f]
-gatherPreds (All f g)       = gatherPreds g -- maybe should handle quantified fmls...
-gatherPreds (SetLit s fs)   = Set.unions $ map gatherPreds fs
-gatherPreds f@Pred{}        = Set.singleton f
-gatherPreds f               = Set.empty
+-- This will not recursively look for nested applications. That should be ok -- 
+--   anything nested should appear at the top level somewhere else (could be wrong tho)
+gatherPreds :: Formula -> Set Formula 
+gatherPreds = 
+  let combine = Set.unions . map snd
+      gAlg (PredF s x args) = Set.singleton $ Pred s x (map fst args)
+      gAlg (AllF _ g)      = snd g
+      gAlg (UnaryF _ x)    = snd x
+      gAlg (BinaryF _ x y) = snd x `Set.union` snd y
+      gAlg (IteF x y z)    = combine [x,y,z]
+      gAlg (SetLitF _ fs)  = combine fs
+      gAlg _               = Set.empty in
+  para gAlg
 
 -- Generate all congruence axioms, given all instantiations of universally quantified
 --   measure applications
