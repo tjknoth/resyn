@@ -265,6 +265,15 @@ mkResourceVar env vvtype name = do
 
 insertRVar (name, info) = Map.insert name info
 
+safeFreshPot :: MonadHorn s 
+             => Environment 
+             -> Maybe RBase 
+             -> Formula
+             -> Explorer s Formula
+safeFreshPot env vtype original 
+  | original == fzero = return fzero
+  | otherwise = freshPot env vtype
+
 freshPot :: MonadHorn s
          => Environment
          -> Maybe RBase
@@ -305,48 +314,42 @@ freshResAnnotation env vtype prefix = do
 freshPotentials :: MonadHorn s
                 => Environment
                 -> RSchema
-                -> Bool
                 -> Explorer s RSchema
-freshPotentials env (Monotype t) isTransfer =
-  Monotype <$> freshPotentials' env t isTransfer
-freshPotentials env (ForallT x t) isTransfer =
-  ForallT x <$> freshPotentials env t isTransfer
-freshPotentials env (ForallP x t) isTransfer =
-  ForallP x <$> freshPotentials env t isTransfer
+freshPotentials env (Monotype t) =
+  Monotype <$> freshPotentials' env t 
+freshPotentials env (ForallT x t) =
+  ForallT x <$> freshPotentials env t 
+freshPotentials env (ForallP x t) =
+  ForallP x <$> freshPotentials env t 
 
 -- Replace potentials in a TypeSkeleton
 freshPotentials' :: MonadHorn s
                  => Environment
                  -> RType
-                 -> Bool
                  -> Explorer s RType
--- In transfer scenarios, we want to simply replace the conditional structure with a
---   single variable, so ignore this case
-freshPotentials' env (ScalarT base fml (Ite g t f)) isTransfer
-  | not isTransfer = do
-    t' <- freshPot env (if isTransfer then Nothing else Just base)
-    f' <- freshPot env (if isTransfer then Nothing else Just base)
-    base' <- if isTransfer then return base else freshMultiplicities env base isTransfer
+freshPotentials' env (ScalarT base fml (Ite g t f)) = do
+    t' <- safeFreshPot env (Just base) t
+    f' <- safeFreshPot env (Just base) f
+    base' <- freshMultiplicities env base 
     return $ ScalarT base' fml $ Ite g t' f'
-freshPotentials' env (ScalarT base fml pot) isTransfer = do
-  pot' <- freshPot env (if isTransfer then Nothing else Just base)
-  base' <- if isTransfer then return base else freshMultiplicities env base isTransfer
+freshPotentials' env (ScalarT base fml pot) = do
+  pot' <- safeFreshPot env (Just base) pot
+  base' <- freshMultiplicities env base
   return $ ScalarT base' fml pot'
-freshPotentials' _ t _ = return t
+freshPotentials' _ t = return t
 
 -- Replace potentials in a BaseType
 freshMultiplicities :: MonadHorn s
                     => Environment
                     -> RBase
-                    -> Bool
-                    -> Explorer s (RBase)
-freshMultiplicities env b@(TypeVarT s x m) _ = do
+                    -> Explorer s RBase
+freshMultiplicities env b@(TypeVarT s x m) = do
   m' <- freshMul env Nothing
   return $ TypeVarT s x m'
-freshMultiplicities env (DatatypeT x ts ps) isTransfer = do
-  ts' <- mapM (\t -> freshPotentials' env t isTransfer) ts
+freshMultiplicities env (DatatypeT x ts ps) = do
+  ts' <- mapM (freshPotentials' env) ts
   return $ DatatypeT x ts' ps
-freshMultiplicities _ t _ = return t
+freshMultiplicities _ t = return t
 
 addScrutineeToEnv :: (MonadHorn s, MonadSMT s)
                   => Environment
@@ -375,8 +378,10 @@ shareContext :: (MonadHorn s, MonadSMT s)
              => Environment
              -> Explorer s (Environment, Environment)
 shareContext env = do
-  symsl <- safeFreshPotentials env False
-  symsr <- safeFreshPotentials env False
+  --symsl <- safeFreshPotentials env False
+  --symsr <- safeFreshPotentials env False
+  symsl <- freshSharingPotential env
+  symsr <- freshSharingPotential env
   (fpl, fpr) <- shareFreePotential env (env ^. freePotential) 
   (cfpl, cfpr) <- shareCondFP env (env ^. condFreePotential) 
   let ghosts = _ghostSymbols env
@@ -441,10 +446,10 @@ freshRestructuredPotentials :: (MonadHorn s, MonadSMT s)
                             -> Explorer s (SymbolMap, [Formula])
 freshRestructuredPotentials env = do
   let ghosts = env ^. ghostSymbols
-  -- cfps :: [Formula]
   let cfps = Map.elems $ Map.mapMaybeWithKey (gatherCondPotential ghosts) (symbolsOfArity 0 env)
   cfps' <- mapM (freshCondFP env) cfps
-  syms' <- safeFreshPotentials env True
+  -- syms' <- safeFreshPotentials env True
+  let syms' = zeroTopLevel env
   return (syms', cfps')
   where
     getCond (ScalarT _ _ (Ite g t f)) = Just (Ite g t f)
@@ -474,7 +479,7 @@ shareAndExtractFP env fp cfps = do
   return (env1, env2, fpout)
 
 
-freshCondFP :: (MonadHorn s, MonadSMT s)
+freshCondFP :: MonadHorn s
             => Environment
             -> Formula
             -> Explorer s Formula
@@ -484,8 +489,8 @@ freshCondFP env (Ite g f1 f2) = do
   return $ Ite g f1' f2'
 freshCondFP env _ = freshCondFreePotential env
 
-
-safeFreshPotentials :: (MonadHorn s, MonadSMT s)
+{-
+safeFreshPotentials :: MonadHorn s
                     => Environment
                     -> Bool
                     -> Explorer s SymbolMap
@@ -500,6 +505,26 @@ safeFreshPotentials env isTransfer = do
   let scalars = Map.assocs $ fromMaybe Map.empty $ Map.lookup 0 syms
   scalars' <- mapM replace scalars
   return $ Map.insert 0 (Map.fromList scalars') syms
+-}
+
+freshSharingPotential :: MonadHorn s => Environment -> Explorer s SymbolMap
+freshSharingPotential env = do 
+  let ghosts = env ^. ghostSymbols
+  let replace (x, sch) = if x `Set.member` ghosts 
+        then return (x, sch)
+        else do 
+          sch' <- freshPotentials env sch 
+          return (x, sch')
+  let syms = env ^. symbols 
+  let scalars = Map.assocs $ fromMaybe Map.empty $ Map.lookup 0 syms
+  scalars' <- mapM replace scalars 
+  return $ Map.insert 0 (Map.fromList scalars') syms
+
+zeroTopLevel :: Environment -> SymbolMap
+zeroTopLevel env = 
+  let remove (ScalarT b r _) = ScalarT b r fzero 
+      scalars = symbolsOfArity 0 env in 
+  Map.insert 0 (fmap remove <$> scalars) (env ^. symbols)
 
 storeCase :: Monad s
           => Environment

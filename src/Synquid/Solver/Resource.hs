@@ -330,7 +330,7 @@ redistribute envIn envOut = do
   -- Assert (fresh) potentials in output context are well-formed
   let wellFormedAssertions = wellFormedFP ++ wellFormed envOut
   --Assert that top-level potentials are re-partitioned
-  let transferAssertions = (envSum envIn |+| fpIn |+| cfpIn) |=| (envSum envOut |+| fpOut |+| cfpOut)
+  -- let transferAssertions = (envSum envIn |+| fpIn |+| cfpIn) |=| (envSum envOut |+| fpOut |+| cfpOut)
   -- No pending substitutions for now
   let substitutions e = Map.foldlWithKey generateSubstFromType Map.empty (toMonotype <$> nonGhostScalars e) 
   return (Map.union (substitutions envIn) (substitutions envOut), transferAssertions : wellFormedAssertions)
@@ -385,6 +385,8 @@ partitionType :: Bool
               -> RType
               -> RType
               -> [Constraint]
+partitionType cm env (x, t@(ScalarT b _ f)) (ScalarT bl _ _) (ScalarT br _ _) 
+  | f == fzero = partitionBase cm env (x, b) bl br
 partitionType cm env (x, t@(ScalarT b _ f)) (ScalarT bl _ fl) (ScalarT br _ fr)
   = let vvtype = addRefinement t (varRefinement x (toSort b))
         env'   = addVariable valueVarName vvtype env 
