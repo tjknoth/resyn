@@ -689,13 +689,13 @@ genSkeleton name preds inSorts outSort post = Monotype $ uncurry 0 inSorts
     predform x = Pred AnyS x []
 
 getAllRPreds :: Formula -> Set Id
-getAllRPreds (Binary _ l r) = getAllRPreds l `Set.union` getAllRPreds r
-getAllRPreds (Unary _ f)    = getAllRPreds f
-getAllRPreds (Ite g t f)    = getAllRPreds g `Set.union` getAllRPreds t `Set.union` getAllRPreds f 
-getAllRPreds (All _ f)      = getAllRPreds f
-getAllRPreds (Pred IntS x fs)  = Set.insert x (Set.unions (map getAllRPreds fs))
-getAllRPreds (Pred _ x fs)  = Set.empty
-getAllRPreds _              = Set.empty 
+getAllRPreds (Binary _ l r)   = getAllRPreds l `Set.union` getAllRPreds r
+getAllRPreds (Unary _ f)      = getAllRPreds f
+getAllRPreds (Ite g t f)      = getAllRPreds g `Set.union` getAllRPreds t `Set.union` getAllRPreds f 
+getAllRPreds (All _ f)        = getAllRPreds f
+getAllRPreds (Pred IntS x fs) = Set.insert x (Set.unions (map getAllRPreds fs))
+getAllRPreds (Pred _ x fs)    = Set.empty
+getAllRPreds _                = Set.empty 
 
 -- Return a map from the IDs of multi-argument measures to a list of sets of possible 
 --   instantiations of those constant arguments by scraping the schema annotations

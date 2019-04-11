@@ -95,7 +95,7 @@ allUnknowns env = Set.filter isUnknownForm $ env ^. assumptions
 
 assignUnknowns :: MonadHorn s => Set Formula -> TCSolver s (Set Formula)
 assignUnknowns fmls = do 
-  sol <- (solution . head) <$> use candidates
+  sol <- solution . head <$> use candidates
   return $ Set.map fromJust $ Set.filter isJust $ Set.map (fmap conjunction . getUnknown sol) fmls
   where 
     getUnknown solution (Unknown _ u) = Map.lookup u solution

@@ -67,7 +67,7 @@ solveWithCEGIS n rfmls universals = do
   --case res of 
     Nothing -> do
       pstr <- printParams 
-      writeLog 4 $ text "Solution wth" <+> pretty n <+> text "iterations left:" <+> pstr
+      writeLog 5 $ text "Solution wth" <+> pretty n <+> text "iterations left:" <+> pstr
       return True -- No counterexamples exist, polynomials hold on all inputs
     Just cx ->
     --Just (rfmls', cx) ->
@@ -179,7 +179,8 @@ applyCounterexample :: RMonad s
 applyCounterexample rfmls cx = do 
   let substRFml = applyPolynomial (mkParamPolynomial cx) bodyFml
   fml <- conjunction <$> mapM substRFml rfmls
-  return $ substitute (allVariables cx) fml
+  let fml' = substitute (allVariables cx) fml
+  lift $ translate fml'
 
 -- TODO: are examples ever applied to the actual variables?? not in polynomials?
 applyPolynomial :: RMonad s 
@@ -332,7 +333,7 @@ updateCEGISState = do
     set cegisSolverLogLevel ll st
 
 updateProgram :: Monad s => ResourceSolution -> CEGISSolver s ()
-updateProgram prog = rprogram %= Map.union prog 
+updateProgram prog = rprogram .= prog -- Map.union prog 
 
 initCEGISState :: CEGISState 
 initCEGISState = CEGISState {

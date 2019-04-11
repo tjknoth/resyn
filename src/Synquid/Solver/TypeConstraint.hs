@@ -74,14 +74,14 @@ initTypingState goal = do
     _hornClauses = [],
     _consistencyChecks = [],
     _errorContext = (noPos, empty),
-    _universalVars = initialFormulas env, -- Set.singleton $ Var IntS valueVarName,
+    _universalVars = initialFormulas env, 
     _universalMeasures = Set.empty
   }
 
 -- Sorta hacky to make sure we look at _v as well as other relevant universally quantified
 --   expressions
 initialFormulas :: Environment -> Set Id
-initialFormulas = Set.insert valueVarName . Set.fromList . Map.keys . nonGhostScalars -- . Map.mapWithKey toFml . nonGhostScalars 
+initialFormulas = {- Set.insert valueVarName . -} Set.fromList . Map.keys . nonGhostScalars -- . Map.mapWithKey toFml . nonGhostScalars 
   where 
     schToSort = toSort . baseTypeOf . toMonotype
     toFml x sch = Var (schToSort sch) x

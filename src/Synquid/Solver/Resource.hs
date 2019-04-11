@@ -128,7 +128,8 @@ embedAndProcessConstraint env extra rfml = do
   hasUnivs <- isJust <$> asks _cegisDomain
   let go = insertAssumption extra
        >=> embedConstraint env
-       >=> instantiateAssumptions
+       >=> instantiateUnknowns
+       >=> instantiateAxioms env
        >=> elaborateAssumptions
        >=> updateVars
        >=> formatVariables
@@ -176,19 +177,25 @@ embedConstraint env rfml = do
   --unk <- Set.filter isUnknownForm ass
   let emb = Set.filter (not . isUnknownForm) ass
   let unk = Set.filter isUnknownForm ass
-  let axioms = if useMeasures
-        then instantiateConsAxioms (env { _measureDefs = allRMeasures env } ) True Nothing (conjunction emb)
-        else Set.empty
-  let extra = Set.union emb axioms
-  return $ over knownAssumptions (Set.union extra) 
+  return $ over knownAssumptions (Set.union emb) 
          $ over unknownAssumptions (Set.union unk) rfml
 
 
-instantiateAssumptions :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
-instantiateAssumptions rfml = do 
+instantiateUnknowns :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
+instantiateUnknowns rfml = do 
   unknown' <- assignUnknowns (_unknownAssumptions rfml)
   return $ set unknownAssumptions Set.empty
          $ over knownAssumptions (Set.union unknown') rfml
+
+
+instantiateAxioms :: MonadHorn s => Environment -> RawRFormula -> TCSolver s RawRFormula
+instantiateAxioms env rfml = do 
+  let known = _knownAssumptions rfml
+  useMeasures <- maybe False shouldUseMeasures <$> asks _cegisDomain
+  let axioms = if useMeasures
+        then instantiateConsAxioms (env { _measureDefs = allRMeasures env } ) True Nothing (conjunction known)
+        else Set.empty
+  return $ over knownAssumptions (Set.union axioms) rfml
 
 
 replaceCons f@Cons{} = mkFuncVar f
@@ -259,9 +266,9 @@ satisfyResources rfmls = do
           writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (snd m'))
           return True
     else do
-      --ufmls <- map (Var IntS) . Set.toList <$> use universalVars
+      ufmls <- map (Var IntS) . Set.toList <$> use universalVars
       --traceM $ "vars: " ++ show (plain (pretty ufmls))
-      universals <- collectUniversals rfmls -- ufmls
+      universals <- collectUniversals' rfmls ufmls
       cMax <- asks _cegisMax
       cstate <- updateCEGISState
 
@@ -347,8 +354,8 @@ allPotentials env = Map.mapMaybeWithKey substTopPotential $ toMonotype <$> nonGh
 generateFreshUniversals :: Monad s => Environment -> TCSolver s Substitution
 generateFreshUniversals env = do 
   relevant <- use universalVars
-  let univs = Map.filterWithKey (\x _ -> x `Set.member` relevant) $ symbolsOfArity 0 env
-  --let univs = Map.filterWithKey (\x _ -> x == valueVarName) $ symbolsOfArity 0 env
+  --let univs = Map.filterWithKey (\x _ -> x `Set.member` relevant) $ symbolsOfArity 0 env
+  let univs = Map.filterWithKey (\x _ -> x == valueVarName) $ symbolsOfArity 0 env
   Map.traverseWithKey freshen univs
   where 
     sortFrom = toSort . baseTypeOf . toMonotype
