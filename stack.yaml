@@ -9,6 +9,8 @@ extra-deps:
   - haskell-src-exts-1.17.1
   - limp-0.3.2.3
   - limp-cbc-0.3.2.3
+  - glpk-hs-0.5
+  - gasp-1.0.1.0
 # extra-include-dirs:
 #  - <z3-home>/src/api
 # extra-lib-dirs:

@@ -11,7 +11,7 @@ maintainer:           nadia.polikarpova@gmail.com
 category:             Language
 build-type:           Simple
 extra-source-files:   README.md
-cabal-version:        >=1.10
+cabal-version:        >=1.12
 
 flag resyn 
   Description: Build the resyn executable
@@ -31,9 +31,10 @@ Library
                     , Synquid.Pretty
                     , Synquid.Program
                     , Synquid.Resolver
+                    , Synquid.Solver.CBC
                     , Synquid.Solver.CEGIS
+                    , Synquid.Solver.GLPK
                     , Synquid.Solver.HornClause
-                    , Synquid.Solver.LP
                     , Synquid.Solver.Monad
                     , Synquid.Solver.Resource
                     , Synquid.Solver.TypeConstraint
@@ -55,7 +56,7 @@ Library
                     , TypeSynonymInstances
                     , FlexibleContexts
 
-  build-depends:      base 
+  build-depends:      base >= 4 && < 5
                     , containers >= 0.5 && < 0.6
                     , mtl >= 2.2 && < 2.3
                     , transformers
@@ -68,10 +69,10 @@ Library
                     , z3 > 4.0
                     , logict >= 0.5
                     , parsec == 3.1.*
-                    , indents == 0.4.*
+                    , indents >= 0.4
                     , filepath
                     , time
-                    , haskell-src-exts == 1.17.*
+                    , haskell-src-exts >= 1.17
                     , safe
                     , split
                     , tuple >= 0.3
@@ -81,6 +82,8 @@ Library
                     , recursion-schemes > 5.0
                     , limp >= 0.3
                     , limp-cbc >= 0.3
+                    , glpk-hs >= 0.5
+                    , gasp == 1.0.1.0
   
 
 executable resyn 

@@ -17,7 +17,7 @@ import Synquid.Program
 import Synquid.Solver.Monad
 import Synquid.Pretty
 import Synquid.Solver.CEGIS
-import Synquid.Solver.LP
+import Synquid.Solver.CBC
 import Synquid.Solver.Types
 import Synquid.Solver.Util hiding (writeLog)
 
@@ -280,7 +280,7 @@ satisfyResources rfmls = do
       smt <- asks (_useSMT . _resourceArgs)
       if smt 
         then solveWithZ3 rfmls
-        else solveLP rfmls
+        else solveCBC rfmls
     else do
       ufmls <- map (Var IntS) . Set.toList <$> use universalVars
       universals <- collectUniversals' rfmls ufmls

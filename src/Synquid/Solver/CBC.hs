@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 
-module Synquid.Solver.LP (
-  solveLP
+module Synquid.Solver.CBC (
+  solveCBC
 ) where
 
 import Synquid.Logic
@@ -20,6 +20,12 @@ import Numeric.Limp.Program.Program
 import Numeric.Limp.Solvers.Cbc
 import qualified Numeric.Limp.Program.Constraint as C
 
+---------------------------------------
+---------------------------------------
+-- Interface to COIN-OR CBC solver
+---------------------------------------
+---------------------------------------
+
 {-
 solveAndGetAssignment :: [String] -> [ProcessedRFormula] -> Maybe (Map String Formula)
 solveAndGetAssignment vars rfmls = 
@@ -32,11 +38,11 @@ solveAndGetAssignment vars rfmls =
     Right ass -> Just $ Map.fromList $ map (mkPair ass) vars 
 -}
 
-solveLP :: Monad s => [ProcessedRFormula] -> TCSolver s Bool
-solveLP rfmls = do 
+solveCBC :: Monad s => [ProcessedRFormula] -> TCSolver s Bool
+solveCBC rfmls = do 
   let constraints = concatMap (map lcToConstraint . _rconstraints) rfmls
   let fml = foldl (C.:&&) C.CTrue constraints
-  let prog = program Minimise trivialLinear fml []
+  let prog = program Minimise objective fml []
   case solve prog of 
     Left err -> do 
       traceM $ "LP solver error: " ++ show err
@@ -45,8 +51,8 @@ solveLP rfmls = do
 
 -- This is a hack: the optimization problem needs to range over some resource variable
 --  that occurs in the constraints. Hopefully "fp1" always shows up.
-trivialLinear :: Linear String String IntDouble 'KR
-trivialLinear = r1 "fp1" 
+objective :: Linear String String IntDouble 'KR
+objective = r1 "fp1" 
 
 makeAtom :: FmlLE -> (Either z String, R IntDouble)
 makeAtom (LA (IntLit x) (Var _ name)) = (Right name, R (fromIntegral x))
