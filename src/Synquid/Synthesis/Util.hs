@@ -60,8 +60,7 @@ data ExplorerParams = ExplorerParams {
   _sourcePos :: SourcePos,                -- ^ Source position of the current goal
   _explorerLogLevel :: Int,               -- ^ How verbose logging is
   _shouldCut :: Bool,                     -- ^ Should cut the search upon synthesizing a functionally correct branch
-  _numPrograms :: Int,                    -- ^ Number of programs to search for
-  _resourceArgs :: ResourceArgs           -- ^ Arguments relevant to resource analysis
+  _numPrograms :: Int                     -- ^ Number of programs to search for
 }
 
 makeLenses ''ExplorerParams
@@ -115,7 +114,7 @@ addConstraint c = typingState %= addTypingConstraint c
 -- | When constant-time flag is set, add the appropriate constraint
 addCTConstraint :: MonadHorn s => Environment -> Explorer s ()
 addCTConstraint env = do
-  checkCT <- asks . view $ _1 . resourceArgs . constantTime
+  checkCT <- asks . view $ _2 . resourceArgs . constantTime
   let c = ConstantRes env 
   when checkCT $ addConstraint c
 

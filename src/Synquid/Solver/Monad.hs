@@ -43,6 +43,19 @@ class (Monad s, Applicative s) => MonadHorn s where
   checkCandidates :: Bool -> [Formula] -> ExtractAssumptions ->[Candidate] -> s [Candidate]   -- ^ Check validity or consistency of constraints under current candidates
   refineCandidates :: [Formula] -> QMap -> ExtractAssumptions -> [Candidate] -> s [Candidate] -- ^ Refine current candidates to satisfy new constraints
   pruneQualifiers :: QSpace -> s QSpace                                                       -- ^ Prune redundant qualifiers
+
+-- | Command line arguments relevant to resource analysis
+data ResourceArgs = ResourceArgs {
+  _checkRes :: Bool,
+  _checkMults :: Bool,
+  _constantTime :: Bool,
+  _cegisBound :: Int,
+  _enumerate :: Bool,
+  _increment :: Bool,
+  _useSMT :: Bool
+} 
+
+makeLenses ''ResourceArgs
  
 -- | Parameters of type constraint solving
 data TypingParams = TypingParams {
@@ -52,29 +65,12 @@ data TypingParams = TypingParams {
   _predQualsGen :: Environment -> [Formula] -> [Formula] -> QSpace, -- ^ Qualifier generator for bound predicates
   _tcSolverSplitMeasures :: Bool,
   _tcSolverLogLevel :: Int,                                         -- ^ How verbose logging is
-  _checkResourceBounds :: Bool,                                     -- ^ Is resource checking enabled
-  _checkMultiplicities :: Bool,                                     -- ^ Should multiplicities be considered when generating resource constraints
-  _constantRes :: Bool,                                             -- ^ Check constant-timedness or not
-  _cegisMax :: Int,                                                 -- ^ Maximum depth of CEGIS solver 
   _cegisDomain :: Maybe AnnotationDomain,
   _polynomialDomain :: Maybe AnnotationDomain,
-  _enumAndCheck ::Bool,
-  _incrementalCEGIS :: Bool
+  _resourceArgs :: ResourceArgs
 }
 
 makeLenses ''TypingParams
-
--- | Command line arguments relevant to resource analysis
-data ResourceArgs = ResourceArgs {
-  _checkRes :: Bool,
-  _checkMults :: Bool,
-  _constantTime :: Bool,
-  _cegisBound :: Int,
-  _enumerate :: Bool,
-  _increment :: Bool
-} 
-
-makeLenses ''ResourceArgs
 
 -- | State of type constraint solving
 data TypingState = TypingState {

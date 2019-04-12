@@ -9,7 +9,7 @@ import Synquid.Type hiding (set)
 import Synquid.Program
 import Synquid.Error
 import Synquid.Synthesis.Explorer
-import Synquid.Synthesis.Util
+import Synquid.Synthesis.Util hiding (resourceArgs)
 import Synquid.Util
 import Synquid.Pretty
 import Synquid.Resolver
@@ -37,7 +37,7 @@ reconstruct eParams tParams goal = do
     initTS <- initTypingState goal'
     runExplorer (eParams { _sourcePos = gSourcePos goal' }) tParams (Reconstructor reconstruct') initTS (go goal')
   where
-    reconstruct' = if tParams ^. enumAndCheck then reconstructAndCheck else reconstructTopLevel
+    reconstruct' = if tParams^.resourceArgs^.enumerate then reconstructAndCheck else reconstructTopLevel
     go g = do
       pMain <- reconstruct' g { gDepth = _auxDepth eParams }  -- Reconstruct the program
       p <- flip insertAuxSolutions pMain <$> use solvedAuxGoals      -- Insert solutions for auxiliary goals stored in @solvedAuxGoals@

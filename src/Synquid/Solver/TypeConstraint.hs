@@ -104,8 +104,8 @@ solveTypeConstraints = do
   solveHornClauses
   checkTypeConsistency
 
-  res <- asks _checkResourceBounds
-  eac <- asks _enumAndCheck
+  res <- asks (_checkRes . _resourceArgs) 
+  eac <- asks (_enumerate . _resourceArgs)
   when res $
     if eac
       then simplifyRCs scs
@@ -117,7 +117,7 @@ solveTypeConstraints = do
 -- Solve resource constraints on final pass of enumerate-and-check algorithm
 finalSolveRCs :: (MonadSMT s, MonadHorn s, RMonad s) => TCSolver s ()
 finalSolveRCs = do
-  res <- asks _checkResourceBounds
+  res <- asks (_checkRes . _resourceArgs) 
   -- Ensures EAC actually verifies the bounds
   when res $ checkResources [SharedForm emptyEnv fzero fzero fzero]
 
@@ -483,7 +483,7 @@ processConstraint (SharedEnv env envl envr)
       let scalars = Map.assocs $ substAndGetScalars env
       let scalarsl = Map.elems $ substAndGetScalars envl
       let scalarsr = Map.elems $ substAndGetScalars envr
-      cm <- asks _checkMultiplicities
+      cm <- asks (_checkMults . _resourceArgs) 
       let cs = zipWith3 (partitionType cm env) scalars scalarsl scalarsr
       --let fpc = SharedForm env (_freePotential env) (_freePotential envl) (_freePotential envr)
       --let cfpc = SharedForm env (totalConditionalFP env) (totalConditionalFP envl) (totalConditionalFP envr)

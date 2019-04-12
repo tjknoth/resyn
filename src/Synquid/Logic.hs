@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, Rank2Types, DeriveFunctor, DeriveFoldable, DeriveTraversable, TypeFamilies #-}
+{-# LANGUAGE TemplateHaskell, Rank2Types, DeriveFunctor, DeriveFoldable, DeriveTraversable, TypeFamilies, StandaloneDeriving #-}
 
 -- | Formulas of the refinement logic
 module Synquid.Logic where
@@ -139,6 +139,8 @@ data Formula =
   deriving (Show, Eq, Ord)
 
 makeBaseFunctor ''Formula
+
+deriving instance Show a => Show (FormulaF a)
 
 embedLit :: String -> FormulaF a -> Formula
 embedLit _ (BoolLitF b)     = BoolLit b
@@ -595,8 +597,8 @@ instance Ord Candidate where
 ---------------------------------------
 
 negateFml :: Formula -> Formula
-negateFml x@IntLit{}        = Unary Neg x
-negateFml x@Var{}           = Unary Neg x
+negateFml (IntLit x)        = IntLit (x * (-1))
+negateFml x@Var{}           = Binary Times (IntLit (-1)) x
 negateFml (Ite g t f)       = Ite g (negateFml t) (negateFml f)
 negateFml (Binary Plus f g) = Binary Plus (negateFml f) (negateFml g)
 negateFml f                 = error $ "negateFml: Unexpected expression " ++ show f

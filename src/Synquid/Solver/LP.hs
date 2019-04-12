@@ -1,6 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 
-module Synquid.Solver.LP where
+module Synquid.Solver.LP (
+  solveLP
+) where
 
 import Synquid.Logic
 import Synquid.Pretty
@@ -30,16 +32,28 @@ solveAndGetAssignment vars rfmls =
     Right ass -> Just $ Map.fromList $ map (mkPair ass) vars 
 -}
 
-trivialLinear :: Linear String String IntDouble 'KR
-trivialLinear = r1 "test" 
+solveLP :: Monad s => [ProcessedRFormula] -> TCSolver s Bool
+solveLP rfmls = do 
+  let constraints = concatMap (map lcToConstraint . _rconstraints) rfmls
+  let fml = foldl (C.:&&) C.CTrue constraints
+  let prog = program Minimise trivialLinear fml []
+  case solve prog of 
+    Left err -> do 
+      traceM $ "LP solver error: " ++ show err
+      return False
+    Right _  -> return True
 
+-- This is a hack: the optimization problem needs to range over some resource variable
+--  that occurs in the constraints. Hopefully "fp1" always shows up.
+trivialLinear :: Linear String String IntDouble 'KR
+trivialLinear = r1 "fp1" 
 
 makeAtom :: FmlLE -> (Either z String, R IntDouble)
 makeAtom (LA (IntLit x) (Var _ name)) = (Right name, R (fromIntegral x))
 makeAtom a@LA{} = error $ show $ text "makeAtom: non-canonical atomic term" <+> pretty a
 makeAtom a      = error $ show $ text "makeAtom: non-atomic term" <+> pretty a
 
-lcToConstraint :: FmlLC -> C.Constraint z String IntDouble
+lcToConstraint :: LinearConstraint FmlLE -> C.Constraint String String IntDouble
 lcToConstraint (LC op f g) = leToLinear f `op'` leToLinear g
   where 
     op' = case op of 
@@ -47,6 +61,6 @@ lcToConstraint (LC op f g) = leToLinear f `op'` leToLinear g
       Ge -> (C.:>=) 
       Le -> (C.:<=) 
 
-leToLinear :: FmlLE -> Linear z String IntDouble 'KR 
+leToLinear :: FmlLE -> Linear String String IntDouble 'KR 
 leToLinear f@LA{}    = LR [makeAtom f] (R 0)
 leToLinear (LS c fs) = LR (map makeAtom fs) (R (fromIntegral c))

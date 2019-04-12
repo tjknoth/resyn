@@ -17,6 +17,7 @@ import Synquid.Program
 import Synquid.Solver.Monad
 import Synquid.Pretty
 import Synquid.Solver.CEGIS
+import Synquid.Solver.LP
 import Synquid.Solver.Types
 import Synquid.Solver.Util hiding (writeLog)
 
@@ -82,7 +83,7 @@ generateFormula :: (MonadHorn s, RMonad s)
                 => Constraint
                 -> TCSolver s ProcessedRFormula
 generateFormula c = do
-  checkMults <- asks _checkMultiplicities
+  checkMults <- asks (_checkMults . _resourceArgs)
   generateFormula' checkMults c
 
 generateFormula' :: (MonadHorn s, RMonad s)
@@ -98,11 +99,13 @@ generateFormula' checkMults c = do
     RSubtype env pl pr -> do
       op <- subtypeOp
       substs <- generateFreshUniversals env
-      let fml = mkRForm substs Map.empty [pl `op` pr]
+      let fml = mkRForm substs Map.empty [LC op pl pr]
       embedAndProcessConstraint env Nothing fml
     SharedForm env f fl fr -> do
-      let sharingFml = f |=| (fl |+| fr)
-      let wf = [f |>=| fzero, fl |>=| fzero, fr |>=| fzero]
+      let sharingFml = LC Eq f (fl |+| fr) 
+      -- let sharingFml = f |=| (fl |+| fr)
+      let wf = [LC Ge f fzero, LC Ge fl fzero, LC Ge fr fzero]
+      --let wf = [f |>=| fzero, fl |>=| fzero, fr |>=| fzero]
       substs <- generateFreshUniversals env
       let fml = mkRForm substs Map.empty (sharingFml : wf) 
       embedAndProcessConstraint env Nothing fml
@@ -143,6 +146,7 @@ embedAndProcessConstraint env extra rfml = do
       _unknownAssumptions = ()
     } -}
 
+{-
 translateAndFinalize :: RMonad s => RawRFormula -> TCSolver s ProcessedRFormula 
 translateAndFinalize rfml = do 
   writeLog 3 $ indent 4 $ pretty (bodyFml rfml)
@@ -151,6 +155,17 @@ translateAndFinalize rfml = do
     _knownAssumptions = ftrue,
     _unknownAssumptions = (),
     _rconstraints = [z3lit]
+  }
+-}
+
+translateAndFinalize :: RMonad s => RawRFormula -> TCSolver s ProcessedRFormula
+translateAndFinalize rfml = do 
+  writeLog 3 $ indent 4 $ pretty (bodyFml rfml)
+  let lcs' = map (fmap (sumToLE False)) (rfml ^. rconstraints)
+  return $ rfml {
+    _knownAssumptions = ftrue,
+    _unknownAssumptions = (),
+    _rconstraints = lcs'
   }
 
 -- Insert extra assumption, if necessary
@@ -229,7 +244,7 @@ updateVars (rfml, allPreds) = do
   universalMeasures %= Set.union (Set.map (transformFml mkFuncVar) (Set.map (substitute substs) allPreds))
   return $ set renamedPreds (format (cons `Set.union` allPreds))
          $ over knownAssumptions (Set.map (substitute substs)) 
-         $ over rconstraints (map (substitute substs)) rfml
+         $ over rconstraints (map (fmap (substitute substs))) rfml
 
 
 formatVariables :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
@@ -237,7 +252,7 @@ formatVariables rfml = do
   let update = Set.map (transformFml mkFuncVar)
   return $ over unknownAssumptions update 
          $ over knownAssumptions update 
-         $ over rconstraints (map (transformFml mkFuncVar)) rfml
+         $ over rconstraints (map (fmap (transformFml mkFuncVar))) rfml
 
 applyAssumptions :: MonadHorn s
                  => RawRFormula
@@ -246,7 +261,8 @@ applyAssumptions rfml = do -- @(RFormula known unknown preds substs pending fml)
   aDomain <- asks _cegisDomain
   let ass = conjunction $ Set.union (_knownAssumptions rfml) (_unknownAssumptions rfml)
   let rfml' = set unknownAssumptions () 
-            $ set knownAssumptions ass rfml
+            $ set knownAssumptions ass 
+            $ over rconstraints (map (fmap (sumToLE True))) rfml
   writeLog 4 $ indent 4 $ pretty (completeFml rfml') 
   return rfml'
 
@@ -261,18 +277,14 @@ satisfyResources rfmls = do
   noUnivs <- isNothing <$> asks _cegisDomain
   if noUnivs
     then do
-      let fml = conjunction $ map bodyFml rfmls
-      model <- runInSolver $ solveAndGetModel fml
-      case model of
-        Nothing -> return False
-        Just m' -> do
-          writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (snd m'))
-          return True
+      smt <- asks (_useSMT . _resourceArgs)
+      if smt 
+        then solveWithZ3 rfmls
+        else solveLP rfmls
     else do
       ufmls <- map (Var IntS) . Set.toList <$> use universalVars
-      --traceM $ "vars: " ++ show (plain (pretty ufmls))
       universals <- collectUniversals' rfmls ufmls
-      cMax <- asks _cegisMax
+      cMax <- asks (_cegisBound . _resourceArgs)
       cstate <- updateCEGISState
 
       writeLog 3 $ text "Solving resource constraint with CEGIS:"
@@ -284,10 +296,23 @@ satisfyResources rfmls = do
       storeCEGISState cstate'
       return sat
 
+solveWithZ3 :: RMonad s 
+            => [ProcessedRFormula]
+            -> TCSolver s Bool
+solveWithZ3 rfmls = do 
+  let runInSolver = lift . lift . lift
+  let fml = conjunction $ map bodyFml rfmls 
+  model <- runInSolver $ solveAndGetModel fml
+  case model of 
+    Nothing -> return False 
+    Just m' -> do 
+      writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (snd m'))
+      return True
+
 storeCEGISState :: Monad s => CEGISState -> TCSolver s ()
 storeCEGISState st = do 
   cegisState .= st
-  incremental <- asks _incrementalCEGIS
+  incremental <- asks (_increment . _resourceArgs)
   -- For non-incremental solving, don't reset resourceVars
   when incremental $
     resourceVars .= Map.empty
@@ -319,21 +344,25 @@ shouldUseMeasures ad = case ad of
 redistribute :: Monad s
              => Environment
              -> Environment
-             -> TCSolver s (PendingRSubst, [Formula])
+             -> TCSolver s (PendingRSubst, [LinearConstraint Formula])
 redistribute envIn envOut = do
   let fpIn  = envIn ^. freePotential
   let fpOut = envOut ^. freePotential
   let cfpIn  = totalConditionalFP envIn
   let cfpOut = totalConditionalFP envOut
-  let wellFormedFP = fmap (|>=| fzero) [fpIn, fpOut, cfpIn, cfpOut]
+  --let wellFormedFP = fmap (|>=| fzero) [fpIn, fpOut, cfpIn, cfpOut]
+  let wellFormedFP = fmap (\f -> LC Ge f fzero) [fpIn, fpOut, cfpIn, cfpOut]
   -- Sum of top-level potential annotations
   let envSum = sumFormulas . allPotentials
   -- Assert that all potentials are well-formed
-  let wellFormed env = map (|>=| fzero) (Map.elems (allPotentials env))
+  --let wellFormed env = map (|>=| fzero) (Map.elems (allPotentials env))
+  let wellFormed env = map (\f -> LC Ge f fzero) (Map.elems (allPotentials env))
   -- Assert (fresh) potentials in output context are well-formed
   let wellFormedAssertions = wellFormedFP ++ wellFormed envOut
   --Assert that top-level potentials are re-partitioned
-  let transferAssertions = (envSum envIn |+| fpIn |+| cfpIn) |=| (envSum envOut |+| fpOut |+| cfpOut)
+  --let transferAssertions = (envSum envIn |+| fpIn |+| cfpIn) |=| (envSum envOut |+| fpOut |+| cfpOut)
+  let transferAssertions = LC Eq (envSum envIn |+| fpIn |+| cfpIn) (envSum envOut |+| fpOut |+| cfpOut)
+  --let transferAssertions = 
   -- No pending substitutions for now
   let substitutions e = Map.foldlWithKey generateSubstFromType Map.empty (toMonotype <$> nonGhostScalars e) 
   return (Map.union (substitutions envIn) (substitutions envOut), transferAssertions : wellFormedAssertions)
@@ -341,12 +370,12 @@ redistribute envIn envOut = do
 -- Assert that a context contains zero "free" potential
 assertZeroPotential :: Monad s
                     => Environment
-                    -> TCSolver s (PendingRSubst, [Formula])
+                    -> TCSolver s (PendingRSubst, [LinearConstraint Formula])
 assertZeroPotential env = do
   let substitutions = Map.foldlWithKey generateSubstFromType Map.empty (toMonotype <$> nonGhostScalars env)
   let envSum = sumFormulas . allPotentials 
-  let fml = ((env ^. freePotential) |+| envSum env) |=| fzero
-  return (substitutions, [fml])
+  let total e = (sumFormulas . allPotentials) e |+| (e ^. freePotential)
+  return (substitutions, [LC Eq fzero (total env)])
 
 allPotentials :: Environment -> Map String Formula 
 allPotentials env = Map.mapMaybeWithKey substTopPotential $ toMonotype <$> nonGhostScalars env
@@ -517,10 +546,11 @@ getPolynomialDomain' t =
       _             -> Nothing
 
 
-subtypeOp :: Monad s => TCSolver s (Formula -> Formula -> Formula)
+subtypeOp :: Monad s => TCSolver s BinOp
 subtypeOp = do
-  ct <- asks _constantRes
-  return $ if ct then (|=|) else (|>=|)
+  ct <- asks (_constantTime . _resourceArgs)
+  return $ if ct then Eq else Ge
+  --return $ if ct then (|=|) else (|>=|)
 
 logUniversals :: Monad s => TCSolver s ()
 logUniversals = do 

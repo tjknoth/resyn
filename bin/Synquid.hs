@@ -43,14 +43,15 @@ main = do
                lfp bfs
                out_file out_module outFormat resolve
                print_spec print_stats log_ 
-               resources mult forall cut nump constTime cegis_max ec inc_cegis) -> do
+               resources mult forall cut nump constTime cegis_max ec inc_cegis smt) -> do
                   let resArgs = defaultResourceArgs {
                     _checkRes = resources,
                     _checkMults = mult,
                     _constantTime = constTime,
                     _cegisBound = cegis_max,
                     _enumerate = ec,
-                    _increment = inc_cegis
+                    _increment = inc_cegis,
+                    _useSMT = smt
                   }
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
@@ -67,8 +68,7 @@ main = do
                     _symmetryReduction = symmetry,
                     _explorerLogLevel = log_,
                     _shouldCut = not cut,
-                    _numPrograms = nump,
-                    _resourceArgs = resArgs
+                    _numPrograms = nump
                   }
                   let solverParams = defaultHornSolverParams {
                     isLeastFixpoint = lfp,
@@ -86,7 +86,7 @@ main = do
                     filename = out_file,
                     module_ = out_module
                   }
-                  runOnFile synquidParams explorerParams solverParams codegenParams file libs
+                  runOnFile synquidParams explorerParams solverParams codegenParams resArgs file libs
 
 {- Command line arguments -}
 
@@ -138,7 +138,8 @@ data CommandLineArgs
         ct :: Bool,
         cegis_max :: Int,
         eac :: Bool,
-        inc_cegis :: Bool
+        inc_cegis :: Bool,
+        smt :: Bool
       }
   deriving (Data, Typeable, Show, Eq)
 
@@ -175,7 +176,8 @@ synt = Synthesis {
   ct                  = False           &= help ("Require that all branching expressions consume a constant amount of resources (default: False)"),
   cegis_max           = 100             &= help ("Maximum number of iterations through the CEGIS loop (default: 100)"),
   eac                 = False           &= help ("Enumerate-and-check instead of round-trip resource analysis (default: False)"),
-  inc_cegis           = True            &= help ("Incremental CEGIS solving (default: True)")
+  inc_cegis           = True            &= help ("Incremental CEGIS solving (default: True)"),
+  smt                 = False           &= help ("Use SMT solver instead of LP solver to solve linear constraints (default: False)")
   } &= auto &= help "Synthesize goals specified in the input file"
     where
       defaultFormat = outputFormat defaultSynquidParams
@@ -206,8 +208,7 @@ defaultExplorerParams = ExplorerParams {
   _sourcePos = noPos,
   _explorerLogLevel = 0,
   _shouldCut = True,
-  _numPrograms = 1,
-  _resourceArgs = defaultResourceArgs
+  _numPrograms = 1
 }
 
 defaultResourceArgs = ResourceArgs {
@@ -216,7 +217,8 @@ defaultResourceArgs = ResourceArgs {
   _constantTime = False,
   _cegisBound = 100,
   _enumerate = False,
-  _increment = True
+  _increment = True,
+  _useSMT = False
 }
 
 -- | Parameters for constraint solving
@@ -306,9 +308,9 @@ data SynthesisResult = SynthesisResult {
 } deriving (Eq, Ord)
 
 -- | Parse and resolve file, then synthesize the specified goals
-runOnFile :: SynquidParams -> ExplorerParams -> HornSolverParams -> CodegenParams
-                           -> String -> [String] -> IO ()
-runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
+runOnFile :: SynquidParams -> ExplorerParams -> HornSolverParams -> CodegenParams -> ResourceArgs
+          -> String -> [String] -> IO ()
+runOnFile synquidParams explorerParams solverParams codegenParams resArgs file libs = do
   declsByFile <- parseFromFiles (libs ++ [file])
   let decls = concat $ map snd declsByFile
   case resolveDecls decls of
@@ -340,7 +342,10 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
       -- print $ vMapDoc pretty pretty (allSymbols $ gEnvironment goal)
       -- print $ pretty (gSpec goal)
       -- print $ vMapDoc pretty pretty (_measures $ gEnvironment goal)
-      (mProg, stats) <- synthesize (updateExplorerParams explorerParams goal) (updateSolverParams solverParams goal) goal cquals tquals
+      (mProg, stats) <- synthesize (updateExplorerParams explorerParams goal) 
+                                   (updateSolverParams solverParams goal) 
+                                   (updateResArgs resArgs goal) 
+                                   goal cquals tquals
       case mProg of
         Left typeErr -> pdoc (pretty typeErr) >> pdoc empty >> exitFailure
         Right progs  -> do
@@ -351,9 +356,9 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
     assembleResult stats goal ps = SynthesisResult (fst (head ps)) (snd (head ps)) (tail ps) stats goal
     updateLogLevel goal orig = if gSynthesize goal then orig else 0 -- prevent logging while type checking measures
 
-    updateExplorerParams eParams goal =
-      let eParams' = explorerLogLevel %~ updateLogLevel goal $ eParams
-      in resourceArgs . checkRes .~ ((gSynthesize goal) && (eParams ^. (resourceArgs . checkRes))) $ eParams'
+    updateResArgs resArgs goal = checkRes .~ ((gSynthesize goal) && (resArgs ^. checkRes)) $ resArgs
+
+    updateExplorerParams eParams goal = explorerLogLevel %~ updateLogLevel goal $ eParams
 
     updateSolverParams sParams goal = sParams { solverLogLevel = (updateLogLevel goal (solverLogLevel sParams))}
 
