@@ -244,7 +244,7 @@ applyAssumptions :: MonadHorn s
 applyAssumptions (RFormula known unknown preds substs pending fml) = do
   aDomain <- asks _cegisDomain
   let ass = conjunction $ Set.union known unknown
-  writeLog 4 $ indent 4 $ pretty (ass |=>| fml) -- conjunction (map lcToFml lcs))
+  writeLog 3 $ indent 4 $ pretty (ass |=>| fml) -- conjunction (map lcToFml lcs))
   return $ RFormula ass () preds substs pending fml 
 
 

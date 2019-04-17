@@ -45,7 +45,7 @@ import Debug.Trace
 
 -- | Assumptions encoded in an environment
 embedding :: Monad s => Environment -> Set Id -> Bool -> Bool -> TCSolver s (Set Formula)
-embedding env vars includeQuantified substituteValueVars = do
+embedding env vars includeQuantified isRes = do
     tass <- use typeAssignment
     pass <- use predAssignment
     qmap <- use qualifierMap
@@ -61,7 +61,8 @@ embedding env vars includeQuantified substituteValueVars = do
                 Nothing -> addBindings env tass pass qmap fmls rest -- Variable not found (useful to ignore value variables)
                 Just (Monotype t) -> case typeSubstitute tass t of
                   ScalarT baseT fml pot ->
-                    let fml' = fml --if substituteValueVars then substitute (Map.singleton valueVarName (Var IntS x)) fml else fml
+                    let fml' = if isRes then adjustFml fml else fml
+                        --fml' = fml --if substituteValueVars then substitute (Map.singleton valueVarName (Var IntS x)) fml else fml
                         fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x)) . substitutePredicate pass)
                                           (fml' : allMeasurePostconditions includeQuantified baseT env) 
                         newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls' in 
@@ -70,13 +71,14 @@ embedding env vars includeQuantified substituteValueVars = do
                   AnyT -> Set.singleton ffalse
                   _ -> error $ unwords ["embedding: encountered non-scalar variable", x, "in 0-arity bucket"]
                 Just sch -> addBindings env tass pass qmap fmls rest -- TODO: why did this work before?
+    adjustFml = removePreds (Map.keys (allRMeasures env))
     allSymbols = symbolsOfArity 0 
 
 embedEnv :: Monad s => Environment -> Formula -> Bool -> Bool -> TCSolver s (Set Formula)
-embedEnv env fml consistency subst = do 
+embedEnv env fml consistency isRes = do 
   qmap <- use qualifierMap
   let relevantVars = potentialVars qmap fml
-  embedding env relevantVars consistency subst
+  embedding env relevantVars consistency isRes
 
 embedSynthesisEnv :: MonadHorn s 
                   => Environment 

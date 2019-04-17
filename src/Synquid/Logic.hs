@@ -379,6 +379,20 @@ isExecutable =
       exAlg _               = True
   in cata exAlg
 
+-- Removes non-resource predicates from a large conjunction
+removePreds :: [String] -> Formula -> Formula
+removePreds valid (Binary And f g) = Binary And (removePreds valid f) (removePreds valid g)
+removePreds valid f = if hasInvalid valid f then ftrue else f
+
+hasInvalid :: [String] -> Formula -> Bool
+hasInvalid valid = 
+  let alg (PredF _ x _)   = not (x `elem` valid)
+      alg (UnaryF _ f)    = f 
+      alg (BinaryF _ f g) = f || g
+      alg (IteF f g h)    = f || g || h
+      alg _              = False
+  in  cata alg
+
 -- | 'substitute' @subst fml@: Replace first-order variables in @fml@ according to @subst@
 substitute :: Substitution -> Formula -> Formula
 substitute subst = 

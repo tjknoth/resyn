@@ -26,4 +26,17 @@ member :: x: a -> xs: IList {a | |1} -> {Bool | _v == (x in ielems xs)}
 qualifier { x < y }
 
 diff :: l1: IList {a| |1} -> l2: IList {a| |1} -[1]-> {List a | elems _v == (ielems l1 - ielems l2)}
-diff = ??
+diff = ?? {-\l1 . \l2 . 
+  match l1 with
+    INil -> Nil
+    ICons x4 x5 ->
+      match l2 with
+        INil -> Cons x4 (diff x5 INil)
+        ICons x12 x13 -> 
+          if x12 < x4
+            then diff l1 x13
+            else 
+              if x4 < x12
+                then Cons x4 (diff x5 l2)
+                else diff x5 l2 -}
+

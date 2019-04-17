@@ -129,22 +129,22 @@ DROP_TYPE = '$\\forall\\alpha .\
                      {\\tsubset{\\tlist{\\alpha}}{\T{len} \\nu = \T{len} xs - n}}}$'
 
 MICRO_BENCHMARKS = [
-    MBenchmark('List-Triple1', 'triple append', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$', 1),
-    MBenchmark('List-Triple2', 'triple append\'', TRIPLE_TYPE, 'append\'', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid^2$', 1),
+    MBenchmark('List-Triple1', 'triple', TRIPLE_TYPE, 'append', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid$', 1),
+    MBenchmark('List-Triple2', 'triple\'', TRIPLE_TYPE, 'append\'', ['--multiplicities=false'], '$\mid xs \mid$', '$\mid xs \mid^2$', 1),
     MBenchmark('List-Concat', 'concat list of lists', CONCAT_TYPE, 'append', [], '$\mid xxs \mid$', '$\mid xxs \mid^2$',1),
     MBenchmark('List-Compress', 'compress', COMPRESS_TYPE, '$=$,$\\neq$', [], '$\mid xs \mid$', '$2^{ \mid xs \mid }$',1),
     MBenchmark('List-Intersect', 'common', INTERSECT_TYPE, '$<$, member', ['-f=AllArguments', '-a=2', '--backtrack'], '$\mid ys \mid + \mid zs \mid$', '$\mid ys \mid \mid zs \mid$', 1),
-    MBenchmark('List-Diff', 'list difference', DIFF_TYPE, '$<$, member', ['-f=AllArguments', '-a=2', '--backtrack'], '$\mid ys \mid + \mid zs \mid$', '$\mid ys \mid \mid zs \mid$',1),
+    MBenchmark('List-Diff', 'list difference', DIFF_TYPE, '$<$, member', ['-f=AllArguments', '--backtrack'], '$\mid ys \mid + \mid zs \mid$', '$\mid ys \mid \mid zs \mid$',1),
     MBenchmark('List-Insert', 'insert', INSERT_TYPE , '$<$', ['--backtrack'], '$\mid xs \mid$', '$\mid xs \mid$'),
     MBenchmark('List-Insert-Fine', 'insert\'', INSERT_MEASURE_TYPE, '$<$', ['-a=2', '--backtrack'], '$\T{numgt}(x,xs)$', '$\mid xs \mid$',-1,1),
-    #MBenchmark('List-Insert-Fine-Alt', 'insert\'\'', INSERT_FG_TYPE, '$<$', [], '$\T{numgt}(x,xs)$', '$\mid xs \mid$',-1,1),
+    MBenchmark('List-Insert-Fine-Alt', 'insert\'\'', INSERT_FG_TYPE, '$<$', [], '$\T{numgt}(x,xs)$', '$\mid xs \mid$',-1,1),
     MBenchmark('List-Replicate', 'replicate', REPLICATE_TYPE, 'zero, inc, dec', [], '$n$', '$n$',-1,1),
     MBenchmark('List-Take', 'take', TAKE_TYPE, 'zero, inc, dec', [], '$n$', '$n$',-1,1),
     MBenchmark('List-Drop', 'drop', DROP_TYPE, 'zero, inc, dec', [], '$n$', '$n$',-1,1),
     MBenchmark('List-Range', 'range', RANGE_TYPE, 'inc,dec,$\geq$', ['-f=Nonterminating'], '$hi - lo$', '-',-1,1),
-    MBenchmark('List-Union', 'union', UNION_TYPE, 'min, $\leq$', ['-e'], '$min(\mid xs \mid, \mid ys \mid )$', '$\mid xs \mid$',1,1),
-    MBenchmark('List-InsertCT', 'CT insert', INSERT_TYPE, '$<$', ['--ct', '--backtrack'], '$\mid xs \mid$', '$\mid xs \mid$'),
-    MBenchmark('List-LenCompareCT', 'CT compare', LEN_COMPARE_TYPE, 'true, false, and', ['-f=AllArguments', '-a=2', '--ct'], '$\mid ys \mid$', '$\mid ys \mid$'),
+    #MBenchmark('List-Union', 'union', UNION_TYPE, 'min, $\leq$', ['--explicit-match'], '$min(\mid xs \mid, \mid ys \mid )$', '$\mid xs \mid$',1,1),
+    MBenchmark('List-InsertCT', 'CT insert', INSERT_TYPE, '$<$', ['--ct', '--backtrack', '-a=2'], '$\mid xs \mid$', '$\mid xs \mid$', 1),
+    MBenchmark('List-LenCompareCT', 'CT compare', LEN_COMPARE_TYPE, 'true, false, and', ['-f=AllArguments', '-a=2', '--ct'], '$\mid ys \mid$', '$\mid ys \mid$', 1),
     MBenchmark('List-LenCompare', 'compare', LEN_COMPARE_TYPE, 'true, false, and', ['-f=AllArguments', '-a=2'], '$\mid ys \mid$', '$\mid ys \mid$'),
     #MBenchmark('List-Union', 'union', ''),
     #MBenchmark('List-Pairs', 'ordered pairs', 'append, attach' ),
@@ -166,7 +166,7 @@ ALL_BENCHMARKS = [
         Benchmark('List-Ith', '$i$-th element', '0, inc, dec, $\\leq$, $\\neq$'),
         Benchmark('List-ElemIndex', 'index of element', '0, inc, dec, $=$, $\\neq$'),
         Benchmark('List-Snoc', 'insert at end'),
-        Benchmark('List-Split', 'balanced split', '', ['-m=3']),
+        Benchmark('List-Split', 'balanced split', 'fst, snd, abs', ['-m=3']),
         Benchmark('List-Reverse', 'reverse', 'insert at end'),
         Benchmark('IncList-Insert', 'insert (sorted)', '$\\leq$, $\\neq$'),
         Benchmark('List-ExtractMin', 'extract minimum', '$\\leq$, $\\neq$', ['-a=2', '-m=3']),
@@ -183,7 +183,7 @@ ALL_BENCHMARKS = [
         Benchmark('UniqueList-Insert', 'insert', '$=$, $\\neq$'),
         Benchmark('UniqueList-Delete', 'delete', '$=$, $\\neq$'),
         #Benchmark('List-Nub', 'remove duplicates', 'member', []),
-        Benchmark('List-Compress', 'remove adjacent dupl.', '$=$, $\\neq$', np = 3),
+        Benchmark('List-Compress', 'compress', '$=$, $\\neq$', np = 3),
         Benchmark('UniqueList-Range', 'integer range', '0, inc, dec, $\\leq$, $\\neq$'),
         Benchmark('List-Partition', 'partition', '$\\leq$'),
         #Benchmark('IncList-Pivot', 'append with pivot'),
@@ -192,15 +192,14 @@ ALL_BENCHMARKS = [
         Benchmark('StrictIncList-Insert', 'insert', '$<$'),
         Benchmark('StrictIncList-Delete', 'delete', '$<$'),
         #Benchmark('List-Diff', 'difference', 'member, $<$', ['--backtrack', '-f=AllArguments']),
-        #Benchmark('List-Diff', 'difference', 'member, $<$', ['--backtrack', '-f=AllArguments', '-a=2']),
         #Benchmark('TripleList-Intersect', 'three-way intersection', '$<$, member',['-f=AllArguments','--backtrack','-m=3'])
-        Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments']),
+        Benchmark('StrictIncList-Intersect', 'intersect', '$<$', ['-f=AllArguments', '--backtrack']),
         ]),
     BenchmarkGroup("Tree",  [], [
         Benchmark('Tree-Count', 'node count', '0, 1, +'),
         Benchmark('Tree-Flatten', 'preorder', 'append'),
-        Benchmark('Tree-ToList', 'to list'),
-        Benchmark('Tree-Elem', 'member', '', ['--multiplicities=false'] ),
+        Benchmark('Tree-ToList', 'to list', 'append'),
+        Benchmark('Tree-Elem', 'member', 'false, not, or, $=$', ['--multiplicities=false'] ),
         #Benchmark('Tree-Count', 'size')
         ]),
     BenchmarkGroup("BST", [], [
@@ -211,7 +210,7 @@ ALL_BENCHMARKS = [
         ]),
     BenchmarkGroup("Binary Heap", [], [
         Benchmark('BinHeap-Insert', 'insert', '$\\leq$, $\\neq$'),
-        Benchmark('BinHeap-Member', 'member', '', ['--multiplicities=false']),
+        Benchmark('BinHeap-Member', 'member', 'false, not, or, $\leq$, $\\neq$', ['--multiplicities=false']),
         Benchmark('BinHeap-Singleton', '1-element constructor', '$\\leq$, $\\neq$'),
         Benchmark('BinHeap-Doubleton', '2-element constructor', '$\\leq$, $\\neq$'),
         Benchmark('BinHeap-Tripleton', '3-element constructor', '$\\leq$, $\\neq$')
@@ -245,7 +244,7 @@ def run_benchmark(name, opts, default_opts):
       logfile.write(name + '\n')
       logfile.seek(0, os.SEEK_END)
       # Run Synquid on the benchmark:
-      synthesis_res = run(TIMEOUT_CMD + SYNQUID_CMD + COMMON_OPTS + RESOURCE_OPTS + opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
+      synthesis_res = run(TIMEOUT_CMD + TIMEOUT + SYNQUID_CMD + COMMON_OPTS + RESOURCE_OPTS + opts + [name + '.sq'], stdout=PIPE, stderr=PIPE, universal_newlines=True)
       end = time.time()
 
       print('{0:0.2f}'.format(end - start), end = ' ')
@@ -313,13 +312,13 @@ def run_micro_benchmark(name, opts, default_opts, eac, incremental):
 
       eac_opts = ['--eac', '--backtrack']
       if eac < 0:
-          micro_results[name].eac_time = '-'
+          micro_results[name].eac_time = '{-}'
       else:
           run_micro_version(name, logfile, 'EAC', eac_opts, lambda t: set_eac_time(micro_results, name, t))
 
       incremental_opts = ['--inc-cegis=false']
       if incremental < 0:
-          micro_results[name].incremental_time = '-'
+          micro_results[name].incremental_time = '{-}'
       else:
           run_micro_version(name, logfile, 'NONINCREMENTAL', incremental_opts, lambda t: set_inc_time(micro_results, name, t))
 
@@ -518,6 +517,8 @@ def cmdline():
     a = argparse.ArgumentParser()
     a.add_argument('--medium', action='store_true')
     a.add_argument('--small', action='store_true')
+    a.add_argument('--rerun', nargs=1, help='Rerun given benchmark')
+    a.add_argument('--rerun-micro', nargs=1, help='Rerun given micro benchmark')
     return a.parse_args()
 
 if __name__ == '__main__':
@@ -546,24 +547,42 @@ if __name__ == '__main__':
     # Run experiments
     groups = ALL_BENCHMARKS[:1] if cl_opts.small else ALL_BENCHMARKS
 
-    for group in groups:
-        for b in group.benchmarks:
-            if b.name in results:
-                print(b.str() + Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'SKIPPED' + Style.RESET_ALL)
-            else:
-                print(b.str())
-                run_benchmark(b.name, b.options, group.default_options)
-                with open(DUMPFILE, 'wb') as data_dump:
-                    pickle.dump(results, data_dump)
 
-    for b in MICRO_BENCHMARKS:
-        if b.name in micro_results:
-            print(b.str() + Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'SKIPPED' + Style.RESET_ALL)
-        else:
+    if cl_opts.rerun:
+        bs = [b for g in groups for b in g if b.name == cl_opts.rerun[0]]
+        for b in bs:
+            print(b.str())
+            run_benchmark(b.name, b.options, [])
+            with open(DUMPFILE, 'wb') as data_dump:
+                pickle.dump(results, data_dump)
+    if cl_opts.rerun_micro:
+        bs = [b for b in MICRO_BENCHMARKS if b.name == cl_opts.rerun_micro[0]]
+        for b in bs:
             print(b.str())
             run_micro_benchmark(b.name, b.options, [], b.eac, b.incremental)
             with open(MICRO_DUMPFILE, 'wb') as data_dump:
                 pickle.dump(micro_results, data_dump)
+
+
+    else:
+        for group in groups:
+            for b in group.benchmarks:
+                if b.name in results:
+                    print(b.str() + Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'SKIPPED' + Style.RESET_ALL)
+                else:
+                    print(b.str())
+                    run_benchmark(b.name, b.options, group.default_options)
+                    with open(DUMPFILE, 'wb') as data_dump:
+                        pickle.dump(results, data_dump)
+
+        for b in MICRO_BENCHMARKS:
+            if b.name in micro_results:
+                print(b.str() + Back.YELLOW + Fore.YELLOW + Style.BRIGHT + 'SKIPPED' + Style.RESET_ALL)
+            else:
+                print(b.str())
+                run_micro_benchmark(b.name, b.options, [], b.eac, b.incremental)
+                with open(MICRO_DUMPFILE, 'wb') as data_dump:
+                    pickle.dump(micro_results, data_dump)
 
     med_slowdown = median([results[b.name].pct_slowdown for g in groups for b in g.benchmarks])
     print('Median slowdown = ' + str(med_slowdown))
