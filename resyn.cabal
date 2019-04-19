@@ -33,7 +33,6 @@ Library
                     , Synquid.Resolver
                     , Synquid.Solver.CEGIS
                     , Synquid.Solver.HornClause
-                    , Synquid.Solver.LP
                     , Synquid.Solver.Monad
                     , Synquid.Solver.Resource
                     , Synquid.Solver.TypeConstraint
@@ -79,8 +78,6 @@ Library
                     , extra >= 1.4
                     , bifunctors >= 5.0
                     , recursion-schemes > 5.0
-                    , limp >= 0.3
-                    , limp-cbc >= 0.3
   
 
 executable resyn 

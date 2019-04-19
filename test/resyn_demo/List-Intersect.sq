@@ -1,0 +1,31 @@
+-- Flags: -f=AllArguments, -a=2, --backtrack
+
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+  
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+  
+measure elems :: List a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs  
+  
+data IList a  where 
+  INil :: IList a 
+  ICons :: x: a -> xs: IList {a | x <= _v } -> IList a 
+
+termination measure ilen :: IList a -> {Int | _v >= 0} where 
+  INil -> 0 
+  ICons x xs -> 1 + ilen xs
+
+measure ielems :: IList a -> Set a where 
+  INil -> []
+  ICons x xs -> [x] + ielems xs
+
+member :: x: a -> xs: IList {a| |1} -> {Bool | _v == (x in ielems xs)}
+qualifier { x < y }
+
+intersect :: l1: IList {a| |1} -> l2: IList {a| |1} -[1]-> {List a | elems _v == (ielems l1 * ielems l2)}
+intersect = ?? 
