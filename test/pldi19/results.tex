@@ -1,4 +1,5 @@
-\multirow{22}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{List}}} & is empty & true, false & 16 & 0.20 & 0.16 \\
+\multirow{22}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{List}}} 
+ & is empty & true, false & 16 & 0.20 & 0.16 \\
  & member & true, false, $=$, $\neq$ & 41 & 0.24 & 0.21 \\
  & duplicate each element &  & 39 & 0.52 & 0.27 \\
  & replicate & 0, inc, dec, $\leq$, $\neq$ & 31 & 2.88 & 0.23 \\
@@ -20,23 +21,28 @@
  & length using fold & 0, inc, dec & 39 & 0.27 & 0.21 \\
  & append using fold &  & 42 & 0.32 & 0.26 \\
  & map &  & 27 & 0.28 & 0.19 \\
-\hline\multirow{5}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Unique list}}} & insert & $=$, $\neq$ & 49 & 0.83 & 0.44 \\
+\hline\multirow{5}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Unique list}}} 
+ & insert & $=$, $\neq$ & 49 & 0.83 & 0.44 \\
  & delete & $=$, $\neq$ & 45 & 0.53 & 0.34 \\
  & compress & $=$, $\neq$ & 64 & 4.98 & 1.85 \\
  & integer range & 0, inc, dec, $\leq$, $\neq$ & 46 & 88.35 & 5.14 \\
  & partition & $\leq$ & 71 & 13.04 & 5.46 \\
-\hline\multirow{3}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Sorted list}}} & insert & $<$ & 64 & 1.62 & 0.57 \\
+\hline\multirow{3}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Sorted list}}} 
+ & insert & $<$ & 64 & 1.62 & 0.57 \\
  & delete & $<$ & 52 & 0.47 & 0.30 \\
  & intersect & $<$ & 71 & 17.01 & 0.76 \\
-\hline\multirow{4}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Tree}}} & node count & 0, 1, + & 34 & 3.84 & 0.52 \\
+\hline\multirow{4}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Tree}}} 
+ & node count & 0, 1, + & 34 & 3.84 & 0.52 \\
  & preorder & append & 45 & 3.03 & 0.55 \\
  & to list & append & 45 & 2.99 & 0.54 \\
  & member & false, not, or, $=$ & 63 & 2.17 & 0.60 \\
-\hline\multirow{4}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{BST}}} & member & true, false, $\leq$, $\neq$ & 72 & 0.50 & 0.32 \\
+\hline\multirow{4}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{BST}}} 
+ & member & true, false, $\leq$, $\neq$ & 72 & 0.50 & 0.32 \\
  & insert & $\leq$, $\neq$ & 90 & 4.49 & 1.55 \\
  & delete & $\leq$, $\neq$ & 103 & 26.77 & 9.25 \\
  & BST sort & $\leq$, $\neq$ & 191 & 8.97 & 4.27 \\
-\hline\multirow{5}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Binary Heap}}} & insert & $\leq$, $\neq$ & 90 & 3.21 & 1.03 \\
+\hline\multirow{5}{*}{\parbox{1cm}{\vspace{-0.85\baselineskip}\center{Binary Heap}}} 
+ & insert & $\leq$, $\neq$ & 90 & 3.21 & 1.03 \\
  & member & false, not, or, $\leq$, $\neq$ & 78 & 2.34 & 0.84 \\
  & 1-element constructor & $\leq$, $\neq$ & 44 & 0.21 & 0.21 \\
  & 2-element constructor & $\leq$, $\neq$ & 91 & 0.67 & 0.34 \\
