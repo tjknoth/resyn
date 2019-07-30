@@ -18,6 +18,15 @@ measure tails :: SList a -> Set a where
   Nil -> []
   Cons x xs -> if elems xs == [] then [x] else tails xs
 
+-- Given an element x and a strictly increasing list xs, return the number of elements
+--   in xs that are larger than x (if xs contains x)
+measure numPast :: x: a -> SList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons y ys -> 
+    if x == y
+      then len ys
+      else 1 + numPast x ys
+
 data PairList a where
   PNil :: PairList a
   PCons :: x: a -> y: {a | x < _v} -> PairList a -> PairList a
@@ -25,6 +34,18 @@ data PairList a where
 termination measure plen :: PairList a -> {Int | _v >= 0} where
   PNil -> 0
   PCons x y xs -> 1 + plen xs
+
+-- Given an element x and a list of pairs ps, return the number of pairs
+--   p in ps s.t. (fst p == x)
+measure numWithFst :: x: a -> PairList a -> {Int | _v >= 0} where
+  PNil -> 0
+  PCons fst snd ps ->
+    if fst < x
+      then numWithFst x ps
+      else 
+        if fst == x
+          then 1 + numWithFst x ps
+          else 0
 
 measure fstElems :: PairList a -> Set a where
   PNil -> []
@@ -42,5 +63,6 @@ attach :: x: a -> xs: SList {a | x < _v }
       -> {PairList a | (fstElems _v == if elems xs == [] then [] else [x]) && sndElems _v == elems xs}
 --attach = ??
 
-pairs :: xs: SList {a| |1} -> {PairList a | sndElems _v == elems xs - heads xs && fstElems _v == elems xs - tails xs}
-pairs = ??
+--pairs :: xs: SList {a| |1} -> res: {PairList {a|numWithFst _v res == numPast _v xs} | sndElems _v == elems xs - heads xs && fstElems _v == elems xs - tails xs}
+pairs :: xs: SList {a| |1} -[1]-> {PairList a | sndElems _v == elems xs - heads xs && fstElems _v == elems xs - tails xs}
+pairs = ?? 

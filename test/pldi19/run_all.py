@@ -199,7 +199,9 @@ ALL_BENCHMARKS = [
         Benchmark('Tree-Count', 'node count', '0, 1, +'),
         Benchmark('Tree-Flatten', 'preorder', 'append'),
         Benchmark('Tree-ToList', 'to list', 'append'),
-        Benchmark('Tree-Elem', 'member', 'false, not, or, $=$', ['--multiplicities=false'] ),
+        Benchmark('Tree-Elem', 'member', 'false, not, or, $=$', ['--multiplicities=false'] )
+        #Benchmark('Tree-BalancedReplicate', 'create balanced', '0, inc, dec,
+        #$\\leq$, $\\neq$' )
         #Benchmark('Tree-Count', 'size')
         ]),
     BenchmarkGroup("BST", [], [
@@ -208,6 +210,25 @@ ALL_BENCHMARKS = [
         Benchmark('BST-Delete', 'delete', '$\\leq$, $\\neq$'),
         Benchmark('BST-Sort', 'BST sort', '$\\leq$, $\\neq$')
         ]),
+    BenchmarkGroup("AVL", ['-a=2'], [
+        Benchmark('AVL-RotateL', 'rotate left', 'inc', ['-a 2', '-u']),
+        Benchmark('AVL-RotateR', 'rotate right', 'inc', ['-a 2', '-u']),
+        Benchmark('AVL-Balance', 'balance', 'rotate, nodeHeight, isSkewed, isLHeavy, isRHeavy', ['-a 2', '-e']),
+        Benchmark('AVL-Insert', 'insert', 'balance, $<$', ['-a 2']),
+        Benchmark('AVL-ExtractMin', 'extract minimum', '$<$', ['-a 2']),
+        Benchmark('AVL-Delete', 'delete', 'extract minimum, balance, $<$', ['-a 2', '-m 1']),
+        ]),        
+    BenchmarkGroup("RBT", ['-m=1', '-a=2'], [
+        Benchmark('RBT-BalanceL', 'balance left', '', ['-m=1', '-a=2']),
+        Benchmark('RBT-BalanceR', 'balance right', '', ['-m=1', '-a=2']),
+        Benchmark('RBT-Insert', 'insert', 'balance left, right, $\\leq$, $\\neq$', ['-m=1', '-a=2'])
+        ]),
+    BenchmarkGroup("User", [], [
+        Benchmark('Evaluator', 'desugar AST', '0, 1, 2'),
+        Benchmark('AddressBook-Make', 'make address book', 'is private', ['-a=2']),
+        #Benchmark('AddressBook-Merge', 'merge address books', 'append', ['-a=2'])
+        ]),
+
     BenchmarkGroup("Binary Heap", [], [
         Benchmark('BinHeap-Insert', 'insert', '$\\leq$, $\\neq$'),
         Benchmark('BinHeap-Member', 'member', 'false, not, or, $\leq$, $\\neq$', ['--multiplicities=false']),

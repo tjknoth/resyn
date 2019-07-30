@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, StandaloneDeriving #-}
+    {-# LANGUAGE DeriveDataTypeable, StandaloneDeriving #-}
 
 module Main where
 
@@ -152,7 +152,7 @@ synt = Synthesis {
   aux_max             = 1               &= help ("Maximum depth of auxiliary functions (default: 1)") &= name "x",
   fix                 = FirstArgument   &= help (unwords ["What should termination metric for fixpoints be derived from?", show AllArguments, show FirstArgument, show DisableFixpoint, show Nonterminating, "(default:", show FirstArgument, ")"]),
   generalize_preds    = True            &= help ("Make recursion polymorphic in abstract refinements (default: False)"),
-  explicit_match      = False           &= help ("Do not abduce match scrutinees (default: False)"),
+  explicit_match      = False           &= help ("Do not abduce match scrutinees (default: False)") &= name "e",
   unfold_locals       = False           &= help ("Use all variables, as opposed to top-level function arguments only, in match scrutinee abduction (default: False)"),
   partial             = False           &= help ("Generate best-effort partial solutions (default: False)") &= name "p",
   incremental         = True            &= help ("Subtyping checks during bottom-up phase (default: True)"),
