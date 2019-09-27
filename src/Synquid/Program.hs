@@ -589,7 +589,8 @@ data Constraint =
   | WellFormed !Environment !RType 
   | WellFormedCond !Environment !Formula
   | WellFormedMatchCond !Environment !Formula
-  | WellFormedPredicate !Environment ![Sort] !Id
+--  | WellFormedPredicate !Environment ![Sort] !Id -- APs: changed to make Pretty.hs show correct predicate constraints
+  | WellFormedPredicate !Environment ![Sort] !Sort !Id
   | SharedEnv !Environment !Environment !Environment 
   | SharedForm !Environment !Formula !Formula !Formula 
   | Transfer !Environment !Environment
@@ -602,7 +603,8 @@ envFrom (Subtype e _ _ _)           = e
 envFrom (RSubtype e _ _)            = e
 envFrom (WellFormed e _)            = e
 envFrom (WellFormedCond e _)        = e
-envFrom (WellFormedPredicate e _ _) = e
+-- envFrom (WellFormedPredicate e _ _) = e -- APs: adjusted to reflect new signature
+envFrom (WellFormedPredicate e _ _ _) = e
 envFrom (SharedEnv e _ _)           = e
 envFrom (SharedForm e _ _ _)        = e
 envFrom (ConstantRes e)             = e
