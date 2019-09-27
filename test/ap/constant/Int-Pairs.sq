@@ -1,6 +1,6 @@
-data SList a where
-  Nil :: SList a
-  Cons :: x: a -> xs: SList {a | x < _v} -> SList a
+data SList a <q1 :: Int> <q2 :: Int> where
+  Nil :: SList a <q1> <q2>
+  Cons :: x: {a | | q1} -> xs: SList {a | x < _v | 0} <{q1 + q2}> <q2> -> SList a <q1> <q2>
 
 termination measure len :: SList a -> {Int | _v >= 0} where
   Nil -> 0
@@ -36,16 +36,15 @@ measure sndElems :: PairList a -> Set a where
 
 append :: xs: PairList a -> ys: PairList a 
   -> {PairList a | fstElems _v == fstElems xs + fstElems ys && sndElems _v == sndElems xs + sndElems ys}
-append = ??
   
-attach :: x: a -> xs: SList {a | x < _v} 
+attach :: x: a -> xs: SList {a | x < _v} <{0}> <{0}> 
   -> {PairList a | (fstElems _v == if elems xs == [] then [] else [x]) && sndElems _v == elems xs}
 attach = \x . \xs.
   match xs with
     Nil -> PNil
     Cons y ys -> PCons x y (attach x ys)
 
-pairs :: xs: SList a -> {PairList a | sndElems _v == elems xs - heads xs && fstElems _v == elems xs - tails xs}
+pairs :: xs: SList a <{0}> <{0}> -[1]-> {PairList a | sndElems _v == elems xs - heads xs && fstElems _v == elems xs - tails xs}
 pairs = \xs .
   match xs with
     Nil -> PNil

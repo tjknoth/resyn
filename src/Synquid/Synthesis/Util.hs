@@ -177,7 +177,7 @@ instantiate env sch top argNames = do
       instantiate' subst (Map.insert p fml pSubst) sch
 -}
     instantiate' subst pSubst (ForallP (PredSig p argSorts resSort) sch) = do
-      let argSorts' = map (sortSubstitute (asSortSubst subst)) argSorts -- TODO: do I need to also substitute return type?
+      let argSorts' = map (sortSubstitute (asSortSubst subst)) argSorts
       fml <- if top
               then do
                 p' <- freshId (map toUpper p)

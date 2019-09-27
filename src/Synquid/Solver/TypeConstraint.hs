@@ -372,38 +372,38 @@ insertRVar (name, info) = Map.insert name info -- APs: copied from Util file to 
 -- | Takes a formula and replaces each AP with a variable that has the same id
 strip :: Monad s => Environment -> Formula -> TCSolver s Formula
 strip env p = case p of
-  BoolLit _           -> do traceM $ "stripping bool: " ++ (show p)
+  BoolLit _           -> do writeLog 4 $ text $ "stripping bool: " ++ (show p)
                             return p
-  IntLit _            -> do traceM $ "stripping int: " ++ (show p)
+  IntLit _            -> do writeLog 4 $ text $ "stripping int: " ++ (show p)
                             return p
-  SetLit _ _          -> do traceM $ "stripping set: " ++ (show p)
+  SetLit _ _          -> do writeLog 4 $ text $ "stripping set: " ++ (show p)
                             return p
-  Var _ _             -> do traceM $ "stripping var: " ++ (show p)
+  Var _ _             -> do writeLog 4 $ text $ "stripping var: " ++ (show p)
                             return p
-  Unknown _ _         -> do traceM $ "stripping unknown: " ++ (show p)
+  Unknown _ _         -> do writeLog 4 $ text $ "stripping unknown: " ++ (show p)
                             return p
-  Unary op fml        -> do traceM $ "stripping unary: " ++ (show p)
+  Unary op fml        -> do writeLog 4 $ text $ "stripping unary: " ++ (show p)
                             strf <- strip env fml
                             return $ Unary op strf
-  Binary op fml1 fml2 -> do traceM $ "stripping bin: " ++ (show p)
+  Binary op fml1 fml2 -> do writeLog 4 $ text $ "stripping bin: " ++ (show p)
                             strf1 <- strip env fml1
                             strf2 <- strip env fml2
                             return $ Binary op strf1 strf2
-  Ite i t e           -> do traceM $ "stripping ite: " ++ (show p)
+  Ite i t e           -> do writeLog 4 $ text $ "stripping ite: " ++ (show p)
                             stri <- strip env i
                             strt <- strip env t
                             stre <- strip env e
                             return $ Ite i strt stre
-  Pred sort id _      -> do traceM $ show (env ^. boundPredicates)
+  Pred sort id _      -> do writeLog 4 $ text $ show (env ^. boundPredicates)
                             if sort == BoolS
-                              then do traceM $ "stripping pred:"
+                              then do writeLog 4 $ text $ "stripping pred:"
                                       return p
-                              else do traceM $ "stripping AP: " ++ (show p)
+                              else do writeLog 4 $ text $ "stripping AP: " ++ (show p)
                                       resourceVars %= insertRVar (id, [])
                                       return $ Var sort id
-  Cons _ _ _          -> do traceM $ "stripping constructor app: " ++ (show p)
+  Cons _ _ _          -> do writeLog 4 $ text $ "stripping constructor app: " ++ (show p)
                             return p
-  All _ _             -> do traceM $ "stripping forall: " ++ (show p)
+  All _ _             -> do writeLog 4 $ text $ "stripping forall: " ++ (show p)
                             return p
   _                   ->    return p
 
