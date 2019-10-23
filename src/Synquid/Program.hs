@@ -539,7 +539,7 @@ refineTop env (ScalarT (DatatypeT name tArgs []) _ _) = ScalarT (DatatypeT name 
 refineTop env (ScalarT (DatatypeT name tArgs pArgs) _ _) =
   let variances = env ^. (datatypes . to (Map.! name) . predVariances) in
   --ScalarT (DatatypeT name (map (refineTop env) tArgs) (map (BoolLit . not) variances)) ftrue defPotential -- APs: discriminate between pred/AP
-  ScalarT (DatatypeT name (map (refineTop env) tArgs) (case (predSigResSort . head . (traceShow name) . (traceShow (_predParams $ (env ^. datatypes) Map.! name)) . _predParams $ (env ^. datatypes) Map.! name) of
+  ScalarT (DatatypeT name (map (refineTop env) tArgs) (case (predSigResSort . head . _predParams $ (env ^. datatypes) Map.! name) of
                                                          BoolS -> (map (BoolLit . not) variances)
                                                          IntS  -> (map (IntLit . (\_ -> 0)) variances) )) 
                                                        ftrue defPotential
@@ -555,7 +555,7 @@ refineBot env (ScalarT (DatatypeT name tArgs []) _ _) = ScalarT (DatatypeT name 
 refineBot env (ScalarT (DatatypeT name tArgs pArgs) _ _) =
   let variances = env ^. (datatypes . to (Map.! name) . predVariances) in
   --ScalarT (DatatypeT name (map (refineBot env) tArgs) (map BoolLit variances)) ffalse defPotential -- APs: discriminate between pred/AP
-  ScalarT (DatatypeT name (map (refineBot env) tArgs) (case (predSigResSort . head . (traceShow name) .(traceShow (_predParams $ (env ^. datatypes) Map.! name)) ._predParams $ (env ^. datatypes) Map.! name) of
+  ScalarT (DatatypeT name (map (refineBot env) tArgs) (case (predSigResSort . head . _predParams $ (env ^. datatypes) Map.! name) of
                                                          BoolS -> (map BoolLit variances)
                                                          IntS  -> (map (IntLit . (\_ -> 9999)) variances) )) 
                                                        ffalse defPotential

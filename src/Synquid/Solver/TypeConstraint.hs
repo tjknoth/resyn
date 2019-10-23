@@ -400,6 +400,11 @@ strip env p = case p of
                                       return p
                               else do writeLog 4 $ text $ "stripping AP: " ++ (show p)
                                       resourceVars %= insertRVar (id, [])
+                                      pass <- use predAssignment
+                                      tass <- use typeAssignment
+                                      let subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass
+                                      simpleConstraints %= (RSubtype env (Var sort id) (subst p) :) 
+                                      simpleConstraints %= (RSubtype env (subst p) (Var sort id) :) 
                                       return $ Var sort id
   Cons _ _ _          -> do writeLog 4 $ text $ "stripping constructor app: " ++ (show p)
                             return p

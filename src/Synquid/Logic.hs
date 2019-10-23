@@ -148,7 +148,7 @@ embedLit err _              = error $ unwords ["embedLit: non-literal base funct
 
 
 dontCare = "_"
-valueVarName = "_v"
+valueVarName = "_v" --need to modify for dependent polys
 unknownName (Unknown _ name) = name
 varName (Var _ name) = name
 varType (Var t _) = t

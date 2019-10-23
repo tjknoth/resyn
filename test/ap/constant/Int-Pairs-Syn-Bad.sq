@@ -39,13 +39,6 @@ append :: xs: PairList a -> ys: PairList a
   
 attach :: x: a -> xs: SList {a | x < _v} <{0}> <{0}> 
   -> {PairList a | (fstElems _v == if elems xs == [] then [] else [x]) && sndElems _v == elems xs}
-attach = \x . \xs.
-  match xs with
-    Nil -> PNil
-    Cons y ys -> PCons x y (attach x ys)
 
-pairs :: xs: SList a <{2}> <{2}> -[1]-> {PairList a | sndElems _v == elems xs - heads xs && fstElems _v == elems xs - tails xs}
-pairs = \xs .
-  match xs with
-    Nil -> PNil
-    Cons y ys -> append (attach y ys) (pairs ys)
+pairs :: xs: SList a <{0}> <{0}> -[1]-> {PairList a | sndElems _v == elems xs - heads xs && fstElems _v == elems xs - tails xs}
+pairs = ??

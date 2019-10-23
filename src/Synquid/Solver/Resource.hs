@@ -97,8 +97,8 @@ generateFormula' checkMults c = do
     RSubtype env pl pr -> do
       op <- subtypeOp
       substs <- generateFreshUniversals env
-      let fml = mkRForm substs Map.empty $ pl `op` pr
-      embedAndProcessConstraint env Nothing fml
+      let fml = mkRForm substs Map.empty $ pl `op` pr 
+      embedAndProcessConstraint env Nothing fml 
     SharedForm env f fl fr -> do
       let sharingFml = f |=| (fl |+| fr)
       let wf = conjunction [f |>=| fzero, fl |>=| fzero, fr |>=| fzero]
