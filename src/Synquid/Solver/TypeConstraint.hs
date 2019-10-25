@@ -227,7 +227,7 @@ simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@(TypeVarT _ a _) rl pl) tr@(
     = do -- APs: modifying Subtype case to strip formulas before simplification
         strL <- strip env pl
         strR <- strip env pr
-        simpleConstraints %= (RSubtype (addVariable valueVarName tl env) strL strR :)
+        simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
         simplifyConstraint (Subtype env (ScalarT bl rl fzero) (ScalarT br rr fzero) False)
 -- Data types: can compare potentials
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@DatatypeT{} rl pl) tr@(ScalarT br@DatatypeT{} rr pr) False)
@@ -235,7 +235,7 @@ simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@DatatypeT{} rl pl) tr@(Scala
     = do
         strL <- strip env pl
         strR <- strip env pr
-        simpleConstraints %= (RSubtype (addVariable valueVarName tl env) strL strR :)
+        simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
         simplifyConstraint (Subtype env (ScalarT bl rl pl) (ScalarT br rr fzero) False)
 -- Bools
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT BoolT rl pl) tr@(ScalarT BoolT rr pr) False)
@@ -243,7 +243,7 @@ simplifyConstraint' _ _ (Subtype env tl@(ScalarT BoolT rl pl) tr@(ScalarT BoolT 
     = do
         strL <- strip env pl
         strR <- strip env pr
-        simpleConstraints %= (RSubtype (addVariable valueVarName tl env) strL strR :)
+        simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
         simplifyConstraint (Subtype env (ScalarT BoolT rl pl) (ScalarT BoolT rr fzero) False)
 -- Ints
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT IntT rl pl) tr@(ScalarT IntT rr pr) False)
@@ -251,7 +251,7 @@ simplifyConstraint' _ _ (Subtype env tl@(ScalarT IntT rl pl) tr@(ScalarT IntT rr
     = do
         strL <- strip env pl
         strR <- strip env pr
-        simpleConstraints %= (RSubtype (addVariable valueVarName tl env) strL strR :)
+        simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
         simplifyConstraint (Subtype env (ScalarT IntT rl pl) (ScalarT IntT rr fzero) False)
 
 
@@ -327,7 +327,7 @@ simplifyConstraint' _ _ (Subtype env t@(ScalarT (DatatypeT name [] (pArg:pArgs))
           do
             strL <- strip env pArg
             strR <- strip env pArg'
-            simpleConstraints %= (RSubtype env strL strR :) 
+            simpleConstraints %= (RSubtype env pArg pArg' :) 
       simplifyConstraint (Subtype env (ScalarT (DatatypeT name [] pArgs) fml pot) (ScalarT (DatatypeT name' [] pArgs') fml' pot') consistency)
 simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) True)
   = if isScalarType tArg1

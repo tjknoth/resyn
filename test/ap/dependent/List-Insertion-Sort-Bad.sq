@@ -26,7 +26,7 @@ insert = \x. \xs.
         then Cons y (insert x ys)
         else Cons x (Cons y ys)
 
-insertionSort :: xs: List a <{1}> <{if (_1 > _0) then 1 else 0}> -[1]-> List a <{0}> <{0}>
+insertionSort :: xs: List a <{0}> <{0}> -[1]-> List a <{0}> <{0}>
 insertionSort = \xs.
   match xs with 
     Nil -> Nil
