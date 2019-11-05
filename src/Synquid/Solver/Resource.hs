@@ -367,13 +367,10 @@ generateFreshUniversals env = do
       x' <- freshVersion x 
       return $ Var (sortFrom sch) x'
 
---reusing RVar
-insertRVar (name, info) = Map.insert name info
 freshenFormula :: Monad s => [String] -> Substitution -> Formula -> TCSolver s Substitution -- APs
 freshenFormula fList subst (Var sort id) 
   | elem id fList = do
       var' <- Var sort <$> freshVersion id
-      resourceVars %= insertRVar (id, [])
       return $ Map.insertWith (\_ x -> x) id var' subst
   | otherwise = return subst
 freshenFormula fList subst (Unary _ fml) =
