@@ -47,7 +47,8 @@ import Debug.Trace
 embedding :: Monad s => Environment -> Set Id -> Bool -> Bool -> TCSolver s (Set Formula)
 embedding env vars includeQuantified isRes = do
     tass <- use typeAssignment
-    pass <- use predAssignment
+    let pass = _predAssignment env
+    --pass <- use predAssignment
     qmap <- use qualifierMap
     let ass = Set.map (substitutePredicate pass) (env ^. assumptions)
     let allVars = vars `Set.union` potentialVars qmap (conjunction ass)

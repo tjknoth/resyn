@@ -226,6 +226,8 @@ type ArgMap = Map Id (Set [Formula])
 -- | Typing environment
 data Environment = Environment {
   -- | Variable part:
+  _predAssignment :: Substitution,           -- ^ Current assignment to free predicate variables
+
   _symbols :: SymbolMap,                     -- ^ Variables and constants (with their refinement types), indexed by arity
   _ghostSymbols :: (Set Id),                 -- ^ Set of names of variables that do not carry potential -- ignored in sharing and transfer constraints
   _freePotential :: Formula,                 -- ^ Extra free potential, used only for weakening
@@ -258,6 +260,7 @@ instance Ord Environment where
 
 -- | Empty environment
 emptyEnv = Environment {
+  _predAssignment = Map.empty,
   _symbols = Map.empty,
   _ghostSymbols = Set.empty,
   _freePotential = fzero,

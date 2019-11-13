@@ -81,7 +81,7 @@ data TypingState = TypingState {
   -- Persistent state:
   _typingConstraints :: [Constraint],           -- ^ Typing constraints yet to be converted to horn clauses
   _typeAssignment :: TypeSubstitution,          -- ^ Current assignment to free type variables
-  _predAssignment :: Substitution,              -- ^ Current assignment to free predicate variables  _qualifierMap :: QMap,
+  -- _predAssignment :: Substitution,              -- ^ Current assignment to free predicate variables  _qualifierMap :: QMap,
   _qualifierMap :: QMap,                        -- ^ Current state space for predicate unknowns
   _candidates :: [Candidate],                   -- ^ Current set of candidate liquid assignments to unknowns
   _initEnv :: Environment,                      -- ^ Initial environment
