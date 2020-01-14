@@ -286,8 +286,8 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
     generateMatchesFor matchCEnv matchBEnv [] pBaseCase t = return pBaseCase
     generateMatchesFor matchCEnv matchBEnv (matchCond : rest) pBaseCase t = do
       let (Binary Eq matchVar@(Var _ x) (Cons _ c _)) = matchCond
-      scrT@(ScalarT (DatatypeT scrDT _ _) _ _) <- runInSolver 
-        $ currentAssignment (toMonotype $ symbolsOfArity 0 matchCEnv Map.! x)
+      scrT <- runInSolver $ currentAssignment (toMonotype $ symbolsOfArity 0 env Map.! x)
+      let (ScalarT (DatatypeT scrDT _ _) _ _)  = scrT
       let pScrutinee = Program (PSymbol x) scrT
       let ctors = ((env ^. datatypes) Map.! scrDT) ^. constructors
       let matchBEnv' = addScrutinee pScrutinee matchBEnv

@@ -18,10 +18,11 @@ import Control.Lens
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Trans.Except
+import Control.Monad.Fail
 
 {- Monadic structure of solvers -}
 
-class (Monad s, Applicative s) => MonadSMT s where  
+class (Monad s, Applicative s, MonadFail s) => MonadSMT s where  
   initSolver :: Environment -> s ()                                                  -- ^ Initialize solver  
   isSat :: Formula -> s Bool                                                         -- ^ 'isSat' @fml@: is @fml@ satisfiable?
   allUnsatCores :: Formula -> Formula -> [Formula] -> s [[Formula]]                  -- ^ 'allUnsatCores' @assumption@ @mustHave@ @fmls@: all minimal unsatisfiable subsets of @fmls@ with @mustHave@, which contain @mustHave@, assuming @assumption@
@@ -33,7 +34,7 @@ class (Monad s, Applicative s, MonadIO s) => RMonad s where
   filterPreds :: [ProcessedRFormula] -> SMTModel -> s [ProcessedRFormula]
   translate :: Formula -> s Formula
 
-class (Monad s, Applicative s) => MonadHorn s where
+class (Monad s, Applicative s, MonadFail s) => MonadHorn s where
   initHornSolver :: Environment -> s Candidate                                                -- ^ Initial candidate solution
   preprocessConstraint :: Formula -> s [Formula]                                              -- ^ Convert a Horn clause to the format this solver can handle
   checkCandidates :: Bool -> [Formula] -> ExtractAssumptions ->[Candidate] -> s [Candidate]   -- ^ Check validity or consistency of constraints under current candidates

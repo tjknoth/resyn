@@ -3,12 +3,12 @@ flags:
     resyn: true
 packages:
   - '.'
-resolver: lts-8.0
-extra-deps: 
+resolver: lts-13.11
+extra-deps:
   - z3-4.3.1
-  - haskell-src-exts-1.17.1
-  - limp-0.3.2.3
-  - limp-cbc-0.3.2.3
+  - recursion-schemes-5.0.2
+#  - limp-0.3.2.3
+#  - limp-cbc-0.3.2.3
 # extra-include-dirs:
 #  - <z3-home>/src/api
 # extra-lib-dirs:

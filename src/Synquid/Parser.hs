@@ -22,6 +22,7 @@ import Text.Parsec.Expr
 import Text.Parsec.Indent
 import Text.Parsec.Error
 import Text.PrettyPrint.ANSI.Leijen (text, vsep)
+import Debug.Trace
 
 {- Interface -}
 
@@ -54,7 +55,6 @@ opStart = nub (map head opNames)
 opLetter :: [Char]
 opLetter = nub (concatMap tail opNames)
 
---synquidDef :: Token.GenLanguageDef String st (State SourcePos)
 synquidDef = Token.LanguageDef
   commentStart
   commentEnd
@@ -68,7 +68,6 @@ synquidDef = Token.LanguageDef
   opNames
   True
 
---lexer :: Token.GenTokenParser String st (ReaderT SourcePos)
 lexer = Token.makeTokenParser synquidDef
 
 identifier = Token.identifier lexer
@@ -497,9 +496,7 @@ attachPosBefore = liftM2 Pos getPosition
 
 {- Debug -}
 
-{-
 printCurPos :: String -> Parser ()
 printCurPos msg = do
   pos <- getPosition
   trace (msg ++ show pos) $ return ()
--}

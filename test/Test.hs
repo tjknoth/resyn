@@ -116,48 +116,28 @@ logicAST =
           f6
           (Set.fromList ["pred", "elem"])
           (text "predsOf" <+> text f6)
-      , mkFmlTest
-          hasPred
-          f1
-          False
-          (text "hasPred" <+> text f1)
-      , mkFmlTest
-          hasPred
-          f4
-          True
-          (text "hasPred" <+> text f4)
-      , mkFmlTest
-          hasPred
-          f6
-          True
-          (text "hasPred" <+> text f6)
       , mkTest
-          hasPred
-          f5
-          False
-          (text "hasPred" <+> pretty f5)
-      , mkTest
-          hasVar
+          (hasVar Set.empty)
           u1
           False
           (text "hasVar" <+> pretty u1)
       , mkFmlTest
-          hasVar
+          (hasVar Set.empty)
           "1 + 2 + True"
           False
           (text "hasVar" <+> text "1 + 2 + True")
       , mkFmlTest
-          hasVar
+          (hasVar (Set.singleton "z"))
           f4
           True
           (text "hasVar" <+> text f4)
       , mkFmlTest
-          hasVar
+          (hasVar (Set.singleton "y"))
           f6
           True
           (text "hasVar" <+> text f6)
       , mkTest
-          hasVar
+          (hasVar (Set.singleton "x"))
           f5
           True
           (text "hasVar" <+> pretty f5)
