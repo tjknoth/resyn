@@ -129,6 +129,7 @@ data Formula =
   SetLit !Sort ![Formula] |            -- ^ Set literal ([1, 2, 3])
   Var !Sort !Id |                      -- ^ Input variable (universally quantified first-order variable)
   Unknown !Substitution !Id |          -- ^ Predicate unknown (with a pending substitution)
+  --UnknownAP !Id |
   Unary !UnOp !Formula |               -- ^ Unary expression
   Binary !BinOp !Formula !Formula |    -- ^ Binary expression
   Ite !Formula !Formula !Formula |     -- ^ If-then-else expression

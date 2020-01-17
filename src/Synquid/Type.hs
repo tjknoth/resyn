@@ -416,7 +416,7 @@ allRefinementsOf' _ = error "allRefinementsOf called on contextual or any type"
 
 -- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@ - edited to include APs (int-valued functions on datatypes)
 --allRFormulas True t = map transformTypeSkeleton' $ bifoldMap (const []) (: []) (transformTypeSkeleton t)
-allRFormulas True t = (bifoldMap (const []) (: []) t) ++ (fTS t)
+allRFormulas True t = [] --(bifoldMap (const []) (: []) t) ++ (fTS t)
   where --also collecting int-valued predicates 
     fBT BoolT = []
     fBT IntT  = []
