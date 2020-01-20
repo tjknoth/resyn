@@ -190,6 +190,10 @@ fone = IntLit 1
 (|=>|) = Binary Implies
 (|<=>|) = Binary Iff
 
+-- top/bot potential annotations
+ptop = IntLit 0
+pbot = IntLit 9999 -- lol
+
 
 andClean :: Formula -> Formula -> Formula
 andClean l r = if l == ftrue then r else (if r == ftrue then l else (if l == ffalse || r == ffalse then ffalse else l |&| r))

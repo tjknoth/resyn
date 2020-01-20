@@ -337,11 +337,13 @@ simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tA
       else simplifyConstraint (Subtype env tRes1 tRes2 True)
 simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) consistency)
   = do
-      simplifyConstraint (Subtype env (removePotential tArg2) (removePotential tArg1) consistency)
+      --simplifyConstraint (Subtype env (removePotential tArg2) (removePotential tArg1) consistency)
+      simplifyConstraint (Subtype env tArg2 tArg1 consistency)
       if isScalarType tArg1
         then do
           env' <- safeAddGhostVar y tArg2 env
-          simplifyConstraint (Subtype env' (renameVar (isBound env) x y tArg1 (removePotential tRes1)) (removePotential tRes2) consistency)
+          --simplifyConstraint (Subtype env' (renameVar (isBound env) x y tArg1 (removePotential tRes1)) (removePotential tRes2) consistency)
+          simplifyConstraint (Subtype env' (renameVar (isBound env) x y tArg1 tRes1) tRes2 consistency)
         else simplifyConstraint (Subtype env tRes1 tRes2 consistency)
 simplifyConstraint' _ _ c@(WellFormed env (ScalarT (DatatypeT name tArgs _) fml pot))
   = do

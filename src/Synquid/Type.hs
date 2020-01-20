@@ -461,15 +461,50 @@ getConditional :: RType -> Maybe Formula
 getConditional (ScalarT _ _ f@(Ite g _ _)) = Just f
 getConditional _ = Nothing
 
-removePotentialSch :: RSchema -> RSchema
-removePotentialSch = fmap removePotential 
+-- Top : true/0 (everything is subtype of Top)
+-- Bot : false/infty (Bot is subtype of everything)
+-- weakenResources: make all resource annotations guaranteed to pass a subtyping check
+-- a -> b <: c -> d means c <: a && b <: d
+--   what if a is a function? need to reverse everything!
+-- so annotate a with Top and b with Bot
+-- Definition: 
+-- All argument types need to become TOP
+--   for scalars this means replace annotations with ptop
+--   for functions this means ??
+-- Return type needs to become BOT
+-- TODO: call this when generating round-trip constraints somehow!
+--   can do it at the checkE somehow? is any time we check 
+--   function types round trip?
 
-removePotential (ScalarT b r _) = ScalarT (removePotentialBase b) r fzero
-removePotential (FunctionT x arg res c) = FunctionT x (removePotential arg) (removePotential res) 0
-removePotential t = t
+-- Weaken resource requirements for round-trip type checking
+weakenResourceAnnotations t@FunctionT{} = weakenResources t
+weakenResourceAnnotations t = t
 
-removePotentialBase (DatatypeT x ts ps) = DatatypeT x (map removePotential ts) ps
-removePotentialBase b = b
+-- Weaken the input and output type, remove cost requirements
+weakenResources (FunctionT x arg res c) = FunctionT x arg' (weakenResources res) 0
+  where 
+    arg' = annotateTopRes arg
+-- Scalar type. Must be function output, annotate with bottom
+weakenResources (ScalarT base r p) = ScalarT base r pbot
+-- Shouldn't occur, only using this for round trip checking
+weakenResources t@LetT{} = error $ "Weakening contextual type " ++ show t
+weakenResources t = t
+
+annotateTopRes (FunctionT x arg res c) = error $ "Not supported yet: re-annotating higher order functions"
+annotateTopRes (ScalarT base r p) = ScalarT (annotateTopResBase base) r ptop
+annotateTopRes t@LetT{} = error $ "Annotating contextual type " ++ show t
+annotateTopRes t = t
+
+annotateTopResBase (DatatypeT x ts ps) = DatatypeT x (map annotateTopRes ts) ps
+annotateTopResBase (TypeVarT s x m) = TypeVarT s x ptop -- this might be wrong? is top ok for multiplicities? should be...
+annotateTopResBase b = b
+
+-- removePotential (ScalarT b r _) = ScalarT (removePotentialBase b) r fzero
+-- removePotential (FunctionT x arg res c) = FunctionT x (removePotential arg) (removePotential res) 0
+-- removePotential t = t
+
+-- removePotentialBase (DatatypeT x ts ps) = DatatypeT x (map removePotential ts) ps
+-- removePotentialBase b = b
 
 -- Set strings: used for "fake" set type for typechecking measures
 emptySetCtor = "Emptyset"

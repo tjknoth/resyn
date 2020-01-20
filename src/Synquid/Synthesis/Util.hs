@@ -183,7 +183,7 @@ instantiate env sch top argNames = do
                 p' <- freshId (map toUpper p)
                 addConstraint $ WellFormedPredicate env argSorts' resSort p'
                 return $ Pred resSort p' (zipWith Var argSorts' deBrujns)
-              else return $ if resSort == BoolS then ffalse else (IntLit 9999) -- TODO: find a better bottom type
+              else return $ if resSort == BoolS then ffalse else pbot 
       instantiate' subst (Map.insert p fml pSubst) sch
     instantiate' subst pSubst (Monotype t) = go subst pSubst argNames t
     go subst pSubst argNames (FunctionT x tArg tRes cost) = do
