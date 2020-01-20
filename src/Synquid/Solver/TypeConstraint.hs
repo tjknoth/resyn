@@ -464,7 +464,8 @@ processPredicate c@(WellFormedPredicate env argSorts BoolS p) = do
     isFreeVariable tass a = not (isBound env a) && not (Map.member a tass)
 processPredicate (WellFormedPredicate env argSorts IntS p) = do
   let u = p
-  addPredAssignment p (Unknown Map.empty u)
+  --addPredAssignment p (Unknown  u)
+  resourceVars %= insertRVar (u, [])
   return ()
 processPredicate c = modify $ addTypingConstraint c
 
