@@ -416,25 +416,25 @@ allRefinementsOf' _ = error "allRefinementsOf called on contextual or any type"
 
 -- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@ - edited to include APs (int-valued functions on datatypes)
 --allRFormulas True t = map transformTypeSkeleton' $ bifoldMap (const []) (: []) (transformTypeSkeleton t)
-allRFormulas True t = [] --(bifoldMap (const []) (: []) t) ++ (fTS t)
+allRFormulas True t = bifoldMap (const []) (: []) t ++ fTS t
   where --also collecting int-valued predicates 
     fBT BoolT = []
     fBT IntT  = []
-    fBT (DatatypeT x ts ps) = (foldr f [] ts) ++ (foldr g [] ps)
+    fBT (DatatypeT x ts ps) = foldr f [] ts ++ foldr g [] ps
     fBT (TypeVarT subs x m) = []
     fTS (ScalarT b r p) = fBT b
-    fTS (FunctionT x argT resT c) = (fTS argT) ++ (fTS resT)
-    fTS (LetT x t bodyT) = (fTS t) ++ (fTS bodyT)
+    fTS (FunctionT x argT resT c) = fTS argT ++ fTS resT
+    fTS (LetT x t bodyT) = fTS t ++ fTS bodyT
     fTS AnyT = []
     f t' ts' = fTS t' ++ ts'
-    g p' ps' = if (intRet p') then p':ps' else ps'
+    g p' ps' = if intRet p' then p':ps' else ps'
     intRet (IntLit _) = True
     intRet (Var _ _) = True
     intRet (Unary Neg _) = True
     intRet (Binary Times _ _) = True
     intRet (Binary Plus _ _) = True
     intRet (Binary Minus _ _) = True
-    intRet (Ite _ t e) = (intRet t) && (intRet e)
+    intRet (Ite _ t e) = intRet t && intRet e
     intRet  _ = False
 
 allRFormulas False t = combine (const []) (: []) t
