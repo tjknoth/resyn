@@ -12,7 +12,6 @@ import Synquid.Tokens
 import Synquid.Solver.Monad
 import Synquid.Solver.Types
 -- import Synquid.Solver.TypeConstraint
--- import qualified Synquid.Solver.Util as TCSolver
 
 import Data.Maybe
 import Data.List
@@ -536,10 +535,6 @@ condFreePotentialPrefix = "cfp"
 writeLog level msg = do
   maxLevel <- asks . view $ _1 . explorerLogLevel
   when (level <= maxLevel) $ traceShow (plain msg) $ return ()
-
---------------------------------
--- From Solver.Util
---------------------------------
 
 -- | Assumptions encoded in an environment
 embedding :: Monad s => Environment -> Set Id -> Bool -> Bool -> TCSolver s (Set Formula)

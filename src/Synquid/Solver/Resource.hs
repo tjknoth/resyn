@@ -21,7 +21,6 @@ import Synquid.Pretty
 import Synquid.Solver.CEGIS
 import Synquid.Solver.Types
 import Synquid.Synthesis.Util hiding (writeLog)
--- import Synquid.Solver.Util hiding (writeLog)
 
 import Data.Maybe
 import Data.Set (Set)
