@@ -95,7 +95,7 @@ reconstructTopLevel (Goal funName env (Monotype typ@FunctionT{}) impl depth _ sy
           (tRes', seenLast) <- recursiveTypeTuple tRes fml
           return (FunctionT x tArg tRes' cost, seenLast)
         Just (argLt, argLe) -> do
-          y <- freshVar env "x"
+          y <- runInSolver $ freshVar env "x"
           let yForVal = Map.singleton valueVarName (Var (toSort $ baseTypeOf tArg) y)
           (tRes', seenLast) <- recursiveTypeTuple (renameVar (isBound env) x y tArg tRes) (fml `orClean` substitute yForVal argLt)
           if seenLast
@@ -111,7 +111,7 @@ reconstructTopLevel (Goal funName env (Monotype typ@FunctionT{}) impl depth _ sy
       case terminationRefinement x tArg of
         Nothing -> (\t -> FunctionT x tArg t cost) <$> recursiveTypeFirst tRes
         Just (argLt, _) -> do
-          y <- freshVar env "x"
+          y <- runInSolver $ freshVar env "x"
           return $ FunctionT y (addRefinement tArg argLt) (renameVar (isBound env) x y tArg tRes) cost
     recursiveTypeFirst t = return t
 
@@ -171,7 +171,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
    
   PIf (Program PHole AnyT) iThen iElse -> do
     (cEnv, bEnv) <- shareContext env 
-    cUnknown <- Unknown Map.empty <$> freshId "C"
+    cUnknown <- Unknown Map.empty <$> runInSolver (freshId "C")
     addConstraint $ WellFormedCond bEnv cUnknown
     pThen <- inContext (\p -> Program (PIf (Program PHole boolAll) p (Program PHole t)) t) 
       $ reconstructI (addAssumption cUnknown bEnv) t iThen
@@ -293,7 +293,7 @@ reconstructE' env typ (PSymbol name) =
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
     Just sch -> retrieveAndCheckVarType name sch typ env 
 reconstructE' env typ p@(PApp iFun iArg) = do
-  x <- freshVar env "x"
+  x <- runInSolver $ freshVar env "x"
   let fp = env ^. freePotential
   let cfps = env ^. condFreePotential
   --(fp', fp'') <- shareFreePotential env fp $ show $ plain $ pretty p
@@ -363,7 +363,7 @@ checkAnnotation env t t' p = do
 
 -- | 'etaExpand' @t@ @f@: for a symbol @f@ of a function type @t@, the term @\X0 . ... \XN . f X0 ... XN@ where @f@ is fully applied
 etaExpand t f = do
-  args <- replicateM (arity t) (freshId "X")
+  args <- replicateM (arity t) (runInSolver (freshId "X"))
   let body = foldl (\e1 e2 -> untyped $ PApp e1 e2) (untyped (PSymbol f)) (map (untyped . PSymbol) args)
   return $ foldr (\x p -> untyped $ PFun x p) body args
 

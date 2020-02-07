@@ -8,7 +8,6 @@ module Synquid.Solver.TypeConstraint (
   qualifierMap,
   candidates,
   errorContext,
-  addTypingConstraint,
   addFixedUnknown,
   setUnknownRecheck,
   simplifyAllConstraints,
@@ -35,8 +34,9 @@ import Synquid.Error
 import Synquid.Pretty
 import Synquid.Util
 import Synquid.Resolver (addAllVariables)
+import Synquid.Synthesis.Util hiding (throwError, writeLog)
 import Synquid.Solver.Monad
-import Synquid.Solver.Util
+-- import Synquid.Solver.Util
 import Synquid.Solver.Resource
 import Synquid.Solver.CEGIS (initCEGISState)
 
@@ -48,6 +48,8 @@ import qualified Data.Map as Map
 import Data.Map (Map)
 import Control.Monad.Reader
 import Control.Monad.State
+import Control.Monad.Logic (msum)
+import Control.Monad.Trans.Except (throwE)
 import Control.Lens hiding (both)
 import Debug.Trace
 
@@ -109,7 +111,7 @@ solveTypeConstraints = do
   when res $
     if eac
       then simplifyRCs scs
-      else checkResources scs
+      else checkResources scs 
 
   hornClauses .= []
   consistencyChecks .= []
@@ -120,9 +122,6 @@ finalSolveRCs = do
   res <- asks _checkResourceBounds
   -- Ensures EAC actually verifies the bounds
   when res $ checkResources [SharedForm emptyEnv fzero fzero fzero]
-
--- | Impose typing constraint @c@ on the programs
-addTypingConstraint c = over typingConstraints (nub . (c :))
 
 {- Implementation -}
 
@@ -203,6 +202,11 @@ checkTypeConsistency = do
   when (null cands') (throwError $ text "Found inconsistent refinements")
   candidates .= cands'
 
+addRSubConstraint :: Monad s => Environment -> RType -> RType -> TCSolver s ()
+addRSubConstraint env tl@(ScalarT _ rl pl) (ScalarT _ rr pr)
+  | rl == ffalse = return ()
+  | otherwise    = simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
+
 -- | Simplify @c@ into a set of simple and shapeless constraints, possibly extended the current type assignment or predicate assignment
 simplifyConstraint :: MonadHorn s => Constraint -> TCSolver s ()
 simplifyConstraint c = do
@@ -224,35 +228,44 @@ simplifyConstraint' _ pass c@(WellFormedPredicate _ _ p) | p `Map.member` pass =
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@(TypeVarT _ a _) rl pl) tr@(ScalarT br@(TypeVarT _ b _) rr pr) False)
   | isBound env a && isBound env b && pr /= fzero
     = do
-        simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
+        -- traceM $ "stripping " ++ show rl ++ " <: " ++ show rr
+        addRSubConstraint env tl tr
+        -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
         simplifyConstraint (Subtype env (ScalarT bl rl fzero) (ScalarT br rr fzero) False)
 -- Data types: can compare potentials
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@DatatypeT{} rl pl) tr@(ScalarT br@DatatypeT{} rr pr) False)
   | pr /= fzero
     = do
-        simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
+        -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
+        addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT bl rl pl) (ScalarT br rr fzero) False)
 -- Bools
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT BoolT rl pl) tr@(ScalarT BoolT rr pr) False)
   | pr /= fzero
     = do
-        simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
+        -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
+        addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT BoolT rl pl) (ScalarT BoolT rr fzero) False)
 -- Ints
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT IntT rl pl) tr@(ScalarT IntT rr pr) False)
   | pr /= fzero
     = do
-        simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
+        addRSubConstraint env tl tr
+        -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
         simplifyConstraint (Subtype env (ScalarT IntT rl pl) (ScalarT IntT rr fzero) False)
 
 
 -- Type variable with known assignment: substitute
-simplifyConstraint' tass _ (Subtype env tv@(ScalarT (TypeVarT _ a _) _ _) t variant)
+simplifyConstraint' tass _ (Subtype env tv@(ScalarT (TypeVarT _ a _) _ p) t variant)
   | a `Map.member` tass
-    = simplifyConstraint (Subtype env (typeSubstitute tass tv) t variant)
-simplifyConstraint' tass _ (Subtype env t tv@(ScalarT (TypeVarT _ a _) _ _) variant)
+    = let tv' = typeSubstitute tass tv
+      in --trace ("subst for " ++ show a ++ " + " ++ show p ++ " yielding " ++ show tv') $ 
+         simplifyConstraint (Subtype env (typeSubstitute tass tv) t variant)
+simplifyConstraint' tass _ (Subtype env t tv@(ScalarT (TypeVarT _ a _) _ p) variant)
   | a `Map.member` tass
-    = simplifyConstraint (Subtype env t (typeSubstitute tass tv) variant)
+    = let tv' = typeSubstitute tass tv
+      in -- trace ("subst for " ++ show a ++ " + " ++ show p ++ " yielding " ++ show tv') $ 
+         simplifyConstraint (Subtype env t (typeSubstitute tass tv) variant)
 simplifyConstraint' tass _ (WellFormed env tv@(ScalarT (TypeVarT _ a _) _ _))
   | a `Map.member` tass
     = simplifyConstraint (WellFormed env (typeSubstitute tass tv))
@@ -317,11 +330,13 @@ simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tA
       else simplifyConstraint (Subtype env tRes1 tRes2 True)
 simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) consistency)
   = do
-      simplifyConstraint (Subtype env (removePotential tArg2) (removePotential tArg1) consistency)
+      -- simplifyConstraint (Subtype env (removePotential tArg2) (removePotential tArg1) consistency)
+      simplifyConstraint (Subtype env tArg2 tArg1 consistency)
       if isScalarType tArg1
         then do
           env' <- safeAddGhostVar y tArg2 env
-          simplifyConstraint (Subtype env' (renameVar (isBound env) x y tArg1 (removePotential tRes1)) (removePotential tRes2) consistency)
+          -- simplifyConstraint (Subtype env' (renameVar (isBound env) x y tArg1 (removePotential tRes1)) (removePotential tRes2) consistency)
+          simplifyConstraint (Subtype env' (renameVar (isBound env) x y tArg1 tRes1) tRes2 consistency)
         else simplifyConstraint (Subtype env tRes1 tRes2 consistency)
 simplifyConstraint' _ _ c@(WellFormed env (ScalarT (DatatypeT name tArgs _) fml pot))
   = do
@@ -395,8 +410,9 @@ processConstraint c@(Subtype env (ScalarT baseTL l potl) (ScalarT baseTR r potr)
   = if l == ffalse || r == ftrue
       then do
         -- Implication on refinements is trivially true, add constraint with trivial refinements for resource analysis
-        let c' = Subtype env (ScalarT baseTL ffalse potl) (ScalarT baseTR r potr) consistency
-        simpleConstraints %= (c': )
+        --let c' = Subtype env (ScalarT baseTL ffalse potl) (ScalarT baseTR r potr) consistency
+        --simpleConstraints %= (c': )
+        return ()
       else do
         tass <- use typeAssignment
         pass <- use predAssignment
@@ -575,16 +591,18 @@ addFixedUnknown name valuation = do
     update cand = cand { solution = Map.insert name valuation (solution cand) }
 
 -- | 'fresh' @t@ : a type with the same shape as @t@ but fresh type variables, fresh predicate variables, and fresh unknowns as refinements
-fresh :: Monad s => Environment -> RType -> TCSolver s RType
-fresh env (ScalarT (TypeVarT vSubst a m) _ p) | not (isBound env a) = do
+fresh :: MonadHorn s => Environment -> RType -> TCSolver s RType
+fresh env (ScalarT b@(TypeVarT vSubst a m) _ p) | not (isBound env a) = do
   -- Free type variable: replace with fresh free type variable
   a' <- freshId "A"
-  return $ ScalarT (TypeVarT vSubst a' m) ftrue p
+  p' <- safeFreshPot env (Just b) p
+  return $ ScalarT (TypeVarT vSubst a' m) ftrue p'
 fresh env (ScalarT baseT _ p) = do
   baseT' <- freshBase baseT
   -- Replace refinement with fresh predicate unknown:
   k <- freshId "U"
-  return $ ScalarT baseT' (Unknown Map.empty k) p
+  p' <- safeFreshPot env (Just baseT) p
+  return $ ScalarT baseT' (Unknown Map.empty k) p'
   where
     freshBase (DatatypeT name tArgs _) = do
       -- Replace type arguments with fresh types:
@@ -656,5 +674,39 @@ finalizeProgram p = do
   pass <- use predAssignment
   sol <- uses candidates (solution . head)
   tstate <- get
-  let prog = (typeApplySolution sol . typeSubstitutePred pass . typeSubstitute tass) <$> p
+  let prog = typeApplySolution sol . typeSubstitutePred pass . typeSubstitute tass <$> p
   return (prog, tstate)
+
+
+------------------------------------
+------------------------------------
+-- Utility functions
+------------------------------------
+------------------------------------
+
+-- | Impose typing constraint @c@ on the programs
+-- addTypingConstraint c = over typingConstraints (nub . (c :))
+
+
+-- | Signal type error
+throwError :: MonadHorn s => Doc -> TCSolver s ()
+throwError msg = do
+  (pos, ec) <- use errorContext
+  lift $ lift $ throwE $ ErrorMessage TypeError pos (msg $+$ ec)
+
+writeLog level msg = do
+  maxLevel <- asks _tcSolverLogLevel
+  when (level <= maxLevel) $ traceShow (plain msg) $ return ()
+
+
+-- | Check resource bounds: attempt to find satisfying expressions for multiplicity and potential annotations
+checkResources :: (MonadHorn s, MonadSMT s, RMonad s)
+               => [Constraint]
+               -> TCSolver s ()
+checkResources [] = return ()
+checkResources constraints = do
+  accConstraints <- use resourceConstraints
+  newC <- solveResourceConstraints accConstraints (filter isResourceConstraint constraints)
+  case newC of
+    Nothing -> throwError $ text "Insufficient resources"
+    Just f  -> resourceConstraints %= (++ f)

@@ -10,8 +10,9 @@ import Synquid.Util
 import Synquid.Pretty
 import Synquid.Tokens
 import Synquid.Solver.Monad
-import Synquid.Solver.TypeConstraint
-import qualified Synquid.Solver.Util as TCSolver
+import Synquid.Solver.Types
+-- import Synquid.Solver.TypeConstraint
+-- import qualified Synquid.Solver.Util as TCSolver
 
 import Data.Maybe
 import Data.List
@@ -109,6 +110,10 @@ throwError e = do
   lift . lift . lift $ typeErrors %= (e :)
   mzero
 
+
+-- | Impose typing constraint @c@ on the programs
+addTypingConstraint c = over typingConstraints (nub . (c :))
+
 -- | Impose typing constraint @c@ on the programs
 addConstraint c = typingState %= addTypingConstraint c
 
@@ -131,14 +136,15 @@ runInSolver f = do
       typingState .= st
       return res
 
-freshId :: MonadHorn s => String -> Explorer s String
-freshId = runInSolver . TCSolver.freshId
+-- freshId :: MonadHorn s => String -> Explorer s String
+-- freshId = runInSolver . freshId
 
-freshVar :: MonadHorn s => Environment -> String -> Explorer s String
-freshVar env prefix = runInSolver $ TCSolver.freshVar env prefix
+-- freshVar :: MonadHorn s => Environment -> String -> Explorer s String
+-- freshVar env prefix = runInSolver $ freshVar env prefix
 
 inContext ctx = local (over (_1 . context) (. ctx))
 
+{- 
 -- | Return the current valuation of @u@;
 -- in case there are multiple solutions,
 -- order them from weakest to strongest in terms of valuation of @u@ and split the computation
@@ -153,6 +159,7 @@ currentValuation u = do
     pickCandidiate cands' = do
       typingState . candidates .= cands'
       return $ val (head cands')
+-}
 
 -- | Replace all bound type and predicate variables with fresh free variables
 -- (if @top@ is @False@, instantiate with bottom refinements instead of top refinements)
@@ -163,14 +170,14 @@ instantiate env sch top argNames = do
   return t
   where
     instantiate' subst pSubst t@(ForallT a sch) = do
-      a' <- freshId "A"
+      a' <- runInSolver $ freshId "A"
       addConstraint $ WellFormed env (vartSafe a' ftrue) 
       instantiate' (Map.insert a (vartSafe a' (BoolLit top)) subst) pSubst sch
     instantiate' subst pSubst (ForallP (PredSig p argSorts _) sch) = do
       let argSorts' = map (sortSubstitute (asSortSubst subst)) argSorts
       fml <- if top
               then do
-                p' <- freshId (map toUpper p)
+                p' <- runInSolver $ freshId (map toUpper p)
                 addConstraint $ WellFormedPredicate env argSorts' p'
                 return $ Pred BoolS p' (zipWith Var argSorts' deBrujns)
               else return ffalse
@@ -178,7 +185,7 @@ instantiate env sch top argNames = do
     instantiate' subst pSubst (Monotype t) = go subst pSubst argNames t
     go subst pSubst argNames (FunctionT x tArg tRes cost) = do
       x' <- case argNames of
-              [] -> freshVar env "x"
+              [] -> runInSolver $ freshVar env "x"
               (argName : _) -> return argName
       liftM2 (\t r -> FunctionT x' t r cost) (go subst pSubst [] tArg) (go subst pSubst (drop 1 argNames) (renameVar (isBoundTV subst) x x' tArg tRes))
     go subst pSubst _ t = return $ typeSubstitutePred pSubst . typeSubstitute subst $ t
@@ -238,21 +245,23 @@ checkResourceVar :: Monad s
                  => Environment
                  -> String
                  -> RType
-                 -> Explorer s Bool
+                 -> TCSolver s Bool
 checkResourceVar env x t = do
-  tstate <- use typingState
+  -- tstate <- use typingState
+  tstate <- get
+  tparams <- ask
   -- TODO: figure out how to use lenses so I can skip the intermediate bind
-  tparams <- asks . view $ _2
-  let isRV = TCSolver.isResourceVariable env tstate (_cegisDomain tparams) x t
+  -- tparams <- asks . view $ _2
+  let isRV = isResourceVariable env tstate (_cegisDomain tparams) x t
   return isRV
 
-mkResourceVar :: Monad s
+mkResourceVar :: MonadHorn s
               => Environment
               -> Maybe (RBase)
               -> String
-              -> Explorer s (String, [Formula])
+              -> TCSolver s (String, [Formula])
 mkResourceVar env vvtype name = do
-  let universalsInScope = toMonotype <$> TCSolver.nonGhostScalars env
+  let universalsInScope = toMonotype <$> nonGhostScalars env
   let mkUFml (x, t) = do
         isRV <- checkResourceVar env x t
         return $ if isRV
@@ -269,7 +278,7 @@ safeFreshPot :: MonadHorn s
              => Environment 
              -> Maybe RBase 
              -> Formula
-             -> Explorer s Formula
+             -> TCSolver s Formula
 safeFreshPot env vtype original 
   | original == fzero = return fzero
   | otherwise = freshPot env vtype
@@ -277,23 +286,23 @@ safeFreshPot env vtype original
 freshPot :: MonadHorn s
          => Environment
          -> Maybe RBase
-         -> Explorer s Formula
+         -> TCSolver s Formula
 freshPot env vtype = freshResAnnotation env vtype potentialPrefix
 
 freshMul :: MonadHorn s
          => Environment
          -> Maybe RBase
-         -> Explorer s Formula
+         -> TCSolver s Formula
 freshMul env vtype = freshResAnnotation env vtype multiplicityPrefix
 
 freshFreePotential :: MonadHorn s
                    => Environment
-                   -> Explorer s Formula
+                   -> TCSolver s Formula
 freshFreePotential env = freshResAnnotation env Nothing freePotentialPrefix
 
 freshCondFreePotential :: MonadHorn s
                        => Environment
-                       -> Explorer s Formula
+                       -> TCSolver s Formula
 freshCondFreePotential env = freshResAnnotation env Nothing condFreePotentialPrefix
 
 
@@ -301,11 +310,11 @@ freshResAnnotation :: MonadHorn s
                    => Environment
                    -> Maybe RBase
                    -> String
-                   -> Explorer s Formula
+                   -> TCSolver s Formula
 freshResAnnotation env vtype prefix = do
   x <- freshId prefix
   rvar <- mkResourceVar env vtype x
-  (typingState . resourceVars) %= insertRVar rvar
+  resourceVars %= insertRVar rvar
   return $ Var IntS x
 
 
@@ -314,7 +323,7 @@ freshResAnnotation env vtype prefix = do
 freshPotentials :: MonadHorn s
                 => Environment
                 -> RSchema
-                -> Explorer s RSchema
+                -> TCSolver s RSchema
 freshPotentials env (Monotype t) =
   Monotype <$> freshPotentials' env t 
 freshPotentials env (ForallT x t) =
@@ -326,7 +335,7 @@ freshPotentials env (ForallP x t) =
 freshPotentials' :: MonadHorn s
                  => Environment
                  -> RType
-                 -> Explorer s RType
+                 -> TCSolver s RType
 freshPotentials' env (ScalarT base fml (Ite g t f)) = do
     t' <- safeFreshPot env (Just base) t
     f' <- safeFreshPot env (Just base) f
@@ -342,7 +351,7 @@ freshPotentials' _ t = return t
 freshMultiplicities :: MonadHorn s
                     => Environment
                     -> RBase
-                    -> Explorer s RBase
+                    -> TCSolver s RBase
 freshMultiplicities env b@(TypeVarT s x m) = do
   m' <- freshMul env Nothing
   return $ TypeVarT s x m'
@@ -359,7 +368,7 @@ addScrutineeToEnv :: (MonadHorn s, MonadSMT s)
 addScrutineeToEnv env pScr tScr = do
   --checkres <- asks . view $ _1 . resourceArgs . checkRes
   (x, env') <- toVar (addScrutinee pScr env) pScr
-  varName <- freshId "x"
+  varName <- runInSolver $ freshId "x"
   let tScr' = addPotential (typeMultiply fzero tScr) (fromMaybe fzero (topPotentialOf tScr))
   return (x, env')
 
@@ -380,8 +389,8 @@ shareContext :: (MonadHorn s, MonadSMT s)
 shareContext env = do
   --symsl <- safeFreshPotentials env False
   --symsr <- safeFreshPotentials env False
-  symsl <- freshSharingPotential env
-  symsr <- freshSharingPotential env
+  symsl <- runInSolver $ freshSharingPotential env
+  symsr <- runInSolver $ freshSharingPotential env
   (fpl, fpr) <- shareFreePotential env (env ^. freePotential) 
   (cfpl, cfpr) <- shareCondFP env (env ^. condFreePotential) 
   let ghosts = _ghostSymbols env
@@ -400,8 +409,8 @@ shareFreePotential :: (MonadHorn s, MonadSMT s)
 shareFreePotential env fp@(Ite g _ _) =
   error "shareFreePotential: conditional expression"
 shareFreePotential env fp = do
-  fp' <- freshFreePotential env
-  fp'' <- freshFreePotential env
+  fp' <- runInSolver $ freshFreePotential env
+  fp'' <- runInSolver $ freshFreePotential env
   addConstraint $ SharedForm env fp fp' fp'' 
   return (fp', fp'')
 
@@ -411,8 +420,8 @@ shareCondFP :: (MonadHorn s, MonadSMT s)
             -> Explorer s ([Formula], [Formula])
 shareCondFP env fmls =
   let share f = do
-        f1 <- freshCondFP env f
-        f2 <- freshCondFP env f
+        f1 <- runInSolver $ freshCondFP env f
+        f2 <- runInSolver $ freshCondFP env f
         addConstraint $ SharedForm env f f1 f2 
         return (f1, f2)
   in  unzip <$> mapM share fmls
@@ -422,8 +431,8 @@ transferPotential :: (MonadHorn s, MonadSMT s)
                   => Environment
                   -> Explorer s Environment
 transferPotential env = do
-  fp <- freshFreePotential env
-  (syms', cfps) <- freshRestructuredPotentials env
+  fp <- runInSolver $ freshFreePotential env
+  (syms', cfps) <- runInSolver $ freshRestructuredPotentials env
   let env' = mkResourceEnv syms' (_ghostSymbols env) fp cfps
   addConstraint $ Transfer env env' 
   return $ env { _symbols = syms', _freePotential = fp, _condFreePotential = cfps }
@@ -433,7 +442,7 @@ transferPotential env = do
 --   extend condFreePotential
 freshRestructuredPotentials :: (MonadHorn s, MonadSMT s)
                             => Environment
-                            -> Explorer s (SymbolMap, [Formula])
+                            -> TCSolver s (SymbolMap, [Formula])
 freshRestructuredPotentials env = do
   let ghosts = env ^. ghostSymbols
   let cfps = Map.elems $ Map.mapMaybeWithKey (gatherCondPotential ghosts) (symbolsOfArity 0 env)
@@ -472,7 +481,7 @@ shareAndExtractFP env fp cfps = do
 freshCondFP :: MonadHorn s
             => Environment
             -> Formula
-            -> Explorer s Formula
+            -> TCSolver s Formula
 freshCondFP env (Ite g f1 f2) = do
   f1' <- freshCondFP env f1
   f2' <- freshCondFP env f2
@@ -480,7 +489,7 @@ freshCondFP env (Ite g f1 f2) = do
 freshCondFP env _ = freshCondFreePotential env
 
 -- When sharing, share 0 \/ 0,0 to reduce number of constraints
-freshSharingPotential :: MonadHorn s => Environment -> Explorer s SymbolMap
+freshSharingPotential :: MonadHorn s => Environment -> TCSolver s SymbolMap
 freshSharingPotential env = do 
   let ghosts = env ^. ghostSymbols
   let replace (x, sch) = if x `Set.member` ghosts 
@@ -517,7 +526,7 @@ toVar :: (MonadSMT s, MonadHorn s)
       -> Explorer s (Formula, Environment)
 toVar env (Program (PSymbol name) t) = return (symbolAsFormula env name t, env)
 toVar env (Program _ t) = do
-  g <- freshId "G"
+  g <- runInSolver $ freshId "G"
   return (Var (toSort $ baseTypeOf t) g, addLetBound g t env)
 
 
@@ -527,3 +536,169 @@ condFreePotentialPrefix = "cfp"
 writeLog level msg = do
   maxLevel <- asks . view $ _1 . explorerLogLevel
   when (level <= maxLevel) $ traceShow (plain msg) $ return ()
+
+--------------------------------
+-- From Solver.Util
+--------------------------------
+
+-- | Assumptions encoded in an environment
+embedding :: Monad s => Environment -> Set Id -> Bool -> Bool -> TCSolver s (Set Formula)
+embedding env vars includeQuantified isRes = do
+    tass <- use typeAssignment
+    pass <- use predAssignment
+    qmap <- use qualifierMap
+    let ass = Set.map (substitutePredicate pass) (env ^. assumptions)
+    let allVars = vars `Set.union` potentialVars qmap (conjunction ass)
+    return $ addBindings env tass pass qmap ass allVars
+  where
+    addBindings env tass pass qmap fmls vars = 
+      if Set.null vars
+        then fmls
+        else let (x, rest) = Set.deleteFindMin vars in
+             case Map.lookup x (allSymbols env) of
+                Nothing -> addBindings env tass pass qmap fmls rest -- Variable not found (useful to ignore value variables)
+                Just (Monotype t) -> case typeSubstitute tass t of
+                  ScalarT baseT fml pot ->
+                    let fml' = if isRes then adjustFml fml else fml
+                        --fml' = fml --if substituteValueVars then substitute (Map.singleton valueVarName (Var IntS x)) fml else fml
+                        fmls' = Set.fromList $ map (substitute (Map.singleton valueVarName (Var (toSort baseT) x)) . substitutePredicate pass)
+                                          (fml' : allMeasurePostconditions includeQuantified baseT env) 
+                        newVars = Set.delete x $ setConcatMap (potentialVars qmap) fmls' in 
+                    addBindings env tass pass qmap (fmls `Set.union` fmls') (rest `Set.union` newVars)
+                  LetT y tDef tBody -> addBindings (addGhostVariable x tBody . addGhostVariable y tDef . removeVariable x $ env) tass pass qmap fmls vars
+                  AnyT -> Set.singleton ffalse
+                  _ -> error $ unwords ["embedding: encountered non-scalar variable", x, "in 0-arity bucket"]
+                Just sch -> addBindings env tass pass qmap fmls rest -- TODO: why did this work before?
+    adjustFml = removePreds (Map.keys (allRMeasures env))
+    allSymbols = symbolsOfArity 0 
+
+embedEnv :: Monad s => Environment -> Formula -> Bool -> Bool -> TCSolver s (Set Formula)
+embedEnv env fml consistency isRes = do 
+  qmap <- use qualifierMap
+  let relevantVars = potentialVars qmap fml
+  embedding env relevantVars consistency isRes
+
+embedSynthesisEnv :: MonadHorn s 
+                  => Environment 
+                  -> Formula 
+                  -> Bool 
+                  -> Bool
+                  -> TCSolver s (Set Formula)
+embedSynthesisEnv env fml consistency useMeasures = do 
+  let env' = if useMeasures 
+      then env { _measureDefs = allRMeasures env }
+      else env { _measureDefs = Map.empty } -- don't instantiate measures in certain cases
+  embedEnv env' fml consistency True
+
+allUnknowns :: Environment -> Set Formula 
+allUnknowns env = Set.filter isUnknownForm $ env ^. assumptions
+
+assignUnknowns :: MonadHorn s => Set Formula -> TCSolver s (Set Formula)
+assignUnknowns fmls = do 
+  sol <- solution . head <$> use candidates
+  return $ Set.map fromJust $ Set.filter isJust $ Set.map (fmap conjunction . getUnknown sol) fmls
+  where 
+    getUnknown solution (Unknown _ u) = Map.lookup u solution
+  
+-- | 'instantiateConsAxioms' @env fml@ : If @fml@ contains constructor applications, return the set of instantiations of constructor axioms for those applications in the environment @env@
+instantiateConsAxioms :: Environment -> Bool -> Maybe Formula -> Formula -> Set Formula
+instantiateConsAxioms env forRes mVal fml =
+  let inst = instantiateConsAxioms env forRes mVal 
+      allMeasures dt e = Map.assocs $
+        if forRes 
+          then allRMeasuresOf dt e
+          else allMeasuresOf dt e
+  in case fml of
+    Cons resS@(DataS dtName _) ctor args -> 
+      Set.unions $ Set.fromList (map (measureAxiom resS ctor args) (allMeasures dtName env)) 
+                   : map (instantiateConsAxioms env forRes Nothing) args
+    Unary op e -> inst e
+    Binary op e1 e2 -> inst e1 `Set.union` inst e2
+    Ite e0 e1 e2 -> inst e0 `Set.union` inst e1 `Set.union` inst e2
+    SetLit _ elems -> Set.unions (map inst elems)
+    Pred _ p args -> Set.unions $ map inst args
+    _ -> Set.empty
+  where
+    measureAxiom resS ctor args (mname, MeasureDef inSort _ defs constArgs _) =
+      let
+        MeasureCase _ vars body = head $ filter (\(MeasureCase c _ _) -> c == ctor) defs
+        sParams = map varSortName (sortArgsOf inSort) -- sort parameters in the datatype declaration
+        sArgs = sortArgsOf resS -- actual sort argument in the constructor application
+        body' = noncaptureSortSubstFml sParams sArgs body -- measure definition with actual sorts for all subexpressions
+        newValue = fromMaybe (Cons resS ctor args) mVal
+        subst = Map.fromList $ (valueVarName, newValue) : zip vars args 
+       
+        -- Universally quantified arguments:
+        mkVar = uncurry (flip Var)
+        constVars = map mkVar constArgs
+        qBody = foldr All body' constVars
+
+      in substitute subst qBody
+
+bottomValuation :: QMap -> Formula -> Formula
+bottomValuation qmap fml = applySolution bottomSolution fml
+  where
+    unknowns = Set.toList $ unknownsOf fml
+    bottomSolution = Map.fromList $ zip (map unknownName unknowns) (map (Set.fromList . lookupQualsSubst qmap) unknowns)
+
+-- | 'potentialVars' @qmap fml@ : variables of @fml@ if all unknowns get strongest valuation according to @quals@
+potentialVars :: QMap -> Formula -> Set Id
+potentialVars qmap fml = Set.map varName $ varsOf $ bottomValuation qmap fml
+
+-- | 'freshId' @prefix@ : fresh identifier starting with @prefix@
+freshId :: Monad s => String -> TCSolver s String
+freshId prefix = do
+  i <- uses idCount (Map.findWithDefault 0 prefix)
+  idCount %= Map.insert prefix (i + 1)
+  return $ prefix ++ show i
+
+-- | 'freshId' @prefix@ : fresh identifier starting with @prefix@, using an underscore
+--    to differentiate from normal freshIds -- only used for resource constraints.
+freshVersion :: Monad s => String -> TCSolver s String
+freshVersion prefix = do
+  i <- uses versionCount (Map.findWithDefault 0 prefix)
+  versionCount %= Map.insert prefix (i + 1)
+  return $ prefix ++ "_" ++ show i
+
+
+freshVar :: Monad s => Environment -> String -> TCSolver s String
+freshVar env prefix = do
+  x <- freshId prefix
+  if Map.member x (allSymbols env)
+    then freshVar env prefix
+    else return x
+
+
+freshValueVarSub :: Monad s => Sort -> TCSolver s Substitution
+freshValueVarSub s = Map.singleton valueVarName <$> (Var s <$> freshValueVarId)
+
+freshValueVarId :: Monad s => TCSolver s String
+freshValueVarId = freshId valueVarName
+
+nonGhostScalars env = Map.filterWithKey (nonGhost env) $ symbolsOfArity 0 env
+
+nonGhost env x _ = Set.notMember x (env^.ghostSymbols)
+
+safeAddGhostVar :: Monad s => String -> RType -> Environment -> TCSolver s Environment
+safeAddGhostVar name t@FunctionT{} env = return $ addGhostVariable name t env
+safeAddGhostVar name t@AnyT{} env = return $ addGhostVariable name t env
+safeAddGhostVar name t env = do 
+  tstate <- get 
+  adomain <- asks _cegisDomain 
+  --return $ addGhostVariable name t env
+  if isResourceVariable env tstate adomain name t
+    then do 
+      universalVars %= Set.insert name -- (Var (toSort (baseTypeOf t)) name)
+      return $ addGhostVariable name t env
+    else return $ addGhostVariable name t env
+
+isResourceVariable :: Environment 
+                   -> TypingState 
+                   -> Maybe AnnotationDomain
+                   -> String
+                   -> RType 
+                   -> Bool 
+isResourceVariable _ _ Nothing _ _ = False
+isResourceVariable env tstate (Just _) x t = 
+  (x /= valueVarName) && not (Map.member x (_unresolvedConstants env))
+

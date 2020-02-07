@@ -643,8 +643,11 @@ isZero (IntLit 0) = True
 isZero _          = False
 
 multiplyFormulas = simpleFormulaBOp simpleMultiply isMultiplicativeId
+
 addFormulas = simpleFormulaBOp (|+|) isAdditiveId
+
 subtractFormulas = simpleFormulaBOp (|-|) isAdditiveId
+
 sumFormulas :: Foldable t => t Formula -> Formula
 sumFormulas = foldl addFormulas fzero
 

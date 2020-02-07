@@ -13,6 +13,8 @@ import Data.Map (Map)
 import Data.Bifunctor
 import Data.Bifoldable
 
+import Debug.Trace
+
 {- Type skeletons -}
 
 data BaseType r p = 

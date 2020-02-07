@@ -76,7 +76,7 @@ generateMaybeIf env t = ifte generateThen (uncurry6 generateElse) (generateMatch
     -- | Guess an E-term and abduce a condition for it
     generateThen = do
       (cEnv, bEnv) <- shareContext env 
-      cUnknown <- Unknown Map.empty <$> freshId "C"
+      cUnknown <- Unknown Map.empty <$> runInSolver (freshId "C")
       addConstraint $ WellFormedCond bEnv cUnknown
       -- Do not backtrack: if we managed to find a solution for a nonempty subset of inputs, we go with it
       pThen <- cut $ generateIE (addAssumption cUnknown bEnv) t 
@@ -98,7 +98,7 @@ generateElse cEnv bEnv t cond condUnknown pThen = if cond == ftrue
   else do -- @pThen@ is valid under a nontrivial assumption, proceed to look for the solution for the rest of the inputs
     pCond <- inContext (\p -> Program (PIf p uHole uHole) t) 
       $ generateConditionFromFml cEnv cond
-    cUnknown <- Unknown Map.empty <$> freshId "C"
+    cUnknown <- Unknown Map.empty <$> runInSolver (freshId "C")
     runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton $ fnot cond) -- Create a fixed-valuation unknown to assume @!cond@
     pElse <- optionalInPartial t $ inContext (\p -> Program (PIf pCond pThen p) t) 
       $ generateI (addAssumption cUnknown bEnv) t
@@ -164,9 +164,9 @@ generateMatch env t = do
 
           let scrutineeSymbols = symbolList pScrutinee
           let isGoodScrutinee = not (null ctors) &&                                               -- Datatype is not abstract
-                                (not $ pScrutinee `elem` (env ^. usedScrutinees)) &&              -- Hasn't been scrutinized yet
-                                (not $ head scrutineeSymbols `elem` ctors) &&                     -- Is not a value
-                                (any (not . flip Set.member (env ^. constants)) scrutineeSymbols) -- Has variables (not just constants)
+                                (pScrutinee `notElem` (env ^. usedScrutinees)) &&              -- Hasn't been scrutinized yet
+                                (head scrutineeSymbols `notElem` ctors) &&                     -- Is not a value
+                                any (not . flip Set.member (env ^. constants)) scrutineeSymbols -- Has variables (not just constants)
           guard isGoodScrutinee
           (x, matchBEnv'') <- addScrutineeToEnv matchBEnv' pScrutinee tScr
           -- First case generated separately in an attempt to abduce a condition for the whole match
@@ -185,12 +185,12 @@ generateFirstCase env scrVar pScrutinee t consName =
       consT <- instantiate env consSch True []
       runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
       consT' <- runInSolver $ currentAssignment consT
-      binders <- replicateM (arity consT') (freshVar env "x")
+      binders <- replicateM (arity consT') (runInSolver (freshVar env "x"))
       (syms, ass) <- caseSymbols env scrVar binders consT'
       caseEnv <- foldM (\e (x, t) -> safeAddVariable x t e) (addAssumption ass env) syms
       storeCase caseEnv (Case consName binders uHole)
       ifte  (do -- Try to find a vacuousness condition:
-              deadUnknown <- Unknown Map.empty <$> freshId "C"
+              deadUnknown <- Unknown Map.empty <$> runInSolver (freshId "C")
               addConstraint $ WellFormedCond env deadUnknown
               err <- inContext (\p -> Program (PMatch pScrutinee [Case consName binders p]) t) $ generateError (addAssumption deadUnknown caseEnv)
               deadValuation <- conjunction <$> currentValuation deadUnknown
@@ -218,11 +218,11 @@ generateCase env scrVar pScrutinee t consName =
       consT <- instantiate env consSch True []
       runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
       consT' <- runInSolver $ currentAssignment consT
-      binders <- replicateM (arity consT') (freshVar env "x")
+      binders <- replicateM (arity consT') (runInSolver (freshVar env "x"))
       (syms, ass) <- caseSymbols env scrVar binders consT'
       unfoldSyms <- asks . view $ _1 . unfoldLocals
 
-      cUnknown <- Unknown Map.empty <$> freshId "M"
+      cUnknown <- Unknown Map.empty <$> runInSolver (freshId "M")
       runInSolver $ addFixedUnknown (unknownName cUnknown) (Set.singleton ass) -- Create a fixed-valuation unknown to assume @ass@
 
       caseEnv <- (if unfoldSyms then unfoldAllVariables else id) <$> foldM (\e (x, t) -> safeAddVariable x t e) (addAssumption cUnknown env) syms
@@ -256,9 +256,9 @@ generateMaybeMatchIf env t = (generateOneBranch >>= generateOtherBranches) `mplu
       (ifCEnv, ifBEnv) <- shareContext env 
       (matchCEnv, matchBEnv) <- shareContext ifBEnv 
       -- TODO: hopefully not an issue that we use env here?
-      matchUnknown <- Unknown Map.empty <$> freshId "M"
+      matchUnknown <- Unknown Map.empty <$> runInSolver (freshId "M")
       addConstraint $ WellFormedMatchCond matchBEnv matchUnknown
-      condUnknown <- Unknown Map.empty <$> freshId "C"
+      condUnknown <- Unknown Map.empty <$> runInSolver (freshId "C")
       addConstraint $ WellFormedCond matchBEnv condUnknown
       cut $ do
         p0 <- generateEOrError (addAssumption matchUnknown . addAssumption condUnknown $ matchBEnv) t
@@ -414,7 +414,7 @@ enumerateAt env typ d = do
         generateApp (\e t -> enumerateAt e t d) (\e t -> generateEUpTo e t (d - 1))
 
     generateApp genFun genArg = do
-      x <- freshId "X"
+      x <- runInSolver $ freshId "X"
       let fp = env ^. freePotential 
       let cfps = env ^. condFreePotential 
       --(fp', fp'') <- shareFreePotential env fp $ show $ text "genApp ::" <+> plain (pretty typ)
@@ -464,6 +464,23 @@ retrieveAndCheckVarType name sch typ env = do
   addCTConstraint env'
   return p
 
+-- | Return the current valuation of @u@;
+-- in case there are multiple solutions,
+-- order them from weakest to strongest in terms of valuation of @u@ and split the computation
+currentValuation :: MonadHorn s => Formula -> Explorer s Valuation
+currentValuation u = do
+  runInSolver solveAllCandidates
+  cands <- use (typingState . candidates)
+  let candGroups = groupBy (\c1 c2 -> val c1 == val c2) $ sortBy (\c1 c2 -> setCompare (val c1) (val c2)) cands
+  msum $ map pickCandidiate candGroups
+  where
+    val c = valuation (solution c) u
+    pickCandidiate cands' = do
+      (typingState . candidates) .= cands'
+      return $ val (head cands')
+
+
+
 -- | Make environment inconsistent (if possible with current unknown assumptions)
 generateError :: (MonadSMT s, MonadHorn s, RMonad s) 
               => Environment 
@@ -491,6 +508,6 @@ appType env (Program _ t) x tRes = contextual x (typeMultiply fzero t) tRes
 isPolyConstructor (Program (PSymbol name) t) = isTypeName name && (not . Set.null . typeVarsOf $ t)
 
 enqueueGoal env typ impl depth = do
-  g <- freshVar env "f"
+  g <- runInSolver $ freshVar env "f"
   auxGoals %= (Goal g env (Monotype typ) impl depth noPos True :)
   return $ Program (PSymbol g) typ

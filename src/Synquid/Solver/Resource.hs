@@ -2,7 +2,9 @@
 
 -- | Resource analysis
 module Synquid.Solver.Resource (
-  checkResources,
+  -- checkResources,
+  solveResourceConstraints,
+  isResourceConstraint,
   simplifyRCs,
   allRMeasures,
   partitionType,
@@ -18,7 +20,8 @@ import Synquid.Solver.Monad
 import Synquid.Pretty
 import Synquid.Solver.CEGIS
 import Synquid.Solver.Types
-import Synquid.Solver.Util hiding (writeLog)
+import Synquid.Synthesis.Util hiding (writeLog)
+-- import Synquid.Solver.Util hiding (writeLog)
 
 import Data.Maybe
 import Data.Set (Set)
@@ -33,17 +36,6 @@ import Control.Monad.State
 import Control.Lens
 import Debug.Trace
 
--- | Check resource bounds: attempt to find satisfying expressions for multiplicity and potential annotations
-checkResources :: (MonadHorn s, MonadSMT s, RMonad s)
-               => [Constraint]
-               -> TCSolver s ()
-checkResources [] = return ()
-checkResources constraints = do
-  accConstraints <- use resourceConstraints
-  newC <- solveResourceConstraints accConstraints (filter isResourceConstraint constraints)
-  case newC of
-    Nothing -> throwError $ text "Insufficient resources"
-    Just f  -> resourceConstraints %= (++ f)
 
 -- | Process, but do not solve, a set of resource constraints
 simplifyRCs :: (MonadHorn s, MonadSMT s, RMonad s)

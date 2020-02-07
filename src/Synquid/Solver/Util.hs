@@ -17,6 +17,7 @@ module Synquid.Solver.Util (
     isResourceVariable,
     assignUnknowns,
     allUnknowns,
+    addTypingConstraint,
     writeLog
 ) where
 
@@ -203,6 +204,8 @@ isResourceVariable _ _ Nothing _ _ = False
 isResourceVariable env tstate (Just _) x t = 
   (x /= valueVarName) && not (Map.member x (_unresolvedConstants env))
 
+-- | Impose typing constraint @c@ on the programs
+addTypingConstraint c = over typingConstraints (nub . (c :))
 
 -- | Signal type error
 throwError :: MonadHorn s => Doc -> TCSolver s ()
