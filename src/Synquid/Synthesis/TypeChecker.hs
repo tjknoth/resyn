@@ -217,8 +217,8 @@ reconstructI' env t@ScalarT{} impl = case impl of
       Nothing -> throwErrorWithDescription $ text "Not in scope: data constructor" </> squotes (text consName)
       Just consSch -> do
                         consT <- instantiate env consSch True args -- Set argument names in constructor type to user-provided binders
-                        let consT' = typeMultiply fzero consT
-                        case lastType consT' of
+                        -- let consT' = typeMultiply fzero consT
+                        case lastType consT of
                           (ScalarT (DatatypeT dtName _ _) _ _) -> do
                             case mName of
                               Nothing -> return ()
@@ -227,7 +227,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
                             if arity (toMonotype consSch) /= length args
                               then throwErrorWithDescription $ text "Constructor" </> squotes (text consName)
                                             </> text "expected" </> pretty (arity (toMonotype consSch)) </> text "binder(s) and got" <+> pretty (length args)
-                              else ((consName, consT') :) <$> checkCases (Just dtName) cs
+                              else ((consName, consT) :) <$> checkCases (Just dtName) cs
                           _ -> throwErrorWithDescription $ text "Not in scope: data constructor" </> squotes (text consName)
     checkCases _ [] = return []
 

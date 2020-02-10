@@ -37,7 +37,6 @@ Library
                     , Synquid.Solver.Monad
                     , Synquid.Solver.Resource
                     , Synquid.Solver.TypeConstraint
-                    , Synquid.Solver.Util
                     , Synquid.Solver.Types
                     , Synquid.Stats
                     , Synquid.Synthesis.Explorer

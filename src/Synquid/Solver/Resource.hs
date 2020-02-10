@@ -57,7 +57,7 @@ solveResourceConstraints accConstraints constraints = do
     constraintList <- mapM generateFormula constraints
     b <- satisfyResources (accConstraints ++ constraintList)
     let result = if b then "SAT" else "UNSAT"
-    writeLog 5 $ nest 4 $ text "Accumulated resource constraints:"
+    writeLog 7 $ nest 4 $ text "Accumulated resource constraints:"
       $+$ pretty (map bodyFml accConstraints)
     writeLog 3 $ nest 4 $ text "Solved resource constraint after conjoining formulas:"
       <+> text result $+$ prettyConjuncts (map bodyFml constraintList)

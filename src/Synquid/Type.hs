@@ -260,7 +260,6 @@ typeSubstitute subst (FunctionT x tArg tRes cost) = FunctionT x (typeSubstitute 
 typeSubstitute subst (LetT x tDef tBody) = LetT x (typeSubstitute subst tDef) (typeSubstitute subst tBody)
 typeSubstitute _ AnyT = AnyT
 
-
 noncaptureTypeSubst :: [Id] -> [RType] -> RType -> RType
 noncaptureTypeSubst tVars tArgs t =
   let tFresh = typeSubstitute (Map.fromList $ zip tVars (map vartAll distinctTypeVars)) t

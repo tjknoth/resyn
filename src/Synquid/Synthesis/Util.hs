@@ -187,7 +187,9 @@ instantiate env sch top argNames = do
               [] -> runInSolver $ freshVar env "x"
               (argName : _) -> return argName
       liftM2 (\t r -> FunctionT x' t r cost) (go subst pSubst [] tArg) (go subst pSubst (drop 1 argNames) (renameVar (isBoundTV subst) x x' tArg tRes))
-    go subst pSubst _ t = return $ typeSubstitutePred pSubst . typeSubstitute subst $ t
+    go subst pSubst _ t@(ScalarT baseT r p) = 
+      return $ typeSubstitutePred pSubst . typeSubstitute subst $ t
+    go _ _ _ t = error $ unwords ["instantiating contextual type:", show (pretty t)]
     isBoundTV subst a = (a `Map.member` subst) || (a `elem` (env ^. boundTypeVars))
 
 -- | 'symbolType' @env x sch@: precise type of symbol @x@, which has a schema @sch@ in environment @env@;
@@ -317,34 +319,34 @@ freshResAnnotation env vtype prefix = do
   return $ Var IntS x
 
 
--- | 'freshPotentials' @env sch r@ : Replace potentials in schema @sch@ by unwrapping the foralls.
+-- | 'schFreshPotentials' @env sch r@ : Replace potentials in schema @sch@ by unwrapping the foralls.
 --    If @r@, recursively replace potential annotations in the entire type. Otherwise, just replace top-level annotations.
-freshPotentials :: MonadHorn s
-                => Environment
-                -> RSchema
-                -> TCSolver s RSchema
-freshPotentials env (Monotype t) =
-  Monotype <$> freshPotentials' env t 
-freshPotentials env (ForallT x t) =
-  ForallT x <$> freshPotentials env t 
-freshPotentials env (ForallP x t) =
-  ForallP x <$> freshPotentials env t 
+schFreshPotentials :: MonadHorn s
+                   => Environment
+                   -> RSchema
+                   -> TCSolver s RSchema
+schFreshPotentials env (Monotype t) =
+  Monotype <$> freshPotentials env t 
+schFreshPotentials env (ForallT x t) =
+  ForallT x <$> schFreshPotentials env t 
+schFreshPotentials env (ForallP x t) =
+  ForallP x <$> schFreshPotentials env t 
 
 -- Replace potentials in a TypeSkeleton
-freshPotentials' :: MonadHorn s
-                 => Environment
-                 -> RType
-                 -> TCSolver s RType
-freshPotentials' env (ScalarT base fml (Ite g t f)) = do
+freshPotentials :: MonadHorn s
+                => Environment
+                -> RType
+                -> TCSolver s RType
+freshPotentials env (ScalarT base fml (Ite g t f)) = do
     t' <- safeFreshPot env (Just base) t
     f' <- safeFreshPot env (Just base) f
     base' <- freshMultiplicities env base 
     return $ ScalarT base' fml $ Ite g t' f'
-freshPotentials' env (ScalarT base fml pot) = do
+freshPotentials env (ScalarT base fml pot) = do
   pot' <- safeFreshPot env (Just base) pot
   base' <- freshMultiplicities env base
   return $ ScalarT base' fml pot'
-freshPotentials' _ t = return t
+freshPotentials _ t = return t
 
 -- Replace potentials in a BaseType
 freshMultiplicities :: MonadHorn s
@@ -355,7 +357,7 @@ freshMultiplicities env b@(TypeVarT s x m) = do
   m' <- freshMul env Nothing
   return $ TypeVarT s x m'
 freshMultiplicities env (DatatypeT x ts ps) = do
-  ts' <- mapM (freshPotentials' env) ts
+  ts' <- mapM (freshPotentials env) ts
   return $ DatatypeT x ts' ps
 freshMultiplicities _ t = return t
 
@@ -494,7 +496,7 @@ freshSharingPotential env = do
   let replace (x, sch) = if x `Set.member` ghosts 
         then return (x, sch)
         else do 
-          sch' <- freshPotentials env sch 
+          sch' <- schFreshPotentials env sch 
           return (x, sch')
   let syms = env ^. symbols 
   let scalars = Map.assocs $ fromMaybe Map.empty $ Map.lookup 0 syms
