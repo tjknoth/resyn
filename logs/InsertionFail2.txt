@@ -1,0 +1,168 @@
+INSTANTIATE <a> . <q2 :: a -> a -> Int> . <q1 :: a -> Int> . {List {1**a||0} <q1 _0> <q2 _0 _1>|_v == (Nil)|0}
+INTO {List {1**A0||0} <Q10 _0> <Q20 _0 _1>|_v == (Nil)|0}
+INSTANTIATE <a> . <q2 :: a -> a -> Int> . <q1 :: a -> Int> . x:{1**a||q1 _v} -> xs:{List {1**a||0} <q1 _0 + q2 x _0> <q2 _0 _1>||0} -> {List {1**a||0} <q1 _0> <q2 _0 _1>|_v == (Cons x xs)|0}
+INTO y:{1**A1||Q11 _v} -> ys:{List {1**A1||0} <Q11 _0 + Q21 y _0> <Q21 _0 _1>||0} -> {List {1**A1||0} <Q11 _0> <Q21 _0 _1>|_v == (Cons y ys)|0}
+
+ 
+ Checking xs :: {List {1**A0||0} <0> <0>||0} in
+\x . \xs . 
+    match ?? with
+from env with top-level potentials: Emptyset : 0,Nil : 0,x : 0,xs : 0 fp2
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- {List {m1**a||0} <if _0 > x then 1 else 0> <0>|_v == xs|0} <: {List {1**A0||0} <0> <0>||0}
+    Emptyset Nil x xs ~ Emptyset Nil x xs fp2
+    Emptyset Nil x xs 0 \/
+    Emptyset Nil x xs 0 || Emptyset Nil x xs 0
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- 0 \/ fp0 || fp1
+    |- Q11 :: A1 -> Int
+    |- Q21 :: A1 -> A1 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- {1**A1||0}
+    |- Q10 :: A0 -> Int
+    |- Q20 :: A0 -> A0 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- {1**A0||0}
+UNIFY A0 WITH {m1**a||0} PRODUCING {m1**a|U0|0}
+Type assignment
+  A0 -> {m1**a|U0|0}
+Typing Constraints
+    |- Q20 :: A0 -> A0 -> Int
+    |- Q10 :: A0 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- {1**A1||0}
+    |- Q21 :: A1 -> A1 -> Int
+    |- Q11 :: A1 -> Int
+Type assignment
+  A0 -> {m1**a|U0|0}
+Pred assignment
+  Q10 -> Q10
+  Q11 -> Q11
+  Q20 -> Q20
+  Q21 -> Q21
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- {m1**a||0} <: {m1**a|U0|0}
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- if _0 > x then 1 else 0 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- 0 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- {List|False|0} <: {List||0}
+    Emptyset Nil x xs ~ Emptyset Nil x xs fp2
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- 1 \/ m0 || m2
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- 1 \/ m1 || m3
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- 0 \/ fp0 || fp1
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- {m1**a|U0|0}
+Constraints
+  False ==> True
+  True ==> U0
+QMap
+  U0 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}] (2 0)
+Remaining Candidates (1)
+  0: [U0 -> {}] (2 0)
+
+Generating resource constraints:
+    (if _0 > x then 1 else 0) >= 0
+    0 >= 0
+    ((((((0 + fp0) + 0 == (0 + fp2) + 0 && fp0 >= 0) && fp2 >= 0) && 0 >= 0) && 0 >= 0) && 0 >= 0) && 0 >= 0
+    ((1 >= 0 && m0 >= 0) && m2 >= 0) && 1 == m0 + m2
+    ((1 >= 0 && m1 >= 0) && m3 >= 0) && 1 == m1 + m3
+    ((0 >= 0 && fp0 >= 0) && fp1 >= 0) && 0 == fp0 + fp1
+Solved resource constraint after conjoining formulas: SAT
+    (>= (ite (> _0IntS xIntS) 1 0) 0)
+    (>= 0 0)
+    (and (= (+ 0 fp0IntS 0) (+ 0 fp2IntS 0))
+     (>= fp0IntS 0)
+     (>= fp2IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    (and (>= 1 0) (>= m0IntS 0) (>= m2IntS 0) (= 1 (+ m0IntS m2IntS)))
+    (and (>= 1 0) (>= m1IntS 0) (>= m3IntS 0) (= 1 (+ m1IntS m3IntS)))
+    (and (>= 0 0) (>= fp0IntS 0) (>= fp1IntS 0) (= 0 (+ fp0IntS fp1IntS)))
+Matching constructor type
+{List {0**A0||0} <Q10 _0> <Q20 _0 _1>|_v == (Nil)|0}
+with scrutinee
+{List {m1**a||0} <if _0 > x then 1 else 0> <0>|_v == xs|0}
+INSTANTIATE <a> . <q2 :: a -> a -> Int> . <q1 :: a -> Int> . x:{1**a||q1 _v} -> xs:{List {1**a||0} <q1 _0 + q2 x _0> <q2 _0 _1>||0} -> {List {1**a||0} <q1 _0> <q2 _0 _1>|_v == (Cons x xs)|0}
+INTO x3:{1**A2||Q12 _v} -> x4:{List {1**A2||0} <Q12 _0 + Q22 x3 _0> <Q22 _0 _1>||0} -> {List {1**A2||0} <Q12 _0> <Q22 _0 _1>|_v == (Cons x3 x4)|0}
+
+ 
+ Checking Cons :: x2:_ -> x1:_ -> {List {1**a||0} <0> <0>||0} in
+\x . \xs . 
+    match xs with
+      Nil -> ?? ?? ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,x : 0,xs : 0 fp10
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs xs == (Nil) |- x3:{1**A2||Q12 _v} -> x4:{List {1**A2||0} <Q12 _0 + Q22 x3 _0> <Q22 _0 _1>||0} -> {List {1**A2||0} <Q12 _0> <Q22 _0 _1>|_v == (Cons x3 x4)|0} /\ x2:_ -> x1:_ -> {List {1**a||0} <0> <0>||0}
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs xs == (Nil) |- x3:{1**A2||Q12 _v} -> x4:{List {1**A2||0} <Q12 _0 + Q22 x3 _0> <Q22 _0 _1>||0} -> {List {1**A2||0} <Q12 _0> <Q22 _0 _1>|_v == (Cons x3 x4)|0} <: x2:_ -> x1:_ -> {List {1**a||0} <0> <0>||0}
+    |- Q12 :: A2 -> Int
+    |- Q22 :: A2 -> A2 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- {1**A2||0}
+    Emptyset Nil x xs fp8 \/
+    Emptyset Nil x xs 0 || Emptyset Nil x xs 0
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs xs == (Nil) |- fp8 \/ fp10 || fp11
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs xs == (Nil) |- fp6 \/ fp8 || fp9
+    Emptyset Nil x xs fp4 \/
+    Emptyset Nil x xs 0 || Emptyset Nil x xs 0
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs xs == (Nil) |- fp4 \/ fp6 || fp7
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs xs == (Nil) |- fp3 \/ fp4 || fp5
+    Emptyset Nil x xs ~ Emptyset Nil x xs fp3
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- {1**A1||0}
+UNIFY A2 WITH {1**a||0} PRODUCING {1**a|U1|0}
+Type assignment
+  A0 -> {m1**a||0}
+  A2 -> {1**a|U1|0}
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- {1**A1||0}
+    |- Q22 :: A2 -> A2 -> Int
+    |- Q12 :: A2 -> Int
+Type assignment
+  A0 -> {m1**a||0}
+  A2 -> {1**a|U1|0}
+Pred assignment
+  Q10 -> if _0 > x then 1 else 0
+  Q11 -> Q11
+  Q12 -> Q12
+  Q20 -> 0
+  Q21 -> Q21
+  Q22 -> Q22
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, x3, x4, xs xs == (Nil) |- Q12 >= Q12
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, x3, x4, xs xs == (Nil) |- Q12 >= Q12
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, x3, x4, xs xs == (Nil) |- Q12 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, x3, x4, xs xs == (Nil) |- Q22 >= Q22
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, x3, x4, xs xs == (Nil) |- Q22 >= Q22
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, x3, x4, xs xs == (Nil) |- Q22 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, x1, x2, xs xs == (Nil) |- {1**a|False|0} <: {1**a||0}
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, x1, x2, xs xs == (Nil) |- Q12 >= Q12
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, x1, x2, xs xs == (Nil) |- Q12 >= Q12
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, x1, x2, xs xs == (Nil) |- Q12 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, x1, x2, xs xs == (Nil) |- Q22 >= Q22
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, x1, x2, xs xs == (Nil) |- Q22 >= Q22
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, x1, x2, xs xs == (Nil) |- Q22 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, x1, x2, xs xs == (Nil) |- {List|False|0} <: {List||0}
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs |- {1**a|U1|0}
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs xs == (Nil) |- m4 \/ m8 || m10
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs xs == (Nil) |- m5 \/ m9 || m11
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs xs == (Nil) |- fp8 \/ fp10 || fp11
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs xs == (Nil) |- fp6 \/ fp8 || fp9
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs xs == (Nil) |- m2 \/ m4 || m6
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs xs == (Nil) |- m3 \/ m5 || m7
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs xs == (Nil) |- fp4 \/ fp6 || fp7
+    Cons, Emptyset, Insert, Nil, Singleton, insert, x, xs xs == (Nil) |- fp3 \/ fp4 || fp5
+    Emptyset Nil x xs ~ Emptyset Nil x xs fp3
+Constraints
+  False ==> True
+  False ==> True
+QMap
+  U0 -> {}
+  U1 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (2 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (2 0)
+
+Generating resource constraints:
+    Q12 >= Q12
+resyn: toAST: encountered a second-order unknown Q12
+CallStack (from HasCallStack):
+  error, called at src/Synquid/Z3.hs:268:21 in resyn-0.1-2etMnOEE5fhHoeri84w0ko:Synquid.Z3

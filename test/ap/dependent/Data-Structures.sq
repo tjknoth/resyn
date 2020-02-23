@@ -1,0 +1,22 @@
+data Tree a <q :: Int> where
+  Nil  :: Tree a <q>
+  Node :: x: {a | | q} -> l: Tree a <q> -> r: Tree a <{0}> -> Tree a <q>
+
+-- can we make this polymorphic in p? so instantiate q, "forall" p
+data Tree' a <p :: a -> Bool> <q :: Int> where
+  Nil  :: Tree' a <p> <q>
+  Node :: x: {a | | q} 
+       -> l: Tree' a <p> <{if (p x) then q else 0}> 
+       -> r: Tree' a <p> <{if (p x) then 0 else q}> 
+       -> Tree' a <p> <q> 
+
+-- can we use measures in data declarations?
+measure nelems :: Tree a -> {Int | _v >= 0} where
+  Nil -> 0
+  Node _ l r -> nelems l + nelems r
+
+measure balance :: Tree a -> Bool where
+  Nil -> True
+  Node _ l r :: nelems l - nelems r < 1 && nelems r - nelems l < 1
+  --Node _ l r -> balance l && balance r
+

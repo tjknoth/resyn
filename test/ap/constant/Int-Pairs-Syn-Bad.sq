@@ -1,0 +1,44 @@
+data SList a <q1 :: Int> <q2 :: Int> where
+  Nil :: SList a <q1> <q2>
+  Cons :: x: {a | | q1} -> xs: SList {a | x < _v | 0} <{q1 + q2}> <q2> -> SList a <q1> <q2>
+
+termination measure len :: SList a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs
+
+measure elems :: SList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs
+
+measure heads :: SList a -> Set a where
+  Nil -> []
+  Cons x xs -> [x]
+
+measure tails :: SList a -> Set a where
+  Nil -> []
+  Cons x xs -> if elems xs == [] then [x] else tails xs
+
+data PairList a where
+  PNil :: PairList a
+  PCons :: x: a -> y: {a | x < _v} -> PairList a -> PairList a
+
+termination measure plen :: PairList a -> {Int | _v >= 0} where
+  PNil -> 0
+  PCons x y xs -> 1 + plen xs
+
+measure fstElems :: PairList a -> Set a where
+  PNil -> []
+  PCons x y xs -> [x] + fstElems xs
+
+measure sndElems :: PairList a -> Set a where
+  PNil -> []
+  PCons x y xs -> [y] + sndElems xs
+
+append :: xs: PairList a -> ys: PairList a 
+  -> {PairList a | fstElems _v == fstElems xs + fstElems ys && sndElems _v == sndElems xs + sndElems ys}
+  
+attach :: x: a -> xs: SList {a | x < _v} <{0}> <{0}> 
+  -> {PairList a | (fstElems _v == if elems xs == [] then [] else [x]) && sndElems _v == elems xs}
+
+pairs :: xs: SList a <{0}> <{0}> -[1]-> {PairList a | sndElems _v == elems xs - heads xs && fstElems _v == elems xs - tails xs}
+pairs = ??

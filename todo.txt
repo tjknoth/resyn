@@ -18,3 +18,4 @@ replicate = \n. \x. if n <= 0 then Nil else Cons x (replicate (dec n) x)
 - Multisets
 - Named arguments for abstract predicates
 - Intersection types (carry multiple environments and type constraint checkers), good example: allPos :: (List Int -> Bool) &&& (List Pos -> {Bool | _v}) &&& ({List Nonpos | len _v > 0} -> {Bool | !_v})
+

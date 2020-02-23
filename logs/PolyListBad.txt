@@ -1,0 +1,2093 @@
+INSTANTIATE <a> . <q :: a -> Int> . {List {1**a||0} <q _0>|_v == (Nil)|0}
+INTO {List {1**A0||0} <Q0 _0>|_v == (Nil)|0}
+INSTANTIATE <a> . <q :: a -> Int> . x:{1**a||q _v} -> xs:{List {1**a||0} <q _0>||0} -> {List {1**a||0} <q _0>|_v == (Cons x xs)|0}
+INTO z:{1**A1||Q1 _v} -> zs:{List {1**A1||0} <Q1 _0>||0} -> {List {1**A1||0} <Q1 _0>|_v == (Cons z zs)|0}
+
+ 
+ Checking xs :: {List {1**A0||0} <0>||0} in
+\xs . \ys . 
+    match ?? with
+from env with top-level potentials: Emptyset : 0,Nil : 0,xs : 0,ys : 0 fp2
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {List {m0**a||0} <0>|_v == xs|0} <: {List {1**A0||0} <0>||0}
+    Emptyset Nil xs ys ~ Emptyset Nil xs ys fp2
+    Emptyset Nil xs ys 0 \/
+    Emptyset Nil xs ys 0 || Emptyset Nil xs ys 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- 0 \/ fp0 || fp1
+    |- Q1 :: A1 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {1**A1||0}
+    |- Q0 :: A0 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {1**A0||0}
+UNIFY A0 WITH {m0**a||0} PRODUCING {m0**a|U0|0}
+stripping int: IntLit 0
+stripping int: IntLit 0
+Type assignment
+  A0 -> {m0**a|U0|0}
+Typing Constraints
+    |- Q0 :: A0 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {1**A1||0}
+    |- Q1 :: A1 -> Int
+Type assignment
+  A0 -> {m0**a|U0|0}
+Pred assignment
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {m0**a||0} <: {m0**a|U0|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- 0 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {List|False|0} <: {List||0}
+    Emptyset Nil xs ys ~ Emptyset Nil xs ys fp2
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- 1 \/ m0 || m2
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- 1 \/ m1 || m3
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- 0 \/ fp0 || fp1
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {m0**a|U0|0}
+Constraints
+  False ==> True
+  True ==> U0
+QMap
+  U0 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}] (2 0)
+Remaining Candidates (1)
+  0: [U0 -> {}] (2 0)
+
+Generating resource constraints:
+  0 >= 0 ~>
+    0 >= 0
+  Emptyset Nil xs ys ~ Emptyset Nil xs ys ~>
+    ((((((0 + fp0) + 0 == (0 + fp2) + 0 && fp0 >= 0) && fp2 >= 0) && 0 >= 0) && 0 >= 0) && 0 >= 0) && 0 >= 0
+  1 \/ m0 || m2 ~>
+    ((1 >= 0 && m0 >= 0) && m2 >= 0) && 1 == m0 + m2
+  1 \/ m1 || m3 ~>
+    ((1 >= 0 && m1 >= 0) && m3 >= 0) && 1 == m1 + m3
+  0 \/ fp0 || fp1 ~>
+    ((0 >= 0 && fp0 >= 0) && fp1 >= 0) && 0 == fp0 + fp1
+Solved with model
+m3IntS -> 0
+m1IntS -> 1
+m0IntS -> 0
+fp2IntS -> 0
+fp1IntS -> 0
+fp0IntS -> 0
+m2IntS -> 1
+
+Accumulated resource constraints:
+    []
+Solved resource constraint after conjoining formulas: SAT
+    (>= 0 0)
+    (and (= (+ 0 fp0IntS 0) (+ 0 fp2IntS 0))
+     (>= fp0IntS 0)
+     (>= fp2IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    (and (>= 1 0) (>= m0IntS 0) (>= m2IntS 0) (= 1 (+ m0IntS m2IntS)))
+    (and (>= 1 0) (>= m1IntS 0) (>= m3IntS 0) (= 1 (+ m1IntS m3IntS)))
+    (and (>= 0 0) (>= fp0IntS 0) (>= fp1IntS 0) (= 0 (+ fp0IntS fp1IntS)))
+Matching constructor type
+{List {0**A0||0} <Q0 _0>|_v == (Nil)|0}
+with scrutinee
+{List {m0**a||0} <0>|_v == xs|0}
+
+ 
+ Checking ys :: {List {1**a||0} <0>|len _v == len xs + len ys && elems _v == elems xs + elems ys|0} in
+\xs . \ys . 
+    match xs with
+      Nil -> ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,xs : 0,ys : 0 fp3
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys xs == (Nil) |- {List {m3**a||0} <0>|_v == ys|0} <: {List {1**a||0} <0>|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+    Emptyset Nil xs ys ~ Emptyset Nil xs ys fp3
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {1**A1||0}
+stripping int: IntLit 0
+stripping int: IntLit 0
+Type assignment
+  A0 -> {m0**a||0}
+Pred assignment
+  Q0 -> 0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys xs == (Nil) |- {m3**a|False|0} <: {1**a||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys xs == (Nil) |- 0 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys xs == (Nil) |- {List|_v == ys|0} <: {List|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+    Emptyset Nil xs ys ~ Emptyset Nil xs ys fp3
+Constraints
+  ((_v == ys && xs == (Nil)) && len xs >= 0) && len ys >= 0 ==> len _v == len xs + len ys && elems _v == elems xs + elems ys
+  False ==> True
+QMap
+  U0 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}] (3 0)
+Remaining Candidates (1)
+  0: [U0 -> {}] (3 0)
+
+Generating resource constraints:
+  0 >= 0 ~>
+    0 >= 0
+  Emptyset Nil xs ys ~ Emptyset Nil xs ys ~>
+    ((((((0 + fp1) + 0 == (0 + fp3) + 0 && fp1 >= 0) && fp3 >= 0) && 0 >= 0) && 0 >= 0) && 0 >= 0) && 0 >= 0
+Solved with model
+m3IntS -> 0
+m1IntS -> 1
+fp2IntS -> 0
+fp1IntS -> 0
+m2IntS -> 1
+fp3IntS -> 0
+m0IntS -> 0
+fp0IntS -> 0
+
+Accumulated resource constraints:
+    [(>= 0 0)
+    ,(and (= (+ 0 fp0IntS 0) (+ 0 fp2IntS 0))
+     (>= fp0IntS 0)
+     (>= fp2IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(and (>= 1 0) (>= m0IntS 0) (>= m2IntS 0) (= 1 (+ m0IntS m2IntS)))
+    ,(and (>= 1 0) (>= m1IntS 0) (>= m3IntS 0) (= 1 (+ m1IntS m3IntS)))
+    ,(and (>= 0 0) (>= fp0IntS 0) (>= fp1IntS 0) (= 0 (+ fp0IntS fp1IntS)))]
+Solved resource constraint after conjoining formulas: SAT
+    (>= 0 0)
+    (and (= (+ 0 fp1IntS 0) (+ 0 fp3IntS 0))
+     (>= fp1IntS 0)
+     (>= fp3IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+Matching constructor type
+{List {1**A1||0} <Q1 _0>|_v == (Cons z zs)|0}
+with scrutinee
+{List {m0**a||0} <0>|_v == xs|0}
+INSTANTIATE <a> . <q :: a -> Int> . x:{1**a||q _v} -> xs:{List {1**a||0} <q _0>||0} -> {List {1**a||0} <q _0>|_v == (Cons x xs)|0}
+INTO x4:{1**A2||Q2 _v} -> x5:{List {1**A2||0} <Q2 _0>||0} -> {List {1**A2||0} <Q2 _0>|_v == (Cons x4 x5)|0}
+
+ 
+ Checking Cons :: x3:_ -> x2:_ -> {List {1**a||0} <0>|len _v == len xs + len ys && elems _v == elems xs + elems ys|0} in
+\xs . \ys . 
+    match xs with
+      Cons z zs -> ?? ?? ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,xs : 0,ys : 0,z : 0,zs : 0 fp11
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- x4:{1**A2||Q2 _v} -> x5:{List {1**A2||0} <Q2 _0>||0} -> {List {1**A2||0} <Q2 _0>|_v == (Cons x4 x5)|0} /\ x3:_ -> x2:_ -> {List {1**a||0} <0>|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- x4:{1**A2||Q2 _v} -> x5:{List {1**A2||0} <Q2 _0>||0} -> {List {1**A2||0} <Q2 _0>|_v == (Cons x4 x5)|0} <: x3:_ -> x2:_ -> {List {1**a||0} <0>|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+    |- Q2 :: A2 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs |- {1**A2||0}
+    Emptyset Nil xs ys z zs fp9 \/
+    Emptyset Nil xs ys z zs 0 || Emptyset Nil xs ys z zs 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp9 \/ fp11 || fp12
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp7 \/ fp9 || fp10
+    Emptyset Nil xs ys z zs fp5 \/
+    Emptyset Nil xs ys z zs 0 || Emptyset Nil xs ys z zs 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp5 \/ fp7 || fp8
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp4 \/ fp5 || fp6
+    Emptyset Nil xs ys z zs ~ Emptyset Nil xs ys z zs fp4
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {1**A1||0}
+UNIFY A2 WITH {1**a||0} PRODUCING {1**a|U1|0}
+[]
+stripping AP: Pred IntS "Q2" [Var (VarS "A2") "_0"]
+stripping int: IntLit 0
+[]
+stripping AP: Pred IntS "Q2" [Var (VarS "A2") "_0"]
+stripping int: IntLit 0
+Type assignment
+  A0 -> {m0**a||0}
+  A1 -> {m0**a||0}
+  A2 -> {1**a|U1|0}
+Typing Constraints
+    |- Q2 :: A2 -> Int
+Type assignment
+  A0 -> {m0**a||0}
+  A1 -> {m0**a||0}
+  A2 -> {1**a|U1|0}
+Pred assignment
+  Q0 -> 0
+  Q1 -> 0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, x4, x5, xs, ys, z, zs xs == (Cons z zs) |- Q2 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, x4, x5, xs, ys, z, zs xs == (Cons z zs) |- {List|_v == (Cons x4 x5)|0} /\ {List|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, x2, x3, xs, ys, z, zs xs == (Cons z zs) |- {1**a|False|0} <: {1**a||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, x2, x3, xs, ys, z, zs xs == (Cons z zs) |- Q2 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, x2, x3, xs, ys, z, zs xs == (Cons z zs) |- {List|elems _v == [x3] + elems x2|0} <: {List|elems _v == elems xs + elems ys|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, x2, x3, xs, ys, z, zs xs == (Cons z zs) |- {List|len _v == 1 + len x2|0} <: {List|len _v == len xs + len ys|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs |- {1**a|U1|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m4 \/ m12 || m16
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m5 \/ m13 || m17
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m6 \/ m14 || m18
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m7 \/ m15 || m19
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp9 \/ fp11 || fp12
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp7 \/ fp9 || fp10
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m2 \/ m4 || m8
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m3 \/ m5 || m9
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m0 \/ m6 || m10
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m0 \/ m7 || m11
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp5 \/ fp7 || fp8
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp4 \/ fp5 || fp6
+    Emptyset Nil xs ys z zs ~ Emptyset Nil xs ys z zs fp4
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {m0**a||0}
+Constraints
+  False ==> len _v == len xs + len ys
+  False ==> elems _v == elems xs + elems ys
+  False ==> True
+QMap
+  U0 -> {}
+  U1 -> {}
+Checking consistency
+  (((((([_v -> x4]U1 && _v == (Cons x4 x5)) && xs == (Cons z zs)) && len x5 >= 0) && len xs >= 0) && len ys >= 0) && len zs >= 0) && (len _v == len xs + len ys && elems _v == elems xs + elems ys)
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (5 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (5 0)
+
+Generating resource constraints:
+  Q2 >= 0 ~>
+    Q2 >= 0
+  Q2 >= 0 ~>
+    Q2 >= 0
+  m4 \/ m12 || m16 ~>
+    ((m4 >= 0 && m12 >= 0) && m16 >= 0) && m4 == m12 + m16
+  m5 \/ m13 || m17 ~>
+    ((m5 >= 0 && m13 >= 0) && m17 >= 0) && m5 == m13 + m17
+  m6 \/ m14 || m18 ~>
+    ((m6 >= 0 && m14 >= 0) && m18 >= 0) && m6 == m14 + m18
+  m7 \/ m15 || m19 ~>
+    ((m7 >= 0 && m15 >= 0) && m19 >= 0) && m7 == m15 + m19
+  fp9 \/ fp11 || fp12 ~>
+    ((fp9 >= 0 && fp11 >= 0) && fp12 >= 0) && fp9 == fp11 + fp12
+  fp7 \/ fp9 || fp10 ~>
+    ((fp7 >= 0 && fp9 >= 0) && fp10 >= 0) && fp7 == fp9 + fp10
+  m2 \/ m4 || m8 ~>
+    ((m2 >= 0 && m4 >= 0) && m8 >= 0) && m2 == m4 + m8
+  m3 \/ m5 || m9 ~>
+    ((m3 >= 0 && m5 >= 0) && m9 >= 0) && m3 == m5 + m9
+  m0 \/ m6 || m10 ~>
+    ((m0 >= 0 && m6 >= 0) && m10 >= 0) && m0 == m6 + m10
+  m0 \/ m7 || m11 ~>
+    ((m0 >= 0 && m7 >= 0) && m11 >= 0) && m0 == m7 + m11
+  fp5 \/ fp7 || fp8 ~>
+    ((fp5 >= 0 && fp7 >= 0) && fp8 >= 0) && fp5 == fp7 + fp8
+  fp4 \/ fp5 || fp6 ~>
+    ((fp4 >= 0 && fp5 >= 0) && fp6 >= 0) && fp4 == fp5 + fp6
+  Emptyset Nil xs ys z zs ~ Emptyset Nil xs ys z zs ~>
+    ((((((((Q1 z + fp1) + 0 == (0 + fp4) + 0 && fp1 >= 0) && fp4 >= 0) && 0 >= 0) && 0 >= 0) && 0 >= 0) && 0 >= 0) && 0 >= 0) && 0 >= 0
+Solved with model
+m8IntS -> 1
+m1IntS -> 1
+m9IntS -> 0
+fp3IntS -> 0
+m4IntS -> 0
+fp0IntS -> 0
+m17IntS -> 0
+zIntS -> 16
+fp5IntS -> 0
+Q2IntS -> 0
+m11IntS -> 0
+m6IntS -> 0
+fp12IntS -> 0
+m16IntS -> 0
+fp10IntS -> 0
+m3IntS -> 0
+fp7IntS -> 0
+fp2IntS -> 0
+fp1IntS -> 0
+m12IntS -> 0
+m14IntS -> 0
+fp4IntS -> 0
+m13IntS -> 0
+m7IntS -> 0
+fp8IntS -> 0
+fp11IntS -> 0
+m15IntS -> 0
+m2IntS -> 1
+m5IntS -> 0
+m18IntS -> 0
+m19IntS -> 0
+fp6IntS -> 0
+m0IntS -> 0
+fp9IntS -> 0
+m10IntS -> 0
+Q1IntSIntS -> {
+  16 -> 0
+  else -> 0
+}
+
+Accumulated resource constraints:
+    [(>= 0 0)
+    ,(and (= (+ 0 fp0IntS 0) (+ 0 fp2IntS 0))
+     (>= fp0IntS 0)
+     (>= fp2IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(and (>= 1 0) (>= m0IntS 0) (>= m2IntS 0) (= 1 (+ m0IntS m2IntS)))
+    ,(and (>= 1 0) (>= m1IntS 0) (>= m3IntS 0) (= 1 (+ m1IntS m3IntS)))
+    ,(and (>= 0 0) (>= fp0IntS 0) (>= fp1IntS 0) (= 0 (+ fp0IntS fp1IntS)))
+    ,(>= 0 0)
+    ,(and (= (+ 0 fp1IntS 0) (+ 0 fp3IntS 0))
+     (>= fp1IntS 0)
+     (>= fp3IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))]
+Solved resource constraint after conjoining formulas: SAT
+    (>= Q2IntS 0)
+    (>= Q2IntS 0)
+    (and (>= m4IntS 0) (>= m12IntS 0) (>= m16IntS 0) (= m4IntS (+ m12IntS m16IntS)))
+    (and (>= m5IntS 0) (>= m13IntS 0) (>= m17IntS 0) (= m5IntS (+ m13IntS m17IntS)))
+    (and (>= m6IntS 0) (>= m14IntS 0) (>= m18IntS 0) (= m6IntS (+ m14IntS m18IntS)))
+    (and (>= m7IntS 0) (>= m15IntS 0) (>= m19IntS 0) (= m7IntS (+ m15IntS m19IntS)))
+    (and (>= fp9IntS 0)
+     (>= fp11IntS 0)
+     (>= fp12IntS 0)
+     (= fp9IntS (+ fp11IntS fp12IntS)))
+    (and (>= fp7IntS 0)
+     (>= fp9IntS 0)
+     (>= fp10IntS 0)
+     (= fp7IntS (+ fp9IntS fp10IntS)))
+    (and (>= m2IntS 0) (>= m4IntS 0) (>= m8IntS 0) (= m2IntS (+ m4IntS m8IntS)))
+    (and (>= m3IntS 0) (>= m5IntS 0) (>= m9IntS 0) (= m3IntS (+ m5IntS m9IntS)))
+    (and (>= m0IntS 0) (>= m6IntS 0) (>= m10IntS 0) (= m0IntS (+ m6IntS m10IntS)))
+    (and (>= m0IntS 0) (>= m7IntS 0) (>= m11IntS 0) (= m0IntS (+ m7IntS m11IntS)))
+    (and (>= fp5IntS 0)
+     (>= fp7IntS 0)
+     (>= fp8IntS 0)
+     (= fp5IntS (+ fp7IntS fp8IntS)))
+    (and (>= fp4IntS 0)
+     (>= fp5IntS 0)
+     (>= fp6IntS 0)
+     (= fp4IntS (+ fp5IntS fp6IntS)))
+    (and (= (+ (Q1IntSIntS zIntS) fp1IntS 0) (+ 0 fp4IntS 0))
+     (>= fp1IntS 0)
+     (>= fp4IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+
+ 
+ Checking z :: {1**A2||Q2 _v + -(fp10 + 0)} in
+\xs . \ys . 
+    match xs with
+      Cons z zs -> Cons ?? ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,xs : 0,ys : 0,z : 0,zs : 0 fp12
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {m18**a|_v == z|0} <: {1**A2||Q2 _v + -(fp10 + 0)}
+stripping int: IntLit 0
+stripping bin: Binary Plus (Pred IntS "Q2" [Var (VarS "a") "_v"]) (Unary Neg (Binary Plus (Var IntS "fp10") (IntLit 0)))
+[]
+stripping AP: Pred IntS "Q2" [Var (VarS "a") "_v"]
+stripping unary: Unary Neg (Binary Plus (Var IntS "fp10") (IntLit 0))
+stripping bin: Binary Plus (Var IntS "fp10") (IntLit 0)
+stripping var: Var IntS "fp10"
+stripping int: IntLit 0
+Type assignment
+  A0 -> {m0**a||0}
+  A1 -> {m0**a||0}
+  A2 -> {1**a|U1|0}
+Pred assignment
+  Q0 -> 0
+  Q1 -> 0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, _v, append, xs, ys, z, zs xs == (Cons z zs) |- 0 >= Q2 + -(fp10 + 0)
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {m18**a|_v == z|0} <: {1**a|U1|0}
+Constraints
+  ((_v == z && xs == (Cons z zs)) && len xs >= 0) && len zs >= 0 ==> U1
+QMap
+  U0 -> {}
+  U1 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (6 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (6 0)
+
+Generating resource constraints:
+  0 >= Q2 + -(fp10 + 0) ~>
+    0 >= Q2 + -(fp10 + 0)
+Solved with model
+m8IntS -> 1
+m1IntS -> 1
+m9IntS -> 0
+fp3IntS -> 0
+m4IntS -> 0
+fp0IntS -> 0
+m17IntS -> 0
+zIntS -> 16
+fp5IntS -> 0
+Q2IntS -> 0
+m11IntS -> 0
+m6IntS -> 0
+fp12IntS -> 0
+m16IntS -> 0
+fp10IntS -> 0
+m3IntS -> 0
+fp7IntS -> 0
+fp2IntS -> 0
+fp1IntS -> 0
+m12IntS -> 0
+m14IntS -> 0
+fp4IntS -> 0
+m13IntS -> 0
+m7IntS -> 0
+fp8IntS -> 0
+fp11IntS -> 0
+m15IntS -> 0
+m2IntS -> 1
+m5IntS -> 0
+m18IntS -> 0
+m19IntS -> 0
+fp6IntS -> 0
+m0IntS -> 0
+fp9IntS -> 0
+m10IntS -> 0
+Q1IntSIntS -> {
+  16 -> 0
+  else -> 0
+}
+
+Accumulated resource constraints:
+    [(>= 0 0)
+    ,(and (= (+ 0 fp0IntS 0) (+ 0 fp2IntS 0))
+     (>= fp0IntS 0)
+     (>= fp2IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(and (>= 1 0) (>= m0IntS 0) (>= m2IntS 0) (= 1 (+ m0IntS m2IntS)))
+    ,(and (>= 1 0) (>= m1IntS 0) (>= m3IntS 0) (= 1 (+ m1IntS m3IntS)))
+    ,(and (>= 0 0) (>= fp0IntS 0) (>= fp1IntS 0) (= 0 (+ fp0IntS fp1IntS)))
+    ,(>= 0 0)
+    ,(and (= (+ 0 fp1IntS 0) (+ 0 fp3IntS 0))
+     (>= fp1IntS 0)
+     (>= fp3IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(>= Q2IntS 0)
+    ,(>= Q2IntS 0)
+    ,(and (>= m4IntS 0) (>= m12IntS 0) (>= m16IntS 0) (= m4IntS (+ m12IntS m16IntS)))
+    ,(and (>= m5IntS 0) (>= m13IntS 0) (>= m17IntS 0) (= m5IntS (+ m13IntS m17IntS)))
+    ,(and (>= m6IntS 0) (>= m14IntS 0) (>= m18IntS 0) (= m6IntS (+ m14IntS m18IntS)))
+    ,(and (>= m7IntS 0) (>= m15IntS 0) (>= m19IntS 0) (= m7IntS (+ m15IntS m19IntS)))
+    ,(and (>= fp9IntS 0)
+     (>= fp11IntS 0)
+     (>= fp12IntS 0)
+     (= fp9IntS (+ fp11IntS fp12IntS)))
+    ,(and (>= fp7IntS 0)
+     (>= fp9IntS 0)
+     (>= fp10IntS 0)
+     (= fp7IntS (+ fp9IntS fp10IntS)))
+    ,(and (>= m2IntS 0) (>= m4IntS 0) (>= m8IntS 0) (= m2IntS (+ m4IntS m8IntS)))
+    ,(and (>= m3IntS 0) (>= m5IntS 0) (>= m9IntS 0) (= m3IntS (+ m5IntS m9IntS)))
+    ,(and (>= m0IntS 0) (>= m6IntS 0) (>= m10IntS 0) (= m0IntS (+ m6IntS m10IntS)))
+    ,(and (>= m0IntS 0) (>= m7IntS 0) (>= m11IntS 0) (= m0IntS (+ m7IntS m11IntS)))
+    ,(and (>= fp5IntS 0)
+     (>= fp7IntS 0)
+     (>= fp8IntS 0)
+     (= fp5IntS (+ fp7IntS fp8IntS)))
+    ,(and (>= fp4IntS 0)
+     (>= fp5IntS 0)
+     (>= fp6IntS 0)
+     (= fp4IntS (+ fp5IntS fp6IntS)))
+    ,(and (= (+ (Q1IntSIntS zIntS) fp1IntS 0) (+ 0 fp4IntS 0))
+     (>= fp1IntS 0)
+     (>= fp4IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))]
+Solved resource constraint after conjoining formulas: SAT
+    (>= 0 (+ Q2IntS (- (+ fp10IntS 0))))
+
+ 
+ Checking Cons
+            z :: x2:_ -> {List {1**a||0} <0>|len _v == len xs + len ys && elems _v == elems xs + elems ys|0} in
+\xs . \ys . 
+    match xs with
+      Cons z zs -> ?? ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,xs : 0,ys : 0,z : 0,zs : 0 fp7
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- x5:{List {1**A2||0} <Q2 _0>||0} -> {List {1**A2||0} <Q2 _0>|_v == (Cons z x5)|0} /\ x2:_ -> {List {1**a||0} <0>|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- x5:{List {1**A2||0} <Q2 _0>||0} -> {List {1**A2||0} <Q2 _0>|_v == (Cons z x5)|0} <: x2:_ -> {List {1**a||0} <0>|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+[]
+stripping AP: Pred IntS "Q2" [Var (VarS "A2") "_0"]
+stripping int: IntLit 0
+[]
+stripping AP: Pred IntS "Q2" [Var (VarS "A2") "_0"]
+stripping int: IntLit 0
+Type assignment
+  A0 -> {m0**a||0}
+  A1 -> {m0**a||0}
+  A2 -> {1**a|U1|0}
+Pred assignment
+  Q0 -> 0
+  Q1 -> 0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, x5, xs, ys, z, zs xs == (Cons z zs) |- Q2 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, x5, xs, ys, z, zs xs == (Cons z zs) |- {List|_v == (Cons z x5)|0} /\ {List|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, x2, xs, ys, z, zs xs == (Cons z zs) |- {1**a|False|0} <: {1**a||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, x2, xs, ys, z, zs xs == (Cons z zs) |- Q2 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, x2, xs, ys, z, zs xs == (Cons z zs) |- {List|elems _v == [z] + elems x2|0} <: {List|elems _v == elems xs + elems ys|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, x2, xs, ys, z, zs xs == (Cons z zs) |- {List|len _v == 1 + len x2|0} <: {List|len _v == len xs + len ys|0}
+Constraints
+  False ==> len _v == len xs + len ys
+  False ==> elems _v == elems xs + elems ys
+  False ==> True
+QMap
+  U0 -> {}
+  U1 -> {}
+Checking consistency
+  (((((_v == (Cons z x5) && xs == (Cons z zs)) && len x5 >= 0) && len xs >= 0) && len ys >= 0) && len zs >= 0) && (len _v == len xs + len ys && elems _v == elems xs + elems ys)
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (6 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (6 0)
+
+Generating resource constraints:
+  Q2 >= 0 ~>
+    Q2 >= 0
+  Q2 >= 0 ~>
+    Q2 >= 0
+Solved with model
+m8IntS -> 1
+m1IntS -> 1
+m9IntS -> 0
+fp3IntS -> 0
+m4IntS -> 0
+fp0IntS -> 0
+m17IntS -> 0
+zIntS -> 16
+fp5IntS -> 0
+Q2IntS -> 0
+m11IntS -> 0
+m6IntS -> 0
+fp12IntS -> 0
+m16IntS -> 0
+fp10IntS -> 0
+m3IntS -> 0
+fp7IntS -> 0
+fp2IntS -> 0
+fp1IntS -> 0
+m12IntS -> 0
+m14IntS -> 0
+fp4IntS -> 0
+m13IntS -> 0
+m7IntS -> 0
+fp8IntS -> 0
+fp11IntS -> 0
+m15IntS -> 0
+m2IntS -> 1
+m5IntS -> 0
+m18IntS -> 0
+m19IntS -> 0
+fp6IntS -> 0
+m0IntS -> 0
+fp9IntS -> 0
+m10IntS -> 0
+Q1IntSIntS -> {
+  16 -> 0
+  else -> 0
+}
+
+Accumulated resource constraints:
+    [(>= 0 0)
+    ,(and (= (+ 0 fp0IntS 0) (+ 0 fp2IntS 0))
+     (>= fp0IntS 0)
+     (>= fp2IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(and (>= 1 0) (>= m0IntS 0) (>= m2IntS 0) (= 1 (+ m0IntS m2IntS)))
+    ,(and (>= 1 0) (>= m1IntS 0) (>= m3IntS 0) (= 1 (+ m1IntS m3IntS)))
+    ,(and (>= 0 0) (>= fp0IntS 0) (>= fp1IntS 0) (= 0 (+ fp0IntS fp1IntS)))
+    ,(>= 0 0)
+    ,(and (= (+ 0 fp1IntS 0) (+ 0 fp3IntS 0))
+     (>= fp1IntS 0)
+     (>= fp3IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(>= Q2IntS 0)
+    ,(>= Q2IntS 0)
+    ,(and (>= m4IntS 0) (>= m12IntS 0) (>= m16IntS 0) (= m4IntS (+ m12IntS m16IntS)))
+    ,(and (>= m5IntS 0) (>= m13IntS 0) (>= m17IntS 0) (= m5IntS (+ m13IntS m17IntS)))
+    ,(and (>= m6IntS 0) (>= m14IntS 0) (>= m18IntS 0) (= m6IntS (+ m14IntS m18IntS)))
+    ,(and (>= m7IntS 0) (>= m15IntS 0) (>= m19IntS 0) (= m7IntS (+ m15IntS m19IntS)))
+    ,(and (>= fp9IntS 0)
+     (>= fp11IntS 0)
+     (>= fp12IntS 0)
+     (= fp9IntS (+ fp11IntS fp12IntS)))
+    ,(and (>= fp7IntS 0)
+     (>= fp9IntS 0)
+     (>= fp10IntS 0)
+     (= fp7IntS (+ fp9IntS fp10IntS)))
+    ,(and (>= m2IntS 0) (>= m4IntS 0) (>= m8IntS 0) (= m2IntS (+ m4IntS m8IntS)))
+    ,(and (>= m3IntS 0) (>= m5IntS 0) (>= m9IntS 0) (= m3IntS (+ m5IntS m9IntS)))
+    ,(and (>= m0IntS 0) (>= m6IntS 0) (>= m10IntS 0) (= m0IntS (+ m6IntS m10IntS)))
+    ,(and (>= m0IntS 0) (>= m7IntS 0) (>= m11IntS 0) (= m0IntS (+ m7IntS m11IntS)))
+    ,(and (>= fp5IntS 0)
+     (>= fp7IntS 0)
+     (>= fp8IntS 0)
+     (= fp5IntS (+ fp7IntS fp8IntS)))
+    ,(and (>= fp4IntS 0)
+     (>= fp5IntS 0)
+     (>= fp6IntS 0)
+     (= fp4IntS (+ fp5IntS fp6IntS)))
+    ,(and (= (+ (Q1IntSIntS zIntS) fp1IntS 0) (+ 0 fp4IntS 0))
+     (>= fp1IntS 0)
+     (>= fp4IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(>= 0 (+ Q2IntS (- (+ fp10IntS 0))))]
+Solved resource constraint after conjoining formulas: SAT
+    (>= Q2IntS 0)
+    (>= Q2IntS 0)
+INSTANTIATE <a> . x0:{List {1**a||0} <0>|len _v >= 0 && len _v < len xs|0} -> ys:{List {1**a||0} <0>||0} -[1]-> {List {1**a||0} <0>|len _v == len x0 + len ys && elems _v == elems x0 + elems ys|0}
+INTO x8:{List {1**A3||0} <0>|len _v >= 0 && len _v < len xs|0} -> x9:{List {1**A3||0} <0>||0} -[1]-> {List {1**A3||0} <0>|len _v == len x8 + len x9 && elems _v == elems x8 + elems x9|0}
+
+ 
+ Checking append :: x7:_ -> x6:_ -> {List {1**A2||0} <Q2 _0>||-(fp6 + 0)} in
+\xs . \ys . 
+    match xs with
+      Cons z zs -> Cons z (?? ?? ??)
+from env with top-level potentials: Emptyset : 0,Nil : 0,xs : 0,ys : 0,z : 0,zs : 0 fp19
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- x8:{List {1**A3||0} <0>|len _v >= 0 && len _v < len xs|0} -> x9:{List {1**A3||0} <0>||0} -[1]-> {List {1**A3||0} <0>|len _v == len x8 + len x9 && elems _v == elems x8 + elems x9|0} /\ x7:_ -> x6:_ -> {List {1**A2||0} <Q2 _0>||-(fp6 + 0)}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- x8:{List {1**A3||0} <0>|len _v >= 0 && len _v < len xs|0} -> x9:{List {1**A3||0} <0>||0} -[1]-> {List {1**A3||0} <0>|len _v == len x8 + len x9 && elems _v == elems x8 + elems x9|0} <: x7:_ -> x6:_ -> {List {1**A2||0} <Q2 _0>||-(fp6 + 0)}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- x8:{List {1**A3||0} <0>||0} -> x9:{List {1**A3||0} <0>||0} -> {List {1**A3|False|0} <9999>|False|0} <: xs:{List {1**a|False|0} <9999>|False|0} -> ys:{List {1**a|False|0} <9999>|False|0} -> {List {1**a||0} <0>||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs |- {1**A3||0}
+    Emptyset Nil xs ys z zs fp17 \/
+    Emptyset Nil xs ys z zs 0 || Emptyset Nil xs ys z zs 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp17 \/ fp19 || fp20
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp15 \/ fp17 || fp18
+    Emptyset Nil xs ys z zs fp13 \/
+    Emptyset Nil xs ys z zs 0 || Emptyset Nil xs ys z zs 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp13 \/ fp15 || fp16
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp8 \/ fp13 || fp14
+UNIFY A3 WITH {1**a|U1|0} PRODUCING {1**a|U2|0}
+stripping int: IntLit 0
+[]
+stripping AP: Pred IntS "Q2" [Var (VarS "A2") "_0"]
+stripping int: IntLit 0
+[]
+stripping AP: Pred IntS "Q2" [Var (VarS "A2") "_0"]
+stripping int: IntLit 9999
+stripping int: IntLit 0
+stripping int: IntLit 9999
+stripping int: IntLit 0
+stripping int: IntLit 9999
+stripping int: IntLit 0
+Type assignment
+  A0 -> {m0**a||0}
+  A1 -> {m0**a||0}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+Typing Constraints
+Type assignment
+  A0 -> {m0**a||0}
+  A1 -> {m0**a||0}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+Pred assignment
+  Q0 -> 0
+  Q1 -> 0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, x8, x9, xs, ys, z, zs xs == (Cons z zs) |- {1**a|U2|0} /\ {1**a|U1|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, x8, x9, xs, ys, z, zs xs == (Cons z zs) |- 0 >= Q2
+    Cons, Emptyset, Insert, Nil, Singleton, append, x6, x7, xs, ys, z, zs xs == (Cons z zs) |- {1**a|U2|0} <: {1**a|U1|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, x6, x7, xs, ys, z, zs xs == (Cons z zs) |- 0 >= Q2
+    Cons, Emptyset, Insert, Nil, Singleton, append, x6, x7, xs, ys, z, zs xs == (Cons z zs) |- {List|False|0} <: {List||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {1**a|False|0} <: {1**a|U2|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- 9999 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {List|False|0} <: {List||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {1**a|False|0} <: {1**a|U2|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- 9999 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {List|False|0} <: {List||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {1**a|False|0} <: {1**a||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- 9999 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {List|False|0} <: {List||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs |- {1**a|U2|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m20 \/ m28 || m32
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m21 \/ m29 || m33
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m22 \/ m30 || m34
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m23 \/ m31 || m35
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp17 \/ fp19 || fp20
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp15 \/ fp17 || fp18
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m8 \/ m20 || m24
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m9 \/ m21 || m25
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m10 \/ m22 || m26
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- m11 \/ m23 || m27
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp13 \/ fp15 || fp16
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- fp8 \/ fp13 || fp14
+Constraints
+  False ==> True
+  False ==> True
+  False ==> True
+  False ==> U2
+  False ==> True
+  False ==> U2
+  False ==> True
+  ((U2 && xs == (Cons z zs)) && len xs >= 0) && len zs >= 0 ==> U1
+QMap
+  U0 -> {}
+  U1 -> {}
+  U2 -> {}
+Checking consistency
+  (((U1 && U2) && xs == (Cons z zs)) && len xs >= 0) && len zs >= 0
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}] (8 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}] (8 0)
+
+Generating resource constraints:
+  0 >= Q2 ~>
+    0 >= Q2
+  0 >= Q2 ~>
+    0 >= Q2
+  9999 >= 0 ~>
+    9999 >= 0
+  9999 >= 0 ~>
+    9999 >= 0
+  9999 >= 0 ~>
+    9999 >= 0
+  m20 \/ m28 || m32 ~>
+    ((m20 >= 0 && m28 >= 0) && m32 >= 0) && m20 == m28 + m32
+  m21 \/ m29 || m33 ~>
+    ((m21 >= 0 && m29 >= 0) && m33 >= 0) && m21 == m29 + m33
+  m22 \/ m30 || m34 ~>
+    ((m22 >= 0 && m30 >= 0) && m34 >= 0) && m22 == m30 + m34
+  m23 \/ m31 || m35 ~>
+    ((m23 >= 0 && m31 >= 0) && m35 >= 0) && m23 == m31 + m35
+  fp17 \/ fp19 || fp20 ~>
+    ((fp17 >= 0 && fp19 >= 0) && fp20 >= 0) && fp17 == fp19 + fp20
+  fp15 \/ fp17 || fp18 ~>
+    ((fp15 >= 0 && fp17 >= 0) && fp18 >= 0) && fp15 == fp17 + fp18
+  m8 \/ m20 || m24 ~>
+    ((m8 >= 0 && m20 >= 0) && m24 >= 0) && m8 == m20 + m24
+  m9 \/ m21 || m25 ~>
+    ((m9 >= 0 && m21 >= 0) && m25 >= 0) && m9 == m21 + m25
+  m10 \/ m22 || m26 ~>
+    ((m10 >= 0 && m22 >= 0) && m26 >= 0) && m10 == m22 + m26
+  m11 \/ m23 || m27 ~>
+    ((m11 >= 0 && m23 >= 0) && m27 >= 0) && m11 == m23 + m27
+  fp13 \/ fp15 || fp16 ~>
+    ((fp13 >= 0 && fp15 >= 0) && fp16 >= 0) && fp13 == fp15 + fp16
+  fp8 \/ fp13 || fp14 ~>
+    ((fp8 >= 0 && fp13 >= 0) && fp14 >= 0) && fp8 == fp13 + fp14
+Solved with model
+m1IntS -> 1
+m33IntS -> 0
+fp18IntS -> 0
+m4IntS -> 1
+fp0IntS -> 0
+m17IntS -> 0
+zIntS -> 16
+m27IntS -> 0
+m30IntS -> 0
+fp15IntS -> 0
+Q2IntS -> 0
+m28IntS -> 0
+m3IntS -> 0
+m14IntS -> 0
+m32IntS -> 0
+m34IntS -> 0
+m25IntS -> 0
+fp4IntS -> 0
+m31IntS -> 0
+fp8IntS -> 0
+fp11IntS -> 0
+m15IntS -> 0
+m35IntS -> 0
+fp19IntS -> 0
+m19IntS -> 0
+m18IntS -> 0
+m26IntS -> 0
+fp16IntS -> 0
+m8IntS -> 0
+m21IntS -> 0
+m9IntS -> 0
+fp3IntS -> 0
+m24IntS -> 0
+fp14IntS -> 0
+fp5IntS -> 0
+m11IntS -> 0
+m6IntS -> 0
+m23IntS -> 0
+fp12IntS -> 0
+m16IntS -> 0
+fp10IntS -> 0
+fp7IntS -> 0
+fp2IntS -> 0
+fp1IntS -> 0
+m12IntS -> 1
+fp20IntS -> 0
+fp13IntS -> 0
+m22IntS -> 0
+m13IntS -> 0
+m7IntS -> 0
+fp17IntS -> 0
+m2IntS -> 1
+m5IntS -> 0
+fp6IntS -> 0
+m20IntS -> 0
+m0IntS -> 0
+fp9IntS -> 0
+m29IntS -> 0
+m10IntS -> 0
+Q1IntSIntS -> {
+  16 -> 0
+  else -> 0
+}
+
+Accumulated resource constraints:
+    [(>= 0 0)
+    ,(and (= (+ 0 fp0IntS 0) (+ 0 fp2IntS 0))
+     (>= fp0IntS 0)
+     (>= fp2IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(and (>= 1 0) (>= m0IntS 0) (>= m2IntS 0) (= 1 (+ m0IntS m2IntS)))
+    ,(and (>= 1 0) (>= m1IntS 0) (>= m3IntS 0) (= 1 (+ m1IntS m3IntS)))
+    ,(and (>= 0 0) (>= fp0IntS 0) (>= fp1IntS 0) (= 0 (+ fp0IntS fp1IntS)))
+    ,(>= 0 0)
+    ,(and (= (+ 0 fp1IntS 0) (+ 0 fp3IntS 0))
+     (>= fp1IntS 0)
+     (>= fp3IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(>= Q2IntS 0)
+    ,(>= Q2IntS 0)
+    ,(and (>= m4IntS 0) (>= m12IntS 0) (>= m16IntS 0) (= m4IntS (+ m12IntS m16IntS)))
+    ,(and (>= m5IntS 0) (>= m13IntS 0) (>= m17IntS 0) (= m5IntS (+ m13IntS m17IntS)))
+    ,(and (>= m6IntS 0) (>= m14IntS 0) (>= m18IntS 0) (= m6IntS (+ m14IntS m18IntS)))
+    ,(and (>= m7IntS 0) (>= m15IntS 0) (>= m19IntS 0) (= m7IntS (+ m15IntS m19IntS)))
+    ,(and (>= fp9IntS 0)
+     (>= fp11IntS 0)
+     (>= fp12IntS 0)
+     (= fp9IntS (+ fp11IntS fp12IntS)))
+    ,(and (>= fp7IntS 0)
+     (>= fp9IntS 0)
+     (>= fp10IntS 0)
+     (= fp7IntS (+ fp9IntS fp10IntS)))
+    ,(and (>= m2IntS 0) (>= m4IntS 0) (>= m8IntS 0) (= m2IntS (+ m4IntS m8IntS)))
+    ,(and (>= m3IntS 0) (>= m5IntS 0) (>= m9IntS 0) (= m3IntS (+ m5IntS m9IntS)))
+    ,(and (>= m0IntS 0) (>= m6IntS 0) (>= m10IntS 0) (= m0IntS (+ m6IntS m10IntS)))
+    ,(and (>= m0IntS 0) (>= m7IntS 0) (>= m11IntS 0) (= m0IntS (+ m7IntS m11IntS)))
+    ,(and (>= fp5IntS 0)
+     (>= fp7IntS 0)
+     (>= fp8IntS 0)
+     (= fp5IntS (+ fp7IntS fp8IntS)))
+    ,(and (>= fp4IntS 0)
+     (>= fp5IntS 0)
+     (>= fp6IntS 0)
+     (= fp4IntS (+ fp5IntS fp6IntS)))
+    ,(and (= (+ (Q1IntSIntS zIntS) fp1IntS 0) (+ 0 fp4IntS 0))
+     (>= fp1IntS 0)
+     (>= fp4IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(>= 0 (+ Q2IntS (- (+ fp10IntS 0))))
+    ,(>= Q2IntS 0)
+    ,(>= Q2IntS 0)]
+Solved resource constraint after conjoining formulas: SAT
+    (>= 0 Q2IntS)
+    (>= 0 Q2IntS)
+    (>= 9999 0)
+    (>= 9999 0)
+    (>= 9999 0)
+    (and (>= m20IntS 0)
+     (>= m28IntS 0)
+     (>= m32IntS 0)
+     (= m20IntS (+ m28IntS m32IntS)))
+    (and (>= m21IntS 0)
+     (>= m29IntS 0)
+     (>= m33IntS 0)
+     (= m21IntS (+ m29IntS m33IntS)))
+    (and (>= m22IntS 0)
+     (>= m30IntS 0)
+     (>= m34IntS 0)
+     (= m22IntS (+ m30IntS m34IntS)))
+    (and (>= m23IntS 0)
+     (>= m31IntS 0)
+     (>= m35IntS 0)
+     (= m23IntS (+ m31IntS m35IntS)))
+    (and (>= fp17IntS 0)
+     (>= fp19IntS 0)
+     (>= fp20IntS 0)
+     (= fp17IntS (+ fp19IntS fp20IntS)))
+    (and (>= fp15IntS 0)
+     (>= fp17IntS 0)
+     (>= fp18IntS 0)
+     (= fp15IntS (+ fp17IntS fp18IntS)))
+    (and (>= m8IntS 0) (>= m20IntS 0) (>= m24IntS 0) (= m8IntS (+ m20IntS m24IntS)))
+    (and (>= m9IntS 0) (>= m21IntS 0) (>= m25IntS 0) (= m9IntS (+ m21IntS m25IntS)))
+    (and (>= m10IntS 0)
+     (>= m22IntS 0)
+     (>= m26IntS 0)
+     (= m10IntS (+ m22IntS m26IntS)))
+    (and (>= m11IntS 0)
+     (>= m23IntS 0)
+     (>= m27IntS 0)
+     (= m11IntS (+ m23IntS m27IntS)))
+    (and (>= fp13IntS 0)
+     (>= fp15IntS 0)
+     (>= fp16IntS 0)
+     (= fp13IntS (+ fp15IntS fp16IntS)))
+    (and (>= fp8IntS 0)
+     (>= fp13IntS 0)
+     (>= fp14IntS 0)
+     (= fp8IntS (+ fp13IntS fp14IntS)))
+
+ 
+ Checking zs :: {List {1**A3||0} <0>|len _v >= 0 && len _v < len xs|-(fp18 + 0)} in
+\xs . \ys . 
+    match xs with
+      Cons z zs -> Cons z (append ??
+                             ??)
+from env with top-level potentials: Emptyset : 0,Nil : 0,xs : 0,ys : 0,z : 0,zs : 0 fp20
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {List {m35**a||0} <Q1 _0>|_v == zs|0} <: {List {1**A3||0} <0>|len _v >= 0 && len _v < len xs|-(fp18 + 0)}
+stripping int: IntLit 0
+stripping unary: Unary Neg (Binary Plus (Var IntS "fp18") (IntLit 0))
+stripping bin: Binary Plus (Var IntS "fp18") (IntLit 0)
+stripping var: Var IntS "fp18"
+stripping int: IntLit 0
+[]
+stripping AP: Pred IntS "Q1" [Var (VarS "a") "_0"]
+stripping int: IntLit 0
+Type assignment
+  A0 -> {m0**a||0}
+  A1 -> {m0**a||0}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+Pred assignment
+  Q0 -> 0
+  Q1 -> 0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, _v, append, xs, ys, z, zs xs == (Cons z zs) |- 0 >= -(fp18 + 0)
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {m35**a||0} <: {1**a|U2|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- Q1 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {List|_v == zs|0} <: {List|len _v >= 0 && len _v < len xs|0}
+Constraints
+  ((_v == zs && xs == (Cons z zs)) && len xs >= 0) && len zs >= 0 ==> len _v >= 0 && len _v < len xs
+  (xs == (Cons z zs) && len xs >= 0) && len zs >= 0 ==> U2
+QMap
+  U0 -> {}
+  U1 -> {}
+  U2 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}] (10 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}] (10 0)
+
+Generating resource constraints:
+  0 >= -(fp18 + 0) ~>
+    0 >= -(fp18 + 0)
+  Q1 >= 0 ~>
+    Q1 >= 0
+Solved with model
+m1IntS -> 1
+m33IntS -> 0
+fp18IntS -> 0
+m4IntS -> 1
+fp0IntS -> 0
+m17IntS -> 0
+zIntS -> 16
+m27IntS -> 0
+m30IntS -> 0
+fp15IntS -> 0
+Q2IntS -> 0
+m28IntS -> 0
+m3IntS -> 0
+m14IntS -> 0
+m32IntS -> 0
+m34IntS -> 0
+m25IntS -> 0
+fp4IntS -> 0
+m31IntS -> 0
+Q1IntS -> 0
+fp8IntS -> 0
+fp11IntS -> 0
+m15IntS -> 0
+m35IntS -> 0
+fp19IntS -> 0
+m19IntS -> 0
+m18IntS -> 0
+m26IntS -> 0
+fp16IntS -> 0
+m8IntS -> 0
+m21IntS -> 0
+m9IntS -> 0
+fp3IntS -> 0
+m24IntS -> 0
+fp14IntS -> 0
+fp5IntS -> 0
+m11IntS -> 0
+m6IntS -> 0
+m23IntS -> 0
+fp12IntS -> 0
+m16IntS -> 0
+fp10IntS -> 0
+fp7IntS -> 0
+fp2IntS -> 0
+fp1IntS -> 0
+m12IntS -> 1
+fp20IntS -> 0
+fp13IntS -> 0
+m22IntS -> 0
+m13IntS -> 0
+m7IntS -> 0
+fp17IntS -> 0
+m2IntS -> 1
+m5IntS -> 0
+fp6IntS -> 0
+m20IntS -> 0
+m0IntS -> 0
+fp9IntS -> 0
+m29IntS -> 0
+m10IntS -> 0
+Q1IntSIntS -> {
+  16 -> 0
+  else -> 0
+}
+
+Accumulated resource constraints:
+    [(>= 0 0)
+    ,(and (= (+ 0 fp0IntS 0) (+ 0 fp2IntS 0))
+     (>= fp0IntS 0)
+     (>= fp2IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(and (>= 1 0) (>= m0IntS 0) (>= m2IntS 0) (= 1 (+ m0IntS m2IntS)))
+    ,(and (>= 1 0) (>= m1IntS 0) (>= m3IntS 0) (= 1 (+ m1IntS m3IntS)))
+    ,(and (>= 0 0) (>= fp0IntS 0) (>= fp1IntS 0) (= 0 (+ fp0IntS fp1IntS)))
+    ,(>= 0 0)
+    ,(and (= (+ 0 fp1IntS 0) (+ 0 fp3IntS 0))
+     (>= fp1IntS 0)
+     (>= fp3IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(>= Q2IntS 0)
+    ,(>= Q2IntS 0)
+    ,(and (>= m4IntS 0) (>= m12IntS 0) (>= m16IntS 0) (= m4IntS (+ m12IntS m16IntS)))
+    ,(and (>= m5IntS 0) (>= m13IntS 0) (>= m17IntS 0) (= m5IntS (+ m13IntS m17IntS)))
+    ,(and (>= m6IntS 0) (>= m14IntS 0) (>= m18IntS 0) (= m6IntS (+ m14IntS m18IntS)))
+    ,(and (>= m7IntS 0) (>= m15IntS 0) (>= m19IntS 0) (= m7IntS (+ m15IntS m19IntS)))
+    ,(and (>= fp9IntS 0)
+     (>= fp11IntS 0)
+     (>= fp12IntS 0)
+     (= fp9IntS (+ fp11IntS fp12IntS)))
+    ,(and (>= fp7IntS 0)
+     (>= fp9IntS 0)
+     (>= fp10IntS 0)
+     (= fp7IntS (+ fp9IntS fp10IntS)))
+    ,(and (>= m2IntS 0) (>= m4IntS 0) (>= m8IntS 0) (= m2IntS (+ m4IntS m8IntS)))
+    ,(and (>= m3IntS 0) (>= m5IntS 0) (>= m9IntS 0) (= m3IntS (+ m5IntS m9IntS)))
+    ,(and (>= m0IntS 0) (>= m6IntS 0) (>= m10IntS 0) (= m0IntS (+ m6IntS m10IntS)))
+    ,(and (>= m0IntS 0) (>= m7IntS 0) (>= m11IntS 0) (= m0IntS (+ m7IntS m11IntS)))
+    ,(and (>= fp5IntS 0)
+     (>= fp7IntS 0)
+     (>= fp8IntS 0)
+     (= fp5IntS (+ fp7IntS fp8IntS)))
+    ,(and (>= fp4IntS 0)
+     (>= fp5IntS 0)
+     (>= fp6IntS 0)
+     (= fp4IntS (+ fp5IntS fp6IntS)))
+    ,(and (= (+ (Q1IntSIntS zIntS) fp1IntS 0) (+ 0 fp4IntS 0))
+     (>= fp1IntS 0)
+     (>= fp4IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(>= 0 (+ Q2IntS (- (+ fp10IntS 0))))
+    ,(>= Q2IntS 0)
+    ,(>= Q2IntS 0)
+    ,(>= 0 Q2IntS)
+    ,(>= 0 Q2IntS)
+    ,(>= 9999 0)
+    ,(>= 9999 0)
+    ,(>= 9999 0)
+    ,(and (>= m20IntS 0)
+     (>= m28IntS 0)
+     (>= m32IntS 0)
+     (= m20IntS (+ m28IntS m32IntS)))
+    ,(and (>= m21IntS 0)
+     (>= m29IntS 0)
+     (>= m33IntS 0)
+     (= m21IntS (+ m29IntS m33IntS)))
+    ,(and (>= m22IntS 0)
+     (>= m30IntS 0)
+     (>= m34IntS 0)
+     (= m22IntS (+ m30IntS m34IntS)))
+    ,(and (>= m23IntS 0)
+     (>= m31IntS 0)
+     (>= m35IntS 0)
+     (= m23IntS (+ m31IntS m35IntS)))
+    ,(and (>= fp17IntS 0)
+     (>= fp19IntS 0)
+     (>= fp20IntS 0)
+     (= fp17IntS (+ fp19IntS fp20IntS)))
+    ,(and (>= fp15IntS 0)
+     (>= fp17IntS 0)
+     (>= fp18IntS 0)
+     (= fp15IntS (+ fp17IntS fp18IntS)))
+    ,(and (>= m8IntS 0) (>= m20IntS 0) (>= m24IntS 0) (= m8IntS (+ m20IntS m24IntS)))
+    ,(and (>= m9IntS 0) (>= m21IntS 0) (>= m25IntS 0) (= m9IntS (+ m21IntS m25IntS)))
+    ,(and (>= m10IntS 0)
+     (>= m22IntS 0)
+     (>= m26IntS 0)
+     (= m10IntS (+ m22IntS m26IntS)))
+    ,(and (>= m11IntS 0)
+     (>= m23IntS 0)
+     (>= m27IntS 0)
+     (= m11IntS (+ m23IntS m27IntS)))
+    ,(and (>= fp13IntS 0)
+     (>= fp15IntS 0)
+     (>= fp16IntS 0)
+     (= fp13IntS (+ fp15IntS fp16IntS)))
+    ,(and (>= fp8IntS 0)
+     (>= fp13IntS 0)
+     (>= fp14IntS 0)
+     (= fp8IntS (+ fp13IntS fp14IntS)))]
+Solved resource constraint after conjoining formulas: SAT
+    (>= 0 (- (+ fp18IntS 0)))
+    (>= Q1IntS 0)
+
+ 
+ Checking append
+            zs :: x6:_ -> {List {1**A2||0} <Q2 _0>||-(fp6 + 0)} in
+\xs . \ys . 
+    match xs with
+      Cons z zs -> Cons z (?? ??)
+from env with top-level potentials: Emptyset : 0,Nil : 0,xs : 0,ys : 0,z : 0,zs : 0 fp15
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- x9:{List {1**A3||0} <0>||0} -[1]-> {List {1**A3||0} <0>|len _v == len zs + len x9 && elems _v == elems zs + elems x9|0} /\ x6:_ -> {List {1**A2||0} <Q2 _0>||-(fp6 + 0)}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- x9:{List {1**A3||0} <0>||0} -[1]-> {List {1**A3||0} <0>|len _v == len zs + len x9 && elems _v == elems zs + elems x9|0} <: x6:_ -> {List {1**A2||0} <Q2 _0>||-(fp6 + 0)}
+stripping int: IntLit 0
+[]
+stripping AP: Pred IntS "Q2" [Var (VarS "A2") "_0"]
+stripping int: IntLit 0
+[]
+stripping AP: Pred IntS "Q2" [Var (VarS "A2") "_0"]
+Type assignment
+  A0 -> {m0**a||0}
+  A1 -> {m0**a||0}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+Pred assignment
+  Q0 -> 0
+  Q1 -> 0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, x9, xs, ys, z, zs xs == (Cons z zs) |- {1**a|U2|0} /\ {1**a|U1|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, x9, xs, ys, z, zs xs == (Cons z zs) |- 0 >= Q2
+    Cons, Emptyset, Insert, Nil, Singleton, append, x6, xs, ys, z, zs xs == (Cons z zs) |- {1**a|U2|0} <: {1**a|U1|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, x6, xs, ys, z, zs xs == (Cons z zs) |- 0 >= Q2
+    Cons, Emptyset, Insert, Nil, Singleton, append, x6, xs, ys, z, zs xs == (Cons z zs) |- {List|False|0} <: {List||0}
+Constraints
+  False ==> True
+  ((U2 && xs == (Cons z zs)) && len xs >= 0) && len zs >= 0 ==> U1
+QMap
+  U0 -> {}
+  U1 -> {}
+  U2 -> {}
+Checking consistency
+  (((U1 && U2) && xs == (Cons z zs)) && len xs >= 0) && len zs >= 0
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}] (10 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}] (10 0)
+
+Generating resource constraints:
+  0 >= Q2 ~>
+    0 >= Q2
+  0 >= Q2 ~>
+    0 >= Q2
+Solved with model
+m1IntS -> 1
+m33IntS -> 0
+fp18IntS -> 0
+m4IntS -> 0
+fp0IntS -> 0
+m17IntS -> 0
+zIntS -> 16
+m27IntS -> 0
+m30IntS -> 0
+fp15IntS -> 0
+Q2IntS -> 0
+m28IntS -> 0
+m3IntS -> 0
+m14IntS -> 0
+m32IntS -> 0
+m34IntS -> 0
+m25IntS -> 0
+fp4IntS -> 0
+m31IntS -> 0
+Q1IntS -> 0
+fp8IntS -> 0
+fp11IntS -> 0
+m15IntS -> 0
+m35IntS -> 0
+fp19IntS -> 0
+m19IntS -> 0
+m18IntS -> 0
+m26IntS -> 0
+fp16IntS -> 0
+m8IntS -> 1
+m21IntS -> 0
+m9IntS -> 0
+fp3IntS -> 0
+m24IntS -> 1
+fp14IntS -> 0
+fp5IntS -> 0
+m11IntS -> 0
+m6IntS -> 0
+m23IntS -> 0
+fp12IntS -> 0
+m16IntS -> 0
+fp10IntS -> 0
+fp7IntS -> 0
+fp2IntS -> 0
+fp1IntS -> 0
+m12IntS -> 0
+fp20IntS -> 0
+fp13IntS -> 0
+m22IntS -> 0
+m13IntS -> 0
+m7IntS -> 0
+fp17IntS -> 0
+m2IntS -> 1
+m5IntS -> 0
+fp6IntS -> 0
+m20IntS -> 0
+m0IntS -> 0
+fp9IntS -> 0
+m29IntS -> 0
+m10IntS -> 0
+Q1IntSIntS -> {
+  16 -> 0
+  else -> 0
+}
+
+Accumulated resource constraints:
+    [(>= 0 0)
+    ,(and (= (+ 0 fp0IntS 0) (+ 0 fp2IntS 0))
+     (>= fp0IntS 0)
+     (>= fp2IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(and (>= 1 0) (>= m0IntS 0) (>= m2IntS 0) (= 1 (+ m0IntS m2IntS)))
+    ,(and (>= 1 0) (>= m1IntS 0) (>= m3IntS 0) (= 1 (+ m1IntS m3IntS)))
+    ,(and (>= 0 0) (>= fp0IntS 0) (>= fp1IntS 0) (= 0 (+ fp0IntS fp1IntS)))
+    ,(>= 0 0)
+    ,(and (= (+ 0 fp1IntS 0) (+ 0 fp3IntS 0))
+     (>= fp1IntS 0)
+     (>= fp3IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(>= Q2IntS 0)
+    ,(>= Q2IntS 0)
+    ,(and (>= m4IntS 0) (>= m12IntS 0) (>= m16IntS 0) (= m4IntS (+ m12IntS m16IntS)))
+    ,(and (>= m5IntS 0) (>= m13IntS 0) (>= m17IntS 0) (= m5IntS (+ m13IntS m17IntS)))
+    ,(and (>= m6IntS 0) (>= m14IntS 0) (>= m18IntS 0) (= m6IntS (+ m14IntS m18IntS)))
+    ,(and (>= m7IntS 0) (>= m15IntS 0) (>= m19IntS 0) (= m7IntS (+ m15IntS m19IntS)))
+    ,(and (>= fp9IntS 0)
+     (>= fp11IntS 0)
+     (>= fp12IntS 0)
+     (= fp9IntS (+ fp11IntS fp12IntS)))
+    ,(and (>= fp7IntS 0)
+     (>= fp9IntS 0)
+     (>= fp10IntS 0)
+     (= fp7IntS (+ fp9IntS fp10IntS)))
+    ,(and (>= m2IntS 0) (>= m4IntS 0) (>= m8IntS 0) (= m2IntS (+ m4IntS m8IntS)))
+    ,(and (>= m3IntS 0) (>= m5IntS 0) (>= m9IntS 0) (= m3IntS (+ m5IntS m9IntS)))
+    ,(and (>= m0IntS 0) (>= m6IntS 0) (>= m10IntS 0) (= m0IntS (+ m6IntS m10IntS)))
+    ,(and (>= m0IntS 0) (>= m7IntS 0) (>= m11IntS 0) (= m0IntS (+ m7IntS m11IntS)))
+    ,(and (>= fp5IntS 0)
+     (>= fp7IntS 0)
+     (>= fp8IntS 0)
+     (= fp5IntS (+ fp7IntS fp8IntS)))
+    ,(and (>= fp4IntS 0)
+     (>= fp5IntS 0)
+     (>= fp6IntS 0)
+     (= fp4IntS (+ fp5IntS fp6IntS)))
+    ,(and (= (+ (Q1IntSIntS zIntS) fp1IntS 0) (+ 0 fp4IntS 0))
+     (>= fp1IntS 0)
+     (>= fp4IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(>= 0 (+ Q2IntS (- (+ fp10IntS 0))))
+    ,(>= Q2IntS 0)
+    ,(>= Q2IntS 0)
+    ,(>= 0 Q2IntS)
+    ,(>= 0 Q2IntS)
+    ,(>= 9999 0)
+    ,(>= 9999 0)
+    ,(>= 9999 0)
+    ,(and (>= m20IntS 0)
+     (>= m28IntS 0)
+     (>= m32IntS 0)
+     (= m20IntS (+ m28IntS m32IntS)))
+    ,(and (>= m21IntS 0)
+     (>= m29IntS 0)
+     (>= m33IntS 0)
+     (= m21IntS (+ m29IntS m33IntS)))
+    ,(and (>= m22IntS 0)
+     (>= m30IntS 0)
+     (>= m34IntS 0)
+     (= m22IntS (+ m30IntS m34IntS)))
+    ,(and (>= m23IntS 0)
+     (>= m31IntS 0)
+     (>= m35IntS 0)
+     (= m23IntS (+ m31IntS m35IntS)))
+    ,(and (>= fp17IntS 0)
+     (>= fp19IntS 0)
+     (>= fp20IntS 0)
+     (= fp17IntS (+ fp19IntS fp20IntS)))
+    ,(and (>= fp15IntS 0)
+     (>= fp17IntS 0)
+     (>= fp18IntS 0)
+     (= fp15IntS (+ fp17IntS fp18IntS)))
+    ,(and (>= m8IntS 0) (>= m20IntS 0) (>= m24IntS 0) (= m8IntS (+ m20IntS m24IntS)))
+    ,(and (>= m9IntS 0) (>= m21IntS 0) (>= m25IntS 0) (= m9IntS (+ m21IntS m25IntS)))
+    ,(and (>= m10IntS 0)
+     (>= m22IntS 0)
+     (>= m26IntS 0)
+     (= m10IntS (+ m22IntS m26IntS)))
+    ,(and (>= m11IntS 0)
+     (>= m23IntS 0)
+     (>= m27IntS 0)
+     (= m11IntS (+ m23IntS m27IntS)))
+    ,(and (>= fp13IntS 0)
+     (>= fp15IntS 0)
+     (>= fp16IntS 0)
+     (= fp13IntS (+ fp15IntS fp16IntS)))
+    ,(and (>= fp8IntS 0)
+     (>= fp13IntS 0)
+     (>= fp14IntS 0)
+     (= fp8IntS (+ fp13IntS fp14IntS)))
+    ,(>= 0 (- (+ fp18IntS 0)))
+    ,(>= Q1IntS 0)]
+Solved resource constraint after conjoining formulas: SAT
+    (>= 0 Q2IntS)
+    (>= 0 Q2IntS)
+
+ 
+ Checking ys :: {List {1**A3||0} <0>||1 + -(fp14 + 0)} in
+\xs . \ys . 
+    match xs with
+      Cons z zs -> Cons z (append zs
+                             ??)
+from env with top-level potentials: Emptyset : 0,Nil : 0,xs : 0,ys : 0,z : 0,zs : 0 fp16
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {List {m25**a||0} <0>|_v == ys|0} <: {List {1**A3||0} <0>||1 + -(fp14 + 0)}
+stripping int: IntLit 0
+stripping bin: Binary Plus (IntLit 1) (Unary Neg (Binary Plus (Var IntS "fp14") (IntLit 0)))
+stripping int: IntLit 1
+stripping unary: Unary Neg (Binary Plus (Var IntS "fp14") (IntLit 0))
+stripping bin: Binary Plus (Var IntS "fp14") (IntLit 0)
+stripping var: Var IntS "fp14"
+stripping int: IntLit 0
+stripping int: IntLit 0
+stripping int: IntLit 0
+Type assignment
+  A0 -> {m0**a||0}
+  A1 -> {m0**a||0}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+Pred assignment
+  Q0 -> 0
+  Q1 -> 0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, _v, append, xs, ys, z, zs xs == (Cons z zs) |- 0 >= 1 + -(fp14 + 0)
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {m25**a||0} <: {1**a|U2|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- 0 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {List|False|0} <: {List||0}
+Constraints
+  False ==> True
+  (xs == (Cons z zs) && len xs >= 0) && len zs >= 0 ==> U2
+QMap
+  U0 -> {}
+  U1 -> {}
+  U2 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}] (10 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}] (10 0)
+
+Generating resource constraints:
+  0 >= 1 + -(fp14 + 0) ~>
+    0 >= 1 + -(fp14 + 0)
+  0 >= 0 ~>
+    0 >= 0
+Solved with model
+m1IntS -> 1
+m33IntS -> 0
+fp18IntS -> 0
+m4IntS -> 0
+fp0IntS -> 0
+m17IntS -> 0
+zIntS -> 16
+m27IntS -> 0
+m30IntS -> 0
+fp15IntS -> 0
+Q2IntS -> 0
+m28IntS -> 0
+m3IntS -> 0
+m14IntS -> 0
+m32IntS -> 0
+m34IntS -> 0
+m25IntS -> 0
+fp4IntS -> 1
+m31IntS -> 0
+Q1IntS -> 0
+fp8IntS -> 1
+fp11IntS -> 0
+m15IntS -> 0
+m35IntS -> 0
+fp19IntS -> 0
+m19IntS -> 0
+m18IntS -> 0
+m26IntS -> 0
+fp16IntS -> 0
+m8IntS -> 1
+m21IntS -> 0
+m9IntS -> 0
+fp3IntS -> 0
+m24IntS -> 1
+fp14IntS -> 1
+fp5IntS -> 1
+m11IntS -> 0
+m6IntS -> 0
+m23IntS -> 0
+fp12IntS -> 0
+m16IntS -> 0
+fp10IntS -> 0
+fp7IntS -> 0
+fp2IntS -> 0
+fp1IntS -> 0
+m12IntS -> 0
+fp20IntS -> 0
+fp13IntS -> 0
+m22IntS -> 0
+m13IntS -> 0
+m7IntS -> 0
+fp17IntS -> 0
+m2IntS -> 1
+m5IntS -> 0
+fp6IntS -> 0
+m20IntS -> 0
+m0IntS -> 0
+fp9IntS -> 0
+m29IntS -> 0
+m10IntS -> 0
+Q1IntSIntS -> {
+  16 -> 1
+  else -> 1
+}
+
+Accumulated resource constraints:
+    [(>= 0 0)
+    ,(and (= (+ 0 fp0IntS 0) (+ 0 fp2IntS 0))
+     (>= fp0IntS 0)
+     (>= fp2IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(and (>= 1 0) (>= m0IntS 0) (>= m2IntS 0) (= 1 (+ m0IntS m2IntS)))
+    ,(and (>= 1 0) (>= m1IntS 0) (>= m3IntS 0) (= 1 (+ m1IntS m3IntS)))
+    ,(and (>= 0 0) (>= fp0IntS 0) (>= fp1IntS 0) (= 0 (+ fp0IntS fp1IntS)))
+    ,(>= 0 0)
+    ,(and (= (+ 0 fp1IntS 0) (+ 0 fp3IntS 0))
+     (>= fp1IntS 0)
+     (>= fp3IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(>= Q2IntS 0)
+    ,(>= Q2IntS 0)
+    ,(and (>= m4IntS 0) (>= m12IntS 0) (>= m16IntS 0) (= m4IntS (+ m12IntS m16IntS)))
+    ,(and (>= m5IntS 0) (>= m13IntS 0) (>= m17IntS 0) (= m5IntS (+ m13IntS m17IntS)))
+    ,(and (>= m6IntS 0) (>= m14IntS 0) (>= m18IntS 0) (= m6IntS (+ m14IntS m18IntS)))
+    ,(and (>= m7IntS 0) (>= m15IntS 0) (>= m19IntS 0) (= m7IntS (+ m15IntS m19IntS)))
+    ,(and (>= fp9IntS 0)
+     (>= fp11IntS 0)
+     (>= fp12IntS 0)
+     (= fp9IntS (+ fp11IntS fp12IntS)))
+    ,(and (>= fp7IntS 0)
+     (>= fp9IntS 0)
+     (>= fp10IntS 0)
+     (= fp7IntS (+ fp9IntS fp10IntS)))
+    ,(and (>= m2IntS 0) (>= m4IntS 0) (>= m8IntS 0) (= m2IntS (+ m4IntS m8IntS)))
+    ,(and (>= m3IntS 0) (>= m5IntS 0) (>= m9IntS 0) (= m3IntS (+ m5IntS m9IntS)))
+    ,(and (>= m0IntS 0) (>= m6IntS 0) (>= m10IntS 0) (= m0IntS (+ m6IntS m10IntS)))
+    ,(and (>= m0IntS 0) (>= m7IntS 0) (>= m11IntS 0) (= m0IntS (+ m7IntS m11IntS)))
+    ,(and (>= fp5IntS 0)
+     (>= fp7IntS 0)
+     (>= fp8IntS 0)
+     (= fp5IntS (+ fp7IntS fp8IntS)))
+    ,(and (>= fp4IntS 0)
+     (>= fp5IntS 0)
+     (>= fp6IntS 0)
+     (= fp4IntS (+ fp5IntS fp6IntS)))
+    ,(and (= (+ (Q1IntSIntS zIntS) fp1IntS 0) (+ 0 fp4IntS 0))
+     (>= fp1IntS 0)
+     (>= fp4IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(>= 0 (+ Q2IntS (- (+ fp10IntS 0))))
+    ,(>= Q2IntS 0)
+    ,(>= Q2IntS 0)
+    ,(>= 0 Q2IntS)
+    ,(>= 0 Q2IntS)
+    ,(>= 9999 0)
+    ,(>= 9999 0)
+    ,(>= 9999 0)
+    ,(and (>= m20IntS 0)
+     (>= m28IntS 0)
+     (>= m32IntS 0)
+     (= m20IntS (+ m28IntS m32IntS)))
+    ,(and (>= m21IntS 0)
+     (>= m29IntS 0)
+     (>= m33IntS 0)
+     (= m21IntS (+ m29IntS m33IntS)))
+    ,(and (>= m22IntS 0)
+     (>= m30IntS 0)
+     (>= m34IntS 0)
+     (= m22IntS (+ m30IntS m34IntS)))
+    ,(and (>= m23IntS 0)
+     (>= m31IntS 0)
+     (>= m35IntS 0)
+     (= m23IntS (+ m31IntS m35IntS)))
+    ,(and (>= fp17IntS 0)
+     (>= fp19IntS 0)
+     (>= fp20IntS 0)
+     (= fp17IntS (+ fp19IntS fp20IntS)))
+    ,(and (>= fp15IntS 0)
+     (>= fp17IntS 0)
+     (>= fp18IntS 0)
+     (= fp15IntS (+ fp17IntS fp18IntS)))
+    ,(and (>= m8IntS 0) (>= m20IntS 0) (>= m24IntS 0) (= m8IntS (+ m20IntS m24IntS)))
+    ,(and (>= m9IntS 0) (>= m21IntS 0) (>= m25IntS 0) (= m9IntS (+ m21IntS m25IntS)))
+    ,(and (>= m10IntS 0)
+     (>= m22IntS 0)
+     (>= m26IntS 0)
+     (= m10IntS (+ m22IntS m26IntS)))
+    ,(and (>= m11IntS 0)
+     (>= m23IntS 0)
+     (>= m27IntS 0)
+     (= m11IntS (+ m23IntS m27IntS)))
+    ,(and (>= fp13IntS 0)
+     (>= fp15IntS 0)
+     (>= fp16IntS 0)
+     (= fp13IntS (+ fp15IntS fp16IntS)))
+    ,(and (>= fp8IntS 0)
+     (>= fp13IntS 0)
+     (>= fp14IntS 0)
+     (= fp8IntS (+ fp13IntS fp14IntS)))
+    ,(>= 0 (- (+ fp18IntS 0)))
+    ,(>= Q1IntS 0)
+    ,(>= 0 Q2IntS)
+    ,(>= 0 Q2IntS)]
+Solved resource constraint after conjoining formulas: SAT
+    (>= 0 (+ 1 (- (+ fp14IntS 0))))
+    (>= 0 0)
+
+ 
+ Checking append zs
+            ys :: {List {1**A2||0} <Q2 _0>||-(fp6 + 0)} in
+\xs . \ys . 
+    match xs with
+      Cons z zs -> Cons z ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,xs : 0,ys : 0,z : 0,zs : 0 fp8
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {List {1**A3||0} <0>|len _v == len zs + len ys && elems _v == elems zs + elems ys|0} <: {List {1**A2||0} <Q2 _0>||-(fp6 + 0)}
+stripping int: IntLit 0
+stripping unary: Unary Neg (Binary Plus (Var IntS "fp6") (IntLit 0))
+stripping bin: Binary Plus (Var IntS "fp6") (IntLit 0)
+stripping var: Var IntS "fp6"
+stripping int: IntLit 0
+stripping int: IntLit 0
+[]
+stripping AP: Pred IntS "Q2" [Var (VarS "A2") "_0"]
+Type assignment
+  A0 -> {m0**a||0}
+  A1 -> {m0**a||0}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+Pred assignment
+  Q0 -> 0
+  Q1 -> 0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, _v, append, xs, ys, z, zs xs == (Cons z zs) |- 0 >= -(fp6 + 0)
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {1**a|U2|0} <: {1**a|U1|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- 0 >= Q2
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- {List|False|0} <: {List||0}
+Constraints
+  False ==> True
+  ((U2 && xs == (Cons z zs)) && len xs >= 0) && len zs >= 0 ==> U1
+QMap
+  U0 -> {}
+  U1 -> {}
+  U2 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}] (10 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}] (10 0)
+
+Generating resource constraints:
+  0 >= -(fp6 + 0) ~>
+    0 >= -(fp6 + 0)
+  0 >= Q2 ~>
+    0 >= Q2
+Solved with model
+m1IntS -> 1
+m33IntS -> 0
+fp18IntS -> 0
+m4IntS -> 1
+fp0IntS -> 0
+m17IntS -> 0
+zIntS -> 16
+m27IntS -> 0
+m30IntS -> 0
+fp15IntS -> 0
+Q2IntS -> 0
+m28IntS -> 0
+m3IntS -> 0
+m14IntS -> 0
+m32IntS -> 0
+m34IntS -> 0
+m25IntS -> 0
+fp4IntS -> 1
+m31IntS -> 0
+Q1IntS -> 0
+fp8IntS -> 1
+fp11IntS -> 0
+m15IntS -> 0
+m35IntS -> 0
+fp19IntS -> 0
+m19IntS -> 0
+m18IntS -> 0
+m26IntS -> 0
+fp16IntS -> 0
+m8IntS -> 0
+m21IntS -> 0
+m9IntS -> 0
+fp3IntS -> 0
+m24IntS -> 0
+fp14IntS -> 1
+fp5IntS -> 1
+m11IntS -> 0
+m6IntS -> 0
+m23IntS -> 0
+fp12IntS -> 0
+m16IntS -> 1
+fp10IntS -> 0
+fp7IntS -> 0
+fp2IntS -> 0
+fp1IntS -> 0
+m12IntS -> 0
+fp20IntS -> 0
+fp13IntS -> 0
+m22IntS -> 0
+m13IntS -> 0
+m7IntS -> 0
+fp17IntS -> 0
+m2IntS -> 1
+m5IntS -> 0
+fp6IntS -> 0
+m20IntS -> 0
+m0IntS -> 0
+fp9IntS -> 0
+m29IntS -> 0
+m10IntS -> 0
+Q1IntSIntS -> {
+  16 -> 1
+  else -> 1
+}
+
+Accumulated resource constraints:
+    [(>= 0 0)
+    ,(and (= (+ 0 fp0IntS 0) (+ 0 fp2IntS 0))
+     (>= fp0IntS 0)
+     (>= fp2IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(and (>= 1 0) (>= m0IntS 0) (>= m2IntS 0) (= 1 (+ m0IntS m2IntS)))
+    ,(and (>= 1 0) (>= m1IntS 0) (>= m3IntS 0) (= 1 (+ m1IntS m3IntS)))
+    ,(and (>= 0 0) (>= fp0IntS 0) (>= fp1IntS 0) (= 0 (+ fp0IntS fp1IntS)))
+    ,(>= 0 0)
+    ,(and (= (+ 0 fp1IntS 0) (+ 0 fp3IntS 0))
+     (>= fp1IntS 0)
+     (>= fp3IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(>= Q2IntS 0)
+    ,(>= Q2IntS 0)
+    ,(and (>= m4IntS 0) (>= m12IntS 0) (>= m16IntS 0) (= m4IntS (+ m12IntS m16IntS)))
+    ,(and (>= m5IntS 0) (>= m13IntS 0) (>= m17IntS 0) (= m5IntS (+ m13IntS m17IntS)))
+    ,(and (>= m6IntS 0) (>= m14IntS 0) (>= m18IntS 0) (= m6IntS (+ m14IntS m18IntS)))
+    ,(and (>= m7IntS 0) (>= m15IntS 0) (>= m19IntS 0) (= m7IntS (+ m15IntS m19IntS)))
+    ,(and (>= fp9IntS 0)
+     (>= fp11IntS 0)
+     (>= fp12IntS 0)
+     (= fp9IntS (+ fp11IntS fp12IntS)))
+    ,(and (>= fp7IntS 0)
+     (>= fp9IntS 0)
+     (>= fp10IntS 0)
+     (= fp7IntS (+ fp9IntS fp10IntS)))
+    ,(and (>= m2IntS 0) (>= m4IntS 0) (>= m8IntS 0) (= m2IntS (+ m4IntS m8IntS)))
+    ,(and (>= m3IntS 0) (>= m5IntS 0) (>= m9IntS 0) (= m3IntS (+ m5IntS m9IntS)))
+    ,(and (>= m0IntS 0) (>= m6IntS 0) (>= m10IntS 0) (= m0IntS (+ m6IntS m10IntS)))
+    ,(and (>= m0IntS 0) (>= m7IntS 0) (>= m11IntS 0) (= m0IntS (+ m7IntS m11IntS)))
+    ,(and (>= fp5IntS 0)
+     (>= fp7IntS 0)
+     (>= fp8IntS 0)
+     (= fp5IntS (+ fp7IntS fp8IntS)))
+    ,(and (>= fp4IntS 0)
+     (>= fp5IntS 0)
+     (>= fp6IntS 0)
+     (= fp4IntS (+ fp5IntS fp6IntS)))
+    ,(and (= (+ (Q1IntSIntS zIntS) fp1IntS 0) (+ 0 fp4IntS 0))
+     (>= fp1IntS 0)
+     (>= fp4IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(>= 0 (+ Q2IntS (- (+ fp10IntS 0))))
+    ,(>= Q2IntS 0)
+    ,(>= Q2IntS 0)
+    ,(>= 0 Q2IntS)
+    ,(>= 0 Q2IntS)
+    ,(>= 9999 0)
+    ,(>= 9999 0)
+    ,(>= 9999 0)
+    ,(and (>= m20IntS 0)
+     (>= m28IntS 0)
+     (>= m32IntS 0)
+     (= m20IntS (+ m28IntS m32IntS)))
+    ,(and (>= m21IntS 0)
+     (>= m29IntS 0)
+     (>= m33IntS 0)
+     (= m21IntS (+ m29IntS m33IntS)))
+    ,(and (>= m22IntS 0)
+     (>= m30IntS 0)
+     (>= m34IntS 0)
+     (= m22IntS (+ m30IntS m34IntS)))
+    ,(and (>= m23IntS 0)
+     (>= m31IntS 0)
+     (>= m35IntS 0)
+     (= m23IntS (+ m31IntS m35IntS)))
+    ,(and (>= fp17IntS 0)
+     (>= fp19IntS 0)
+     (>= fp20IntS 0)
+     (= fp17IntS (+ fp19IntS fp20IntS)))
+    ,(and (>= fp15IntS 0)
+     (>= fp17IntS 0)
+     (>= fp18IntS 0)
+     (= fp15IntS (+ fp17IntS fp18IntS)))
+    ,(and (>= m8IntS 0) (>= m20IntS 0) (>= m24IntS 0) (= m8IntS (+ m20IntS m24IntS)))
+    ,(and (>= m9IntS 0) (>= m21IntS 0) (>= m25IntS 0) (= m9IntS (+ m21IntS m25IntS)))
+    ,(and (>= m10IntS 0)
+     (>= m22IntS 0)
+     (>= m26IntS 0)
+     (= m10IntS (+ m22IntS m26IntS)))
+    ,(and (>= m11IntS 0)
+     (>= m23IntS 0)
+     (>= m27IntS 0)
+     (= m11IntS (+ m23IntS m27IntS)))
+    ,(and (>= fp13IntS 0)
+     (>= fp15IntS 0)
+     (>= fp16IntS 0)
+     (= fp13IntS (+ fp15IntS fp16IntS)))
+    ,(and (>= fp8IntS 0)
+     (>= fp13IntS 0)
+     (>= fp14IntS 0)
+     (= fp8IntS (+ fp13IntS fp14IntS)))
+    ,(>= 0 (- (+ fp18IntS 0)))
+    ,(>= Q1IntS 0)
+    ,(>= 0 Q2IntS)
+    ,(>= 0 Q2IntS)
+    ,(>= 0 (+ 1 (- (+ fp14IntS 0))))
+    ,(>= 0 0)]
+Solved resource constraint after conjoining formulas: SAT
+    (>= 0 (- (+ fp6IntS 0)))
+    (>= 0 Q2IntS)
+
+ 
+ Checking Cons z (append zs
+                    ys) :: {List {1**a||0} <0>|len _v == len xs + len ys && elems _v == elems xs + elems ys|0} in
+\xs . \ys . 
+    match xs with
+      Cons z zs -> ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,xs : 0,ys : 0,z : 0,zs : 0 fp4
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys, z, zs xs == (Cons z zs) |- LET x5:({List {0**A3||0} <0>|len _v == len zs + len ys && elems _v == elems zs + elems ys|0}) IN {List {1**A2||0} <Q2 _0>|_v == (Cons z x5)|0} <: {List {1**a||0} <0>|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+[]
+stripping AP: Pred IntS "Q2" [Var (VarS "A2") "_0"]
+stripping int: IntLit 0
+Type assignment
+  A0 -> {m0**a||0}
+  A1 -> {m0**a||0}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+Pred assignment
+  Q0 -> 0
+  Q1 -> 0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, x5, xs, ys, z, zs xs == (Cons z zs) |- {1**a|False|0} <: {1**a||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, x5, xs, ys, z, zs xs == (Cons z zs) |- Q2 >= 0
+    Cons, Emptyset, Insert, Nil, Singleton, append, x5, xs, ys, z, zs xs == (Cons z zs) |- {List|elems _v == [z] + elems x5|0} <: {List|elems _v == elems xs + elems ys|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, x5, xs, ys, z, zs xs == (Cons z zs) |- {List|len _v == 1 + len x5|0} <: {List|len _v == len xs + len ys|0}
+Constraints
+  (((((xs == (Cons z zs) && len _v == 1 + len x5) && len x5 >= 0) && len xs >= 0) && len ys >= 0) && len zs >= 0) && (len x5 == len zs + len ys && elems x5 == elems zs + elems ys) ==> len _v == len xs + len ys
+  (((((xs == (Cons z zs) && elems _v == [z] + elems x5) && len x5 >= 0) && len xs >= 0) && len ys >= 0) && len zs >= 0) && (len x5 == len zs + len ys && elems x5 == elems zs + elems ys) ==> elems _v == elems xs + elems ys
+  False ==> True
+QMap
+  U0 -> {}
+  U1 -> {}
+  U2 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}] (12 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}] (12 0)
+
+Generating resource constraints:
+  Q2 >= 0 ~>
+    Q2 >= 0
+Solved with model
+m1IntS -> 1
+m33IntS -> 0
+fp18IntS -> 0
+m4IntS -> 0
+fp0IntS -> 0
+m17IntS -> 0
+zIntS -> 16
+m27IntS -> 0
+m30IntS -> 0
+fp15IntS -> 0
+Q2IntS -> 0
+m28IntS -> 0
+m3IntS -> 0
+m14IntS -> 0
+m32IntS -> 0
+m34IntS -> 0
+m25IntS -> 0
+fp4IntS -> 1
+m31IntS -> 0
+Q1IntS -> 0
+fp8IntS -> 1
+fp11IntS -> 0
+m15IntS -> 0
+m35IntS -> 0
+fp19IntS -> 0
+m19IntS -> 0
+m18IntS -> 0
+m26IntS -> 0
+fp16IntS -> 0
+m8IntS -> 1
+m21IntS -> 0
+m9IntS -> 0
+fp3IntS -> 0
+m24IntS -> 1
+fp14IntS -> 1
+fp5IntS -> 1
+m11IntS -> 0
+m6IntS -> 0
+m23IntS -> 0
+fp12IntS -> 0
+m16IntS -> 0
+fp10IntS -> 0
+fp7IntS -> 0
+fp2IntS -> 0
+fp1IntS -> 0
+m12IntS -> 0
+fp20IntS -> 0
+fp13IntS -> 0
+m22IntS -> 0
+m13IntS -> 0
+m7IntS -> 0
+fp17IntS -> 0
+m2IntS -> 1
+m5IntS -> 0
+fp6IntS -> 0
+m20IntS -> 0
+m0IntS -> 0
+fp9IntS -> 0
+m29IntS -> 0
+m10IntS -> 0
+Q1IntSIntS -> {
+  16 -> 1
+  else -> 1
+}
+
+Accumulated resource constraints:
+    [(>= 0 0)
+    ,(and (= (+ 0 fp0IntS 0) (+ 0 fp2IntS 0))
+     (>= fp0IntS 0)
+     (>= fp2IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(and (>= 1 0) (>= m0IntS 0) (>= m2IntS 0) (= 1 (+ m0IntS m2IntS)))
+    ,(and (>= 1 0) (>= m1IntS 0) (>= m3IntS 0) (= 1 (+ m1IntS m3IntS)))
+    ,(and (>= 0 0) (>= fp0IntS 0) (>= fp1IntS 0) (= 0 (+ fp0IntS fp1IntS)))
+    ,(>= 0 0)
+    ,(and (= (+ 0 fp1IntS 0) (+ 0 fp3IntS 0))
+     (>= fp1IntS 0)
+     (>= fp3IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(>= Q2IntS 0)
+    ,(>= Q2IntS 0)
+    ,(and (>= m4IntS 0) (>= m12IntS 0) (>= m16IntS 0) (= m4IntS (+ m12IntS m16IntS)))
+    ,(and (>= m5IntS 0) (>= m13IntS 0) (>= m17IntS 0) (= m5IntS (+ m13IntS m17IntS)))
+    ,(and (>= m6IntS 0) (>= m14IntS 0) (>= m18IntS 0) (= m6IntS (+ m14IntS m18IntS)))
+    ,(and (>= m7IntS 0) (>= m15IntS 0) (>= m19IntS 0) (= m7IntS (+ m15IntS m19IntS)))
+    ,(and (>= fp9IntS 0)
+     (>= fp11IntS 0)
+     (>= fp12IntS 0)
+     (= fp9IntS (+ fp11IntS fp12IntS)))
+    ,(and (>= fp7IntS 0)
+     (>= fp9IntS 0)
+     (>= fp10IntS 0)
+     (= fp7IntS (+ fp9IntS fp10IntS)))
+    ,(and (>= m2IntS 0) (>= m4IntS 0) (>= m8IntS 0) (= m2IntS (+ m4IntS m8IntS)))
+    ,(and (>= m3IntS 0) (>= m5IntS 0) (>= m9IntS 0) (= m3IntS (+ m5IntS m9IntS)))
+    ,(and (>= m0IntS 0) (>= m6IntS 0) (>= m10IntS 0) (= m0IntS (+ m6IntS m10IntS)))
+    ,(and (>= m0IntS 0) (>= m7IntS 0) (>= m11IntS 0) (= m0IntS (+ m7IntS m11IntS)))
+    ,(and (>= fp5IntS 0)
+     (>= fp7IntS 0)
+     (>= fp8IntS 0)
+     (= fp5IntS (+ fp7IntS fp8IntS)))
+    ,(and (>= fp4IntS 0)
+     (>= fp5IntS 0)
+     (>= fp6IntS 0)
+     (= fp4IntS (+ fp5IntS fp6IntS)))
+    ,(and (= (+ (Q1IntSIntS zIntS) fp1IntS 0) (+ 0 fp4IntS 0))
+     (>= fp1IntS 0)
+     (>= fp4IntS 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0)
+     (>= 0 0))
+    ,(>= 0 (+ Q2IntS (- (+ fp10IntS 0))))
+    ,(>= Q2IntS 0)
+    ,(>= Q2IntS 0)
+    ,(>= 0 Q2IntS)
+    ,(>= 0 Q2IntS)
+    ,(>= 9999 0)
+    ,(>= 9999 0)
+    ,(>= 9999 0)
+    ,(and (>= m20IntS 0)
+     (>= m28IntS 0)
+     (>= m32IntS 0)
+     (= m20IntS (+ m28IntS m32IntS)))
+    ,(and (>= m21IntS 0)
+     (>= m29IntS 0)
+     (>= m33IntS 0)
+     (= m21IntS (+ m29IntS m33IntS)))
+    ,(and (>= m22IntS 0)
+     (>= m30IntS 0)
+     (>= m34IntS 0)
+     (= m22IntS (+ m30IntS m34IntS)))
+    ,(and (>= m23IntS 0)
+     (>= m31IntS 0)
+     (>= m35IntS 0)
+     (= m23IntS (+ m31IntS m35IntS)))
+    ,(and (>= fp17IntS 0)
+     (>= fp19IntS 0)
+     (>= fp20IntS 0)
+     (= fp17IntS (+ fp19IntS fp20IntS)))
+    ,(and (>= fp15IntS 0)
+     (>= fp17IntS 0)
+     (>= fp18IntS 0)
+     (= fp15IntS (+ fp17IntS fp18IntS)))
+    ,(and (>= m8IntS 0) (>= m20IntS 0) (>= m24IntS 0) (= m8IntS (+ m20IntS m24IntS)))
+    ,(and (>= m9IntS 0) (>= m21IntS 0) (>= m25IntS 0) (= m9IntS (+ m21IntS m25IntS)))
+    ,(and (>= m10IntS 0)
+     (>= m22IntS 0)
+     (>= m26IntS 0)
+     (= m10IntS (+ m22IntS m26IntS)))
+    ,(and (>= m11IntS 0)
+     (>= m23IntS 0)
+     (>= m27IntS 0)
+     (= m11IntS (+ m23IntS m27IntS)))
+    ,(and (>= fp13IntS 0)
+     (>= fp15IntS 0)
+     (>= fp16IntS 0)
+     (= fp13IntS (+ fp15IntS fp16IntS)))
+    ,(and (>= fp8IntS 0)
+     (>= fp13IntS 0)
+     (>= fp14IntS 0)
+     (= fp8IntS (+ fp13IntS fp14IntS)))
+    ,(>= 0 (- (+ fp18IntS 0)))
+    ,(>= Q1IntS 0)
+    ,(>= 0 Q2IntS)
+    ,(>= 0 Q2IntS)
+    ,(>= 0 (+ 1 (- (+ fp14IntS 0))))
+    ,(>= 0 0)
+    ,(>= 0 (- (+ fp6IntS 0)))
+    ,(>= 0 Q2IntS)]
+Solved resource constraint after conjoining formulas: SAT
+    (>= Q2IntS 0)
