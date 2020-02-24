@@ -1,0 +1,33 @@
+data List a <q1 :: a -> Int> <q2 :: a -> a -> Int> where
+  Nil :: List a <q1> <q2>
+  Cons :: x:{a | | q1 _v} -> xs: List a <{q1 _0 + (q2 x _0)}> <q2> -> List a <q1> <q2>
+
+{-
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0 
+  Cons x xs -> 1 + len xs
+
+insert :: x: a -> xs: List a <{1}> <{0}> -[1]-> List a <{0}> <{0}> 
+insert = \x. \xs.
+  match xs with
+    Nil -> Cons x Nil
+    Cons y ys -> 
+      if y < x
+        then Cons y (insert x ys)
+        else Cons x (Cons y ys)
+-}
+
+insert :: x: a -> xs: List a <{if (_0 > x) then 1 else 0}> <{0}> -[1]-> List a <{0}> <{0}> 
+insert = \x. \xs.
+  match xs with
+    Nil -> Cons x Nil
+    Cons y ys -> 
+      if y < x
+        then Cons y (insert x ys)
+        else Cons x (Cons y ys)
+
+insertionSort :: xs: List a <{0}> <{0}> -[1]-> List a <{0}> <{0}>
+insertionSort = \xs.
+  match xs with 
+    Nil -> Nil
+    Cons y ys -> insert y (insertionSort ys)

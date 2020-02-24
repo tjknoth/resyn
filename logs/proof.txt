@@ -1,0 +1,8 @@
+Let r2 be "if _1 > _0 then 1 else 0"
+and r1(x) be if "_0 > x then 1 else 0".  
+
+Then 
+Cons y ys                   <: List2 a <1>      <r2>
+ys                          <: List2 a <1 + r1> <r2>
+insertionSort ys            <: List2 a <1>      <0>
+insert y (insertionSort ys) <: List2 a <0>      <0>

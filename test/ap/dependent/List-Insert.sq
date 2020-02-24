@@ -1,0 +1,31 @@
+data IList a <q :: a -> Int> where 
+  Nil :: IList a <q>
+  Cons :: x: {a | | q _v} -> xs: IList {a | x <= _v} <q> -> IList a <q> 
+
+measure elems :: IList a -> Set a where 
+  Nil -> []
+  Cons x xs -> [x] + elems xs
+
+termination measure len :: IList a -> {Int | _v >= 0} where 
+  Nil -> 0 
+  Cons x xs -> 1 + len xs
+
+insert :: x: a -> xs: IList a <{if (_0 < x) then 1 else 0}> -[1]-> {IList a <{0}> | elems _v == elems xs + [x]}
+insert = \x. \xs. 
+  match xs with 
+    Nil -> Cons x Nil 
+    Cons y ys -> 
+      if y < x 
+        then Cons y (insert x ys)
+        else Cons x (Cons y ys)
+
+{-
+insert' :: x: a -> xs: List {a| | if _v < x then 1 else 0} -> {List a | elems _v == elems xs + [x]}
+insert' = \x. \xs.
+  match xs with 
+    Nil -> Cons x Nil
+    Cons y ys ->
+      if y < x 
+        then Cons y (insert x ys)
+        else Cons x (Cons y ys)
+-}
