@@ -381,6 +381,7 @@ simplifyConstraint' _ _ c@SharedForm{} = simpleConstraints %= (c :)
 simplifyConstraint' _ _ (Subtype _ t t' _) =
   throwError $ text  "Cannot match shape" <+> squotes (pretty $ shape t) $+$ text "with shape" <+> squotes (pretty $ shape t')
 
+insertRVar (name, info) = Map.insert name info -- APs: copied from Util file to avoid circular dependency
 -- | Takes a formula and replaces each AP with a variable that has the same id
 strip :: Monad s => Environment -> Formula -> TCSolver s Formula
 strip env p = case p of
