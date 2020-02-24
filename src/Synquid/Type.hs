@@ -436,7 +436,7 @@ allRFormulas True t = bifoldMap (const []) (: []) t ++ fTS t
     intRet (Ite _ t e) = intRet t && intRet e
     intRet  _ = False
 
-allRFormulas False = combine (const []) (: [])
+allRFormulas False t = combine (const []) (: []) t
 
 -- Return a set of all formulas (potential, multiplicity, refinement) of a type. 
 --   Doesn't mean anything necesssarily, used to embed environment assumptions
