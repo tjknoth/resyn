@@ -414,7 +414,28 @@ allRefinementsOf' (FunctionT _ argT resT _) = allRefinementsOf' argT ++ allRefin
 allRefinementsOf' _ = error "allRefinementsOf called on contextual or any type"
 
 -- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
-allRFormulas True = bifoldMap (const []) (: [])
+-- allRFormulas True = bifoldMap (const []) (: [])
+allRFormulas True t = bifoldMap (const []) (: []) t ++ fTS t
+  where --also collecting int-valued predicates 
+    fBT BoolT = []
+    fBT IntT  = []
+    fBT (DatatypeT x ts ps) = foldr f [] ts ++ foldr g [] ps
+    fBT (TypeVarT subs x m) = []
+    fTS (ScalarT b r p) = fBT b
+    fTS (FunctionT x argT resT c) = fTS argT ++ fTS resT
+    fTS (LetT x t bodyT) = fTS t ++ fTS bodyT
+    fTS AnyT = []
+    f t' ts' = fTS t' ++ ts'
+    g p' ps' = if intRet p' then p':ps' else ps'
+    intRet (IntLit _) = True
+    intRet (Var _ _) = True
+    intRet (Unary Neg _) = True
+    intRet (Binary Times _ _) = True
+    intRet (Binary Plus _ _) = True
+    intRet (Binary Minus _ _) = True
+    intRet (Ite _ t e) = intRet t && intRet e
+    intRet  _ = False
+
 allRFormulas False = combine (const []) (: [])
 
 -- Return a set of all formulas (potential, multiplicity, refinement) of a type. 
