@@ -1,0 +1,24 @@
+data List a where
+  Nil :: List a
+  Cons :: x:a -> xs: List a -> List a
+
+data Tree a where
+  Leaf :: a -> Tree a
+  Node :: l: {Tree {a | | 1} | | 2} -> r: {Tree {a | | 1} | | 1} -> Tree a
+
+mergeLists :: List {a | | 1} -> List {a | | 1} -[1]-> List a
+mergeLists = \xs. \ys.
+  match xs with
+    Nil        -> ys
+    Cons xh xt -> match ys with
+                    Nil        -> xs
+                    Cons yh yt -> if xh < yh
+                                    then Cons xh (mergeLists xt (Cons yh yt))
+                                    else Cons yh (mergeLists (Cons xh xt) yt)  
+
+flatten :: Tree {a | | 1} -[1]-> List a
+flatten = \t .
+  match t with
+    Leaf x -> Cons x Nil
+    Node l r -> mergeLists (flatten l) (flatten r) -- l, r :: Tree {a | | 2}
+                                                   -- flatten l, flatten r :: List {a | | 1}

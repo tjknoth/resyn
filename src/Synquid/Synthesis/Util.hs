@@ -186,7 +186,7 @@ instantiate env sch top argNames = do
       let argSorts' = map (sortSubstitute (asSortSubst subst)) argSorts
       fml <- if top
               then do
-                p' <- freshId (map toUpper p)
+                p' <- runInSolver $ freshId (map toUpper p)
                 addConstraint $ WellFormedPredicate env argSorts' resSort p'
                 return $ Pred resSort p' (zipWith Var argSorts' deBrujns)
               else return $ if resSort == BoolS then ffalse else pbot 
