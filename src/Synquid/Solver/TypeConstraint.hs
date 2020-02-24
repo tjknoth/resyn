@@ -228,10 +228,10 @@ simplifyConstraint' _ pass c@(WellFormedPredicate _ _ _ p) | p `Map.member` pass
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@(TypeVarT _ a _) rl pl) tr@(ScalarT br@(TypeVarT _ b _) rr pr) False)
   | isBound env a && isBound env b && pr /= fzero
     = do -- APs: modifying Subtype case to strip formulas before simplification
-        addRSubConstraint env tl tr
         -- strL <- strip env pl
         -- strR <- strip env pr
         -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
+        addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT bl rl fzero) (ScalarT br rr fzero) False)
 -- Data types: can compare potentials
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@DatatypeT{} rl pl) tr@(ScalarT br@DatatypeT{} rr pr) False)
@@ -239,8 +239,8 @@ simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@DatatypeT{} rl pl) tr@(Scala
     = do
         -- strL <- strip env pl
         -- strR <- strip env pr
-        addRSubConstraint env tl tr
         -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
+        addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT bl rl pl) (ScalarT br rr fzero) False)
 -- Bools
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT BoolT rl pl) tr@(ScalarT BoolT rr pr) False)
@@ -248,8 +248,8 @@ simplifyConstraint' _ _ (Subtype env tl@(ScalarT BoolT rl pl) tr@(ScalarT BoolT 
     = do
         -- strL <- strip env pl
         -- strR <- strip env pr
-        addRSubConstraint env tl tr
         -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
+        addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT BoolT rl pl) (ScalarT BoolT rr fzero) False)
 -- Ints
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT IntT rl pl) tr@(ScalarT IntT rr pr) False)
@@ -257,8 +257,8 @@ simplifyConstraint' _ _ (Subtype env tl@(ScalarT IntT rl pl) tr@(ScalarT IntT rr
     = do
         -- strL <- strip env pl
         -- strR <- strip env pr
-        addRSubConstraint env tl tr
         -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
+        addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT IntT rl pl) (ScalarT IntT rr fzero) False)
 
 
@@ -348,12 +348,12 @@ simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tA
       else simplifyConstraint (Subtype env tRes1 tRes2 True)
 simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) consistency)
   = do
-      --simplifyConstraint (Subtype env (removePotential tArg2) (removePotential tArg1) consistency)
+      -- simplifyConstraint (Subtype env (removePotential tArg2) (removePotential tArg1) consistency)
       simplifyConstraint (Subtype env tArg2 tArg1 consistency)
       if isScalarType tArg1
         then do
           env' <- safeAddGhostVar y tArg2 env
-          --simplifyConstraint (Subtype env' (renameVar (isBound env) x y tArg1 (removePotential tRes1)) (removePotential tRes2) consistency)
+          -- simplifyConstraint (Subtype env' (renameVar (isBound env) x y tArg1 (removePotential tRes1)) (removePotential tRes2) consistency)
           simplifyConstraint (Subtype env' (renameVar (isBound env) x y tArg1 tRes1) tRes2 consistency)
         else simplifyConstraint (Subtype env tRes1 tRes2 consistency)
 simplifyConstraint' _ _ c@(WellFormed env (ScalarT (DatatypeT name tArgs _) fml pot))
