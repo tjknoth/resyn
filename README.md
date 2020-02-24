@@ -5,10 +5,14 @@ an upper bound on the programs' resource usage.
 
 For example, given the following type as the specification:
 ```
+#!haskell
+
 replicate :: n:Nat -> x:{n**a| |n} -[1]-> {List a | len _v = n}
 ```
 and an appropriate set of components, Resyn will automatically generate a program: 
 ```
+#!haskell
+
 replicate = \n . \x . 
   if n <= 0
     then Nil

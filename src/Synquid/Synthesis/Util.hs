@@ -172,7 +172,7 @@ instantiate env sch top argNames = do
       a' <- runInSolver $ freshId "A"
       addConstraint $ WellFormed env (vartSafe a' ftrue) 
       instantiate' (Map.insert a (vartSafe a' (BoolLit top)) subst) pSubst sch
-{-  instantiate' subst pSubst (ForallP (PredSig p argSorts _) sch) = do -- APs: changed 
+    instantiate' subst pSubst (ForallP (PredSig p argSorts _) sch) = do
       let argSorts' = map (sortSubstitute (asSortSubst subst)) argSorts
       fml <- if top
               then do
@@ -180,16 +180,6 @@ instantiate env sch top argNames = do
                 addConstraint $ WellFormedPredicate env argSorts' p'
                 return $ Pred BoolS p' (zipWith Var argSorts' deBrujns)
               else return ffalse
-      instantiate' subst (Map.insert p fml pSubst) sch
--}
-    instantiate' subst pSubst (ForallP (PredSig p argSorts resSort) sch) = do
-      let argSorts' = map (sortSubstitute (asSortSubst subst)) argSorts
-      fml <- if top
-              then do
-                p' <- freshId (map toUpper p)
-                addConstraint $ WellFormedPredicate env argSorts' resSort p'
-                return $ Pred resSort p' (zipWith Var argSorts' deBrujns)
-              else return $ if resSort == BoolS then ffalse else pbot 
       instantiate' subst (Map.insert p fml pSubst) sch
     instantiate' subst pSubst (Monotype t) = go subst pSubst argNames t
     go subst pSubst argNames (FunctionT x tArg tRes cost) = do

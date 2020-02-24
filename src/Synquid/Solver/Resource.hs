@@ -82,18 +82,14 @@ generateFormula' :: (MonadHorn s, RMonad s)
 generateFormula' checkMults c = do
   writeLog 4 $ indent 2 $ simplePrettyConstraint c <+> operator "~>"
   let mkRForm = RFormula Set.empty Set.empty Set.empty
-  let freeParams = deBrujnOrVee 5  --FIXME 
   case c of
     Subtype{} -> error $ show $ text "generateFormula: subtype constraint present:" <+> pretty c
     WellFormed{} -> error $ show $ text "generateFormula: well-formed constraint present:" <+> pretty c
     RSubtype env pl pr -> do
       op <- subtypeOp
-      --substs <- generateFreshUniversals env
-      substs1 <- freshenFormula freeParams Map.empty pl
-      substs2 <- freshenFormula freeParams Map.empty pr
-      let substs = Map.union substs1 substs2
+      substs <- generateFreshUniversals env
       let fml = mkRForm substs Map.empty $ pl `op` pr
-      embedAndProcessConstraint env Nothing fml 
+      embedAndProcessConstraint env Nothing fml
     SharedForm env f fl fr -> do
       let sharingFml = f |=| (fl |+| fr)
       let wf = conjunction [f |>=| fzero, fl |>=| fzero, fr |>=| fzero]
@@ -348,7 +344,7 @@ allPotentials env = Map.mapMaybeWithKey substTopPotential $ toMonotype <$> nonGh
 
 generateFreshUniversals :: Monad s => Environment -> TCSolver s Substitution
 generateFreshUniversals env = do 
-  --relevant <- use universalVars
+  relevant <- use universalVars
   --let univs = Map.filterWithKey (\x _ -> x `Set.member` relevant) $ symbolsOfArity 0 env
   let univs = Map.filterWithKey (\x _ -> x == valueVarName) $ symbolsOfArity 0 env
   Map.traverseWithKey freshen univs
@@ -357,28 +353,6 @@ generateFreshUniversals env = do
     freshen x sch = do 
       x' <- freshVersion x 
       return $ Var (sortFrom sch) x'
-
-freshenFormula :: Monad s => [String] -> Substitution -> Formula -> TCSolver s Substitution -- APs
-freshenFormula fList subst (Var sort id) 
-  | elem id fList = do
-      var' <- Var sort <$> freshVersion id
-      return $ Map.insertWith (\_ x -> x) id var' subst
-  | otherwise = return subst
-freshenFormula fList subst (Unary _ fml) =
-  freshenFormula fList subst fml
-freshenFormula fList subst (Binary _ fml1 fml2) =
-  Map.union <$> (freshenFormula fList subst fml1) <*> (freshenFormula fList subst fml2)
-freshenFormula fList subst (Ite i t e) =
-  Map.union <$> (Map.union <$> (freshenFormula fList subst i) <*> 
-    (freshenFormula fList subst t)) <*> (freshenFormula fList subst e)
-freshenFormula fList subst (Pred _ _ fmls) = 
-  Map.unions <$> (mapM (freshenFormula fList subst) fmls)
-freshenFormula fList subst (Cons _ _ fmls) = 
-  Map.unions <$> (mapM (freshenFormula fList subst) fmls)
-freshenFormula _ subst x = return subst
-
-deBrujnOrVee :: Int -> [String]
-deBrujnOrVee n = valueVarName:(take n deBrujns)
 
 -- Substitute for _v in potential annotation
 generateSubstFromType :: PendingRSubst -> String -> RType -> PendingRSubst

@@ -535,14 +535,9 @@ scalarSubstituteEnv tass syms =
 
 -- | Insert weakest refinement
 refineTop :: Environment -> SType -> RType
-refineTop env (ScalarT (DatatypeT name tArgs []) _ _) = ScalarT (DatatypeT name (map (refineTop env) tArgs) []) ftrue defPotential
 refineTop env (ScalarT (DatatypeT name tArgs pArgs) _ _) =
   let variances = env ^. (datatypes . to (Map.! name) . predVariances) in
-  --ScalarT (DatatypeT name (map (refineTop env) tArgs) (map (BoolLit . not) variances)) ftrue defPotential -- APs: discriminate between pred/AP
-  ScalarT (DatatypeT name (map (refineTop env) tArgs) (case (predSigResSort . head . _predParams $ (env ^. datatypes) Map.! name) of
-                                                         BoolS -> (map (BoolLit . not) variances)
-                                                         IntS  -> (map (const ptop) variances))) 
-                                                       ftrue defPotential
+  ScalarT (DatatypeT name (map (refineTop env) tArgs) (map (BoolLit . not) variances)) ftrue defPotential
 refineTop _ (ScalarT IntT _ _) = ScalarT IntT ftrue defPotential
 refineTop _ (ScalarT BoolT _ _) = ScalarT BoolT ftrue defPotential
 refineTop _ (ScalarT (TypeVarT vSubst a _) _ _) = ScalarT (TypeVarT vSubst a defMultiplicity) ftrue defPotential
@@ -551,14 +546,9 @@ refineTop env (FunctionT x tArg tFun c) = FunctionT x (refineBot env tArg) (refi
 -- | Insert strongest refinement
 -- TODO: maybe shouldn't use default potentials and multiplicities?
 refineBot :: Environment -> SType -> RType
-refineBot env (ScalarT (DatatypeT name tArgs []) _ _) = ScalarT (DatatypeT name (map (refineBot env) tArgs) []) ffalse defPotential
 refineBot env (ScalarT (DatatypeT name tArgs pArgs) _ _) =
   let variances = env ^. (datatypes . to (Map.! name) . predVariances) in
-  --ScalarT (DatatypeT name (map (refineBot env) tArgs) (map BoolLit variances)) ffalse defPotential -- APs: discriminate between pred/AP
-  ScalarT (DatatypeT name (map (refineBot env) tArgs) (case (predSigResSort . head . _predParams $ (env ^. datatypes) Map.! name) of
-                                                         BoolS -> (map BoolLit variances)
-                                                         IntS  -> (map (const pbot) variances))) 
-                                                       ffalse defPotential
+  ScalarT (DatatypeT name (map (refineBot env) tArgs) (map BoolLit variances)) ffalse defPotential
 refineBot _ (ScalarT IntT _ _) = ScalarT IntT ffalse defPotential
 refineBot _ (ScalarT BoolT _ _) = ScalarT BoolT ffalse defPotential
 refineBot _ (ScalarT (TypeVarT vSubst a _) _ _) = ScalarT (TypeVarT vSubst a defMultiplicity) ffalse defPotential
@@ -599,8 +589,7 @@ data Constraint =
   | WellFormed !Environment !RType 
   | WellFormedCond !Environment !Formula
   | WellFormedMatchCond !Environment !Formula
---  | WellFormedPredicate !Environment ![Sort] !Id -- APs: changed to make Pretty.hs show correct predicate constraints
-  | WellFormedPredicate !Environment ![Sort] !Sort !Id
+  | WellFormedPredicate !Environment ![Sort] !Id
   | SharedEnv !Environment !Environment !Environment 
   | SharedForm !Environment !Formula !Formula !Formula 
   | Transfer !Environment !Environment
@@ -613,8 +602,7 @@ envFrom (Subtype e _ _ _)           = e
 envFrom (RSubtype e _ _)            = e
 envFrom (WellFormed e _)            = e
 envFrom (WellFormedCond e _)        = e
--- envFrom (WellFormedPredicate e _ _) = e -- APs: adjusted to reflect new signature
-envFrom (WellFormedPredicate e _ _ _) = e
+envFrom (WellFormedPredicate e _ _) = e
 envFrom (SharedEnv e _ _)           = e
 envFrom (SharedForm e _ _ _)        = e
 envFrom (ConstantRes e)             = e

@@ -1,6 +1,0 @@
-data List a <q :: a -> Int> where
-	Nil :: List a <q>
-	Cons :: x:{a| | q _v} -> xs: List a <q> -> List a <q>
-  
-simple :: x:{Int | |1} -> List Int <{1}>
-simple = \x. Cons x Nil
