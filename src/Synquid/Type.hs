@@ -12,7 +12,7 @@ import qualified Data.Map as Map
 import Data.Map (Map)
 import Data.Bifunctor
 import Data.Bifoldable
-
+import Data.Foldable
 import Debug.Trace
 
 {- Type skeletons -}
@@ -260,6 +260,7 @@ typeSubstitute subst (FunctionT x tArg tRes cost) = FunctionT x (typeSubstitute 
 typeSubstitute subst (LetT x tDef tBody) = LetT x (typeSubstitute subst tDef) (typeSubstitute subst tBody)
 typeSubstitute _ AnyT = AnyT
 
+
 noncaptureTypeSubst :: [Id] -> [RType] -> RType -> RType
 noncaptureTypeSubst tVars tArgs t =
   let tFresh = typeSubstitute (Map.fromList $ zip tVars (map vartAll distinctTypeVars)) t
@@ -413,9 +414,30 @@ allRefinementsOf' (ScalarT _ ref _) = [ref]
 allRefinementsOf' (FunctionT _ argT resT _) = allRefinementsOf' argT ++ allRefinementsOf' resT
 allRefinementsOf' _ = error "allRefinementsOf called on contextual or any type"
 
--- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
-allRFormulas True = bifoldMap (const []) (: [])
-allRFormulas False = combine (const []) (: [])
+-- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@ - edited to include APs (int-valued functions on datatypes)
+--allRFormulas True t = map transformTypeSkeleton' $ bifoldMap (const []) (: []) (transformTypeSkeleton t)
+allRFormulas True t = bifoldMap (const []) (: []) t ++ fTS t
+  where --also collecting int-valued predicates 
+    fBT BoolT = []
+    fBT IntT  = []
+    fBT (DatatypeT x ts ps) = foldr f [] ts ++ foldr g [] ps
+    fBT (TypeVarT subs x m) = []
+    fTS (ScalarT b r p) = fBT b
+    fTS (FunctionT x argT resT c) = fTS argT ++ fTS resT
+    fTS (LetT x t bodyT) = fTS t ++ fTS bodyT
+    fTS AnyT = []
+    f t' ts' = fTS t' ++ ts'
+    g p' ps' = if intRet p' then p':ps' else ps'
+    intRet (IntLit _) = True
+    intRet (Var _ _) = True
+    intRet (Unary Neg _) = True
+    intRet (Binary Times _ _) = True
+    intRet (Binary Plus _ _) = True
+    intRet (Binary Minus _ _) = True
+    intRet (Ite _ t e) = intRet t && intRet e
+    intRet  _ = False
+
+allRFormulas False t = combine (const []) (: []) t
 
 -- Return a set of all formulas (potential, multiplicity, refinement) of a type. 
 --   Doesn't mean anything necesssarily, used to embed environment assumptions
@@ -439,15 +461,50 @@ getConditional :: RType -> Maybe Formula
 getConditional (ScalarT _ _ f@(Ite g _ _)) = Just f
 getConditional _ = Nothing
 
-removePotentialSch :: RSchema -> RSchema
-removePotentialSch = fmap removePotential 
+-- Top : true/0 (everything is subtype of Top)
+-- Bot : false/infty (Bot is subtype of everything)
+-- weakenResources: make all resource annotations guaranteed to pass a subtyping check
+-- a -> b <: c -> d means c <: a && b <: d
+--   what if a is a function? need to reverse everything!
+-- so annotate a with Top and b with Bot
+-- Definition: 
+-- All argument types need to become TOP
+--   for scalars this means replace annotations with ptop
+--   for functions this means ??
+-- Return type needs to become BOT
+-- TODO: call this when generating round-trip constraints somehow!
+--   can do it at the checkE somehow? is any time we check 
+--   function types round trip?
 
-removePotential (ScalarT b r _) = ScalarT (removePotentialBase b) r fzero
-removePotential (FunctionT x arg res c) = FunctionT x (removePotential arg) (removePotential res) 0
-removePotential t = t
+-- Weaken resource requirements for round-trip type checking
+weakenResourceAnnotations t@FunctionT{} = weakenResources t
+weakenResourceAnnotations t = t
 
-removePotentialBase (DatatypeT x ts ps) = DatatypeT x (map removePotential ts) ps
-removePotentialBase b = b
+-- Weaken the input and output type, remove cost requirements
+weakenResources (FunctionT x arg res c) = FunctionT x arg' (weakenResources res) 0
+  where 
+    arg' = annotateTopRes arg
+-- Scalar type. Must be function output, annotate with bottom
+weakenResources (ScalarT base r p) = ScalarT base r pbot
+-- Shouldn't occur, only using this for round trip checking
+weakenResources t@LetT{} = error $ "Weakening contextual type " ++ show t
+weakenResources t = t
+
+annotateTopRes (FunctionT x arg res c) = error $ "Not supported yet: re-annotating higher order functions"
+annotateTopRes (ScalarT base r p) = ScalarT (annotateTopResBase base) r ptop
+annotateTopRes t@LetT{} = error $ "Annotating contextual type " ++ show t
+annotateTopRes t = t
+
+annotateTopResBase (DatatypeT x ts ps) = DatatypeT x (map annotateTopRes ts) ps
+annotateTopResBase (TypeVarT s x m) = TypeVarT s x ptop -- this might be wrong? is top ok for multiplicities? should be...
+annotateTopResBase b = b
+
+-- removePotential (ScalarT b r _) = ScalarT (removePotentialBase b) r fzero
+-- removePotential (FunctionT x arg res c) = FunctionT x (removePotential arg) (removePotential res) 0
+-- removePotential t = t
+
+-- removePotentialBase (DatatypeT x ts ps) = DatatypeT x (map removePotential ts) ps
+-- removePotentialBase b = b
 
 -- Set strings: used for "fake" set type for typechecking measures
 emptySetCtor = "Emptyset"

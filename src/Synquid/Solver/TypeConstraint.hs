@@ -220,21 +220,25 @@ simplifyConstraint' _ _ (WellFormed _ AnyT) = return ()
 -- Any datatype: drop only if lhs is a datatype
 simplifyConstraint' _ _ (Subtype _ (ScalarT (DatatypeT _ _ _) _ _) t _) | t == anyDatatype = return ()
 -- Well-formedness of a known predicate drop
-simplifyConstraint' _ pass c@(WellFormedPredicate _ _ p) | p `Map.member` pass = return ()
+-- simplifyConstraint' _ pass c@(WellFormedPredicate _ _ p) | p `Map.member` pass = return () -- APs: Just adjusted signature
+simplifyConstraint' _ pass c@(WellFormedPredicate _ _ _ p) | p `Map.member` pass = return () 
 
 -- Strip away potentials -- This is a little janky. Is there a better way than matching everything that is NOT a type var?
 -- Bound type variables: can compare potentials
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@(TypeVarT _ a _) rl pl) tr@(ScalarT br@(TypeVarT _ b _) rr pr) False)
   | isBound env a && isBound env b && pr /= fzero
-    = do
-        -- traceM $ "stripping " ++ show rl ++ " <: " ++ show rr
-        addRSubConstraint env tl tr
+    = do -- APs: modifying Subtype case to strip formulas before simplification
+        -- strL <- strip env pl
+        -- strR <- strip env pr
         -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
+        addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT bl rl fzero) (ScalarT br rr fzero) False)
 -- Data types: can compare potentials
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@DatatypeT{} rl pl) tr@(ScalarT br@DatatypeT{} rr pr) False)
   | pr /= fzero
     = do
+        -- strL <- strip env pl
+        -- strR <- strip env pr
         -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
         addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT bl rl pl) (ScalarT br rr fzero) False)
@@ -242,6 +246,8 @@ simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@DatatypeT{} rl pl) tr@(Scala
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT BoolT rl pl) tr@(ScalarT BoolT rr pr) False)
   | pr /= fzero
     = do
+        -- strL <- strip env pl
+        -- strR <- strip env pr
         -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
         addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT BoolT rl pl) (ScalarT BoolT rr fzero) False)
@@ -249,8 +255,10 @@ simplifyConstraint' _ _ (Subtype env tl@(ScalarT BoolT rl pl) tr@(ScalarT BoolT 
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT IntT rl pl) tr@(ScalarT IntT rr pr) False)
   | pr /= fzero
     = do
-        addRSubConstraint env tl tr
+        -- strL <- strip env pl
+        -- strR <- strip env pr
         -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
+        addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT IntT rl pl) (ScalarT IntT rr fzero) False)
 
 
@@ -288,7 +296,8 @@ simplifyConstraint' _ _ c@(Subtype env (ScalarT (TypeVarT _ a _) _ _) (ScalarT (
             (modify $ addTypingConstraint c)
 simplifyConstraint' _ _ c@(WellFormed env (ScalarT (TypeVarT _ a _) _ _)) | not (isBound env a)
   = modify $ addTypingConstraint c
-simplifyConstraint' _ _ c@(WellFormedPredicate _ _ _) = modify $ addTypingConstraint c
+-- simplifyConstraint' _ _ c@(WellFormedPredicate _ _ _) = modify $ addTypingConstraint c -- APs: Adjusted signature
+simplifyConstraint' _ _ c@(WellFormedPredicate _ _ _ _) = modify $ addTypingConstraint c
 
 -- Let types: extend environment (has to be done before trying to extend the type assignment)
 simplifyConstraint' _ _ (Subtype env (LetT x tDef tBody) t variant)
@@ -317,9 +326,19 @@ simplifyConstraint' _ _ (Subtype env t@(ScalarT (DatatypeT name [] (pArg:pArgs))
   = do
       let variances = _predVariances ((env ^. datatypes) Map.! name)
       let isContra = variances !! (length variances - length pArgs - 1) -- Is pArg contravariant?
-      if isContra
+{-    if isContra -- APs: Discriminate between predicates and APs to create the correct simple constraint type
         then simplifyConstraint (Subtype env (int pArg') (int pArg) consistency)
         else simplifyConstraint (Subtype env (int pArg) (int pArg') consistency)
+-}      
+      if (predSigResSort . head . _predParams $ (env ^. datatypes) Map.! name) == BoolS
+        then if isContra
+          then simplifyConstraint (Subtype env (int pArg') (int pArg) consistency)
+          else simplifyConstraint (Subtype env (int pArg) (int pArg') consistency)
+        else
+          do
+            strL <- strip env pArg
+            strR <- strip env pArg'
+            simpleConstraints %= (RSubtype env pArg pArg' :) 
       simplifyConstraint (Subtype env (ScalarT (DatatypeT name [] pArgs) fml pot) (ScalarT (DatatypeT name' [] pArgs') fml' pot') consistency)
 simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) True)
   = if isScalarType tArg1
@@ -362,6 +381,49 @@ simplifyConstraint' _ _ c@SharedForm{} = simpleConstraints %= (c :)
 simplifyConstraint' _ _ (Subtype _ t t' _) =
   throwError $ text  "Cannot match shape" <+> squotes (pretty $ shape t) $+$ text "with shape" <+> squotes (pretty $ shape t')
 
+-- | Takes a formula and replaces each AP with a variable that has the same id
+strip :: Monad s => Environment -> Formula -> TCSolver s Formula
+strip env p = case p of
+  BoolLit _           -> do writeLog 4 $ text $ "stripping bool: " ++ (show p)
+                            return p
+  IntLit _            -> do writeLog 4 $ text $ "stripping int: " ++ (show p)
+                            return p
+  SetLit _ _          -> do writeLog 4 $ text $ "stripping set: " ++ (show p)
+                            return p
+  Var _ _             -> do writeLog 4 $ text $ "stripping var: " ++ (show p)
+                            return p
+  Unknown _ _         -> do writeLog 4 $ text $ "stripping unknown: " ++ (show p)
+                            return p
+  Unary op fml        -> do writeLog 4 $ text $ "stripping unary: " ++ (show p)
+                            strf <- strip env fml
+                            return $ Unary op strf
+  Binary op fml1 fml2 -> do writeLog 4 $ text $ "stripping bin: " ++ (show p)
+                            strf1 <- strip env fml1
+                            strf2 <- strip env fml2
+                            return $ Binary op strf1 strf2
+  Ite i t e           -> do writeLog 4 $ text $ "stripping ite: " ++ (show p)
+                            stri <- strip env i
+                            strt <- strip env t
+                            stre <- strip env e
+                            return $ Ite i strt stre
+  Pred sort id _      -> do writeLog 4 $ text $ show (env ^. boundPredicates)
+                            if sort == BoolS
+                              then do writeLog 4 $ text $ "stripping pred:"
+                                      return p
+                              else do writeLog 4 $ text $ "stripping AP: " ++ (show p)
+                                      resourceVars %= insertRVar (id, [])
+                                      pass <- use predAssignment
+                                      tass <- use typeAssignment
+                                      let subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass
+                                      simpleConstraints %= (RSubtype env (Var sort id) (subst p) :) 
+                                      simpleConstraints %= (RSubtype env (subst p) (Var sort id) :) 
+                                      return $ Var sort id
+  Cons _ _ _          -> do writeLog 4 $ text $ "stripping constructor app: " ++ (show p)
+                            return p
+  All _ _             -> do writeLog 4 $ text $ "stripping forall: " ++ (show p)
+                            return p
+  _                   ->    return p
+
 -- | Unify type variable @a@ with type @t@ or fail if @a@ occurs in @t@
 unify env a t = if a `Set.member` typeVarsOf t
   then error $ show $ text "simplifyConstraint: type variable occurs in the other type"
@@ -371,7 +433,7 @@ unify env a t = if a `Set.member` typeVarsOf t
     addTypeAssignment a t'
 
 -- Predicate well-formedness: shapeless or simple depending on type variables
-processPredicate c@(WellFormedPredicate env argSorts p) = do
+{-processPredicate c@(WellFormedPredicate env argSorts p) = do -- APs: split case into BoolS, IntS return types
   tass <- use typeAssignment
   let typeVars = Set.toList $ Set.unions $ map typeVarsOfSort argSorts
   if any (isFreeVariable tass) typeVars
@@ -390,6 +452,31 @@ processPredicate c@(WellFormedPredicate env argSorts p) = do
       addQuals u (pq (addAllVariables args env') args vars)
   where
     isFreeVariable tass a = not (isBound env a) && not (Map.member a tass)
+-}
+processPredicate c@(WellFormedPredicate env argSorts BoolS p) = do
+  tass <- use typeAssignment
+  let typeVars = Set.toList $ Set.unions $ map typeVarsOfSort argSorts
+  if any (isFreeVariable tass) typeVars
+    then do
+      writeLog 3 $ text "WARNING: free vars in predicate" <+> pretty c
+      modify $ addTypingConstraint c -- Still has type variables: cannot determine shape
+    else do
+      -- u <- freshId "U"
+      let u = p
+      addPredAssignment p (Unknown Map.empty u)
+      let argSorts' = map (sortSubstitute $ asSortSubst tass) argSorts
+      let args = zipWith Var argSorts' deBrujns
+      let env' = typeSubstituteEnv tass env
+      let vars = allScalars env'
+      pq <- asks _predQualsGen
+      addQuals u (pq (addAllVariables args env') args vars)
+  where
+    isFreeVariable tass a = not (isBound env a) && not (Map.member a tass)
+processPredicate (WellFormedPredicate env argSorts IntS p) = do
+  let u = p
+  --addPredAssignment p (Unknown  u)
+  resourceVars %= insertRVar (u, [])
+  return ()
 processPredicate c = modify $ addTypingConstraint c
 
 -- | Eliminate type and predicate variables from simple constraints, create qualifier maps, split measure-based subtyping constraints
@@ -608,7 +695,8 @@ fresh env (ScalarT baseT _ p) = do
       tArgs' <- mapM (fresh env) tArgs
       -- Replace predicate arguments with fresh predicate variables:
       let (DatatypeDef tParams pParams _ _ _) = (env ^. datatypes) Map.! name
-      pArgs' <- mapM (\sig -> freshPred env . map (noncaptureSortSubst tParams (map (toSort . baseTypeOf) tArgs')) . predSigArgSorts $ sig) pParams
+      -- pArgs' <- mapM (\sig -> freshPred env . map (noncaptureSortSubst tParams (map (toSort . baseTypeOf) tArgs')) . predSigArgSorts $ sig) pParams -- APs: changed to reflect new signature of freshPred 
+      pArgs' <- mapM (\sig -> (freshPred env . map (noncaptureSortSubst tParams (map (toSort . baseTypeOf) tArgs')) $        predSigArgSorts sig) (predSigResSort sig)) pParams
       return $ DatatypeT name tArgs' pArgs'
     -- Ensure fresh base type has multiplicity 1 to avoid zeroing other formulas during unification
     --freshBase (TypeVarT subs a m) = return $ TypeVarT subs a defMultiplicity
@@ -617,12 +705,17 @@ fresh env (FunctionT x tArg tFun c) =
   liftM2 (\t r -> FunctionT x t r c) (fresh env tArg) (fresh env tFun)
 fresh env t = let (env', t') = embedContext env t in fresh env' t'
 
-
-freshPred env sorts = do
+{-freshPred env sorts = do -- APs: changed signature to allow for access to return type of predicate
   p' <- freshId "P"
   modify $ addTypingConstraint (WellFormedPredicate env sorts p')
   let args = zipWith Var sorts deBrujns
   return $ Pred BoolS p' args
+-}
+freshPred env argSorts resSort = do
+  p' <- freshId "P"
+  modify $ addTypingConstraint (WellFormedPredicate env argSorts resSort p')
+  let args = zipWith Var argSorts deBrujns
+  return $ Pred resSort p' args
 
 -- | Set valuation of unknown @name@ to @valuation@
 -- and re-check all potentially affected constraints in all candidates
@@ -648,7 +741,8 @@ matchConsType formal@(ScalarT (DatatypeT d vars pVars) _ _) actual@(ScalarT (Dat
   = do
       writeLog 3 $ text "Matching constructor type" $+$ pretty formal $+$ text "with scrutinee" $+$ pretty actual
       zipWithM_ (\(ScalarT (TypeVarT _ a _) ftrue _) t -> addTypeAssignment a t) vars args
-      zipWithM_ (\(Pred BoolS p _) fml -> addPredAssignment p fml) pVars pArgs
+      -- zipWithM_ (\(Pred BoolS p _) fml -> addPredAssignment p fml) pVars pArgs -- APs: Modified signature to match against APs as well as predicates
+      zipWithM_ (\(Pred _ p _) fml -> addPredAssignment p fml) pVars pArgs
 matchConsType t t' = error $ show $ text "matchConsType: cannot match" <+> pretty t <+> text "against" <+> pretty t'
 
 currentAssignment :: Monad s => RType -> TCSolver s RType

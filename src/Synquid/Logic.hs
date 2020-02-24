@@ -129,6 +129,7 @@ data Formula =
   SetLit !Sort ![Formula] |            -- ^ Set literal ([1, 2, 3])
   Var !Sort !Id |                      -- ^ Input variable (universally quantified first-order variable)
   Unknown !Substitution !Id |          -- ^ Predicate unknown (with a pending substitution)
+  --UnknownAP !Id |
   Unary !UnOp !Formula |               -- ^ Unary expression
   Binary !BinOp !Formula !Formula |    -- ^ Binary expression
   Ite !Formula !Formula !Formula |     -- ^ If-then-else expression
@@ -148,7 +149,7 @@ embedLit err _              = error $ unwords ["embedLit: non-literal base funct
 
 
 dontCare = "_"
-valueVarName = "_v"
+valueVarName = "_v" --need to modify for dependent polys
 unknownName (Unknown _ name) = name
 varName (Var _ name) = name
 varType (Var t _) = t
@@ -189,6 +190,10 @@ fone = IntLit 1
 (|||) = Binary Or
 (|=>|) = Binary Implies
 (|<=>|) = Binary Iff
+
+-- top/bot potential annotations
+ptop = IntLit 0
+pbot = IntLit 9999 -- lol
 
 
 andClean :: Formula -> Formula -> Formula

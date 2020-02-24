@@ -324,8 +324,8 @@ resolveSchema sch = do
         (throwResError $ text "Duplicate predicate variables" <+> text predName)
         (return ())
       mapM_ resolveSort argSorts
-      when (resSort /= BoolS) $
-        throwResError (text "Bound predicate variable" <+> text predName <+> text "must return Bool")
+   -- when (resSort /= BoolS) $ -- APs: removed to allow for APs
+     -- throwResError (text "Bound predicate variable" <+> text predName <+> text "must return Bool")
       sch' <- withLocalEnv $ do
         environment %= addBoundPredicate sig
         resolveSchema' sch
@@ -360,13 +360,21 @@ resolveType s@(ScalarT (DatatypeT name tArgs pArgs) fml pot) = do
       return $ ScalarT baseT' fml' pot'
   where
     resolvePredArg :: (Sort -> Sort) -> PredSig -> Formula -> Resolver Formula
-    resolvePredArg subst (PredSig _ argSorts BoolS) fml = withLocalEnv $ do
+{-  resolvePredArg subst (PredSig _ argSorts BoolS) fml = withLocalEnv $ do -- APs: changed to allow resolution of non predicate APs
       let argSorts' = map subst argSorts
       let vars = zipWith Var argSorts' deBrujns
       environment %= addAllVariables vars
       case fml of
         Pred _ p [] -> resolveTypeRefinement AnyS (Pred BoolS p vars)
         _ -> resolveTypeRefinement AnyS fml
+-}
+    resolvePredArg subst (PredSig _ argSorts resSort) fml = withLocalEnv $ do
+      let argSorts' = map subst argSorts
+      let vars = zipWith Var argSorts' deBrujns
+      environment %= addAllVariables vars
+      case fml of
+        Pred _ p [] -> resolveTypeAnnotation resSort AnyS (Pred resSort p vars)
+        _ -> resolveTypeAnnotation resSort AnyS fml
 
 resolveType (ScalarT baseT fml pot) = ScalarT <$> resolveBaseType baseT <*> resolveTypeRefinement (toSort baseT) fml <*> resolveTypePotential (toSort baseT) pot 
 

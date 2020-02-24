@@ -1,0 +1,1016 @@
+INSTANTIATE <a> . <q :: a -> Int> . {List {1**a||0} <q _0>|_v == (Nil)|0}
+INTO {List {1**A0||0} <Q0 _0>|_v == (Nil)|0}
+INSTANTIATE <a> . <q :: a -> Int> . x:{1**a||q _v} -> xs:{List {1**a||0} <q _0>||0} -> {List {1**a||0} <q _0>|_v == (Cons x xs)|0}
+INTO x:{1**A1||Q1 _v} -> xs:{List {1**A1||0} <Q1 _0>||0} -> {List {1**A1||0} <Q1 _0>|_v == (Cons x xs)|0}
+
+ 
+ Checking arg0 :: {List {1**A0||0} <True>||0} in
+\arg0 . 
+  match ?? with
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : 0 fp2
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len |- {List {m0**a||p1} <q _0>|_v == arg0|p4} <: {List {1**A0||0} <True>||0}
+    Emptyset Nil arg0 ~ Emptyset Nil arg0 fp2
+    Shared scalars: Emptyset Nil arg0 0 \/
+    Emptyset Nil arg0 fp0 || Emptyset Nil arg0 fp1
+    |- Q1 :: A1 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len |- {1**A1||0}
+    |- Q0 :: A0 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len |- {1**A0||0}
+UNIFY A0 WITH {m0**a||p1} PRODUCING {m0**a|U0|p1}
+stripping var: Var IntS "p1"
+stripping var: Var IntS "p1"
+[PredSig {predSigName = "q", predSigArgSorts = [VarS "a"], predSigResSort = IntS}]
+stripping AP: Pred IntS "q" [Var (VarS "a") "_0"]
+stripping bool: BoolLit True
+Type assignment
+  A0 -> {m0**a|U0|p1}
+Typing Constraints
+    |- Q0 :: A0 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len |- {1**A1||0}
+    |- Q1 :: A1 -> Int
+Type assignment
+  A0 -> {m0**a|U0|p1}
+Pred assignment
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len |- p1 >= p1
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len |- {m0**a||0} <: {m0**a|U0|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len |- q >= True
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len |- {List|False|p4} <: {List||0}
+    Emptyset Nil arg0 ~ Emptyset Nil arg0 fp2
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len |- 0 \/ fp0 || fp1
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len |- 0 \/ p0 || p2
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len |- 0 \/ p1 || p3
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len |- 1 \/ m0 || m1
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len |- {m0**a|U0|p1}
+Constraints
+  False ==> True
+  True ==> U0
+QMap
+  U0 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}] (2 0)
+Remaining Candidates (1)
+  0: [U0 -> {}] (2 0)
+Matching constructor type
+{List {0**A0||0} <Q0 _0>|_v == (Nil)|0}
+with scrutinee
+{List {m0**a||p1} <q _0>|_v == arg0|p4}
+
+ 
+ Checking 0 :: {Int|_v >= 0|0} in
+\arg0 . 
+  match arg0 with
+    Nil -> ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p5 fp3
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len arg0 == (Nil) |- {Int|_v == 0|0} <: {Int|_v >= 0|0}
+    Emptyset Nil arg0 ~ Emptyset Nil arg0 fp3
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len |- {1**A1||0}
+Type assignment
+  A0 -> {m0**a||p1}
+Pred assignment
+  Q0 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len arg0 == (Nil) |- {Int|_v == 0|0} <: {Int|_v >= 0|0}
+    Emptyset Nil arg0 ~ Emptyset Nil arg0 fp3
+Constraints
+  (_v == 0 && arg0 == (Nil)) && len arg0 >= 0 ==> _v >= 0
+QMap
+  U0 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}] (3 0)
+Remaining Candidates (1)
+  0: [U0 -> {}] (3 0)
+Matching constructor type
+{List {1**A1||0} <Q1 _0>|_v == (Cons x xs)|0}
+with scrutinee
+{List {m0**a||p1} <q _0>|_v == arg0|p4}
+INSTANTIATE x:{Int||0} -> y:{Int||0} -> {Int|_v == x + y|0}
+INTO x3:{Int||0} -> x4:{Int||0} -> {Int|_v == x3 + x4|0}
+
+ 
+ Checking + :: x2:_ -> x1:_ -> {Int|_v >= 0|0} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> ?? ?? ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p19,x : p21,xs : p22 fp11
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- x3:{Int||0} -> x4:{Int||0} -> {Int|_v == x3 + x4|0} /\ x2:_ -> x1:_ -> {Int|_v >= 0|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- x3:{Int||0} -> x4:{Int||0} -> {Int|_v == x3 + x4|0} <: x2:_ -> x1:_ -> {Int|_v >= 0|0}
+    Shared scalars: Emptyset Nil arg0 x xs fp9 \/
+    Emptyset Nil arg0 x xs fp11 || Emptyset Nil arg0 x xs fp12
+    Shared scalars: fp7 \/
+    fp9 || fp10
+    Shared scalars: Emptyset Nil arg0 x xs fp5 \/
+    Emptyset Nil arg0 x xs fp7 || Emptyset Nil arg0 x xs fp8
+    Shared scalars: fp4 \/
+    fp5 || fp6
+    Emptyset Nil arg0 x xs ~ Emptyset Nil arg0 x xs fp4
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len |- {1**A1||0}
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, x3, x4, xs arg0 == (Cons x xs) |- {Int|_v == x3 + x4|0} /\ {Int|_v >= 0|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, x1, x2, xs arg0 == (Cons x xs) |- {Int|_v == x2 + x1|0} <: {Int|_v >= 0|0}
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- fp9 \/ fp11 || fp12
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p9 \/ p19 || p24
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p10 \/ p20 || p25
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- m2 \/ m8 || m11
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p11 \/ p21 || p26
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- m3 \/ m9 || m12
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p12 \/ p22 || p27
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p13 \/ p23 || p28
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- m4 \/ m10 || m13
+    Shared potential: |- fp7 \/ fp9 || fp10
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- fp5 \/ fp7 || fp8
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p6 \/ p9 || p14
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p3 \/ p10 || p15
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- m1 \/ m2 || m5
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p7 \/ p11 || p16
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- m0 \/ m3 || m6
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p8 \/ p12 || p17
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p1 \/ p13 || p18
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- m0 \/ m4 || m7
+    Shared potential: |- fp4 \/ fp5 || fp6
+    Emptyset Nil arg0 x xs ~ Emptyset Nil arg0 x xs fp4
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len |- {m0**a||p1}
+Constraints
+  False ==> _v >= 0
+QMap
+  U0 -> {}
+Checking consistency
+  (((_v == x3 + x4 && arg0 == (Cons x xs)) && _v >= 0) && len arg0 >= 0) && len xs >= 0
+Candidates (1)
+  0: [U0 -> {}] (4 0)
+Remaining Candidates (1)
+  0: [U0 -> {}] (4 0)
+
+ 
+ Checking 1 :: {Int||fp10} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> ?? + ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p24,x : p26,xs : p27 fp12
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- {Int|_v == 1|0} <: {Int||fp10}
+stripping int: IntLit 0
+stripping var: Var IntS "fp10"
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- 0 >= fp10
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- {Int|False|0} <: {Int||0}
+Constraints
+  False ==> True
+QMap
+  U0 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}] (4 0)
+Remaining Candidates (1)
+  0: [U0 -> {}] (4 0)
+
+ 
+ Checking +
+            1 :: x1:_ -> {Int|_v >= 0|0} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> ?? ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p9,x : p11,xs : p12 fp7
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- x4:{Int||0} -> {Int|_v == 1 + x4|0} /\ x1:_ -> {Int|_v >= 0|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- x4:{Int||0} -> {Int|_v == 1 + x4|0} <: x1:_ -> {Int|_v >= 0|0}
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, x4, xs arg0 == (Cons x xs) |- {Int|_v == 1 + x4|0} /\ {Int|_v >= 0|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, x1, xs arg0 == (Cons x xs) |- {Int|_v == 1 + x1|0} <: {Int|_v >= 0|0}
+Constraints
+  False ==> _v >= 0
+QMap
+  U0 -> {}
+Checking consistency
+  (((_v == 1 + x4 && arg0 == (Cons x xs)) && _v >= 0) && len arg0 >= 0) && len xs >= 0
+Candidates (1)
+  0: [U0 -> {}] (4 0)
+Remaining Candidates (1)
+  0: [U0 -> {}] (4 0)
+INSTANTIATE <a> . <q :: a -> Int> . arg0:{List {1**a||0} <q _0>||0} -> {Int|_v >= 0|0}
+INTO x6:{List {1**A2||0} <Q2 _0>||0} -> {Int|_v >= 0|0}
+
+ 
+ Checking len :: x5:_ -> {Int||fp6} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> 1 + (?? ??)
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p29,x : p31,xs : p32 fp15
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- x6:{List {1**A2||0} <Q2 _0>||0} -> {Int|_v >= 0|0} /\ x5:_ -> {Int||fp6}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- x6:{List {1**A2||0} <Q2 _0>||0} -> {Int|_v >= 0|0} <: x5:_ -> {Int||fp6}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- x6:{List {1**A2||0} <True>||0} -> {Int|False|0} <: arg0:{List {1**a|False|0} <False>|False|0} -> {Int||0}
+    |- Q2 :: A2 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs |- {1**A2||0}
+    Shared scalars: Emptyset Nil arg0 x xs fp13 \/
+    Emptyset Nil arg0 x xs fp15 || Emptyset Nil arg0 x xs fp16
+    Shared scalars: fp8 \/
+    fp13 || fp14
+UNIFY A2 WITH {1**a|False|0} PRODUCING {1**a|U1|0}
+stripping bool: BoolLit False
+stripping bool: BoolLit True
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+Typing Constraints
+    |- Q2 :: A2 -> Int
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, x5, xs arg0 == (Cons x xs) |- {Int|False|0} <: {Int||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- {1**a|False|0} <: {1**a|U1|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- False >= True
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- {List|False|0} <: {List||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- {Int|False|0} <: {Int||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs |- {1**a|U1|0}
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- fp13 \/ fp15 || fp16
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p14 \/ p29 || p34
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p15 \/ p30 || p35
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- m5 \/ m14 || m17
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p16 \/ p31 || p36
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- m6 \/ m15 || m18
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p17 \/ p32 || p37
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p18 \/ p33 || p38
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- m7 \/ m16 || m19
+    Shared potential: |- fp8 \/ fp13 || fp14
+Constraints
+  False ==> True
+  False ==> True
+  False ==> U1
+  False ==> True
+QMap
+  U0 -> {}
+  U1 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (5 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (5 0)
+
+ 
+ Checking xs :: {List {1**A2||0} <Q2 _0>||fp14} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> 1 + (len ??)
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p34,x : p36,xs : 0 fp16
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- {List {m19**a||p38} <Q1 _0>|_v == xs|p37} <: {List {1**A2||0} <Q2 _0>||fp14}
+stripping var: Var IntS "p37"
+stripping var: Var IntS "fp14"
+[PredSig {predSigName = "q", predSigArgSorts = [VarS "a"], predSigResSort = IntS}]
+stripping AP: Pred IntS "Q1" [Var (VarS "a") "_0"]
+[PredSig {predSigName = "q", predSigArgSorts = [VarS "a"], predSigResSort = IntS}]
+stripping AP: Pred IntS "Q2" [Var (VarS "A2") "_0"]
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- p37 >= fp14
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- {m19**a||p38} <: {1**a|U1|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- Q1 >= Q2
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- {List|False|p37} <: {List||0}
+Constraints
+  False ==> True
+  (arg0 == (Cons x xs) && len arg0 >= 0) && len xs >= 0 ==> U1
+QMap
+  U0 -> {}
+  U1 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (6 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (6 0)
+
+ 
+ Checking len
+            xs :: {Int||fp6} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> 1 + ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p14,x : p16,xs : p17 fp8
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- {Int|_v >= 0|0} <: {Int||fp6}
+stripping int: IntLit 0
+stripping var: Var IntS "fp6"
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, len, x, xs arg0 == (Cons x xs) |- 0 >= fp6
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- {Int|False|0} <: {Int||0}
+Constraints
+  False ==> True
+QMap
+  U0 -> {}
+  U1 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (6 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (6 0)
+
+ 
+ Checking 1 + (len
+                 xs) :: {Int|_v >= 0|0} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p6,x : p7,xs : p8 fp4
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, xs arg0 == (Cons x xs) |- LET x4:({Int|_v >= 0|0}) IN {Int|_v == 1 + x4|0} <: {Int|_v >= 0|0}
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, len, x, x4, xs arg0 == (Cons x xs) |- {Int|_v == 1 + x4|0} <: {Int|_v >= 0|0}
+Constraints
+  (((_v == 1 + x4 && arg0 == (Cons x xs)) && x4 >= 0) && len arg0 >= 0) && len xs >= 0 ==> _v >= 0
+QMap
+  U0 -> {}
+  U1 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (7 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (7 0)
+INSTANTIATE <a> . <q :: a -> Int> . {List {1**a||0} <q _0>|_v == (Nil)|0}
+INTO {List {1**A0||0} <Q0 _0>|_v == (Nil)|0}
+INSTANTIATE <a> . <q :: a -> Int> . x:{1**a||q _v} -> xs:{List {1**a||0} <q _0>||0} -> {List {1**a||0} <q _0>|_v == (Cons x xs)|0}
+INTO x:{1**A1||Q1 _v} -> xs:{List {1**A1||0} <Q1 _0>||0} -> {List {1**A1||0} <Q1 _0>|_v == (Cons x xs)|0}
+
+ 
+ Checking arg0 :: {List {1**A0||0} <True>||0} in
+\arg0 . 
+  match ?? with
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : 0 fp2
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- {List {m0**a||p1} <q _0>|_v == arg0|p4} <: {List {1**A0||0} <True>||0}
+    Emptyset Nil arg0 ~ Emptyset Nil arg0 fp2
+    Shared scalars: Emptyset Nil arg0 0 \/
+    Emptyset Nil arg0 fp0 || Emptyset Nil arg0 fp1
+    |- Q1 :: A1 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- {1**A1||0}
+    |- Q0 :: A0 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- {1**A0||0}
+UNIFY A0 WITH {m0**a||p1} PRODUCING {m0**a|U0|p1}
+stripping var: Var IntS "p1"
+stripping var: Var IntS "p1"
+[PredSig {predSigName = "q", predSigArgSorts = [VarS "a"], predSigResSort = IntS}]
+stripping AP: Pred IntS "q" [Var (VarS "a") "_0"]
+stripping bool: BoolLit True
+Type assignment
+  A0 -> {m0**a|U0|p1}
+Typing Constraints
+    |- Q0 :: A0 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- {1**A1||0}
+    |- Q1 :: A1 -> Int
+Type assignment
+  A0 -> {m0**a|U0|p1}
+Pred assignment
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len |- p1 >= p1
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- {m0**a||0} <: {m0**a|U0|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- q >= True
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- {List|False|p4} <: {List||0}
+    Emptyset Nil arg0 ~ Emptyset Nil arg0 fp2
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- 0 \/ fp0 || fp1
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len |- 0 \/ p0 || p2
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len |- 0 \/ p1 || p3
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- 1 \/ m0 || m1
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- {m0**a|U0|p1}
+Constraints
+  False ==> True
+  True ==> U0
+QMap
+  U0 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}] (2 0)
+Remaining Candidates (1)
+  0: [U0 -> {}] (2 0)
+Matching constructor type
+{List {0**A0||0} <Q0 _0>|_v == (Nil)|0}
+with scrutinee
+{List {m0**a||p1} <q _0>|_v == arg0|p4}
+INSTANTIATE <a> . {DSet {1**a||0}|_v == (Emptyset)|0}
+INTO {DSet {1**A2|False|0}|_v == (Emptyset)|0}
+
+ 
+ Checking Emptyset :: {DSet {1**a||0}||0} in
+\arg0 . 
+  match arg0 with
+    Nil -> ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p5 fp3
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len arg0 == (Nil) |- {DSet {1**A2|False|0}|_v == (Emptyset)|0} <: {DSet {1**a||0}||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- {1**A2||0}
+    Emptyset Nil arg0 ~ Emptyset Nil arg0 fp3
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- {1**A1||0}
+UNIFY A2 WITH {1**a||0} PRODUCING {1**a|U1|0}
+Type assignment
+  A0 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- {1**A1||0}
+Type assignment
+  A0 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+Pred assignment
+  Q0 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len arg0 == (Nil) |- {1**a|False|0} <: {1**a||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len arg0 == (Nil) |- {DSet|False|0} <: {DSet||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- {1**a|U1|0}
+    Emptyset Nil arg0 ~ Emptyset Nil arg0 fp3
+Constraints
+  False ==> True
+  False ==> True
+QMap
+  U0 -> {}
+  U1 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (2 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}] (2 0)
+Matching constructor type
+{List {1**A1||0} <Q1 _0>|_v == (Cons x xs)|0}
+with scrutinee
+{List {m0**a||p1} <q _0>|_v == arg0|p4}
+INSTANTIATE <a> . x:{DSet {1**a||0}||0} -> y:{DSet {1**a||0}||0} -> {DSet {1**a||0}|_v == x + y|0}
+INTO x3:{DSet {1**A3||0}||0} -> x4:{DSet {1**A3||0}||0} -> {DSet {1**A3||0}|_v == x3 + x4|0}
+
+ 
+ Checking + :: x2:_ -> x1:_ -> {DSet {1**a||0}||0} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> ?? ?? ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p19,x : p21,xs : p22 fp11
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- x3:{DSet {1**A3||0}||0} -> x4:{DSet {1**A3||0}||0} -> {DSet {1**A3||0}|_v == x3 + x4|0} /\ x2:_ -> x1:_ -> {DSet {1**a||0}||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- x3:{DSet {1**A3||0}||0} -> x4:{DSet {1**A3||0}||0} -> {DSet {1**A3||0}|_v == x3 + x4|0} <: x2:_ -> x1:_ -> {DSet {1**a||0}||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs |- {1**A3||0}
+    Shared scalars: Emptyset Nil arg0 x xs fp9 \/
+    Emptyset Nil arg0 x xs fp11 || Emptyset Nil arg0 x xs fp12
+    Shared scalars: fp7 \/
+    fp9 || fp10
+    Shared scalars: Emptyset Nil arg0 x xs fp5 \/
+    Emptyset Nil arg0 x xs fp7 || Emptyset Nil arg0 x xs fp8
+    Shared scalars: fp4 \/
+    fp5 || fp6
+    Emptyset Nil arg0 x xs ~ Emptyset Nil arg0 x xs fp4
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- {1**A1||0}
+UNIFY A3 WITH {1**a||0} PRODUCING {1**a|U2|0}
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+Typing Constraints
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, x1, x2, xs arg0 == (Cons x xs) |- {1**a|False|0} <: {1**a||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, x1, x2, xs arg0 == (Cons x xs) |- {DSet|False|0} <: {DSet||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs |- {1**a|U2|0}
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- fp9 \/ fp11 || fp12
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p9 \/ p19 || p24
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p10 \/ p20 || p25
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- m2 \/ m8 || m11
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p11 \/ p21 || p26
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- m3 \/ m9 || m12
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p12 \/ p22 || p27
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p13 \/ p23 || p28
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- m4 \/ m10 || m13
+    Shared potential: |- fp7 \/ fp9 || fp10
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- fp5 \/ fp7 || fp8
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p6 \/ p9 || p14
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p3 \/ p10 || p15
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- m1 \/ m2 || m5
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p7 \/ p11 || p16
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- m0 \/ m3 || m6
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p8 \/ p12 || p17
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p1 \/ p13 || p18
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- m0 \/ m4 || m7
+    Shared potential: |- fp4 \/ fp5 || fp6
+    Emptyset Nil arg0 x xs ~ Emptyset Nil arg0 x xs fp4
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len |- {m0**a||p1}
+Constraints
+  False ==> True
+  False ==> True
+QMap
+  U0 -> {}
+  U1 -> {}
+  U2 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}] (2 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}] (2 0)
+INSTANTIATE <a> . x:{1**a||0} -> {DSet {1**a||0}|_v == (Singleton x)|0}
+INTO x6:{1**A4||0} -> {DSet {1**A4||0}|_v == (Singleton x6)|0}
+
+ 
+ Checking Singleton :: x5:_ -> {DSet {1**A3||0}||fp10} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> (?? ??) + ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p29,x : p31,xs : p32 fp15
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- x6:{1**A4||0} -> {DSet {1**A4||0}|_v == (Singleton x6)|0} /\ x5:_ -> {DSet {1**A3||0}||fp10}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- x6:{1**A4||0} -> {DSet {1**A4||0}|_v == (Singleton x6)|0} <: x5:_ -> {DSet {1**A3||0}||fp10}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs |- {1**A4||0}
+    Shared scalars: Emptyset Nil arg0 x xs fp13 \/
+    Emptyset Nil arg0 x xs fp15 || Emptyset Nil arg0 x xs fp16
+    Shared scalars: fp12 \/
+    fp13 || fp14
+UNIFY A4 WITH {1**a|U2|0} PRODUCING {1**a|U3|0}
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+  A4 -> {1**a|U3|0}
+Typing Constraints
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+  A4 -> {1**a|U3|0}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, x6, xs arg0 == (Cons x xs) |- {1**a|U3|0} /\ {1**a|U2|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, x5, xs arg0 == (Cons x xs) |- {1**a|U3|0} <: {1**a|U2|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, x5, xs arg0 == (Cons x xs) |- {DSet|False|0} <: {DSet||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs |- {1**a|U3|0}
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- fp13 \/ fp15 || fp16
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p24 \/ p29 || p34
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p25 \/ p30 || p35
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- m11 \/ m14 || m17
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p26 \/ p31 || p36
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- m12 \/ m15 || m18
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p27 \/ p32 || p37
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p28 \/ p33 || p38
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- m13 \/ m16 || m19
+    Shared potential: |- fp12 \/ fp13 || fp14
+Constraints
+  False ==> True
+  ((U3 && arg0 == (Cons x xs)) && len arg0 >= 0) && len xs >= 0 ==> U2
+QMap
+  U0 -> {}
+  U1 -> {}
+  U2 -> {}
+  U3 -> {}
+Checking consistency
+  (((U2 && U3) && arg0 == (Cons x xs)) && len arg0 >= 0) && len xs >= 0
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}] (3 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}] (3 0)
+
+ 
+ Checking x :: {1**A4||fp14} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> (Singleton ??) + ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p34,x : 0,xs : p37 fp16
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- {m18**a|_v == x|p36} <: {1**A4||fp14}
+stripping var: Var IntS "p36"
+stripping var: Var IntS "fp14"
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+  A4 -> {1**a|U3|0}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p36 >= fp14
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- {m18**a|_v == x|0} <: {1**a|U3|0}
+Constraints
+  ((_v == x && arg0 == (Cons x xs)) && len arg0 >= 0) && len xs >= 0 ==> U3
+QMap
+  U0 -> {}
+  U1 -> {}
+  U2 -> {}
+  U3 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}] (4 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}] (4 0)
+
+ 
+ Checking Singleton
+            x :: {DSet {1**A3||0}||fp10} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> ?? + ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p24,x : p26,xs : p27 fp12
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- {DSet {1**A4||0}|_v == (Singleton x)|0} <: {DSet {1**A3||0}||fp10}
+stripping int: IntLit 0
+stripping var: Var IntS "fp10"
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+  A4 -> {1**a|U3|0}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- 0 >= fp10
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- {1**a|U3|0} <: {1**a|U2|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- {DSet|False|0} <: {DSet||0}
+Constraints
+  False ==> True
+  ((U3 && arg0 == (Cons x xs)) && len arg0 >= 0) && len xs >= 0 ==> U2
+QMap
+  U0 -> {}
+  U1 -> {}
+  U2 -> {}
+  U3 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}] (4 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}] (4 0)
+
+ 
+ Checking + (Singleton
+               x) :: x1:_ -> {DSet {1**a||0}||0} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> ?? ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p9,x : p11,xs : p12 fp7
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- x4:LET x3:({DSet {0**A4||0}|_v == (Singleton x)|0}) IN {DSet {1**A3||0}||0} -> LET x3:({DSet {0**A4||0}|_v == (Singleton x)|0}) IN {DSet {1**A3||0}|_v == x3 + x4|0} /\ x1:_ -> {DSet {1**a||0}||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- x4:LET x3:({DSet {0**A4||0}|_v == (Singleton x)|0}) IN {DSet {1**A3||0}||0} -> LET x3:({DSet {0**A4||0}|_v == (Singleton x)|0}) IN {DSet {1**A3||0}|_v == x3 + x4|0} <: x1:_ -> {DSet {1**a||0}||0}
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+  A4 -> {1**a|U3|0}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, x1, x3, xs arg0 == (Cons x xs) |- {1**a|False|0} <: {1**a||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, x1, x3, xs arg0 == (Cons x xs) |- {DSet|False|0} <: {DSet||0}
+Constraints
+  False ==> True
+  False ==> True
+QMap
+  U0 -> {}
+  U1 -> {}
+  U2 -> {}
+  U3 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}] (4 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}] (4 0)
+INSTANTIATE <a> . <q :: a -> Int> . arg0:{List {1**a||0} <q _0>||0} -> {DSet {1**a||0}||0}
+INTO x8:{List {1**A5||0} <Q2 _0>||0} -> {DSet {1**A5||0}||0}
+
+ 
+ Checking elems :: x7:_ -> LET x3:({DSet {0**A4||0}|_v == (Singleton x)|0}) IN {DSet {1**A3||0}||fp6} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> (Singleton x) + (??
+                                    ??)
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p39,x : p41,xs : p42 fp19
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- x8:{List {1**A5||0} <Q2 _0>||0} -> {DSet {1**A5||0}||0} /\ x7:_ -> LET x3:({DSet {0**A4||0}|_v == (Singleton x)|0}) IN {DSet {1**A3||0}||fp6}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- x8:{List {1**A5||0} <Q2 _0>||0} -> {DSet {1**A5||0}||0} <: x7:_ -> LET x3:({DSet {0**A4||0}|_v == (Singleton x)|0}) IN {DSet {1**A3||0}||fp6}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- x8:{List {1**A5||0} <True>||0} -> {DSet {1**A5|False|0}|False|0} <: arg0:{List {1**a|False|0} <False>|False|0} -> {DSet {1**a||0}||0}
+    |- Q2 :: A5 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs |- {1**A5||0}
+    Shared scalars: Emptyset Nil arg0 x xs fp17 \/
+    Emptyset Nil arg0 x xs fp19 || Emptyset Nil arg0 x xs fp20
+    Shared scalars: fp8 \/
+    fp17 || fp18
+UNIFY A5 WITH {1**a|U2|0} PRODUCING {1**a|U4|0}
+stripping int: IntLit 0
+stripping var: Var IntS "fp6"
+stripping bool: BoolLit False
+stripping bool: BoolLit True
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+  A4 -> {1**a|U3|0}
+  A5 -> {1**a|U4|0}
+Typing Constraints
+    |- Q2 :: A5 -> Int
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+  A4 -> {1**a|U3|0}
+  A5 -> {1**a|U4|0}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, x3, x8, xs arg0 == (Cons x xs) |- {1**a|U4|0} /\ {1**a|U2|0}
+    Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, x3, x7, xs arg0 == (Cons x xs) |- 0 >= fp6
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, x3, x7, xs arg0 == (Cons x xs) |- {1**a|U4|0} <: {1**a|U2|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, x3, x7, xs arg0 == (Cons x xs) |- {DSet|False|0} <: {DSet||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- {1**a|False|0} <: {1**a|U4|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- False >= True
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- {List|False|0} <: {List||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- {1**a|False|0} <: {1**a||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- {DSet|False|0} <: {DSet||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs |- {1**a|U4|0}
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- fp17 \/ fp19 || fp20
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p14 \/ p39 || p44
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p15 \/ p40 || p45
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- m5 \/ m20 || m23
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p16 \/ p41 || p46
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- m6 \/ m21 || m24
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p17 \/ p42 || p47
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p18 \/ p43 || p48
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- m7 \/ m22 || m25
+    Shared potential: |- fp8 \/ fp17 || fp18
+Constraints
+  False ==> True
+  False ==> True
+  False ==> True
+  False ==> U4
+  False ==> True
+  ((U4 && arg0 == (Cons x xs)) && len arg0 >= 0) && len xs >= 0 ==> U2
+QMap
+  U0 -> {}
+  U1 -> {}
+  U2 -> {}
+  U3 -> {}
+  U4 -> {}
+Checking consistency
+  (((U2 && U4) && arg0 == (Cons x xs)) && len arg0 >= 0) && len xs >= 0
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}, U4 -> {}] (6 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}, U4 -> {}] (6 0)
+
+ 
+ Checking xs :: {List {1**A5||0} <Q2 _0>||fp18} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> (Singleton x) +
+                   (elems ??)
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p44,x : p46,xs : 0 fp20
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- {List {m25**a||p48} <Q1 _0>|_v == xs|p47} <: {List {1**A5||0} <Q2 _0>||fp18}
+stripping var: Var IntS "p47"
+stripping var: Var IntS "fp18"
+[PredSig {predSigName = "q", predSigArgSorts = [VarS "a"], predSigResSort = IntS}]
+stripping AP: Pred IntS "Q1" [Var (VarS "a") "_0"]
+[PredSig {predSigName = "q", predSigArgSorts = [VarS "a"], predSigResSort = IntS}]
+stripping AP: Pred IntS "Q2" [Var (VarS "A5") "_0"]
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+  A4 -> {1**a|U3|0}
+  A5 -> {1**a|U4|0}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- p47 >= fp18
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- {m25**a||p48} <: {1**a|U4|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- Q1 >= Q2
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- {List|False|p47} <: {List||0}
+Constraints
+  False ==> True
+  (arg0 == (Cons x xs) && len arg0 >= 0) && len xs >= 0 ==> U4
+QMap
+  U0 -> {}
+  U1 -> {}
+  U2 -> {}
+  U3 -> {}
+  U4 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}, U4 -> {}] (7 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}, U4 -> {}] (7 0)
+
+ 
+ Checking elems
+            xs :: LET x3:({DSet {0**A4||0}|_v == (Singleton x)|0}) IN {DSet {1**A3||0}||fp6} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> (Singleton x) + ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p14,x : p16,xs : p17 fp8
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- {DSet {1**A5||0}||0} <: LET x3:({DSet {0**A4||0}|_v == (Singleton x)|0}) IN {DSet {1**A3||0}||fp6}
+stripping int: IntLit 0
+stripping var: Var IntS "fp6"
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+  A4 -> {1**a|U3|0}
+  A5 -> {1**a|U4|0}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, _v, append, arg0, elems, len, x, x3, xs arg0 == (Cons x xs) |- 0 >= fp6
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, x3, xs arg0 == (Cons x xs) |- {1**a|U4|0} <: {1**a|U2|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, x3, xs arg0 == (Cons x xs) |- {DSet|False|0} <: {DSet||0}
+Constraints
+  False ==> True
+  ((U4 && arg0 == (Cons x xs)) && len arg0 >= 0) && len xs >= 0 ==> U2
+QMap
+  U0 -> {}
+  U1 -> {}
+  U2 -> {}
+  U3 -> {}
+  U4 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}, U4 -> {}] (7 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}, U4 -> {}] (7 0)
+
+ 
+ Checking (Singleton x) + (elems
+                             xs) :: {DSet {1**a||0}||0} in
+\arg0 . 
+  match arg0 with
+    Cons x xs -> ??
+from env with top-level potentials: Emptyset : 0,Nil : 0,arg0 : p6,x : p7,xs : p8 fp4
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, xs arg0 == (Cons x xs) |- LET x4:({DSet {0**A5||0}||0}) IN LET x3:({DSet {0**A4||0}|_v == (Singleton x)|0}) IN {DSet {1**A3||0}|_v == x3 + x4|0} <: {DSet {1**a||0}||0}
+Type assignment
+  A0 -> {m0**a||p1}
+  A1 -> {m0**a||p1}
+  A2 -> {1**a|U1|0}
+  A3 -> {1**a|U2|0}
+  A4 -> {1**a|U3|0}
+  A5 -> {1**a|U4|0}
+Pred assignment
+  Q0 -> q _0
+  Q1 -> q _0
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, x3, x4, xs arg0 == (Cons x xs) |- {1**a|False|0} <: {1**a||0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, arg0, elems, len, x, x3, x4, xs arg0 == (Cons x xs) |- {DSet|False|0} <: {DSet||0}
+Constraints
+  False ==> True
+  False ==> True
+QMap
+  U0 -> {}
+  U1 -> {}
+  U2 -> {}
+  U3 -> {}
+  U4 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}, U4 -> {}] (7 0)
+Remaining Candidates (1)
+  0: [U0 -> {}, U1 -> {}, U2 -> {}, U3 -> {}, U4 -> {}] (7 0)
+INSTANTIATE <a> . <q :: a -> Int> . {List {1**a||0} <q _0>|_v == (Nil)|0}
+INTO {List {1**A0||0} <Q0 _0>|_v == (Nil)|0}
+INSTANTIATE <a> . <q :: a -> Int> . x:{1**a||q _v} -> xs:{List {1**a||0} <q _0>||0} -> {List {1**a||0} <q _0>|_v == (Cons x xs)|0}
+INTO z:{1**A1||Q1 _v} -> zs:{List {1**A1||0} <Q1 _0>||0} -> {List {1**A1||0} <Q1 _0>|_v == (Cons z zs)|0}
+
+ 
+ Checking xs :: {List {1**A0||0} <True>||0} in
+\xs . \ys . 
+    match ?? with
+from env with top-level potentials: Emptyset : 0,Nil : 0,xs : 0,ys : p9 fp2
+Typing Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {List {m0**a||p1} <1>|_v == xs|p8} <: {List {1**A0||0} <True>||0}
+    Emptyset Nil xs ys ~ Emptyset Nil xs ys fp2
+    Shared scalars: Emptyset Nil xs ys 0 \/
+    Emptyset Nil xs ys fp0 || Emptyset Nil xs ys fp1
+    |- Q1 :: A1 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {1**A1||0}
+    |- Q0 :: A0 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {1**A0||0}
+UNIFY A0 WITH {m0**a||p1} PRODUCING {m0**a|U0|p1}
+stripping var: Var IntS "p1"
+stripping var: Var IntS "p1"
+stripping int: IntLit 1
+stripping bool: BoolLit True
+Type assignment
+  A0 -> {m0**a|U0|p1}
+Typing Constraints
+    |- Q0 :: A0 -> Int
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {1**A1||0}
+    |- Q1 :: A1 -> Int
+Type assignment
+  A0 -> {m0**a|U0|p1}
+Pred assignment
+Simple Constraints
+    Cons, Emptyset, Insert, Nil, Singleton, _v, append, xs, ys |- p1 >= p1
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {m0**a||0} <: {m0**a|U0|0}
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- 1 >= True
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {List|False|p8} <: {List||0}
+    Emptyset Nil xs ys ~ Emptyset Nil xs ys fp2
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- 0 \/ fp0 || fp1
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, xs, ys |- 0 \/ p0 || p4
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, xs, ys |- 0 \/ p1 || p5
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- 1 \/ m0 || m2
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, xs, ys |- 0 \/ p2 || p6
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, _v, append, xs, ys |- 0 \/ p3 || p7
+    Shared potential: Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- 1 \/ m1 || m3
+    Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {m0**a|U0|p1}
+Constraints
+  False ==> True
+  True ==> U0
+QMap
+  U0 -> {}
+Checking consistency
+Candidates (1)
+  0: [U0 -> {}] (2 0)
+Remaining Candidates (1)
+  0: [U0 -> {}] (2 0)
+
+Generating resource constraints:
+  p1 >= p1 ~>
+      p1 >= p1
+  1 >= True ~>
+      1 >= True
+  Emptyset Nil xs ys ~ Emptyset Nil xs ys ~>
+      ((((p0 + p2) + fp0 == (p8 + p9) + fp2 && fp0 >= 0) && fp2 >= 0) && p8 >= 0) && p9 >= 0
+  0 \/ fp0 || fp1 ~>
+      ((0 >= 0 && fp0 >= 0) && fp1 >= 0) && 0 == fp0 + fp1
+  0 \/ p0 || p4 ~>
+      ((0 >= 0 && p0 >= 0) && p4 >= 0) && 0 == p0 + p4
+  0 \/ p1 || p5 ~>
+      ((0 >= 0 && p1 >= 0) && p5 >= 0) && 0 == p1 + p5
+  1 \/ m0 || m2 ~>
+      ((1 >= 0 && m0 >= 0) && m2 >= 0) && 1 == m0 + m2
+  0 \/ p2 || p6 ~>
+      ((0 >= 0 && p2 >= 0) && p6 >= 0) && 0 == p2 + p6
+  0 \/ p3 || p7 ~>
+      ((0 >= 0 && p3 >= 0) && p7 >= 0) && 0 == p3 + p7
+  1 \/ m1 || m3 ~>
+      ((1 >= 0 && m1 >= 0) && m3 >= 0) && 1 == m1 + m3
+  Cons, Emptyset, Insert, Nil, Singleton, append, xs, ys |- {m0**a|U0|p1} ~>
+      p1 >= 0
+synquid: Z3 error: Sort mismatch at argument #2 for function (declare-fun >= (Int Int) Bool) supplied sort is Bool
