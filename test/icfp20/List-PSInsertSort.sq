@@ -1,0 +1,25 @@
+--Sorted List
+data SList a where
+  SNil  :: SList a
+  SCons :: x:a -> SList {a | x < _v} -> SList a
+
+--Partially sorted list.  Has quadratic potential on unsorted portion, with
+--a sorted (SList) suffix.  
+data PSList a <q :: Int> where
+  Wrap   :: SList a -> PSList a <q>
+  PSCons :: x:a -> PSList {a | | q} <q> -> PSList a <q>
+
+--Inserts an element x into a sorted list (SList).
+sInsert :: x:a -> SList {a | | 1} -> SList a
+sInsert = \x. \xs. 
+  match xs with
+    SNil       -> SCons x SNil
+    SCons y ys -> if x < y then SCons x (SCons y ys)
+                           else SCons y (sInsert x ys)
+
+--Sorts a partially sorted list using insertion sort.
+psInsertionSort :: PSList {a | | 1} <{1}> -> SList a
+psInsertionSort = \xs. 
+  match xs with 
+    Wrap ys     -> ys
+    PSCons y ys -> sInsert y (psInsertionSort ys)

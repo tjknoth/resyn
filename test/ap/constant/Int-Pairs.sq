@@ -3,7 +3,7 @@ data List a <q1 :: Int> <q2 :: Int> where
   Cons :: x: {a | | q1} -> xs: List a <{q1 + q2}> <q2> -> List a <q1> <q2>
 
 data Pair a where
-  Pai :: a -> a -> Pair a
+  Pair :: a -> a -> Pair a
 
 {-
 append :: xs: PairList a -> ys: PairList a 
@@ -17,7 +17,7 @@ attach = \x . \xs.
     Cons y ys -> PCons x y (attach x ys)
 -}
 
-append :: xs: List a <{1}> <{0}> -> ys: List a <{0}> <{0}>
+append :: <q :: Int>.xs: List a <{1 + q}> <{0}> -> ys: List a <{q}> <{0}>
   -> List a <{0}> <{0}>
   
 attach :: <q :: Int>.x: a -> xs: List a <{1+q}> <{0}> 
@@ -25,9 +25,9 @@ attach :: <q :: Int>.x: a -> xs: List a <{1+q}> <{0}>
 attach = \x . \xs.
   match xs with
     Nil -> Nil
-    Cons y ys -> Cons (Pai x y) (attach x ys)
+    Cons y ys -> Cons (Pair x y) (attach x ys)
 
-pairs :: xs: List a <{1}> <{2}> -[1]-> List (Pair a) <{0}> <{0}>
+pairs :: <q :: Int>.xs: List a <{1+q}> <{2}> -[1]-> List (Pair a) <{q}> <{0}>
 pairs = \xs .
   match xs with
     Nil -> Nil
