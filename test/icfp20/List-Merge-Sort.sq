@@ -14,7 +14,7 @@ measure len :: List a -> Int where
 data Tree a <q :: Int> where
   Leaf :: x:a -> Tree a <q>
   Node :: l: Tree {a | | q} <q>
-       -> r: Tree {a | | q} <q>
+       -> r: Tree {a | | q} <q> 
        -> Tree a <q>
 
 split :: List {a | | 1} <{0}> -[1]-> Pair (List a <{0}>)

@@ -1,7 +1,7 @@
 --Sorted List
 data SList a where
   SNil  :: SList a
-  SCons :: x:a -> SList {a | x < _v} -> SList a
+  SCons :: x:a -> SList {a | x <= _v} -> SList a
 
 --Partially sorted list.  Has quadratic potential on unsorted portion, with
 --a sorted (SList) suffix.  
