@@ -336,8 +336,8 @@ simplifyConstraint' _ _ (Subtype env t@(ScalarT (DatatypeT name [] (pArg:pArgs))
           else simplifyConstraint (Subtype env (int pArg) (int pArg') consistency)
         else
           do
-            strL <- strip env pArg
-            strR <- strip env pArg'
+            -- strL <- strip env pArg
+            -- strR <- strip env pArg'
             simpleConstraints %= (RSubtype env pArg pArg' :) 
       simplifyConstraint (Subtype env (ScalarT (DatatypeT name [] pArgs) fml pot) (ScalarT (DatatypeT name' [] pArgs') fml' pot') consistency)
 simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) True)

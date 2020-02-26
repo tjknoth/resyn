@@ -505,26 +505,37 @@ getVVFromType (ScalarT _ ref _) = findVV ref
         findVV _ = error $ show $ text "getVVFromType: ill-formed refinement:" <+> pretty ref
 getVVFromType t = error $ show $ text "getVVFromType: non-scalar type:" <+> pretty t
 
-getAnnotationStyle = getAnnotationStyle' . toMonotype
+getAnnotationStyle sch = getAnnotationStyle' (getPredParamsSch sch) (toMonotype sch)
 
-getAnnotationStyle' t =
+getAnnotationStyle' predParams t =
   let rforms = conjunction $ allRFormulas True t
-  in case (hasVar rforms, hasPred rforms) of
+      allVars = getVarNames t
+  in case (hasVar allVars rforms, hasMeasure predParams rforms) of
       (True, True)  -> Just Both
       (False, True) -> Just Measure
       (True, _)     -> Just Variable
       _             -> Nothing
 
-getPolynomialDomain = getPolynomialDomain' . toMonotype
+getPolynomialDomain sch = getPolynomialDomain' (getPredParamsSch sch) (toMonotype sch)
 
-getPolynomialDomain' t = 
+getPolynomialDomain' predParams t = 
   let rforms = conjunction $ allRFormulas True t 
-  in case (hasVarITE rforms, hasPredITE rforms) of 
+      allVars = getVarNames t
+  in case (hasVarITE allVars rforms, hasMeasureITE predParams rforms) of 
       (True, True)  -> Just Both
       (False, True) -> Just Measure
       (True, _)     -> Just Variable
       _             -> Nothing
 
+getPredParamsSch :: RSchema -> Set String
+getPredParamsSch (ForallP (PredSig x _ _) s) = Set.insert x (getPredParamsSch s)
+getPredParamsSch (ForallT _ s) = getPredParamsSch s 
+getPredParamsSch (Monotype _) = Set.empty 
+
+getVarNames :: RType -> Set String
+getVarNames (FunctionT x argT resT _) = 
+  Set.insert x $ Set.union (getVarNames argT) (getVarNames resT)
+getVarNames _ = Set.empty
 
 subtypeOp :: Monad s => TCSolver s (Formula -> Formula -> Formula)
 subtypeOp = do

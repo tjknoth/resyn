@@ -285,9 +285,9 @@ predsOf =
       pSetAlg f               = Set.empty
   in cata pSetAlg 
 
-hasPred :: Formula -> Bool 
-hasPred = 
-  let pAlg PredF{}           = True
+hasMeasure :: Set Id -> Formula -> Bool 
+hasMeasure predParams = 
+  let pAlg (PredF _ x _)     = not $ x `Set.member` predParams
       pAlg (SetLitF _ xs)    = or xs 
       pAlg (UnaryF _ e)      = e 
       pAlg (BinaryF _ e1 e2) = e1 || e2
@@ -296,9 +296,9 @@ hasPred =
       pAlg _                 = False
   in cata pAlg
 
-hasPredITE :: Formula -> Bool 
-hasPredITE = 
-  let pAlg PredF{}           = True
+hasMeasureITE :: Set Id -> Formula -> Bool 
+hasMeasureITE predParams = 
+  let pAlg (PredF _ x _)     = not $ x `Set.member` predParams
       pAlg (SetLitF _ xs)    = or xs 
       pAlg (UnaryF _ e)      = e 
       pAlg (BinaryF _ e1 e2) = e1 || e2
@@ -307,9 +307,12 @@ hasPredITE =
       pAlg _                 = False
   in cata pAlg
 
-hasVar :: Formula -> Bool
-hasVar = 
-  let vAlg VarF{}            = True
+hasVar :: Set Id -> Formula -> Bool
+hasVar vars = 
+  let isDBorVV []      = False -- heuristic for checking if something is a de bruijn
+      isDBorVV (_:[])  = False --   or if it's _v -- does it start with "_"?
+      isDBorVV ('_':_) = True
+      vAlg (VarF _ x)        = x `Set.member` vars || isDBorVV x
       vAlg PredF{}           = False
       vAlg (SetLitF _ xs)    = or xs 
       vAlg (UnaryF _ e)      = e 
@@ -319,9 +322,12 @@ hasVar =
       vAlg _                 = False
   in cata vAlg
 
-hasVarITE :: Formula -> Bool
-hasVarITE = 
-  let vAlg VarF{}            = True
+hasVarITE :: Set Id -> Formula -> Bool
+hasVarITE vars = 
+  let isDBorVV []      = False -- heuristic for checking if something is a de bruijn
+      isDBorVV (_:[])  = False --   or if it's _v -- does it start with "_"?
+      isDBorVV ('_':_) = True
+      vAlg (VarF _ x)        = x `Set.member` vars || isDBorVV x
       vAlg PredF{}           = False
       vAlg (SetLitF _ xs)    = or xs 
       vAlg (UnaryF _ e)      = e 
