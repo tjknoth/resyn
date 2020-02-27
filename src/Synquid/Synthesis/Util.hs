@@ -347,6 +347,11 @@ freshPotentials :: MonadHorn s
                 => Environment
                 -> RType
                 -> TCSolver s RType
+freshPotentials env (ScalarT base fml p) = do
+  base' <- freshMultiplicities env base
+  p' <- freshPotentials' env base p
+  return $ ScalarT base' fml p'
+{-
 freshPotentials env (ScalarT base fml (Ite g t f)) = do
     t' <- safeFreshPot env (Just base) t
     f' <- safeFreshPot env (Just base) f
@@ -356,7 +361,18 @@ freshPotentials env (ScalarT base fml pot) = do
   pot' <- safeFreshPot env (Just base) pot
   base' <- freshMultiplicities env base
   return $ ScalarT base' fml pot'
+-}
 freshPotentials _ t = return t
+
+freshPotentials' env base (Ite g t f) = do
+  t' <- safeFreshPot env (Just base) t
+  f' <- safeFreshPot env (Just base) f
+  return $ Ite g t' f'
+freshPotentials' env base (Unary op p) = 
+  Unary op <$> freshPotentials' env base p
+freshPotentials' env base (Binary op f g) = 
+  Binary op <$> freshPotentials' env base f <*> freshPotentials' env base g
+freshPotentials' env base pot = safeFreshPot env (Just base) pot
 
 -- Replace potentials in a BaseType
 freshMultiplicities :: MonadHorn s

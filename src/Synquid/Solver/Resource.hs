@@ -82,7 +82,7 @@ generateFormula' :: (MonadHorn s, RMonad s)
 generateFormula' checkMults c = do
   writeLog 4 $ indent 2 $ simplePrettyConstraint c <+> operator "~>"
   let mkRForm = RFormula Set.empty Set.empty Set.empty
-  let freeParams = deBrujnOrVee 5  --FIXME 
+  let freeParams = deBrujnOrVee 3  -- TODO: better solution. 3 is arbitrary.
   case c of
     Subtype{} -> error $ show $ text "generateFormula: subtype constraint present:" <+> pretty c
     WellFormed{} -> error $ show $ text "generateFormula: well-formed constraint present:" <+> pretty c
@@ -123,6 +123,7 @@ embedAndProcessConstraint env extra rfml = do
   hasUnivs <- isJust <$> asks _cegisDomain
   let go = insertAssumption extra
        >=> embedConstraint env
+       >=> replaceAbstractPotentials
        >=> instantiateUnknowns
        >=> instantiateAxioms env
        >=> elaborateAssumptions
@@ -174,6 +175,24 @@ embedConstraint env rfml = do
   let unk = Set.filter isUnknownForm ass
   return $ over knownAssumptions (Set.union emb) 
          $ over unknownAssumptions (Set.union unk) rfml
+
+
+replaceAbstractPotentials :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
+replaceAbstractPotentials rfml = do
+  rvs <- use resourceVars 
+  let fml' = replaceAbsPreds rvs $ _rconstraints rfml
+  return $ set rconstraints fml' rfml
+
+replaceAbsPreds :: Map String [Formula] -> Formula -> Formula
+replaceAbsPreds rvs p@(Pred s x fs) =
+  case Map.lookup x rvs of
+    Nothing -> p
+    Just _  -> Var s x
+replaceAbsPreds rvs (Unary op f) = Unary op $ replaceAbsPreds rvs f
+replaceAbsPreds rvs (Binary op f g) = Binary op (replaceAbsPreds rvs f) (replaceAbsPreds rvs g)
+replaceAbsPreds rvs (Ite g t f) = Ite (replaceAbsPreds rvs g) (replaceAbsPreds rvs t) (replaceAbsPreds rvs f)
+replaceAbsPreds rvs (All _ _) = error "replaceAbsPreds: found forall you should handle that"
+replaceAbsPreds _ f = f
 
 
 instantiateUnknowns :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
@@ -291,6 +310,8 @@ collectUniversals rfmls = do
   let preds = map (\(Var s x) -> (x, Var s x)) (collectUFs rfmls) 
   return $ Universals (formatUniversals (collectVars rfmls)) preds
 
+-- A different version of collectUniversals. 
+--  Allows a list of extra formulas
 collectUniversals' :: Monad s => [ProcessedRFormula] -> [Formula] -> TCSolver s Universals
 collectUniversals' rfmls extra = do 
   let preds = map (\(Var s x) -> (x, Var s x)) (collectUFs rfmls) 
@@ -360,25 +381,25 @@ generateFreshUniversals env = do
 
 freshenFormula :: Monad s => [String] -> Substitution -> Formula -> TCSolver s Substitution -- APs
 freshenFormula fList subst (Var sort id) 
-  | elem id fList = do
+  | id `elem` fList = do
       var' <- Var sort <$> freshVersion id
       return $ Map.insertWith (\_ x -> x) id var' subst
   | otherwise = return subst
 freshenFormula fList subst (Unary _ fml) =
   freshenFormula fList subst fml
 freshenFormula fList subst (Binary _ fml1 fml2) =
-  Map.union <$> (freshenFormula fList subst fml1) <*> (freshenFormula fList subst fml2)
+  Map.union <$> freshenFormula fList subst fml1 <*> freshenFormula fList subst fml2
 freshenFormula fList subst (Ite i t e) =
-  Map.union <$> (Map.union <$> (freshenFormula fList subst i) <*> 
-    (freshenFormula fList subst t)) <*> (freshenFormula fList subst e)
+  Map.union <$> (Map.union <$> freshenFormula fList subst i <*> 
+    freshenFormula fList subst t) <*> freshenFormula fList subst e
 freshenFormula fList subst (Pred _ _ fmls) = 
-  Map.unions <$> (mapM (freshenFormula fList subst) fmls)
+  Map.unions <$> mapM (freshenFormula fList subst) fmls
 freshenFormula fList subst (Cons _ _ fmls) = 
-  Map.unions <$> (mapM (freshenFormula fList subst) fmls)
+  Map.unions <$> mapM (freshenFormula fList subst) fmls
 freshenFormula _ subst x = return subst
 
 deBrujnOrVee :: Int -> [String]
-deBrujnOrVee n = valueVarName:(take n deBrujns)
+deBrujnOrVee n = valueVarName : take n deBrujns
 
 -- Substitute for _v in potential annotation
 generateSubstFromType :: PendingRSubst -> String -> RType -> PendingRSubst

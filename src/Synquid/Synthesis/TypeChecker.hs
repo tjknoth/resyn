@@ -59,7 +59,11 @@ reconstructTopLevel :: (MonadSMT s, MonadHorn s, RMonad s)
                     => Goal 
                     -> Explorer s RProgram
 reconstructTopLevel (Goal funName env (ForallT a sch) impl depth pos s) = reconstructTopLevel (Goal funName (addTypeVar a env) sch impl depth pos s)
-reconstructTopLevel (Goal funName env (ForallP sig sch) impl depth pos s) = reconstructTopLevel (Goal funName (addBoundPredicate sig env) sch impl depth pos s)
+reconstructTopLevel (Goal funName env (ForallP sig sch) impl depth pos s) = do
+  -- check if pred is resource var
+  when (predSigResSort sig == IntS) $ -- add int-valued pred param as resource var 
+    runInSolver $ resourceVars %= insertRVar (predSigName sig, [])
+  reconstructTopLevel (Goal funName (addBoundPredicate sig env) sch impl depth pos s)
 reconstructTopLevel (Goal funName env (Monotype typ@FunctionT{}) impl depth _ synth) = local (set (_1 . auxDepth) depth) reconstructFix
   where
     reconstructFix = do

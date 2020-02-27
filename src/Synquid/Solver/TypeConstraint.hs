@@ -473,9 +473,9 @@ processPredicate c@(WellFormedPredicate env argSorts BoolS p) = do
   where
     isFreeVariable tass a = not (isBound env a) && not (Map.member a tass)
 processPredicate (WellFormedPredicate env argSorts IntS p) = do
-  let u = p
+  -- let u = p
   --addPredAssignment p (Unknown  u)
-  resourceVars %= insertRVar (u, [])
+  resourceVars %= insertRVar (p, [])
   return ()
 processPredicate c = modify $ addTypingConstraint c
 
@@ -696,7 +696,7 @@ fresh env (ScalarT baseT _ p) = do
       -- Replace predicate arguments with fresh predicate variables:
       let (DatatypeDef tParams pParams _ _ _) = (env ^. datatypes) Map.! name
       -- pArgs' <- mapM (\sig -> freshPred env . map (noncaptureSortSubst tParams (map (toSort . baseTypeOf) tArgs')) . predSigArgSorts $ sig) pParams -- APs: changed to reflect new signature of freshPred 
-      pArgs' <- mapM (\sig -> (freshPred env . map (noncaptureSortSubst tParams (map (toSort . baseTypeOf) tArgs')) $        predSigArgSorts sig) (predSigResSort sig)) pParams
+      pArgs' <- mapM (\sig -> (freshPred env . map (noncaptureSortSubst tParams (map (toSort . baseTypeOf) tArgs')) $ predSigArgSorts sig) (predSigResSort sig)) pParams
       return $ DatatypeT name tArgs' pArgs'
     -- Ensure fresh base type has multiplicity 1 to avoid zeroing other formulas during unification
     --freshBase (TypeVarT subs a m) = return $ TypeVarT subs a defMultiplicity
