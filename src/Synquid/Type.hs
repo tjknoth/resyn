@@ -196,7 +196,7 @@ predsOfPotential intMap t =
         case Map.lookup dt intMap of
           Nothing -> error $ "Datatype " ++ dt ++ " not found when extracting resource predicates"
           Just isInt -> 
-            Set.unions (map go tArgs) `Set.union` Set.unions (map predsOf (filter fst (zip isInt pArgs)))
+            Set.unions (map go tArgs) `Set.union` Set.unions (map (\(_, p) -> predsOf p) (filter fst (zip isInt pArgs)))
       predsFromBase _ = Set.empty in
   case t of
     (ScalarT baseT _ pfml)    -> predsFromBase baseT `Set.union` predsOf pfml 
