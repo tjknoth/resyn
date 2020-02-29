@@ -193,7 +193,8 @@ data DatatypeDef = DatatypeDef {
   _predParams :: [PredSig],         -- ^ Signatures of predicate parameters
   _predVariances :: [Bool],         -- ^ For each predicate parameter, whether it is contravariant
   _constructors :: [Id],            -- ^ Constructor names
-  _wfMetric :: (Maybe Id)           -- ^ Name of the measure that serves as well founded termination metric
+  _wfMetric :: (Maybe Id),          -- ^ Name of the measure that serves as well founded termination metric
+  _resourcePreds :: [Bool]          -- ^ For each predicate parameter, whether or not it appears in potential expressions
 } deriving (Show, Eq, Ord)
 
 makeLenses ''DatatypeDef
@@ -478,6 +479,17 @@ rMeasuresFromSch' typ =
   let rforms = allRFormulas True typ
   in  Set.unions $ map getAllRPreds rforms
 
+extractResourceParams :: BareDeclaration -> [Bool]
+extractResourceParams (DataDecl dtName tParams pVarParams ctors) =
+  let preds = map fst pVarParams 
+      returnsInt ps = predSigResSort ps == IntS
+      computedWith ps = False
+      -- exists a constructor where p occurs in an integer-sorted predicate
+      -- exists a constructor where p occurs in a potential. (not necessary in )
+      usedForResourceAnalysis p = returnsInt p || computedWith p
+  in map usedForResourceAnalysis preds
+extractResourceParams _ = error "extractResourceParams given non-datatype declaration"
+
 -- | 'allMeasurePostconditions' @baseT env@ : all nontrivial postconditions of measures of @baseT@ in case it is a datatype
 allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env =
     let
@@ -537,12 +549,17 @@ scalarSubstituteEnv tass syms =
 refineTop :: Environment -> SType -> RType
 refineTop env (ScalarT (DatatypeT name tArgs []) _ _) = ScalarT (DatatypeT name (map (refineTop env) tArgs) []) ftrue defPotential
 refineTop env (ScalarT (DatatypeT name tArgs pArgs) _ _) =
-  let variances = env ^. (datatypes . to (Map.! name) . predVariances) in
+  let variances = env ^. (datatypes . to (Map.! name) . predVariances) 
+      predSorts = map predSigResSort $ env ^. (datatypes . to (Map.! name) . predParams)
+      makeTop variance BoolS = BoolLit . not $ variance
+      makeTop variance IntS  = ptop  
+  in ScalarT (DatatypeT name (map (refineTop env) tArgs) (zipWith makeTop variances predSorts)) ftrue defPotential
   --ScalarT (DatatypeT name (map (refineTop env) tArgs) (map (BoolLit . not) variances)) ftrue defPotential -- APs: discriminate between pred/AP
-  ScalarT (DatatypeT name (map (refineTop env) tArgs) (case (predSigResSort . head . _predParams $ (env ^. datatypes) Map.! name) of
+  {-(case (predSigResSort . head . _predParams $ (env ^. datatypes) Map.! name) of
                                                          BoolS -> (map (BoolLit . not) variances)
                                                          IntS  -> (map (const ptop) variances))) 
                                                        ftrue defPotential
+  -}
 refineTop _ (ScalarT IntT _ _) = ScalarT IntT ftrue defPotential
 refineTop _ (ScalarT BoolT _ _) = ScalarT BoolT ftrue defPotential
 refineTop _ (ScalarT (TypeVarT vSubst a _) _ _) = ScalarT (TypeVarT vSubst a defMultiplicity) ftrue defPotential

@@ -153,7 +153,7 @@ mkASTLit s ast = Z3Lit s ast <$> astToString ast
 
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
 convertDatatypes _ [] = return ()
-convertDatatypes symbols ((dtName, DatatypeDef [] _ _ ctors@(_:_) _):rest) = do
+convertDatatypes symbols ((dtName, DatatypeDef [] _ _ ctors@(_:_) _ _):rest) = do
   ifM (uses storedDatatypes (Set.member dtName))
     (return ()) -- This datatype has already been processed as a dependency
     (do

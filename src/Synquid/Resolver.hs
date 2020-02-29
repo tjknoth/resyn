@@ -124,12 +124,14 @@ resolveDeclaration (FuncDecl funcName typeSchema) = do
 resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
   let
     (pParams, pVariances) = unzip pVarParams
+    -- resParams = extractResourceParams d
     datatype = DatatypeDef {
       _typeParams = tParams,
       _predParams = pParams,
       _predVariances = pVariances,
       _constructors = map constructorName ctors,
-      _wfMetric = Nothing
+      _wfMetric = Nothing,
+      _resourcePreds = [] -- resParams
     }
   environment %= addDatatype dtName datatype
   let addPreds typ = foldl (flip ForallP) (Monotype typ) pParams
@@ -343,7 +345,7 @@ resolveType s@(ScalarT (DatatypeT name tArgs pArgs) fml pot) = do
       t' <- substituteTypeSynonym name tArgs >>= resolveType
       fml' <- resolveTypeRefinement (toSort $ baseTypeOf t') fml
       return $ addRefinement t' fml'
-    Just (DatatypeDef tParams pParams _ _ _) -> do
+    Just (DatatypeDef tParams pParams _ _ _ _) -> do
       when (length tArgs /= length tParams) $
         throwResError $ text "Datatype" <+> text name <+> text "expected" <+> pretty (length tParams) <+> text "type arguments and got" <+> pretty (length tArgs) <+> pretty tParams
       when (length pArgs /= length pParams) $
@@ -407,7 +409,7 @@ resolveSort s@(DataS name sArgs) = do
   ds <- use $ environment . datatypes
   case Map.lookup name ds of
     Nothing -> throwResError $ text "Datatype" <+> text name <+> text "is undefined in sort" <+> pretty s
-    Just (DatatypeDef tParams _ _ _ _) -> do
+    Just (DatatypeDef tParams _ _ _ _ _) -> do
       let n = length tParams
       when (length sArgs /= n) $ throwResError $ text "Datatype" <+> text name <+> text "expected" <+> pretty n <+> text "type arguments and got" <+> pretty (length sArgs)
       mapM_ resolveSort sArgs

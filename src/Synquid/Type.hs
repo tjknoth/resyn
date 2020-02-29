@@ -177,7 +177,7 @@ varsOfType (FunctionT x tArg tRes _) = varsOfType tArg `Set.union` Set.delete x 
 varsOfType (LetT x tDef tBody) = varsOfType tDef `Set.union` Set.delete x (varsOfType tBody)
 varsOfType AnyT = Set.empty
 
--- | Free variables of a type
+-- | Predicates mentioned in a type
 predsOfType :: RType -> Set Id
 predsOfType (ScalarT baseT fml _) = predsOfBase baseT `Set.union` predsOf fml --`Set.union` predsOf pot
   where
@@ -186,6 +186,24 @@ predsOfType (ScalarT baseT fml _) = predsOfBase baseT `Set.union` predsOf fml --
 predsOfType (FunctionT _ tArg tRes _) = predsOfType tArg `Set.union` predsOfType tRes
 predsOfType (LetT _ tDef tBody) = predsOfType tDef `Set.union` predsOfType tBody
 predsOfType AnyT = Set.empty
+
+-- | Predicates mentioned in an integer-sorted predicate argument position, 
+--     or in a potential annotation 
+predsOfPotential :: Map Id [Bool] -> RType -> Set Id
+predsOfPotential intMap t = 
+  let go = predsOfPotential intMap 
+      predsFromBase (DatatypeT dt tArgs pArgs) = 
+        case Map.lookup dt intMap of
+          Nothing -> error $ "Datatype " ++ dt ++ " not found when extracting resource predicates"
+          Just isInt -> 
+            Set.unions (map go tArgs) `Set.union` Set.unions (map predsOf (filter fst (zip isInt pArgs)))
+      predsFromBase _ = Set.empty in
+  case t of
+    (ScalarT baseT _ pfml)    -> predsFromBase baseT `Set.union` predsOf pfml 
+    (FunctionT _ tArg tRes _) -> go tArg `Set.union` go tRes
+    (LetT _ tDef tBody)       -> go tDef `Set.union`  go tBody
+    AnyT                      -> Set.empty
+
 
 varRefinement x s = Var s valueVarName |=| Var s x
 isVarRefinement (Binary Eq (Var _ v) (Var _ _)) = v == valueVarName
@@ -415,6 +433,7 @@ allRefinementsOf' _ = error "allRefinementsOf called on contextual or any type"
 
 -- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
 -- allRFormulas True = bifoldMap (const []) (: [])
+allRFormulas :: Bool -> RType -> [Formula]
 allRFormulas True t = bifoldMap (const []) (: []) t ++ fTS t
   where --also collecting int-valued predicates 
     fBT BoolT = []
@@ -435,7 +454,6 @@ allRFormulas True t = bifoldMap (const []) (: []) t ++ fTS t
     intRet (Binary Minus _ _) = True
     intRet (Ite _ t e) = intRet t && intRet e
     intRet  _ = False
-
 allRFormulas False t = combine (const []) (: []) t
 
 -- Return a set of all formulas (potential, multiplicity, refinement) of a type. 

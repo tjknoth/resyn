@@ -330,15 +330,17 @@ simplifyConstraint' _ _ (Subtype env t@(ScalarT (DatatypeT name [] (pArg:pArgs))
         then simplifyConstraint (Subtype env (int pArg') (int pArg) consistency)
         else simplifyConstraint (Subtype env (int pArg) (int pArg') consistency)
 -}      
-      if (predSigResSort . head . _predParams $ (env ^. datatypes) Map.! name) == BoolS
+-- This is a bad condition! Need to get return val of actual pred
+      if sortOf pArg == BoolS
+      -- if (predSigResSort . head . _predParams $ (env ^. datatypes) Map.! name) == BoolS
         then if isContra
           then simplifyConstraint (Subtype env (int pArg') (int pArg) consistency)
           else simplifyConstraint (Subtype env (int pArg) (int pArg') consistency)
-        else
-          do
+        else simpleConstraints %= (RSubtype env pArg pArg' :) 
+          -- do
             -- strL <- strip env pArg
             -- strR <- strip env pArg'
-            simpleConstraints %= (RSubtype env pArg pArg' :) 
+            -- simpleConstraints %= (RSubtype env pArg pArg' :) 
       simplifyConstraint (Subtype env (ScalarT (DatatypeT name [] pArgs) fml pot) (ScalarT (DatatypeT name' [] pArgs') fml' pot') consistency)
 simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) True)
   = if isScalarType tArg1
@@ -694,7 +696,7 @@ fresh env (ScalarT baseT _ p) = do
       -- Replace type arguments with fresh types:
       tArgs' <- mapM (fresh env) tArgs
       -- Replace predicate arguments with fresh predicate variables:
-      let (DatatypeDef tParams pParams _ _ _) = (env ^. datatypes) Map.! name
+      let (DatatypeDef tParams pParams _ _ _ _) = (env ^. datatypes) Map.! name
       -- pArgs' <- mapM (\sig -> freshPred env . map (noncaptureSortSubst tParams (map (toSort . baseTypeOf) tArgs')) . predSigArgSorts $ sig) pParams -- APs: changed to reflect new signature of freshPred 
       pArgs' <- mapM (\sig -> (freshPred env . map (noncaptureSortSubst tParams (map (toSort . baseTypeOf) tArgs')) $ predSigArgSorts sig) (predSigResSort sig)) pParams
       return $ DatatypeT name tArgs' pArgs'
