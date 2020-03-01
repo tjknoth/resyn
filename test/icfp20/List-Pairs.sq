@@ -17,8 +17,8 @@ attach = \x. \xs.
     Nil       -> Nil
     Cons y ys -> Cons (Pair x y) (attach x ys)
 
-pairs :: xs: List {a | | 2} <{2}> -[1]-> List (Pair a) <{0}>
-pairs = \xs. 
+pairs :: xs: List {a | | 1} <{2}> -[1]-> List (Pair a) <{0}>
+pairs = \xs.
   match xs with
     Nil       -> Nil
     Cons y ys -> append (attach y ys) (pairs ys)
