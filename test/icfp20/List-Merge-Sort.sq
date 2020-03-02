@@ -13,7 +13,7 @@ measure len :: List a -> Int where
 
 data Tree a <q :: Int> where
   Leaf :: x:a -> Tree a <q>
-  Node :: l: Tree {a | | q} <q>
+  Node :: l: { Tree {a | | q} <q> | | q}
        -> r: Tree {a | | q} <q> 
        -> Tree a <q>
 
@@ -49,7 +49,7 @@ merge = \xs. \ys.
                                     else Cons yh (merge (Cons xh xt) yt)
 
 --takes the contents of a tree and arranges them in a sorted list
-flatten :: Tree {a | | 1} <{1}> -[1]-> List a <{0}>
+flatten :: Tree {a | | 1} <{2}> -[1]-> List a <{0}>
 flatten = \t. 
   match t with
     Leaf x -> Cons x Nil
