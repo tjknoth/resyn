@@ -1,3 +1,6 @@
+data Pair a b where
+  Pair :: a -> b -> Pair a b
+
 data List a <q :: Int> where
   Nil  :: List a <q>
   Cons :: a -> List {a | | q} <q> -> List a <q>
@@ -11,7 +14,7 @@ min = \x. \xs.
         then min y ys 
         else min x ys
 
-remove :: x: a -> xs: List {a| |1} <{0}> -[1]-> List a <{0}>
+remove :: x:a -> xs: List {a| |1} <{0}> -[1]-> List a <{0}>
 remove = \x. \xs.
   match xs with
     Nil       -> Nil
@@ -20,10 +23,8 @@ remove = \x. \xs.
         then ys
         else Cons y (remove x ys)
 
-selectionSort :: List {a | | 5} <{5}> -[1]-> List a <{0}> 
+selectionSort :: List {a | | 4} <{3}> -[1]-> List a <{0}> 
 selectionSort = \xs. 
   match xs with
     Nil       -> Nil
-    Cons y ys ->
-      let m = min y ys in 
-      Cons (m) (selectionSort (remove m xs))
+    Cons y ys -> Cons (min y xs) (remove (min y xs) (selectionSort ys))
