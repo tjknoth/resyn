@@ -1,11 +1,11 @@
-data Pair a b where
-  Pair :: a -> b -> Pair a b
+data Pair a where
+  Pair :: a -> a -> Pair a
 
 data List a <q :: Int> where
   Nil :: List a <q>
   Cons :: a -> List {a | | q} <q> -> List a <q>
 
-partition :: a -> xs:List {a | | 2} <{1}> -[1]-> Pair (List {a | | 2} <{1}>) (List {a | | 1} <{1}>)
+partition :: a -> List {a | | 1} <{1}> -[1]-> Pair (List a <{1}>)
 partition = \p. \xs. 
   match xs with
     Nil -> Pair Nil Nil
@@ -22,7 +22,7 @@ pivotAppend = \p. \xs. \ys.
     Nil -> Cons p ys
     Cons z zs -> Cons z (pivotAppend p zs ys)
 
-quickSort :: xs: List {a | | 1} <{1}> -[0.5]-> List a <{0}>
+quickSort :: xs: List {a | | 2} <{2}> -[1]-> List a <{0}>
 quickSort = \xs. 
   match xs with
     Nil -> Nil
