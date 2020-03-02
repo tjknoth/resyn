@@ -2,6 +2,7 @@ data EList a <q :: Int> where
   Nil  :: EList a <q>
   Cons :: x: {a | | q} -> xs: EList a <{q + q}> -> EList a <q>
 
+subsetSum :: EList {a | | 2} <{2}> -[1]-> EList a <{0}>
 subsetSum = \xs. \target.
   match xs with
     Nil        -> target == 0
