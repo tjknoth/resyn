@@ -1,0 +1,59 @@
+data Pair a where
+  Pair :: a -> a -> Pair a
+
+data List a <q :: Int> where
+  Nil  :: List a <q>
+  Cons :: a -> List {a | | q} <q> -> List a <q>
+
+split :: <q :: Int>. List {a | | 1} <{q}> -[1]-> Pair (List a <{q}>)
+split = \xs. 
+  match xs with
+    Nil       -> Pair Nil Nil
+    Cons y ys -> 
+      match split ys with 
+        Pair u v -> Pair (Cons y v) u
+
+merge :: List {a | | 1} <{0}> -> List {a | | 1} <{0}> -[1]-> List a <{0}> 
+merge = \ps. \qs.
+  match ps with
+    Nil       -> qs
+    Cons x xs ->
+      match qs with
+        Nil       -> ps
+        Cons y ys -> 
+          if x < y
+            then Cons x (Cons y (merge xs ys))
+            else Cons y (Cons x (merge xs ys))
+{-
+merge :: List a <{1}> -> List a <{1}> -[1]-> List a <{0}>
+merge = \ps. \qs. 
+  match ps with
+    Nil       -> qs
+    Cons x xs ->
+      match qs with
+        Nil       -> ps
+        Cons y ys -> 
+          match xs with
+            Nil         -> 
+              match ys with
+                Nil         -> if x < y then Cons x (Cons y Nil) else Cons y (Cons x Nil)
+                Cons y' ys' -> if x < y 
+                                 then Cons x qs 
+                                 else if x < y' 
+                                        then Cons y (Cons x ys)
+                                        else Cons y (Cons y' (merge (Cons x Nil) ys'))
+            Cons x' xs' -> if x' < y then Cons x (Cons x' (Cons y (merge xs' ys)))
+                                       else if y < x then Cons y (Cons x (Cons x' (merge xs' ys)))
+                                                     else Cons x (Cons y (Cons x' (merge xs' ys)))
+-}
+
+mergeSort :: List {a | | 2} <{2}> -[1]-> List a <{0}>
+mergeSort = \xs.
+  match xs with
+    Nil       -> Nil
+    Cons y ys ->   
+      match ys with
+        Nil       -> Cons y Nil
+        Cons z zs ->
+          match split xs with
+            Pair u v -> merge (mergeSort u) (mergeSort v)
