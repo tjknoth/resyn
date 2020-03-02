@@ -8,7 +8,7 @@ snoc = \x. \xs.
     Nil       -> Cons x Nil
     Cons y ys -> Cons y (snoc x ys)
 
-reverse :: xs: List {a | | 1} <{1}> -[1]-> List a <{0}>
+reverse :: xs: List {a | | 2} <{1}> -[1]-> List a <{0}>
 reverse = \xs. 
   match xs with                       --xs :: List {a | | 1} <{1}>
     Nil       -> Nil                  --y :: {a | | 1}, ys :: List {a | | 2} <{1}>
