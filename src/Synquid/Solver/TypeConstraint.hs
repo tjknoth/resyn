@@ -213,6 +213,7 @@ simplifyConstraint c = do
   pass <- use predAssignment
   simplifyConstraint' tass pass c
 
+simplifyConstraint' _ _ c@RSubtype{} = simpleConstraints %= (c :)
 -- Any type: drop
 simplifyConstraint' _ _ (Subtype _ _ AnyT _) = return ()
 simplifyConstraint' _ _ (Subtype _ AnyT _ _) = return ()
@@ -474,7 +475,7 @@ processPredicate c@(WellFormedPredicate env argSorts BoolS p) = do
       addQuals u (pq (addAllVariables args env') args vars)
   where
     isFreeVariable tass a = not (isBound env a) && not (Map.member a tass)
-processPredicate (WellFormedPredicate env argSorts IntS p) = do
+processPredicate (WellFormedPredicate env _ IntS p) = do
   -- let u = p
   --addPredAssignment p (Unknown  u)
   resourceVars %= insertRVar (p, [])
@@ -591,14 +592,22 @@ processConstraint (SharedEnv env envl envr)
       let cs = zipWith3 (partitionType cm env) scalars scalarsl scalarsr
       --let fpc = SharedForm env (_freePotential env) (_freePotential envl) (_freePotential envr)
       --let cfpc = SharedForm env (totalConditionalFP env) (totalConditionalFP envl) (totalConditionalFP envr)
-      simpleConstraints %= (concat cs ++)
+      mapM_ processConstraint (concat cs)
+      -- simpleConstraints %= (concat cs ++)
       --simpleConstraints %= (fpc :)
       --simpleConstraints %= (cfpc :)
 processConstraint (ConstantRes env) = do
   tass <- use typeAssignment
   let env' = over symbols (scalarSubstituteEnv tass) env
   simpleConstraints %= (ConstantRes env' :)
-processConstraint c@SharedForm{} = simpleConstraints %= (c :)
+-- processConstraint c@SharedForm{} = simpleConstraints %= (c :)
+processConstraint c@(SharedForm env f g h) = do
+  pass <- use predAssignment
+  -- traceM $ "Substituting in " ++ show (plain (pretty c))
+  let f' = substitutePredicate pass f 
+  let g' = substitutePredicate pass g 
+  let h' = substitutePredicate pass h 
+  simpleConstraints %= (SharedForm env f' g' h' :)
 processConstraint (Transfer envIn envOut) = do
   tass <- use typeAssignment
   let envIn' = over symbols (scalarSubstituteEnv tass) envIn
@@ -683,13 +692,15 @@ fresh :: MonadHorn s => Environment -> RType -> TCSolver s RType
 fresh env (ScalarT b@(TypeVarT vSubst a m) _ p) | not (isBound env a) = do
   -- Free type variable: replace with fresh free type variable
   a' <- freshId "A"
-  p' <- safeFreshPot env (Just b) p
+  -- p' <- safeFreshPot env (Just b) p
+  p' <- freshPotentials env (Just b) p
   return $ ScalarT (TypeVarT vSubst a' m) ftrue p'
 fresh env (ScalarT baseT _ p) = do
   baseT' <- freshBase baseT
   -- Replace refinement with fresh predicate unknown:
   k <- freshId "U"
-  p' <- safeFreshPot env (Just baseT) p
+  -- p' <- safeFreshPot env (Just baseT) p
+  p' <- freshPotentials env (Just baseT) p
   return $ ScalarT baseT' (Unknown Map.empty k) p'
   where
     freshBase (DatatypeT name tArgs _) = do
@@ -739,13 +750,13 @@ setUnknownRecheck name valuation duals = do
                                   invalidConstraints = Set.intersection liveClauses (invalidConstraints c) }) cands'' -- Remove Horn clauses produced by now eliminated code
 
 -- | 'matchConsType' @formal@ @actual@ : unify constructor return type @formal@ with @actual@
-matchConsType formal@(ScalarT (DatatypeT d vars pVars) _ _) actual@(ScalarT (DatatypeT d' args pArgs) _ p) | d == d'
+matchConsType env formal@(ScalarT (DatatypeT d vars pVars) _ _) actual@(ScalarT (DatatypeT d' args pArgs) _ p) | d == d'
   = do
       writeLog 3 $ text "Matching constructor type" $+$ pretty formal $+$ text "with scrutinee" $+$ pretty actual
       zipWithM_ (\(ScalarT (TypeVarT _ a _) ftrue _) t -> addTypeAssignment a t) vars args
       -- zipWithM_ (\(Pred BoolS p _) fml -> addPredAssignment p fml) pVars pArgs -- APs: Modified signature to match against APs as well as predicates
       zipWithM_ (\(Pred _ p _) fml -> addPredAssignment p fml) pVars pArgs
-matchConsType t t' = error $ show $ text "matchConsType: cannot match" <+> pretty t <+> text "against" <+> pretty t'
+matchConsType _ t t' = error $ show $ text "matchConsType: cannot match" <+> pretty t <+> text "against" <+> pretty t'
 
 currentAssignment :: Monad s => RType -> TCSolver s RType
 currentAssignment t = do

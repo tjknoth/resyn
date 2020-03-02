@@ -245,7 +245,7 @@ reconstructCase :: (MonadSMT s, MonadHorn s, RMonad s)
                 -> Explorer s (Case RType)
 reconstructCase env scrVar pScrutinee t c@(Case consName args iBody) consT = cut $ do
   -- matchConsType simply assigns type variables appropriately
-  runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
+  runInSolver $ matchConsType env (lastType consT) (typeOf pScrutinee)
   consT' <- runInSolver $ currentAssignment consT 
   (syms, ass) <- caseSymbols env scrVar args consT'
   caseEnv <- foldM (\e (x, t) -> safeAddVariable x t e) (addAssumption ass env) syms

@@ -59,7 +59,7 @@ solveResourceConstraints accConstraints constraints = do
     let result = if b then "SAT" else "UNSAT"
     writeLog 7 $ nest 4 $ text "Accumulated resource constraints:"
       $+$ pretty (map bodyFml accConstraints)
-    writeLog 3 $ nest 4 $ text "Solved resource constraint after conjoining formulas:"
+    writeLog 8 $ nest 4 $ text "Solved resource constraint after conjoining formulas:"
       <+> text result $+$ prettyConjuncts (map bodyFml constraintList)
     return $ if b
       then Just constraintList -- $ Just $ if hasUniversals
@@ -89,8 +89,8 @@ generateFormula' checkMults c = do
     RSubtype env pl pr -> do
       op <- subtypeOp
       --substs <- generateFreshUniversals env
-      substs1 <- freshenFormula freeParams Map.empty pl
-      substs2 <- freshenFormula freeParams Map.empty pr
+      substs1 <- freshenFormula env freeParams pl
+      substs2 <- freshenFormula env freeParams pr
       let substs = Map.union substs1 substs2
       let fml = mkRForm substs Map.empty $ pl `op` pr
       embedAndProcessConstraint env Nothing fml 
@@ -138,10 +138,11 @@ embedAndProcessConstraint env extra rfml = do
       _unknownAssumptions = ()
     } -}
 
-translateAndFinalize :: RMonad s => RawRFormula -> TCSolver s ProcessedRFormula 
+translateAndFinalize :: (MonadHorn s, RMonad s) => RawRFormula -> TCSolver s ProcessedRFormula 
 translateAndFinalize rfml = do 
   writeLog 3 $ indent 4 $ pretty (bodyFml rfml)
-  z3lit <- lift . lift . lift $ translate $ bodyFml rfml
+  rfml' <- replaceAbstractPotentials rfml
+  z3lit <- lift . lift . lift $ translate $ bodyFml rfml'
   return $ rfml {
     _knownAssumptions = ftrue,
     _unknownAssumptions = (),
@@ -198,7 +199,9 @@ replaceAbsPreds _ f = f
 instantiateUnknowns :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
 instantiateUnknowns rfml = do 
   unknown' <- assignUnknowns (_unknownAssumptions rfml)
+  fml' <- assignUnknownsInFml (_rconstraints rfml)
   return $ set unknownAssumptions Set.empty
+         $ set rconstraints fml'
          $ over knownAssumptions (Set.union unknown') rfml
 
 
@@ -379,24 +382,34 @@ generateFreshUniversals env = do
       x' <- freshVersion x 
       return $ Var (sortFrom sch) x'
 
-freshenFormula :: Monad s => [String] -> Substitution -> Formula -> TCSolver s Substitution -- APs
-freshenFormula fList subst (Var sort id) 
+
+-- new version:
+-- generate fresh value var if it's present
+-- then traverse formula, generating de bruijns as needed (and passing upwards)
+
+freshenFormula :: Monad s => Environment -> [String] -> Formula -> TCSolver s Substitution
+freshenFormula env fList f = do
+  subst <- generateFreshUniversals env
+  freshenFormula' fList subst f
+
+freshenFormula' :: Monad s => [String] -> Substitution -> Formula -> TCSolver s Substitution -- APs
+freshenFormula' fList subst (Var sort id) 
   | id `elem` fList = do
       var' <- Var sort <$> freshVersion id
       return $ Map.insertWith (\_ x -> x) id var' subst
   | otherwise = return subst
-freshenFormula fList subst (Unary _ fml) =
-  freshenFormula fList subst fml
-freshenFormula fList subst (Binary _ fml1 fml2) =
-  Map.union <$> freshenFormula fList subst fml1 <*> freshenFormula fList subst fml2
-freshenFormula fList subst (Ite i t e) =
-  Map.union <$> (Map.union <$> freshenFormula fList subst i <*> 
-    freshenFormula fList subst t) <*> freshenFormula fList subst e
-freshenFormula fList subst (Pred _ _ fmls) = 
-  Map.unions <$> mapM (freshenFormula fList subst) fmls
-freshenFormula fList subst (Cons _ _ fmls) = 
-  Map.unions <$> mapM (freshenFormula fList subst) fmls
-freshenFormula _ subst x = return subst
+freshenFormula' fList subst (Unary _ fml) =
+  freshenFormula' fList subst fml
+freshenFormula' fList subst (Binary _ fml1 fml2) =
+  Map.union <$> freshenFormula' fList subst fml1 <*> freshenFormula' fList subst fml2
+freshenFormula' fList subst (Ite i t e) =
+  Map.union <$> (Map.union <$> freshenFormula' fList subst i <*> 
+    freshenFormula' fList subst t) <*> freshenFormula' fList subst e
+freshenFormula' fList subst (Pred _ _ fmls) = 
+  Map.unions <$> mapM (freshenFormula' fList subst) fmls
+freshenFormula' fList subst (Cons _ _ fmls) = 
+  Map.unions <$> mapM (freshenFormula' fList subst) fmls
+freshenFormula' _ subst x = return subst
 
 deBrujnOrVee :: Int -> [String]
 deBrujnOrVee n = valueVarName : take n deBrujns
@@ -526,10 +539,11 @@ getVVFromType (ScalarT _ ref _) = findVV ref
         findVV _ = error $ show $ text "getVVFromType: ill-formed refinement:" <+> pretty ref
 getVVFromType t = error $ show $ text "getVVFromType: non-scalar type:" <+> pretty t
 
-getAnnotationStyle sch = getAnnotationStyle' (getPredParamsSch sch) (toMonotype sch)
+getAnnotationStyle :: Map String [Bool] -> RSchema -> Maybe AnnotationDomain 
+getAnnotationStyle flagMap sch = getAnnotationStyle' flagMap (getPredParamsSch sch) (toMonotype sch)
 
-getAnnotationStyle' predParams t =
-  let rforms = conjunction $ allRFormulas True t
+getAnnotationStyle' flagMap predParams t =
+  let rforms = conjunction $ allRFormulas flagMap t
       allVars = getVarNames t
   in case (hasVar allVars rforms, hasMeasure predParams rforms) of
       (True, True)  -> Just Both
@@ -537,10 +551,11 @@ getAnnotationStyle' predParams t =
       (True, _)     -> Just Variable
       _             -> Nothing
 
-getPolynomialDomain sch = getPolynomialDomain' (getPredParamsSch sch) (toMonotype sch)
+getPolynomialDomain :: Map String [Bool] -> RSchema -> Maybe AnnotationDomain
+getPolynomialDomain flagMap sch = getPolynomialDomain' flagMap (getPredParamsSch sch) (toMonotype sch)
 
-getPolynomialDomain' predParams t = 
-  let rforms = conjunction $ allRFormulas True t 
+getPolynomialDomain' flagMap predParams t = 
+  let rforms = conjunction $ allRFormulas flagMap t 
       allVars = getVarNames t
   in case (hasVarITE allVars rforms, hasMeasureITE predParams rforms) of 
       (True, True)  -> Just Both

@@ -472,18 +472,19 @@ allRMeasuresOf dtName env = Map.filterWithKey checkM $ env ^. measureDefs
 
 allRMeasures env = Map.filterWithKey (\m _ -> m `Set.member` (env ^. resourceMeasures)) $ env ^. measureDefs
 
-rMeasuresFromSch :: RSchema -> Set String
-rMeasuresFromSch sch = rMeasuresFromSch' (toMonotype sch)
+rMeasuresFromSch :: Map Id [Bool] -> RSchema -> Set String
+rMeasuresFromSch flagMap sch = rMeasuresFromSch' flagMap (toMonotype sch)
 
-rMeasuresFromSch' typ =
-  let rforms = allRFormulas True typ
+rMeasuresFromSch' flagMap typ =
+  let rforms = allRFormulas flagMap typ
   in  Set.unions $ map getAllRPreds rforms
 
 extractResourceParams :: BareDeclaration -> [Bool]
 extractResourceParams (DataDecl dtName tParams pVarParams ctors) =
   let preds = map fst pVarParams 
       returnsInt ps = predSigResSort ps == IntS
-      computedWith ps = False
+      isInt = map returnsInt preds
+      computedWith ps = any (Set.member (predSigName ps)) (map (\(ConstructorSig _ t) -> (predsOfPotential isInt t)) ctors)
       -- exists a constructor where p occurs in an integer-sorted predicate
       -- exists a constructor where p occurs in a potential. (not necessary in )
       usedForResourceAnalysis p = returnsInt p || computedWith p
@@ -737,7 +738,8 @@ getAllCArgsFromType :: Environment -> RType -> ArgMap
 getAllCArgsFromType env (FunctionT x argT resT _) = 
   let vv = Var (toSort (baseTypeOf argT)) x 
       measures = Map.keys (env ^. measureDefs)
-      allForms = allRFormulas True argT
+      flagMap = fmap _resourcePreds $ env ^. datatypes
+      allForms = allRFormulas flagMap argT
       cargs = Map.unionsWith combineArgLists $ map (getAllCArgs vv) allForms
   in  Map.union cargs (getAllCArgsFromType env resT) 
 getAllCArgsFromType _ LetT{}    = error "getAllCArgsFromType: Contextual type in top-level schema." 

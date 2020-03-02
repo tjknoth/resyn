@@ -210,7 +210,7 @@ applyPolynomial' mkPolynomial pendingSubs subs f =
     Pred s x fs   -> Pred s x <$> mapM sub fs
     Cons s x fs   -> Cons s x <$> mapM sub fs 
     All q f       -> All q <$> sub f -- there shouldn't be foralls by now anyway
-    Unknown{}     -> error "applySynthesisPolynomial: condition unknown present"
+    Unknown s x   -> error $ "applySynthesisPolynomial: condition unknown " ++ x ++ " present"
     lit           -> return lit
 
 

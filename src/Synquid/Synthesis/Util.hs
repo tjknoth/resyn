@@ -336,21 +336,42 @@ schFreshPotentials :: MonadHorn s
                    -> RSchema
                    -> TCSolver s RSchema
 schFreshPotentials env (Monotype t) =
-  Monotype <$> freshPotentials env t 
+  Monotype <$> freshPotentialsType env t 
 schFreshPotentials env (ForallT x t) =
   ForallT x <$> schFreshPotentials env t 
 schFreshPotentials env (ForallP x t) =
   ForallP x <$> schFreshPotentials env t 
 
 -- Replace potentials in a TypeSkeleton
-freshPotentials :: MonadHorn s
-                => Environment
-                -> RType
-                -> TCSolver s RType
-freshPotentials env (ScalarT base fml p) = do
+
+-- Retain conditional structure of potentials in a type when freshening
+freshPotentialsType :: MonadHorn s
+                    => Environment
+                    -> RType
+                    -> TCSolver s RType
+freshPotentialsType env (ScalarT base fml p) = do
+  pass <- use predAssignment
+  -- traceM $ "freshening: " ++ show (plain (pretty p)) ++ " where " ++ show pass
   base' <- freshMultiplicities env base
-  p' <- freshPotentials' env base p
+  p' <- freshPotentialsType' env base (substitutePredicate pass p)
   return $ ScalarT base' fml p'
+-- freshPotentials _ t = return t
+
+freshPotentialsType' :: MonadHorn s => Environment -> RBase -> Formula -> TCSolver s Formula
+freshPotentialsType' env base pot = 
+  case itesOf pot of
+    [] -> safeFreshPot env (Just base) pot
+    -- xs -> sumFormulas <$> mapM (\(Ite g t f) -> Ite g <$> safeFreshPot env (Just base) t <*> safeFreshPot env (Just base) f) xs
+    xs -> sumFormulas <$> mapM (\(Ite g t f) -> Ite g <$> freshPot env (Just base) <*> freshPot env (Just base)) xs
+
+-- Retain conditional structure of formula when freshening
+freshPotentials :: MonadHorn s => Environment -> Maybe RBase -> Formula -> TCSolver s Formula
+-- freshPotentials env rb (Ite g t f) = Ite g <$> safeFreshPot env rb t <*> safeFreshPot env rb f
+-- freshPotentials env rb f = safeFreshPot env rb f
+freshPotentials env rb (Ite g t f) = Ite g <$> freshPot env rb <*> freshPot env rb
+freshPotentials env rb f = freshPot env rb
+
+
 {-
 freshPotentials env (ScalarT base fml (Ite g t f)) = do
     t' <- safeFreshPot env (Just base) t
@@ -361,9 +382,10 @@ freshPotentials env (ScalarT base fml pot) = do
   pot' <- safeFreshPot env (Just base) pot
   base' <- freshMultiplicities env base
   return $ ScalarT base' fml pot'
--}
 freshPotentials _ t = return t
+-}
 
+{-
 freshPotentials' env base (Ite g t f) = do
   t' <- safeFreshPot env (Just base) t
   f' <- safeFreshPot env (Just base) f
@@ -373,6 +395,8 @@ freshPotentials' env base (Unary op p) =
 freshPotentials' env base (Binary op f g) = 
   Binary op <$> freshPotentials' env base f <*> freshPotentials' env base g
 freshPotentials' env base pot = safeFreshPot env (Just base) pot
+-}
+
 
 -- Replace potentials in a BaseType
 freshMultiplicities :: MonadHorn s
@@ -383,7 +407,7 @@ freshMultiplicities env b@(TypeVarT s x m) = do
   m' <- freshMul env Nothing
   return $ TypeVarT s x m'
 freshMultiplicities env (DatatypeT x ts ps) = do
-  ts' <- mapM (freshPotentials env) ts
+  ts' <- mapM (freshPotentialsType env) ts
   return $ DatatypeT x ts' ps
 freshMultiplicities _ t = return t
 
@@ -622,6 +646,11 @@ assignUnknowns fmls = do
   return $ Set.map fromJust $ Set.filter isJust $ Set.map (fmap conjunction . getUnknown sol) fmls
   where 
     getUnknown solution (Unknown _ u) = Map.lookup u solution
+
+assignUnknownsInFml :: MonadHorn s => Formula -> TCSolver s Formula
+assignUnknownsInFml fml = do
+  sol <- solution . head <$> use candidates
+  return $ applySolution sol fml
   
 -- | 'instantiateConsAxioms' @env fml@ : If @fml@ contains constructor applications, return the set of instantiations of constructor axioms for those applications in the environment @env@
 instantiateConsAxioms :: Environment -> Bool -> Maybe Formula -> Formula -> Set Formula

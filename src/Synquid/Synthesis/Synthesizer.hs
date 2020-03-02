@@ -51,8 +51,8 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _constantRes = _constantTime rArgs,
                         _cegisMax = rArgs^.cegisBound,
                         _enumAndCheck = _enumerate rArgs,
-                        _cegisDomain = getAnnotationStyle (gSpec goal),
-                        _polynomialDomain = getPolynomialDomain (gSpec goal),
+                        _cegisDomain = getAnnotationStyle (fmap _resourcePreds (gEnvironment goal ^. datatypes)) (gSpec goal),
+                        _polynomialDomain = getPolynomialDomain (fmap _resourcePreds (gEnvironment goal ^. datatypes)) (gSpec goal),
                         _incrementalCEGIS = _increment rArgs
                       }
       in do cp0 <- lift $ lift startTiming  -- TODO time stats for this one as well?

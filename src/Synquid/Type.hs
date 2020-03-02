@@ -12,6 +12,7 @@ import qualified Data.Map as Map
 import Data.Map (Map)
 import Data.Bifunctor
 import Data.Bifoldable
+import Data.Maybe (catMaybes)
 
 import Debug.Trace
 
@@ -71,12 +72,6 @@ type RSchema = SchemaSkeleton RType
 
 -- | Refinement base type
 type RBase = BaseType Formula Formula
-
--- Like bifoldMap but doesn't consider base types
-combine f g (ScalarT b r p) = f r `mappend` g p
-combine f g (FunctionT _ argT resT _) = combine f g argT `mappend` combine f g resT
-combine f g (LetT _ _ bodyT) = combine f g bodyT
-combine _ _ AnyT = mempty
 
 -- Ignore multiplicity and potential when comparing baseTypes
 equalShape :: RBase -> RBase -> Bool
@@ -189,14 +184,11 @@ predsOfType AnyT = Set.empty
 
 -- | Predicates mentioned in an integer-sorted predicate argument position, 
 --     or in a potential annotation 
-predsOfPotential :: Map Id [Bool] -> RType -> Set Id
-predsOfPotential intMap t = 
-  let go = predsOfPotential intMap 
+predsOfPotential :: [Bool] -> RType -> Set Id
+predsOfPotential isInt t = 
+  let go = predsOfPotential isInt
       predsFromBase (DatatypeT dt tArgs pArgs) = 
-        case Map.lookup dt intMap of
-          Nothing -> error $ "Datatype " ++ dt ++ " not found when extracting resource predicates"
-          Just isInt -> 
-            Set.unions (map go tArgs) `Set.union` Set.unions (map (\(_, p) -> predsOf p) (filter fst (zip isInt pArgs)))
+        Set.unions (map go tArgs) `Set.union` Set.unions (map (\(_, p) -> predsOf p) (filter fst (zip isInt pArgs)))
       predsFromBase _ = Set.empty in
   case t of
     (ScalarT baseT _ pfml)    -> predsFromBase baseT `Set.union` predsOf pfml 
@@ -432,34 +424,26 @@ allRefinementsOf' (FunctionT _ argT resT _) = allRefinementsOf' argT ++ allRefin
 allRefinementsOf' _ = error "allRefinementsOf called on contextual or any type"
 
 -- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
--- allRFormulas True = bifoldMap (const []) (: [])
-allRFormulas :: Bool -> RType -> [Formula]
-allRFormulas True t = bifoldMap (const []) (: []) t ++ fTS t
-  where --also collecting int-valued predicates 
-    fBT BoolT = []
-    fBT IntT  = []
-    fBT (DatatypeT x ts ps) = foldr f [] ts ++ foldr g [] ps
-    fBT (TypeVarT subs x m) = []
-    fTS (ScalarT b r p) = fBT b
-    fTS (FunctionT x argT resT c) = fTS argT ++ fTS resT
-    fTS (LetT x t bodyT) = fTS t ++ fTS bodyT
-    fTS AnyT = []
-    f t' ts' = fTS t' ++ ts'
-    g p' ps' = if intRet p' then p':ps' else ps'
-    intRet (IntLit _) = True
-    intRet (Var _ _) = True
-    intRet (Unary Neg _) = True
-    intRet (Binary Times _ _) = True
-    intRet (Binary Plus _ _) = True
-    intRet (Binary Minus _ _) = True
-    intRet (Ite _ t e) = intRet t && intRet e
-    intRet  _ = False
-allRFormulas False t = combine (const []) (: []) t
+allRFormulas :: Map Id [Bool] -> RType -> [Formula]
+allRFormulas flagMap t = 
+  let concretePotentials = bifoldMap (const []) (: []) t
+      abstractPotentials = allAbstractPotentials flagMap t 
+  in concretePotentials ++ abstractPotentials
+ -- collect potential annotations
+ -- collect resource preds
 
--- Return a set of all formulas (potential, multiplicity, refinement) of a type. 
---   Doesn't mean anything necesssarily, used to embed environment assumptions
-allFormulasOf True = bifoldMap Set.singleton Set.singleton
-allFormulasOf False = combine Set.singleton Set.singleton 
+allAbstractPotentials :: Map Id [Bool] -> RType -> [Formula]
+allAbstractPotentials flagMap (ScalarT b _ pot) = allAbstractPotentialsBase flagMap b
+allAbstractPotentials flagMap (FunctionT _ argT resT _) = allAbstractPotentials flagMap argT ++ allAbstractPotentials flagMap resT
+allAbstractPotentials flagMap (LetT _ tDef tBody) = allAbstractPotentials flagMap tDef ++ allAbstractPotentials flagMap tBody
+allAbstractPotentials _ AnyT = []
+
+allAbstractPotentialsBase :: Map Id [Bool] -> RBase -> [Formula]
+allAbstractPotentialsBase flagMap (DatatypeT dt ts preds) = 
+  case Map.lookup dt flagMap of
+    Nothing     -> error $ "allAbstractPotentialsBase: datatype " ++ dt ++ " not found"
+    Just rflags -> catMaybes $ zipWith (\isRes pred -> if isRes then Just pred else Nothing) rflags preds
+allAbstractPotentialsBase _ _ = []
 
 allArgSorts :: RType -> [Sort]
 allArgSorts (FunctionT _ (ScalarT b _ _) resT _) = toSort b : allArgSorts resT

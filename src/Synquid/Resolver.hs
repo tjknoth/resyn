@@ -83,7 +83,8 @@ resolveDecls declarations =
         spec = allSymbols env Map.! name
         myMutuals = Map.findWithDefault [] name allMutuals
         toRemove = drop (fromJust $ elemIndex name allNames) allNames \\ myMutuals -- All goals after and including @name@, except mutuals
-        env' = (foldr removeVariable env toRemove) { _resourceMeasures = rMeasuresFromSch spec }
+        flagMap = fmap _resourcePreds (env ^. datatypes)
+        env' = (foldr removeVariable env toRemove) { _resourceMeasures = rMeasuresFromSch flagMap spec }
       in Goal name env' spec impl 0 pos synth
     extractPos pass (Pos pos decl) = do
       currentPosition .= pos
@@ -124,14 +125,14 @@ resolveDeclaration (FuncDecl funcName typeSchema) = do
 resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
   let
     (pParams, pVariances) = unzip pVarParams
-    -- resParams = extractResourceParams d
+    resParams = extractResourceParams d
     datatype = DatatypeDef {
       _typeParams = tParams,
       _predParams = pParams,
       _predVariances = pVariances,
       _constructors = map constructorName ctors,
       _wfMetric = Nothing,
-      _resourcePreds = [] -- resParams
+      _resourcePreds = resParams
     }
   environment %= addDatatype dtName datatype
   let addPreds typ = foldl (flip ForallP) (Monotype typ) pParams

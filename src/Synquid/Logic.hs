@@ -248,6 +248,16 @@ unknownsOf =
       uSetAlg f               = Set.empty
   in cata uSetAlg
 
+-- collect guards of ITE expressions
+--   careful, this should only be used on resource formulas!
+itesOf :: Formula -> [Formula]
+itesOf = 
+  let alg (IteF g t f)    = [Ite (fst g) (fst t) (fst f)] -- Assumes no nested ITEs!
+      alg (UnaryF _ x)    = snd x
+      alg (BinaryF _ x y) = snd x ++ snd y
+      alg f = []
+  in para alg
+
 
 -- | 'posNegUnknowns' @fml@: sets of positive and negative predicate unknowns in @fml@
 posNegUnknowns :: Formula -> (Set Id, Set Id)
@@ -427,6 +437,7 @@ substitute subst =
           _     -> All v' (snd e)
       sAlg f = embedLit "substitute" f
   in para sAlg
+
 
 -- | Compose substitutions
 composeSubstitutions old new =

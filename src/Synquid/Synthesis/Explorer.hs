@@ -183,7 +183,7 @@ generateFirstCase env scrVar pScrutinee t consName =
     Nothing -> error $ show $ text "Datatype constructor" <+> text consName <+> text "not found in the environment" <+> pretty env
     Just consSch -> do
       consT <- instantiate env consSch True []
-      runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
+      runInSolver $ matchConsType env (lastType consT) (typeOf pScrutinee)
       consT' <- runInSolver $ currentAssignment consT
       binders <- replicateM (arity consT') (runInSolver (freshVar env "x"))
       (syms, ass) <- caseSymbols env scrVar binders consT'
@@ -216,7 +216,7 @@ generateCase env scrVar pScrutinee t consName =
     Nothing -> error $ show $ text "Datatype constructor" <+> text consName <+> text "not found in the environment" <+> pretty env
     Just consSch -> do
       consT <- instantiate env consSch True []
-      runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
+      runInSolver $ matchConsType env (lastType consT) (typeOf pScrutinee)
       consT' <- runInSolver $ currentAssignment consT
       binders <- replicateM (arity consT') (runInSolver (freshVar env "x"))
       (syms, ass) <- caseSymbols env scrVar binders consT'
