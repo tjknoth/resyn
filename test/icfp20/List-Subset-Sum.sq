@@ -1,9 +1,9 @@
 data EList a <q :: Int> where
   Nil  :: EList a <q>
-  Cons :: x: {a | | q} -> xs: EList a <{q + q}> -> EList a <q>
+  Cons :: x: {a | | q} -> xs: EList a <{2*q}> -> EList a <q>
 
-subsetSum :: EList {Int | | 2} <{2}> -> Int -[1]-> Bool
+subsetSum :: EList Int <{2}> -> Int -[1]-> Bool
 subsetSum = \xs. \target.
   match xs with
-    Nil        -> target == 0
+    Nil        -> target == 0  
     Cons hd tl -> (subsetSum tl (target - hd)) || (subsetSum tl target)
