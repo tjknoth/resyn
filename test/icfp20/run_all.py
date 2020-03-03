@@ -67,9 +67,9 @@ ALL_BENCHMARKS = [
         Benchmark('List-Quick-Flatten', 'quick sort flatten', ['-f=NONTERMINATING']),
         ]),
     BenchmarkGroup("Value-Dependent", [], [
-        Benchmark('List-InsertSort', 'insertion sort (fine)', ['-f=NONTERMINATING']),
+        Benchmark('List-InsertSort', 'insertion sort (fine)', ['-f=NONTERMINATING', '--inc-cegis=FALSE']),
         Benchmark('BST-Member', 'BT member', ['-f=NONTERMINATING']),
-        Benchmark('BST-Insert', 'BT insert', ['-f=NONTERMINATING'])
+        Benchmark('BST-Insert', 'BT insert', ['-f=NONTERMINATING', '--inc-cegis=FALSE'])
         ])
 ]
 
