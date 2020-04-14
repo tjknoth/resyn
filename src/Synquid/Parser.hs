@@ -23,8 +23,6 @@ import Text.Parsec.Indent
 import Text.Parsec.Error
 import Text.PrettyPrint.ANSI.Leijen (text, vsep)
 
-import Debug.Trace
-
 {- Interface -}
 
 type Parser a = IndentParser String () a
@@ -82,9 +80,7 @@ angles = Token.angles lexer
 brackets = Token.brackets lexer
 parens = Token.parens lexer
 braces = Token.braces lexer
-comma = Token.comma lexer
 commaSep = Token.commaSep lexer
-commaSep1 = Token.commaSep1 lexer
 dot = Token.dot lexer
 
 {- Declarations -}
@@ -501,7 +497,9 @@ attachPosBefore = liftM2 Pos getPosition
 
 {- Debug -}
 
+{-
 printCurPos :: String -> Parser ()
 printCurPos msg = do
   pos <- getPosition
   trace (msg ++ show pos) $ return ()
+-}

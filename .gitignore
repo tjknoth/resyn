@@ -43,3 +43,4 @@ experiments/*
 micro
 results
 *.smt2
+.ghci

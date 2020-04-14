@@ -14,8 +14,6 @@ import Data.Bifunctor
 import Data.Bifoldable
 import Data.Maybe (catMaybes)
 
-import Debug.Trace
-
 {- Type skeletons -}
 
 data BaseType r p = 

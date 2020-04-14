@@ -38,6 +38,7 @@ Library
                     , Synquid.Solver.Resource
                     , Synquid.Solver.TypeConstraint
                     , Synquid.Solver.Types
+                    , Synquid.Solver.CVC4
                     , Synquid.Stats
                     , Synquid.Synthesis.Explorer
                     , Synquid.Synthesis.Synthesizer

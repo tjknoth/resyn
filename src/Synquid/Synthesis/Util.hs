@@ -25,7 +25,6 @@ import Control.Monad.State
 import Control.Monad.Reader
 import Control.Lens
 import Control.Monad.Extra (mapMaybeM)
-import Data.Key (mapWithKeyM)
 import Debug.Trace
 
 {- Types -}
@@ -39,6 +38,7 @@ data FixpointStrategy =
 
 -- | Choices for the order of e-term enumeration
 data PickSymbolStrategy = PickDepthFirst | PickInterleave
+
 
 -- | Parameters of program exploration
 data ExplorerParams = ExplorerParams {
@@ -61,7 +61,7 @@ data ExplorerParams = ExplorerParams {
   _explorerLogLevel :: Int,               -- ^ How verbose logging is
   _shouldCut :: Bool,                     -- ^ Should cut the search upon synthesizing a functionally correct branch
   _numPrograms :: Int,                    -- ^ Number of programs to search for
-  _resourceArgs :: ResourceArgs           -- ^ Arguments relevant to resource analysis
+  _explorerResourceArgs :: ResourceArgs   -- ^ Arguments relevant to resource analysis
 }
 
 makeLenses ''ExplorerParams
@@ -119,7 +119,7 @@ addConstraint c = typingState %= addTypingConstraint c
 -- | When constant-time flag is set, add the appropriate constraint
 addCTConstraint :: MonadHorn s => Environment -> Explorer s ()
 addCTConstraint env = do
-  checkCT <- asks . view $ _1 . resourceArgs . constantTime
+  checkCT <- asks . view $ _1 . explorerResourceArgs . constantTime
   let c = ConstantRes env 
   when checkCT $ addConstraint c
 
@@ -420,7 +420,9 @@ addScrutineeToEnv env pScr tScr = do
   --checkres <- asks . view $ _1 . resourceArgs . checkRes
   (x, env') <- toVar (addScrutinee pScr env) pScr
   varName <- runInSolver $ freshId "x"
-  let tScr' = addPotential (typeMultiply fzero tScr) (fromMaybe fzero (topPotentialOf tScr))
+  -- TODO: is this wrong?? probably not bc of sharing + unification? Had tscr' defined but not used...
+  -- Should tscr' be added to env'?
+  -- let tScr' = addPotential (typeMultiply fzero tScr) (fromMaybe fzero (topPotentialOf tScr))
   return (x, env')
 
 -- | Generate subtyping constraint
@@ -501,9 +503,6 @@ freshRestructuredPotentials env = do
   -- syms' <- safeFreshPotentials env True
   let syms' = zeroTopLevel env
   return (syms', cfps')
-  where
-    getCond (ScalarT _ _ (Ite g t f)) = Just (Ite g t f)
-    getCond _                         = Nothing
 
 gatherCondPotential :: Set String -> String -> RSchema -> Maybe Formula
 gatherCondPotential ghosts x sch =

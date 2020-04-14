@@ -11,7 +11,7 @@ import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
-import Data.Functor.Foldable (Recursive(..), Corecursive(..), Base(..))
+import Data.Functor.Foldable (Recursive(..), Corecursive(..))
 import Data.Functor.Foldable.TH
 
 import Control.Lens hiding (both, para)

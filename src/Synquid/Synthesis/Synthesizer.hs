@@ -24,7 +24,6 @@ import Control.Monad.State
 import Control.Lens
 import qualified Data.Set as Set
 import qualified Data.Map as Map
-import Debug.Trace
 
 type HornSolver = FixPointSolver Z3State
 
@@ -38,7 +37,6 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
     -- | Stream of programs that satisfy the specification or type error
     reconstruction :: HornSolver (Either ErrorMessage [(RProgram, TypingState)], TimeStats)
     reconstruction = let
-        rArgs = _resourceArgs explorerParams
         typingParams = TypingParams {
                         _condQualsGen = condQuals,
                         _matchQualsGen = matchQuals,
@@ -46,14 +44,9 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _predQualsGen = predQuals,
                         _tcSolverSplitMeasures = _splitMeasures explorerParams,
                         _tcSolverLogLevel = _explorerLogLevel explorerParams,
-                        _checkResourceBounds = _checkRes rArgs,
-                        _checkMultiplicities = _checkMults rArgs,
-                        _constantRes = _constantTime rArgs,
-                        _cegisMax = rArgs^.cegisBound,
-                        _enumAndCheck = _enumerate rArgs,
                         _cegisDomain = getAnnotationStyle (fmap _resourcePreds (gEnvironment goal ^. datatypes)) (gSpec goal),
                         _polynomialDomain = getPolynomialDomain (fmap _resourcePreds (gEnvironment goal ^. datatypes)) (gSpec goal),
-                        _incrementalCEGIS = _increment rArgs
+                        _resourceArgs = _explorerResourceArgs explorerParams
                       }
       in do cp0 <- lift $ lift startTiming  -- TODO time stats for this one as well?
             res <- reconstruct explorerParams typingParams goal
@@ -167,6 +160,7 @@ extractCondFromType env vars t@(FunctionT _ tArg _ _) = case lastType t of
     _ -> []
 extractCondFromType _ _ _ = []
 
+{-
 extractPredQGenFromQual :: Bool -> Environment -> [Formula] -> [Formula] -> Formula -> [Formula]
 extractPredQGenFromQual useAllArgs env actualParams actualVars fml =
   if null actualParams
@@ -181,6 +175,7 @@ extractPredQGenFromQual useAllArgs env actualParams actualVars fml =
     filterAllArgs = if useAllArgs
                       then filter (\q -> Set.fromList actualParams `Set.isSubsetOf` varsOf q)  -- Only take the qualifiers that use all predicate parameters
                       else id
+-}
 
 extractPredQGenFromType :: Bool -> Environment -> [Formula] -> [Formula] -> RType -> [Formula]
 extractPredQGenFromType useAllArgs env actualParams actualVars t = extractPredQGenFromType' t
@@ -211,7 +206,7 @@ extractPredQGenFromType useAllArgs env actualParams actualVars t = extractPredQG
       let extractFromPArg pArg =
             let
               pArg' = sortSubstituteFml sortInst pArg
-              (formalParams, formalVars) = partition isParam (Set.toList $ varsOf pArg')
+              (_, formalVars) = partition isParam (Set.toList $ varsOf pArg')
               -- atoms = Set.toList $ (atomsOf pArg' `Set.union` conjunctsOf pArg') -- Uncomment this to enable disjunctive qualifiers
               atoms = Set.toList $ atomsOf pArg'
               extractFromAtom atom =
@@ -220,19 +215,6 @@ extractPredQGenFromType useAllArgs env actualParams actualVars t = extractPredQG
       in extractFromRefinement fml {-++ extractFromRefinement pot-} ++ concatMap extractFromPArg pArgs ++ concatMap extractPredQGenFromType' tArgs
     extractPredQGenFromType' (ScalarT _ fml pot) = extractFromRefinement fml -- ++ extractFromRefinement pot
     extractPredQGenFromType' (FunctionT _ tArg tRes _) = extractPredQGenFromType' tArg ++ extractPredQGenFromType' tRes
-
-allPredApps :: Environment -> [Formula] -> Int -> [Formula]
-allPredApps _ actuals 0 = actuals
-allPredApps env actuals n =
-  let smallerApps = allPredApps env actuals (n - 1)
-  in smallerApps ++ predAppsOneStep smallerApps
-  where
-    predAppsOneStep actuals = do
-      (pName, sorts) <- Map.toList (env ^. globalPredicates)
-      let (resSort:argSorts) = instantiateSorts sorts
-      let formals = zipWith Var argSorts deBrujns
-      let app = Pred resSort pName formals
-      allRawSubstitutions env app formals actuals [] []
 
 -- | 'allSubstitutions' @env qual nonsubstActuals formals actuals@:
 -- all well-typed substitutions of @actuals@ for @formals@ in a qualifier @qual@

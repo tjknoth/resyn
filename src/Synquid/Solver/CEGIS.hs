@@ -17,23 +17,19 @@ module Synquid.Solver.CEGIS (
   runCEGIS
 ) where
 
-import Synquid.Type hiding (set)
 import Synquid.Logic
 import Synquid.Pretty
 import Synquid.Program
 import Synquid.Solver.Monad
 import Synquid.Solver.Types
-import qualified Synquid.Z3 as Z3
 
 import Data.Maybe
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Set (Set)
 import qualified Data.Set as Set
 import Control.Lens
 import Control.Monad.State
 import Control.Monad.Reader (asks)
-import qualified Z3.Monad as Z3
 import Debug.Trace
 
 type CEGISSolver s = StateT CEGISState s
@@ -114,7 +110,7 @@ verify rfmls universals = do
     $ (modelGetAssignment (map fst (ufuns universals)) <$> model)
   return $ CX <$> measures <*> vars <*> model
 
-
+{-
 verifyOnePass :: RMonad s 
               => [ProcessedRFormula]
               -> CEGISSolver s (Maybe ([ProcessedRFormula], Counterexample))
@@ -136,7 +132,7 @@ verifyOnePass rfmls = do
       vars <- lift $ modelGetAssignment allVars md 
       funs <- lift $ modelGetAssignment allFuns md 
       return $ Just (rfmls', CX funs vars md)
-
+-}
 
 -- | 'getRelevantPreds' @rfml cx program polynomials@
 -- Given a counterexample @cx@, a @program@, and a list of verification conditions @rfmls@
@@ -239,9 +235,6 @@ mkParamPolynomial cx poly = sumFormulas <$> mapM (pTermForProg (allVariables cx)
 mkSimplePolynomial :: RMonad s => Map String Formula -> Polynomial -> CEGISSolver s Formula
 mkSimplePolynomial cx poly = sumFormulas <$> mapM (pTermForPrinting cx) poly
 
-polynomialVars :: Polynomial -> Formula
-polynomialVars poly = sumFormulas $ mapMaybe (fmap snd . universal) poly 
-
 -- | Assemble a polynomial term, given a variable prefix and a universally quantified expression
 mkPTerm :: String -> Formula -> PolynomialTerm
 mkPTerm prefix fml = PolynomialTerm coeff (Just (fmlStr, fml))
@@ -250,8 +243,6 @@ mkPTerm prefix fml = PolynomialTerm coeff (Just (fmlStr, fml))
     fmlStr = universalToString fml
 
 coefficientsOf = map coefficient
-
-defaultInterp = fzero
 
 pTermForEval :: RMonad s => ResourceSolution -> Map String Formula -> PolynomialTerm -> CEGISSolver s Formula
 pTermForEval coeffVals cx (PolynomialTerm c Nothing) =

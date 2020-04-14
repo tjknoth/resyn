@@ -1,4 +1,4 @@
-    {-# LANGUAGE DeriveDataTypeable, StandaloneDeriving #-}
+{-# LANGUAGE DeriveDataTypeable, StandaloneDeriving #-}
 
 module Main where
 
@@ -15,6 +15,7 @@ import Synquid.Synthesis.Util
 import Synquid.HtmlOutput
 import Synquid.Codegen
 import Synquid.Stats
+import Synquid.Solver.Types
 
 import Control.Monad
 import System.Exit
@@ -26,7 +27,6 @@ import Data.Map ((!))
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 import Control.Lens ((.~), (^.), (%~))
-import Debug.Trace
 
 import Data.List.Split
 
@@ -43,14 +43,15 @@ main = do
                lfp bfs
                out_file out_module outFormat resolve
                print_spec print_stats log_ 
-               resources mult forall cut nump constTime cegis_max ec inc_cegis) -> do
-                  let resArgs = defaultResourceArgs {
-                    _checkRes = resources,
-                    _checkMults = mult,
+               resources mult forall cut nump constTime cegis_max ec res_solver) -> do
+                  let 
+                    resArgs = defaultResourceArgs {
+                    _shouldCheckResources = resources,
+                    _checkMultiplicities = mult,
                     _constantTime = constTime,
                     _cegisBound = cegis_max,
                     _enumerate = ec,
-                    _increment = inc_cegis
+                    _rsolver = res_solver
                   }
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
@@ -68,7 +69,7 @@ main = do
                     _explorerLogLevel = log_,
                     _shouldCut = not cut,
                     _numPrograms = nump,
-                    _resourceArgs = resArgs
+                    _explorerResourceArgs = resArgs
                   }
                   let solverParams = defaultHornSolverParams {
                     isLeastFixpoint = lfp,
@@ -94,6 +95,11 @@ deriving instance Typeable FixpointStrategy
 deriving instance Data FixpointStrategy
 deriving instance Eq FixpointStrategy
 deriving instance Show FixpointStrategy
+
+deriving instance Typeable ResourceSolver
+deriving instance Data ResourceSolver
+deriving instance Eq ResourceSolver
+deriving instance Show ResourceSolver
 
 {-# ANN module "HLint: ignore Use camelCase" #-}
 {-# ANN module "HLint: ignore Redundant bracket" #-}
@@ -138,7 +144,7 @@ data CommandLineArgs
         ct :: Bool,
         cegis_max :: Int,
         eac :: Bool,
-        inc_cegis :: Bool
+        res_solver :: ResourceSolver
       }
   deriving (Data, Typeable, Show, Eq)
 
@@ -175,7 +181,7 @@ synt = Synthesis {
   ct                  = False           &= help ("Require that all branching expressions consume a constant amount of resources (default: False)"),
   cegis_max           = 100             &= help ("Maximum number of iterations through the CEGIS loop (default: 100)"),
   eac                 = False           &= help ("Enumerate-and-check instead of round-trip resource analysis (default: False)"),
-  inc_cegis           = True            &= help ("Incremental CEGIS solving (default: True)")
+  res_solver          = Incremental     &= help (unwords ["Which solver should be used for resource constraints?", show CVC4, show CEGIS, show Incremental, "(default: ", show Incremental, ")"])
   } &= auto &= help "Synthesize goals specified in the input file"
     where
       defaultFormat = outputFormat defaultSynquidParams
@@ -207,16 +213,16 @@ defaultExplorerParams = ExplorerParams {
   _explorerLogLevel = 0,
   _shouldCut = True,
   _numPrograms = 1,
-  _resourceArgs = defaultResourceArgs
+  _explorerResourceArgs = defaultResourceArgs
 }
 
 defaultResourceArgs = ResourceArgs {
-  _checkRes = True,
-  _checkMults = True,
+  _shouldCheckResources = True,
+  _checkMultiplicities = True,
   _constantTime = False,
   _cegisBound = 100,
   _enumerate = False,
-  _increment = True
+  _rsolver = Incremental
 }
 
 -- | Parameters for constraint solving
@@ -353,7 +359,7 @@ runOnFile synquidParams explorerParams solverParams codegenParams file libs = do
 
     updateExplorerParams eParams goal =
       let eParams' = explorerLogLevel %~ updateLogLevel goal $ eParams
-      in resourceArgs . checkRes .~ ((gSynthesize goal) && (eParams ^. (resourceArgs . checkRes))) $ eParams'
+      in explorerResourceArgs . shouldCheckResources .~ ((gSynthesize goal) && (eParams ^. (explorerResourceArgs . shouldCheckResources))) $ eParams'
 
     updateSolverParams sParams goal = sParams { solverLogLevel = (updateLogLevel goal (solverLogLevel sParams))}
 

@@ -40,14 +40,12 @@ import Synquid.Solver.Resource
 import Synquid.Solver.CEGIS (initCEGISState)
 
 import Data.Maybe
-import Data.List
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Logic (msum)
 import Control.Monad.Trans.Except (throwE)
 import Control.Lens hiding (both)
 import Debug.Trace
@@ -83,9 +81,6 @@ initTypingState goal = do
 --   expressions
 initialFormulas :: Environment -> Set Id
 initialFormulas = {- Set.insert valueVarName . -} Set.fromList . Map.keys . nonGhostScalars -- . Map.mapWithKey toFml . nonGhostScalars 
-  where 
-    schToSort = toSort . baseTypeOf . toMonotype
-    toFml x sch = Var (schToSort sch) x
 
 {- Top-level constraint solving interface -}
 
@@ -105,8 +100,8 @@ solveTypeConstraints = do
   solveHornClauses
   checkTypeConsistency
 
-  res <- asks _checkResourceBounds
-  eac <- asks _enumAndCheck
+  res <- view (resourceArgs . shouldCheckResources) 
+  eac <- view (resourceArgs . enumerate) 
   when res $
     if eac
       then simplifyRCs scs
@@ -118,7 +113,7 @@ solveTypeConstraints = do
 -- Solve resource constraints on final pass of enumerate-and-check algorithm
 finalSolveRCs :: (MonadSMT s, MonadHorn s, RMonad s) => TCSolver s ()
 finalSolveRCs = do
-  res <- asks _checkResourceBounds
+  res <- view (resourceArgs . shouldCheckResources) 
   -- Ensures EAC actually verifies the bounds
   when res $ checkResources [SharedForm emptyEnv fzero fzero fzero]
 
@@ -224,41 +219,27 @@ simplifyConstraint' _ _ (Subtype _ (ScalarT (DatatypeT _ _ _) _ _) t _) | t == a
 -- simplifyConstraint' _ pass c@(WellFormedPredicate _ _ p) | p `Map.member` pass = return () -- APs: Just adjusted signature
 simplifyConstraint' _ pass c@(WellFormedPredicate _ _ _ p) | p `Map.member` pass = return () 
 
--- Strip away potentials -- This is a little janky. Is there a better way than matching everything that is NOT a type var?
--- Bound type variables: can compare potentials
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@(TypeVarT _ a _) rl pl) tr@(ScalarT br@(TypeVarT _ b _) rr pr) False)
   | isBound env a && isBound env b && pr /= fzero
-    = do -- APs: modifying Subtype case to strip formulas before simplification
-        -- strL <- strip env pl
-        -- strR <- strip env pr
-        -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
+    = do 
         addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT bl rl fzero) (ScalarT br rr fzero) False)
 -- Data types: can compare potentials
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@DatatypeT{} rl pl) tr@(ScalarT br@DatatypeT{} rr pr) False)
   | pr /= fzero
     = do
-        -- strL <- strip env pl
-        -- strR <- strip env pr
-        -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
         addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT bl rl pl) (ScalarT br rr fzero) False)
 -- Bools
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT BoolT rl pl) tr@(ScalarT BoolT rr pr) False)
   | pr /= fzero
     = do
-        -- strL <- strip env pl
-        -- strR <- strip env pr
-        -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
         addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT BoolT rl pl) (ScalarT BoolT rr fzero) False)
 -- Ints
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT IntT rl pl) tr@(ScalarT IntT rr pr) False)
   | pr /= fzero
     = do
-        -- strL <- strip env pl
-        -- strR <- strip env pr
-        -- simpleConstraints %= (RSubtype (addVariable valueVarName tl env) pl pr :)
         addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT IntT rl pl) (ScalarT IntT rr fzero) False)
 
@@ -266,17 +247,13 @@ simplifyConstraint' _ _ (Subtype env tl@(ScalarT IntT rl pl) tr@(ScalarT IntT rr
 -- Type variable with known assignment: substitute
 simplifyConstraint' tass _ (Subtype env tv@(ScalarT (TypeVarT _ a _) _ p) t variant)
   | a `Map.member` tass
-    = let tv' = typeSubstitute tass tv
-      in --trace ("subst for " ++ show a ++ " + " ++ show p ++ " yielding " ++ show tv') $ 
-         simplifyConstraint (Subtype env (typeSubstitute tass tv) t variant)
+  = simplifyConstraint (Subtype env (typeSubstitute tass tv) t variant)
 simplifyConstraint' tass _ (Subtype env t tv@(ScalarT (TypeVarT _ a _) _ p) variant)
   | a `Map.member` tass
-    = let tv' = typeSubstitute tass tv
-      in -- trace ("subst for " ++ show a ++ " + " ++ show p ++ " yielding " ++ show tv') $ 
-         simplifyConstraint (Subtype env t (typeSubstitute tass tv) variant)
+  = simplifyConstraint (Subtype env t (typeSubstitute tass tv) variant)
 simplifyConstraint' tass _ (WellFormed env tv@(ScalarT (TypeVarT _ a _) _ _))
   | a `Map.member` tass
-    = simplifyConstraint (WellFormed env (typeSubstitute tass tv))
+  = simplifyConstraint (WellFormed env (typeSubstitute tass tv))
 
 -- Don't do shit yet, wait until type assignment is finalized
 simplifyConstraint' tass _ c@SharedEnv{} =
@@ -339,9 +316,6 @@ simplifyConstraint' _ _ (Subtype env t@(ScalarT (DatatypeT name [] (pArg:pArgs))
           else simplifyConstraint (Subtype env (int pArg) (int pArg') consistency)
         else simpleConstraints %= (RSubtype env pArg pArg' :) 
           -- do
-            -- strL <- strip env pArg
-            -- strR <- strip env pArg'
-            -- simpleConstraints %= (RSubtype env pArg pArg' :) 
       simplifyConstraint (Subtype env (ScalarT (DatatypeT name [] pArgs) fml pot) (ScalarT (DatatypeT name' [] pArgs') fml' pot') consistency)
 simplifyConstraint' _ _ (Subtype env (FunctionT x tArg1 tRes1 _) (FunctionT y tArg2 tRes2 _) True)
   = if isScalarType tArg1
@@ -384,48 +358,6 @@ simplifyConstraint' _ _ c@SharedForm{} = simpleConstraints %= (c :)
 simplifyConstraint' _ _ (Subtype _ t t' _) =
   throwError $ text  "Cannot match shape" <+> squotes (pretty $ shape t) $+$ text "with shape" <+> squotes (pretty $ shape t')
 
--- | Takes a formula and replaces each AP with a variable that has the same id
-strip :: Monad s => Environment -> Formula -> TCSolver s Formula
-strip env p = case p of
-  BoolLit _           -> do writeLog 4 $ text $ "stripping bool: " ++ (show p)
-                            return p
-  IntLit _            -> do writeLog 4 $ text $ "stripping int: " ++ (show p)
-                            return p
-  SetLit _ _          -> do writeLog 4 $ text $ "stripping set: " ++ (show p)
-                            return p
-  Var _ _             -> do writeLog 4 $ text $ "stripping var: " ++ (show p)
-                            return p
-  Unknown _ _         -> do writeLog 4 $ text $ "stripping unknown: " ++ (show p)
-                            return p
-  Unary op fml        -> do writeLog 4 $ text $ "stripping unary: " ++ (show p)
-                            strf <- strip env fml
-                            return $ Unary op strf
-  Binary op fml1 fml2 -> do writeLog 4 $ text $ "stripping bin: " ++ (show p)
-                            strf1 <- strip env fml1
-                            strf2 <- strip env fml2
-                            return $ Binary op strf1 strf2
-  Ite i t e           -> do writeLog 4 $ text $ "stripping ite: " ++ (show p)
-                            stri <- strip env i
-                            strt <- strip env t
-                            stre <- strip env e
-                            return $ Ite i strt stre
-  Pred sort id _      -> do writeLog 4 $ text $ show (env ^. boundPredicates)
-                            if sort == BoolS
-                              then do writeLog 4 $ text $ "stripping pred:"
-                                      return p
-                              else do writeLog 4 $ text $ "stripping AP: " ++ (show p)
-                                      resourceVars %= insertRVar (id, [])
-                                      pass <- use predAssignment
-                                      tass <- use typeAssignment
-                                      let subst = sortSubstituteFml (asSortSubst tass) . substitutePredicate pass
-                                      simpleConstraints %= (RSubtype env (Var sort id) (subst p) :) 
-                                      simpleConstraints %= (RSubtype env (subst p) (Var sort id) :) 
-                                      return $ Var sort id
-  Cons _ _ _          -> do writeLog 4 $ text $ "stripping constructor app: " ++ (show p)
-                            return p
-  All _ _             -> do writeLog 4 $ text $ "stripping forall: " ++ (show p)
-                            return p
-  _                   ->    return p
 
 -- | Unify type variable @a@ with type @t@ or fail if @a@ occurs in @t@
 unify env a t = if a `Set.member` typeVarsOf t
@@ -588,7 +520,7 @@ processConstraint (SharedEnv env envl envr)
       let scalars = Map.assocs $ substAndGetScalars env
       let scalarsl = Map.elems $ substAndGetScalars envl
       let scalarsr = Map.elems $ substAndGetScalars envr
-      cm <- asks _checkMultiplicities
+      cm <- view (resourceArgs . checkMultiplicities) 
       let cs = zipWith3 (partitionType cm env) scalars scalarsl scalarsr
       --let fpc = SharedForm env (_freePotential env) (_freePotential envl) (_freePotential envr)
       --let cfpc = SharedForm env (totalConditionalFP env) (totalConditionalFP envl) (totalConditionalFP envr)

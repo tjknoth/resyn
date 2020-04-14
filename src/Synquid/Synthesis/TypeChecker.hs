@@ -22,7 +22,6 @@ import Control.Monad.Logic
 import Control.Monad.Reader
 import Control.Lens
 import qualified Data.Set as Set
-import Debug.Trace
 
 
 -- | 'reconstruct' @eParams tParams goal@ : reconstruct missing types and terms in the body of @goal@ so that it represents a valid type judgment;
@@ -37,7 +36,7 @@ reconstruct eParams tParams goal = do
     initTS <- initTypingState goal'
     runExplorer (eParams { _sourcePos = gSourcePos goal' }) tParams (Reconstructor reconstruct') initTS (go goal')
   where
-    reconstruct' = if tParams ^. enumAndCheck then reconstructAndCheck else reconstructTopLevel
+    reconstruct' = if tParams^.(resourceArgs . enumerate) then reconstructAndCheck else reconstructTopLevel
     go g = do
       pMain <- reconstruct' g { gDepth = _auxDepth eParams }  -- Reconstruct the program
       p <- flip insertAuxSolutions pMain <$> use solvedAuxGoals      -- Insert solutions for auxiliary goals stored in @solvedAuxGoals@
@@ -190,7 +189,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
     (cEnv, bEnv) <- shareContext env 
     pCond <- inContext (\p -> Program (PIf p (Program PHole t) (Program PHole t)) t) 
       $ reconstructIE cEnv (ScalarT BoolT ftrue defPotential) iCond
-    let (bEnv', ScalarT BoolT cond pot) = embedContext bEnv $ typeOf pCond
+    let (bEnv', ScalarT BoolT cond _) = embedContext bEnv $ typeOf pCond
     pThen <- inContext (\p -> Program (PIf pCond p (Program PHole t)) t) 
       $ reconstructI (addAssumption (substitute (Map.singleton valueVarName ftrue) cond) bEnv') t iThen
     pElse <- inContext (\p -> Program (PIf pCond pThen p) t) 
@@ -305,8 +304,8 @@ reconstructE' env typ p@(PApp iFun iArg) = do
   (env1, env2, fp'') <- shareAndExtractFP env fp cfps 
   pFun <- inContext (\p -> Program (PApp p uHole) typ) 
     $ reconstructE env1 (FunctionT x AnyT typ defCost) iFun
-  let tp@(FunctionT x tArg tRes _) = typeOf pFun
-  let (FunctionT x' tArg' tRes' _) = shiftCost tp
+  let tp@(FunctionT x _ _ _) = typeOf pFun
+  let (FunctionT _ tArg' tRes' _) = shiftCost tp
   pApp <- if isFunctionType tArg'
     then do -- Higher-order argument: its value is not required for the function type, enqueue an auxiliary goal
       d <- asks . view $ _1 . auxDepth

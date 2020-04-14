@@ -12,6 +12,8 @@ import Data.Map (Map)
 import qualified Z3.Monad as Z3
 import Control.Lens
 
+data ResourceSolver = CVC4 | CEGIS | Incremental
+
 -- Resource Constraint body AST
 
 data LinearExp a = 

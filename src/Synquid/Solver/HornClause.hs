@@ -11,9 +11,9 @@ module Synquid.Solver.HornClause (
   ) where
 
 import Synquid.Logic
-import Synquid.Solver.Monad
 import Synquid.Util
 import Synquid.Pretty
+import Synquid.Solver.Monad
 
 import Data.List
 import Data.Maybe
@@ -24,8 +24,7 @@ import qualified Data.Map as Map
 import Control.Monad
 import Control.Monad.Reader
 import Control.Lens hiding (both)
-
-import Debug.Trace
+import Debug.Trace (traceShow)
 
 {- Interface -}
 
@@ -244,7 +243,6 @@ strengthen qmap extractAssumptions fml@(Binary Implies lhs rhs) sol = do
     unknownsList = Set.toList unknowns
     lhsQuals = setConcatMap (Set.fromList . lookupQualsSubst qmap) unknowns   -- available qualifiers for the whole antecedent
     usedLhsQuals = setConcatMap (valuation sol) unknowns `Set.union` knownConjuncts      -- already used qualifiers for the whole antecedent
-    rhsVars = Set.map varName $ varsOf rhs
     assumptions = setConcatMap extractAssumptions lhsQuals `Set.union`
                   setConcatMap extractAssumptions knownConjuncts `Set.union`
                   extractAssumptions rhs

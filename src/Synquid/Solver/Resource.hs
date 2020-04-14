@@ -27,11 +27,9 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.List (tails, union, isPrefixOf)
-import Data.Tuple.Extra (first)
+import Data.List (tails)
 import Control.Monad.Logic
 import Control.Monad.Reader
-import Control.Monad.State
 import Control.Lens
 import Debug.Trace
 
@@ -72,7 +70,7 @@ generateFormula :: (MonadHorn s, RMonad s)
                 => Constraint
                 -> TCSolver s ProcessedRFormula
 generateFormula c = do
-  checkMults <- asks _checkMultiplicities
+  checkMults <- view (resourceArgs . checkMultiplicities) 
   generateFormula' checkMults c
 
 generateFormula' :: (MonadHorn s, RMonad s)
@@ -218,8 +216,8 @@ instantiateAxioms env rfml = do
 replaceCons f@Cons{} = mkFuncVar f
 replaceCons f = f
 
-replacePred f@Pred{} = mkFuncVar f
-replacePred f = f
+-- replacePred f@Pred{} = mkFuncVar f
+-- replacePred f = f
 
 -- Instantiate universally quantified expressions
 -- Generate congruence axioms
@@ -283,40 +281,58 @@ satisfyResources rfmls = do
           writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (snd m'))
           return True
     else do
-      ufmls <- map (Var IntS) . Set.toList <$> use universalVars
-      --traceM $ "vars: " ++ show (plain (pretty ufmls))
-      universals <- collectUniversals' rfmls ufmls
-      cMax <- asks _cegisMax
-      cstate <- updateCEGISState
+      solver <- view (resourceArgs . rsolver)
+      deployHigherOrderSolver solver rfmls
 
-      writeLog 3 $ text "Solving resource constraint with CEGIS:"
-      writeLog 5 $ pretty $ conjunction $ map completeFml rfmls
-      logUniversals  
-      
-      let go = solveWithCEGIS cMax rfmls universals
-      (sat, cstate') <- runInSolver $ runCEGIS go cstate
-      storeCEGISState cstate'
-      return sat
+deployHigherOrderSolver :: RMonad s
+                        => ResourceSolver
+                        -> [ProcessedRFormula] 
+                        -> TCSolver s Bool
+-- Solve with synthesizer
+deployHigherOrderSolver CVC4 rfmls = do
+  error "CVC4 not yet supported"
+-- Solve with CEGIS (incremental or not)
+deployHigherOrderSolver _ rfmls = do
+  let runInSolver = lift . lift . lift
+  ufmls <- map (Var IntS) . Set.toList <$> use universalVars
+  --traceM $ "vars: " ++ show (plain (pretty ufmls))
+  universals <- collectUniversals rfmls ufmls
+  cMax <- view (resourceArgs . cegisBound) 
+  cstate <- updateCEGISState
+
+  writeLog 3 $ text "Solving resource constraint with CEGIS:"
+  writeLog 5 $ pretty $ conjunction $ map completeFml rfmls
+  logUniversals  
+  
+  let go = solveWithCEGIS cMax rfmls universals
+  (sat, cstate') <- runInSolver $ runCEGIS go cstate
+  storeCEGISState cstate'
+  return sat
+
 
 storeCEGISState :: Monad s => CEGISState -> TCSolver s ()
 storeCEGISState st = do 
   cegisState .= st
-  incremental <- asks _incrementalCEGIS
+  let isIncremental s = 
+        case s of
+          Incremental -> True
+          _           -> False
+  incremental <- isIncremental <$> view (resourceArgs . rsolver) 
   -- For non-incremental solving, don't reset resourceVars
   when incremental $
     resourceVars .= Map.empty
 
 -- Given a list of resource constraints, assemble the relevant universally quantified 
 --   expressions for the CEGIS solver: renamed variables, constructor and measure applications
-collectUniversals :: Monad s => [ProcessedRFormula] -> TCSolver s Universals
-collectUniversals rfmls = do 
-  let preds = map (\(Var s x) -> (x, Var s x)) (collectUFs rfmls) 
-  return $ Universals (formatUniversals (collectVars rfmls)) preds
+-- collectUniversals :: Monad s => [ProcessedRFormula] -> TCSolver s Universals
+-- collectUniversals rfmls = do 
+--   let preds = map (\(Var s x) -> (x, Var s x)) (collectUFs rfmls) 
+--   return $ Universals (formatUniversals (collectVars rfmls)) preds
 
 -- A different version of collectUniversals. 
 --  Allows a list of extra formulas
-collectUniversals' :: Monad s => [ProcessedRFormula] -> [Formula] -> TCSolver s Universals
-collectUniversals' rfmls extra = do 
+collectUniversals :: Monad s => [ProcessedRFormula] -> [Formula] -> TCSolver s Universals
+collectUniversals rfmls extra = do 
   let preds = map (\(Var s x) -> (x, Var s x)) (collectUFs rfmls) 
   return $ Universals (formatUniversals (extra ++ collectVars rfmls)) preds
 
@@ -461,11 +477,6 @@ isResourceConstraint ConstantRes{} = True
 isResourceConstraint Transfer{}    = True
 isResourceConstraint _             = False
 
--- Return refinement of scalar type
-refinementOf :: RType -> Formula
-refinementOf (ScalarT _ fml _) = fml
-refinementOf _                 = error "error: Encountered non-scalar type when generating resource constraints"
-
 -- Instantiate universally quantified expression with all possible arguments in the
 --   quantified position. Also generate congruence axioms.
 -- POSSIBLE PROBLEM: this doesn't really recurse looking for arbitrary foralls
@@ -518,26 +529,9 @@ assertCongruence allApps = map assertCongruence' (pairs allApps)
     pairs xs = [(x, y) | (x:ys) <- tails xs, y <- ys]
 
 assertCongruence' (pl@(Pred _ ml largs), pr@(Pred _ mr rargs)) =
-  --conjunction (zipWith (|=|) largs rargs) |=>| (mkvar pl |=| mkvar pr)
   conjunction (zipWith (|=|) largs rargs) |=>| (pl |=| pr)
-  where
-    mkvar = transformFml mkFuncVar
 assertCongruence' ms = error $ show $ text "assertCongruence: called with non-measure formulas:"
   <+> pretty ms
-
--- | 'getValueVarSubst' @env fml@ : Given a context and formula, find the valuation of _v
---    by inspecting its refinement of the form _v :: { B | _v == x }
---    and return this substitution [x / _v]
-getValueVarSubst :: Environment -> Substitution
-getValueVarSubst env =
-  case Map.lookup valueVarName (symbolsOfArity 0 env) of
-    Nothing -> Map.empty
-    Just sc -> Map.singleton valueVarName $ getVVFromType (toMonotype sc)
-
-getVVFromType (ScalarT _ ref _) = findVV ref
-  where findVV (Binary Eq (Var _ "_v") right) = right
-        findVV _ = error $ show $ text "getVVFromType: ill-formed refinement:" <+> pretty ref
-getVVFromType t = error $ show $ text "getVVFromType: non-scalar type:" <+> pretty t
 
 getAnnotationStyle :: Map String [Bool] -> RSchema -> Maybe AnnotationDomain 
 getAnnotationStyle flagMap sch = getAnnotationStyle' flagMap (getPredParamsSch sch) (toMonotype sch)
@@ -575,7 +569,7 @@ getVarNames _ = Set.empty
 
 subtypeOp :: Monad s => TCSolver s (Formula -> Formula -> Formula)
 subtypeOp = do
-  ct <- asks _constantRes
+  ct <- view (resourceArgs . constantTime)
   return $ if ct then (|=|) else (|>=|)
 
 logUniversals :: Monad s => TCSolver s ()

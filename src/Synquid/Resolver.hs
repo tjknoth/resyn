@@ -28,7 +28,6 @@ import Data.Maybe
 import Data.List
 import qualified Data.Foldable as Foldable
 import Control.Arrow (first)
-import Debug.Trace
 
 
 {- Interface -}

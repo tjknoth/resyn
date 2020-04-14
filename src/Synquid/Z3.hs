@@ -29,7 +29,6 @@ import Control.Monad
 import Control.Monad.Extra (mapMaybeM)
 import Control.Monad.Trans.State
 import Control.Lens hiding (both)
-import Debug.Trace
 import Control.Monad.State.Class (MonadState)
 import Z3.Monad hiding (Z3Env, newEnv, Sort)
 import qualified Z3.Base as Z3
@@ -101,7 +100,7 @@ instance RMonad Z3State where
     fmlAst <- fmlToAST fml
     astStr <- astToString fmlAst
     -- Throw error if unknown result: could probably do this a better way since r' is now unused
-    let r' = case r of 
+    let _ = case r of 
               Unsat -> False 
               Sat   -> True
               _     -> error $ "solveWithModel: Z3 returned Unknown for AST " ++ astStr 
@@ -115,7 +114,6 @@ instance RMonad Z3State where
     Map.fromList . catMaybes <$> mapM (getAssignmentForVar m . Var astS) vals
     where 
       astS = IntS -- TODO: maybe be smarter about this!
-      varFun s = fmlToAST (Var astS s) -- Z3 AST node for variable 
   
   checkPredWithModel fml (model, _) = do 
     ast <- fmlToAST fml

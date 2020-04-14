@@ -4,18 +4,11 @@ module Synquid.Solver.LP where
 
 import Synquid.Logic
 import Synquid.Pretty
-import Synquid.Solver.Monad
 import Synquid.Solver.Types
 
-import Data.Map (Map)
-import qualified Data.Map as Map
-import Debug.Trace
 import Numeric.Limp.Program.Linear
 import Numeric.Limp.Program.ResultKind (K(..))
 import Numeric.Limp.Rep.IntDouble
-import Numeric.Limp.Rep.Rep (rOf)
-import Numeric.Limp.Program.Program 
-import Numeric.Limp.Solvers.Cbc
 import qualified Numeric.Limp.Program.Constraint as C
 
 {-

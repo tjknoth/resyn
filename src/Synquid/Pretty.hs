@@ -204,7 +204,7 @@ fmlDocAt n fml = condHlParens (n' <= n) (
   )
   where
     n' = power fml
-    withSort s doc = doc <> text ":" <> pretty s
+    -- withSort s doc = doc <> text ":" <> pretty s
 
 simpleFmlDoc = simpleFmlDocAt 0
 
@@ -229,7 +229,7 @@ simpleFmlDocAt n fml = condHlParens (n' <= n) (
   )
   where
     n' = power fml
-    withSort s doc = doc <> text ":" <> pretty s
+    -- withSort s doc = doc <> text ":" <> pretty s
 
 instance Pretty Formula where pretty = fmlDoc
 
@@ -260,7 +260,7 @@ prettyBase prettyType base = case base of
       subs = if Map.null s 
                then empty 
                else hMapDoc pretty pretty s
-      mult = pretty m <> operator "**"
+      -- mult = pretty m <> operator "**"
   DatatypeT name tArgs pArgs -> text name <+> hsep (map prettyType tArgs) <+> hsep (map (hlAngles . pretty) pArgs)
 
 instance (Pretty p, Pretty (TypeSkeleton () p)) => Pretty (BaseType () p) where
@@ -374,7 +374,7 @@ instance Pretty MeasureCase where
 instance Pretty MeasureDef where
   pretty (MeasureDef inSort outSort defs constArgs post) = nest 2 (prettyMeasureDefaults constArgs <+> pretty inSort <+> text "->" <+> pretty outSort <+> braces (pretty post) $+$ vsep (map pretty defs))
 
-prettyBinding (name, typ) = text name <+> operator "::" <+> pretty typ
+-- prettyBinding (name, typ) = text name <+> operator "::" <+> pretty typ
 
 
 prettyAssumptions env = commaSep (map pretty (Set.toList $ env ^. assumptions))

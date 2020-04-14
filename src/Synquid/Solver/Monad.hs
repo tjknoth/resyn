@@ -12,16 +12,12 @@ import Synquid.Error
 import Synquid.Solver.Types
 
 import Data.Map (Map)
-import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Control.Lens
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Trans.Except
-import qualified Z3.Monad as Z3 
-import qualified Data.Bimap as Bimap
-import Data.Bimap (Bimap)
 
 {- Monadic structure of solvers -}
 
@@ -30,7 +26,7 @@ class (Monad s, Applicative s) => MonadSMT s where
   isSat :: Formula -> s Bool                                                         -- ^ 'isSat' @fml@: is @fml@ satisfiable?
   allUnsatCores :: Formula -> Formula -> [Formula] -> s [[Formula]]                  -- ^ 'allUnsatCores' @assumption@ @mustHave@ @fmls@: all minimal unsatisfiable subsets of @fmls@ with @mustHave@, which contain @mustHave@, assuming @assumption@
 
-class (Monad s, Applicative s) => RMonad s where
+class (Monad s, Applicative s, MonadIO s) => RMonad s where
   solveAndGetModel :: Formula -> s (Maybe SMTModel)                                  -- ^ 'solveAndGetModel' @fml@: Evaluate @fml@ and, if satisfiable, return the model object
   modelGetAssignment :: [String] -> SMTModel -> s (Map String Formula)               -- ^ 'modelGetAssignment' @vals@ @m@: Get assignments of all variables @vals@ in model @m@
   checkPredWithModel :: Formula -> SMTModel -> s Bool                                -- ^ 'checkWithModel' @fml model@: check if boolean-sorted formula holds under a given model
@@ -43,7 +39,19 @@ class (Monad s, Applicative s) => MonadHorn s where
   checkCandidates :: Bool -> [Formula] -> ExtractAssumptions ->[Candidate] -> s [Candidate]   -- ^ Check validity or consistency of constraints under current candidates
   refineCandidates :: [Formula] -> QMap -> ExtractAssumptions -> [Candidate] -> s [Candidate] -- ^ Refine current candidates to satisfy new constraints
   pruneQualifiers :: QSpace -> s QSpace                                                       -- ^ Prune redundant qualifiers
- 
+
+-- | Command line arguments relevant to resource analysis
+data ResourceArgs = ResourceArgs {
+  _shouldCheckResources :: Bool,
+  _checkMultiplicities :: Bool,
+  _constantTime :: Bool,
+  _cegisBound :: Int,
+  _enumerate :: Bool,
+  _rsolver :: ResourceSolver
+} 
+
+makeLenses ''ResourceArgs
+
 -- | Parameters of type constraint solving
 data TypingParams = TypingParams {
   _condQualsGen :: Environment -> [Formula] -> QSpace,              -- ^ Qualifier generator for conditionals
@@ -52,29 +60,12 @@ data TypingParams = TypingParams {
   _predQualsGen :: Environment -> [Formula] -> [Formula] -> QSpace, -- ^ Qualifier generator for bound predicates
   _tcSolverSplitMeasures :: Bool,
   _tcSolverLogLevel :: Int,                                         -- ^ How verbose logging is
-  _checkResourceBounds :: Bool,                                     -- ^ Is resource checking enabled
-  _checkMultiplicities :: Bool,                                     -- ^ Should multiplicities be considered when generating resource constraints
-  _constantRes :: Bool,                                             -- ^ Check constant-timedness or not
-  _cegisMax :: Int,                                                 -- ^ Maximum depth of CEGIS solver 
   _cegisDomain :: Maybe AnnotationDomain,
   _polynomialDomain :: Maybe AnnotationDomain,
-  _enumAndCheck ::Bool,
-  _incrementalCEGIS :: Bool
+  _resourceArgs :: ResourceArgs
 }
 
 makeLenses ''TypingParams
-
--- | Command line arguments relevant to resource analysis
-data ResourceArgs = ResourceArgs {
-  _checkRes :: Bool,
-  _checkMults :: Bool,
-  _constantTime :: Bool,
-  _cegisBound :: Int,
-  _enumerate :: Bool,
-  _increment :: Bool
-} 
-
-makeLenses ''ResourceArgs
 
 -- | State of type constraint solving
 data TypingState = TypingState {

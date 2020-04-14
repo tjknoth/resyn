@@ -422,8 +422,8 @@ enumerateAt env typ d = do
       (env1, env2, fp'') <- shareAndExtractFP env fp cfps 
       fun <- inContext (\p -> Program (PApp p uHole) typ)
              $ genFun env1 (FunctionT x AnyT typ defCost) -- Find all functions that unify with (? -> typ)
-      let tp@(FunctionT x tArg tRes _) = typeOf fun
-      let (FunctionT x' tArg' tRes' _) = shiftCost tp
+      let tp@(FunctionT x _ _ _) = typeOf fun
+      let (FunctionT _ tArg' tRes' _) = shiftCost tp
       pApp <- if isFunctionType tArg'
         then do -- Higher-order argument: its value is not required for the function type, return a placeholder and enqueue an auxiliary goal
           d <- asks . view $ _1 . auxDepth

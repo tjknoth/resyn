@@ -16,7 +16,6 @@ import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Control.Lens as Lens
-import Debug.Trace
 
 {- Program terms -}
 
@@ -386,9 +385,9 @@ addGhostVariable :: Id -> RType -> Environment -> Environment
 addGhostVariable name t = addVariable name t . (ghostSymbols %~ Set.insert name)
 
 addPolyVariable :: Id -> RSchema -> Environment -> Environment
-addPolyVariable name sch e =  let n = arity (toMonotype sch) in (symbols %~ Map.insertWith Map.union n (Map.singleton name sch)) e
-  where
-    n = arity (toMonotype sch)
+addPolyVariable name sch e = 
+  let n = arity (toMonotype sch) in 
+  (symbols %~ Map.insertWith Map.union n (Map.singleton name sch)) e
 
 -- | 'addPolyConstant' @name sch env@ : add type binding @name@ :: @sch@ to @env@
 addPolyConstant :: Id -> RSchema -> Environment -> Environment
@@ -516,7 +515,7 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
     -- TODO: should potentials transfer as well?
     contentProperties (mName, MeasureDef (DataS _ vars) a _ _ _) = case elemIndex a vars of
       Nothing -> Nothing
-      Just i -> let (ScalarT elemT fml pot) = tArgs !! i -- @mName@ "returns" one of datatype's parameters: transfer the refinement onto the value of the measure
+      Just i -> let (ScalarT elemT fml _) = tArgs !! i -- @mName@ "returns" one of datatype's parameters: transfer the refinement onto the value of the measure
                 in let
                     elemSort = toSort elemT
                     measureApp = Pred elemSort mName [Var (toSort baseT) valueVarName]
@@ -525,7 +524,7 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
     -- TODO: is potential relevant?
     elemProperties (mName, MeasureDef (DataS _ vars) (SetS a) _ _ _) = case elemIndex a vars of
       Nothing -> Nothing
-      Just i -> let (ScalarT elemT fml pot) = tArgs !! i -- @mName@ is a set of datatype "elements": add an axiom that every element of the set has that property
+      Just i -> let (ScalarT elemT fml _) = tArgs !! i -- @mName@ is a set of datatype "elements": add an axiom that every element of the set has that property
                 in if fml == ftrue || fml == ffalse || not (Set.null $ unknownsOf fml)
                     then Nothing
                     else  let
@@ -681,7 +680,7 @@ generateSchema :: Environment -> Id -> [(Maybe Id, Sort)] -> Sort -> Formula -> 
 generateSchema e name inSorts outSort post = predPolymorphic allPredParams [] name inSorts outSort post
   where
     allPredParams = concat $ fmap ((getPredParams e) . snd) inSorts
-    allTypeParams = concat $ fmap ((getTypeParams e) . snd) inSorts
+    -- allTypeParams = concat $ fmap ((getTypeParams e) . snd) inSorts
 
 getTypeParams :: Environment -> Sort -> [Id]
 getTypeParams e (DataS name _) = case Map.lookup name (e ^. datatypes) of
@@ -737,7 +736,7 @@ getAllCArgsFromSchema env sch = Map.filter (not . null) $
 getAllCArgsFromType :: Environment -> RType -> ArgMap 
 getAllCArgsFromType env (FunctionT x argT resT _) = 
   let vv = Var (toSort (baseTypeOf argT)) x 
-      measures = Map.keys (env ^. measureDefs)
+      -- measures = Map.keys (env ^. measureDefs)
       flagMap = fmap _resourcePreds $ env ^. datatypes
       allForms = allRFormulas flagMap argT
       cargs = Map.unionsWith combineArgLists $ map (getAllCArgs vv) allForms
