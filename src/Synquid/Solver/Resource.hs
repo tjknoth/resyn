@@ -83,7 +83,7 @@ generateFormula' checkMults c = do
   let freeParams = deBrujnOrVee 3  -- TODO: better solution. 3 is arbitrary.
   case c of
     Subtype{} -> error $ show $ text "generateFormula: subtype constraint present:" <+> pretty c
-    WellFormed{} -> error $ show $ text "generateFormula: well-formed constraint present:" <+> pretty c
+    WellFormed{} -> error $ show $ text "generateFormula: well-formedness constraint present:" <+> pretty c
     RSubtype env pl pr -> do
       op <- subtypeOp
       --substs <- generateFreshUniversals env

@@ -478,6 +478,7 @@ processConstraint c@(Subtype env (ScalarT baseTL l potl) (ScalarT baseTR r potr)
 
 processConstraint c@(WellFormed env t@(ScalarT baseT fml pot))
   = do
+      simpleConstraints %= (RSubtype (addVariable valueVarName t env) pot fzero :)
       simpleConstraints %= (c :)
       case fml of
         Unknown _ u -> do
