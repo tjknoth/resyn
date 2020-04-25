@@ -61,15 +61,15 @@ ALL_BENCHMARKS = [
         ]),
     BenchmarkGroup("Non-Polynomial", [], [
         Benchmark('List-Subset-Sum', 'subset sum problem', ['-f=NONTERMINATING']),
-        Benchmark('List-Merge-Build', 'merge sort build', ['-f=NONTERMINATING']),
+        # Benchmark('List-Merge-Build', 'merge sort build', ['-f=NONTERMINATING']),
         Benchmark('List-Merge-Flatten', 'merge sort flatten', ['-f=NONTERMINATING']),
-        Benchmark('List-Quick-Build', 'quick sort build', ['-f=NONTERMINATING']),
-        Benchmark('List-Quick-Flatten', 'quick sort flatten', ['-f=NONTERMINATING']),
+        # Benchmark('List-Quick-Build', 'quick sort build', ['-f=NONTERMINATING']),
+        # Benchmark('List-Quick-Flatten', 'quick sort flatten', ['-f=NONTERMINATING']),
         ]),
     BenchmarkGroup("Value-Dependent", [], [
-        Benchmark('List-InsertSort', 'insertion sort (fine)', ['-f=NONTERMINATING', '--inc-cegis=FALSE']),
+        Benchmark('List-InsertSort', 'insertion sort (fine)', ['-f=NONTERMINATING', '--res-solver=CEGIS']),
         Benchmark('BST-Member', 'BT member', ['-f=NONTERMINATING']),
-        Benchmark('BST-Insert', 'BT insert', ['-f=NONTERMINATING', '--inc-cegis=FALSE'])
+        Benchmark('BST-Insert', 'BT insert', ['-f=NONTERMINATING', '--res-solver=CEGIS'])
         ])
 ]
 
