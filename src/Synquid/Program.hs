@@ -543,7 +543,12 @@ typeSubstituteEnv tass = over symbols (Map.map (Map.map (schemaSubstitute tass))
 scalarSubstituteEnv :: TypeSubstitution -> SymbolMap -> SymbolMap
 scalarSubstituteEnv tass syms = 
   let scalars = (fromMaybe Map.empty $ Map.lookup 0 syms) :: Map Id RSchema
-  in  Map.insert 0 (Map.map (schemaSubstitute tass) scalars) syms
+   in Map.insert 0 (Map.map (schemaSubstitute tass) scalars) syms
+
+scalarPredSubstituteEnv :: Substitution -> SymbolMap -> SymbolMap
+scalarPredSubstituteEnv pass syms = 
+  let scalars = (fromMaybe Map.empty $ Map.lookup 0 syms)
+   in Map.insert 0 (Map.map (fmap (typeSubstitutePred pass)) scalars) syms
 
 -- | Insert weakest refinement
 refineTop :: Environment -> SType -> RType

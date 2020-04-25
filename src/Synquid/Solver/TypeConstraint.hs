@@ -542,8 +542,9 @@ processConstraint c@(SharedForm env f g h) = do
   simpleConstraints %= (SharedForm env f' g' h' :)
 processConstraint (Transfer envIn envOut) = do
   tass <- use typeAssignment
-  let envIn' = over symbols (scalarSubstituteEnv tass) envIn
-  let envOut' = over symbols (scalarSubstituteEnv tass) envOut
+  pass <- use predAssignment
+  let envIn' = over symbols (scalarPredSubstituteEnv pass . scalarSubstituteEnv tass) envIn
+  let envOut' = over symbols (scalarPredSubstituteEnv pass . scalarSubstituteEnv tass) envOut
   simpleConstraints %= (Transfer envIn' envOut' :)
 processConstraint c = error $ show $ text "processConstraint: not a simple constraint" <+> pretty c
 
