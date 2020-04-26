@@ -23,8 +23,8 @@ remove = \x. \xs.
         then ys
         else Cons y (remove x ys)
 
-selectionSort :: List {a | | 4} <{3}> -[1]-> List a <{0}> 
+selectionSort :: List {a | | 6} <{3}> -[1]-> List a <{0}> 
 selectionSort = \xs. 
-  match xs with
-    Nil       -> Nil
+  match xs with -- xs:5,4
+    Nil       -> Nil -- y: 5, ys:9,4
     Cons y ys -> Cons (min y xs) (remove (min y xs) (selectionSort ys))

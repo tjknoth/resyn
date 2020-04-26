@@ -19,7 +19,7 @@ merge = \xs. \ys.
                                     else Cons yh (merge (Cons xh xt) yt)
 
 --takes the contents of a tree and arranges them in a sorted list
-flatten :: Tree {a | | 1} <{2}> -[1]-> List a <{0}>
+flatten :: Tree {a | | 1} <{3}> -[1]-> List a <{0}>
 flatten = \t. 
   match t with
     Leaf x -> Cons x Nil
