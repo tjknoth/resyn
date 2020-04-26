@@ -24,7 +24,7 @@ insert = \x. \xs.
 
 
 
-insertionSort :: xs: List {a | | 2} <{if _0 < _1 then 1 else 0}>
+insertionSort :: xs: List {a | | 2} <{if _1 < _0 then 1 else 0}>
   -[1]-> List a <{0}>
 insertionSort = \xs.
   match xs with 
