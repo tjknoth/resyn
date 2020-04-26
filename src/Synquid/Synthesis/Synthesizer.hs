@@ -37,6 +37,7 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
     -- | Stream of programs that satisfy the specification or type error
     reconstruction :: HornSolver (Either ErrorMessage [(RProgram, TypingState)], TimeStats)
     reconstruction = let
+        allSchema = gSpec goal : Map.elems (allSymbols (gEnvironment goal))
         typingParams = TypingParams {
                         _condQualsGen = condQuals,
                         _matchQualsGen = matchQuals,
@@ -44,7 +45,7 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _predQualsGen = predQuals,
                         _tcSolverSplitMeasures = _splitMeasures explorerParams,
                         _tcSolverLogLevel = _explorerLogLevel explorerParams,
-                        _cegisDomain = getAnnotationStyle (fmap _resourcePreds (gEnvironment goal ^. datatypes)) (gSpec goal),
+                        _cegisDomain = getAnnotationStyle (fmap _resourcePreds (gEnvironment goal ^. datatypes)) allSchema,
                         _polynomialDomain = getPolynomialDomain (fmap _resourcePreds (gEnvironment goal ^. datatypes)) (gSpec goal),
                         _resourceArgs = _explorerResourceArgs explorerParams
                       }

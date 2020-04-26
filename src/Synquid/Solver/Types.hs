@@ -42,6 +42,14 @@ data AnnotationDomain =
   Variable | Measure | Both
   deriving (Show, Eq)
 
+instance Semigroup AnnotationDomain where
+ Variable <> Variable = Variable
+ Variable <> _ = Both
+ Measure <> Measure = Measure
+ Measure <> _ = Both
+ _ <> _ = Both
+ 
+
 {- Types for solving resource formulas -}
 
 type PendingRSubst = Map Formula Substitution

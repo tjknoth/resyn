@@ -32,6 +32,8 @@ import Control.Monad.Logic
 import Control.Monad.Reader
 import Control.Lens
 import Debug.Trace
+import Data.List.NonEmpty (NonEmpty(..))
+import Data.Semigroup (sconcat)
 
 
 -- | Process, but do not solve, a set of resource constraints
@@ -533,8 +535,12 @@ assertCongruence' (pl@(Pred _ ml largs), pr@(Pred _ mr rargs)) =
 assertCongruence' ms = error $ show $ text "assertCongruence: called with non-measure formulas:"
   <+> pretty ms
 
-getAnnotationStyle :: Map String [Bool] -> RSchema -> Maybe AnnotationDomain 
-getAnnotationStyle flagMap sch = getAnnotationStyle' flagMap (getPredParamsSch sch) (toMonotype sch)
+getAnnotationStyle :: Map String [Bool] -> [RSchema] -> Maybe AnnotationDomain 
+getAnnotationStyle flagMap schemas =
+  let get sch = getAnnotationStyle' flagMap (getPredParamsSch sch) (toMonotype sch)
+   in case catMaybes (map get schemas) of
+        [] -> Nothing
+        (a:as) -> Just $ sconcat (a :| as) -- can probably skip the catmaybes? and combine semigroups?
 
 getAnnotationStyle' flagMap predParams t =
   let rforms = conjunction $ allRFormulas flagMap t
