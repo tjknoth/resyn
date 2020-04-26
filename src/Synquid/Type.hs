@@ -13,6 +13,7 @@ import Data.Map (Map)
 import Data.Bifunctor
 import Data.Bifoldable
 import Data.Maybe (catMaybes)
+import Debug.Trace
 
 {- Type skeletons -}
 
@@ -304,7 +305,7 @@ typeVarsOf _ = Set.empty
 
 -- | 'updateAnnotations' @t m p@ : "multiply" @t@ by multiplicity @m@, then add on surplus potential @p@
 updateAnnotations :: RType -> Formula -> Formula -> RType
-updateAnnotations t@ScalarT{} mult = addPotential (typeMultiply mult t)
+updateAnnotations t@ScalarT{} mult = safeAddPotential (typeMultiply mult t)
 
 schemaMultiply p = fmap (typeMultiply p)
 
@@ -316,6 +317,18 @@ baseTypeMultiply :: Formula -> RBase -> RBase
 baseTypeMultiply fml (TypeVarT subs name mul) = TypeVarT subs name (multiplyFormulas mul fml)
 baseTypeMultiply fml (DatatypeT name tArgs pArgs) = DatatypeT name (map (typeMultiply fml) tArgs) pArgs
 baseTypeMultiply fml t = t
+
+safeAddPotential :: RType -> Formula -> RType 
+safeAddPotential (ScalarT base ref pot) f = ScalarT base ref (safeAddFormulas pot f)
+safeAddPotential (LetT x tDef tBody) f    = LetT x tDef (safeAddPotential tBody f)
+safeAddPotential t _ = t
+
+-- safeAddFormulas f g : Adds f to g -- if g is a conditional, it pushes f into the conditional structure
+--  used as a hack to make conditional solver work w polynomials
+safeAddFormulas :: Formula -> Formula -> Formula
+safeAddFormulas f (Ite f1 f2 f3) = Ite f1 (addFormulas f f2) (addFormulas f f3)
+safeAddFormulas f g = addFormulas f g
+
 
 addPotential :: RType -> Formula -> RType 
 addPotential (ScalarT base ref pot) f = ScalarT base ref (addFormulas pot f)
