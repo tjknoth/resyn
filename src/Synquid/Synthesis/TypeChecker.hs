@@ -165,14 +165,12 @@ reconstructI' env t@ScalarT{} impl = case impl of
   PFun _ _ -> throwErrorWithDescription $ text "Cannot assign non-function type" </> squotes (pretty t) </>
                            text "to lambda term" </> squotes (pretty $ untyped impl)
 
-  -- Why don't I need this? 
-  {- 
   PLet x iDef iBody -> do -- E-term let (since lambda-let was considered before)
-    (pDef, _) <- inContext (\p -> Program (PLet x p (Program PHole t)) t) $ reconstructETopLevel env AnyT iDef
+    pDef <- inContext (\p -> Program (PLet x p (Program PHole t)) t) $ reconstructETopLevel env AnyT iDef
     let (env', tDef) = embedContext env (typeOf pDef)
-    pBody <- inContext (\p -> Program (PLet x pDef p) t) $ reconstructI (safeAddVariable x tDef env') t iBody
+    env'' <- safeAddVariable x tDef env' 
+    pBody <- inContext (\p -> Program (PLet x pDef p) t) $ reconstructI env'' t iBody
     return $ Program (PLet x pDef pBody) t
-  -}   
    
   PIf (Program PHole AnyT) iThen iElse -> do
     (cEnv, bEnv) <- shareContext env 

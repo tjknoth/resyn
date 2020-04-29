@@ -144,6 +144,18 @@ DEMO_BENCHMARKS = [
     ('Sort-Fold',           ['-m 1', '-a 2', '--explicit-match']),
 ]
 
+UNIT_TESTS = [
+    ('Constructors',         []),
+    ('Pairs',                []),
+    ('HigherOrder',          []),
+    ('TypeAbduction',        []),
+    ('Measure',              []),
+    ('Instantiation',        []),
+    ('MultiArgMeasure',      []),
+    ('HOChecking',           []),
+    ('Incr',                 []),
+]
+
 RESOURCE_VERIFICATION_BENCHMARKS = [
     ('BST-Contains-Bad',    []),
     ('BST-Contains',        []),
@@ -303,13 +315,6 @@ def run_resyn_benchmark(name, opts, path='.'):
             print('Unchanged')
 
 
-def run_test(name, path='.'):
-    print (name)
-
-    with open(LOGFILE_NAME, 'a+') as logfile:
-      logfile.seek(0, os.SEEK_END)
-      subprocess.call(synquid_path + COMMON_OPTS + RESOURCE_FALSE + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
-
 def write_times(benchmarks):
     with open(OUTFILE_NAME, 'w') as outfile:
         for (name, args) in benchmarks:
@@ -384,10 +389,12 @@ if __name__ == '__main__':
         os.chdir('unit')
         print(os.getcwd())
         clear_log()
-        for name in os.listdir('.'):
-            filename, file_extension = os.path.splitext(name)
-            if file_extension == '.sq':
-                run_test(filename)
+        # for name in os.listdir('.'):
+        #    filename, file_extension = os.path.splitext(name)
+        #    if file_extension == '.sq':
+        #        run_test(filename)
+        for (name, args) in UNIT_TESTS:
+            run_benchmark(name, args)
         fail = check_diff()
         os.chdir('..')
 

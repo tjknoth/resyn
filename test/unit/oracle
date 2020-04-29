@@ -1,8 +1,7 @@
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-./Instantiation.sq:12: Resolution Error:
-  Constructor Zero must return type {Natural {1**n||0}||0}, got {Natural {Z||0}||0}
-
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 all :: <p :: a -> Bool> . arg1:(x:{1**a||0} -> {Bool|_v == p x|0}) -> arg0:{List {1**a|p _v|0}||0} -> {Bool|_v|0}
@@ -25,15 +24,17 @@ notAllPos :: {Bool|_v|0}
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-incr :: n:{Int||0} -> f:(m:{Int||0} -> {Int|_v == n|0}) -> {Int|_v == n + 1|0}
-incr = \n . \f . 1 + (f 0)
+client :: xs:{List {Nat||0}||0} -> {List {Int|_v == 0|0}||0}
+client = \xs . filterLE 0 xs
 
-f :: {Int|_v == 2|0}
-f = incr (incr zero (\x7 .
-              zero)) (\x . 1)
+clientBad :: xs:{List {Int||0}||0} -> ys:{List {Nat||0}||0} -> {List {Int|_v == 0|0}||0}
+./TypeAbduction.sq:27: Error:
+  Cannot find sufficiently strong refinements
+  when checking xs ::
+  {List {Int|_v >= 0|p0}||-(fp6 + 0)}
+  in
+  \xs . \ys . filterLE1 0 xs ??
 
-Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
-Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 ./Measure.sq:6: Error:
@@ -43,6 +44,35 @@ Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was
   \arg0 . 
     match arg0 with
       Cons x xs -> 1 + (len xs)
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+./Instantiation.sq:12: Resolution Error:
+  Constructor Zero must return type {Natural {1**n||0}||0}, got {Natural {Z||0}||0}
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+copies :: x:{1**a||0} -> xs:{List {1**a||0}||0} -> {Int|_v == numeq x xs|0}
+copies = \x . \xs . 
+    match xs with
+      Nil -> 0
+      Cons y ys -> 
+        if y == x
+          then 1 + (copies x ys)
+          else copies x ys
+
+copies' :: x:{1**a||0} -> xs:{List {1**a||0}||0} -> {Int|_v == numeq x xs|0}
+./MultiArgMeasure.sq:28: Error:
+  Cannot find sufficiently strong refinements
+  when checking 1 - (copies' x ys)
+  :: {Int|_v == numeq x xs|0} in
+  \x . \xs . 
+      match xs with
+        Cons y ys -> 
+          if x == y
+            then 1 - (copies' x ys)
+            else
+              (?? :: {Int|_v == numeq x xs|0})
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
@@ -83,42 +113,9 @@ map5 :: f:(arg0:{1**a||0} -> {1**b||0}) -> xs:{List {1**a||0}||0} -> {List {1**b
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-filterAbove :: xs:{IList||0} -> x:{Int||0} -> {IList|aboveAll x _v|0}
-filterAbove = \xs . \x . 
-    match xs with
-      Nil -> Nil
-      Cons y ys -> 
-        if y >= x
-          then Cons y (filterAbove ys x)
-          else filterAbove ys x
+incr :: n:{Int||0} -> f:(m:{Int||0} -> {Int|_v == n|0}) -> {Int|_v == n + 1|0}
+incr = \n . \f . 1 + (f 0)
 
-filterBetween :: xs:{IList||0} -> lo:{Int||0} -> hi:{Int||0} -> {IList|between lo hi _v|0}
-./MultiArgMeasure.sq:34: Error:
-  Cannot find sufficiently strong refinements
-  when checking Cons y
-                  (filterBetween ys lo hi) ::
-  {IList|between lo hi _v|0} in
-  \xs . \lo . \hi . 
-        match xs with
-          Cons y ys -> 
-            if (y >= lo) && (y <= hi)
-              then Cons y (filterBetween ys lo
-                             hi)
-              else
-                (?? :: {IList|between lo hi _v|0})
-
-Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
-Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
-Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-client :: xs:{List {Nat||0}||0} -> {List {Int|_v == 0|0}||0}
-client = \xs . filterLE 0 xs
-
-clientBad :: xs:{List {Int||0}||0} -> ys:{List {Nat||0}||0} -> {List {Int|_v == 0|0}||0}
-./TypeAbduction.sq:27: Error:
-  Cannot find sufficiently strong refinements
-  when checking xs ::
-  {List {Int|_v >= 0|p0}||-(fp6 + 0)}
-  in
-  \xs . \ys . filterLE1 0 xs ??
+f :: {Int|_v == 2|0}
+resyn: src/Synquid/Synthesis/Util.hs:558:7-48: Non-exhaustive patterns in function remove
 
