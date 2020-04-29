@@ -23,8 +23,7 @@ Library
   hs-source-dirs:     src
   default-language:   Haskell2010
 
-  exposed-modules:    Synquid.Codegen
-                    , Synquid.Error
+  exposed-modules:    Synquid.Error
                     , Synquid.HtmlOutput
                     , Synquid.Logic
                     , Synquid.Parser
@@ -39,7 +38,6 @@ Library
                     , Synquid.Solver.TypeConstraint
                     , Synquid.Solver.Types
                     , Synquid.Solver.CVC4
-                    , Synquid.Stats
                     , Synquid.Synthesis.Explorer
                     , Synquid.Synthesis.Synthesizer
                     , Synquid.Synthesis.TypeChecker

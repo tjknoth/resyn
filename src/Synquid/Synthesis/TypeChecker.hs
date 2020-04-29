@@ -152,6 +152,8 @@ reconstructI' env t (PLet x iDef@(Program (PFun _ _) _) iBody) = do -- lambda-le
   let ctx p = Program (PLet x uHole p) t
   pBody <- inContext ctx $ reconstructI env t iBody
   return $ ctx pBody
+reconstructI' env t@(LetT x tDef tBody) impl = 
+  reconstructI' (addVariable x tDef env) tBody impl
 reconstructI' env t@(FunctionT _ tArg tRes c) impl = case impl of
   PFun y impl -> exploreFunction env (FunctionT y tArg tRes c) (\e t -> reconstructI e t impl) 
   PSymbol f -> do

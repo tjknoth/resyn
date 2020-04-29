@@ -1,7 +1,6 @@
 -- | Top-level synthesizer interface
 module Synquid.Synthesis.Synthesizer (
-  synthesize, 
-  SynthPhase(..)
+  synthesize
 ) where
 
 import Synquid.Util
@@ -12,7 +11,6 @@ import Synquid.Z3
 import Synquid.Resolver
 import Synquid.Synthesis.TypeChecker
 import Synquid.Synthesis.Util
-import Synquid.Stats
 import Synquid.Solver.Monad
 import Synquid.Solver.HornClause
 import Synquid.Solver.TypeConstraint
@@ -31,11 +29,11 @@ type HornSolver = FixPointSolver Z3State
 -- in the typing environment @env@ and follows template @templ@,
 -- using conditional qualifiers @cquals@ and type qualifiers @tquals@,
 -- with parameters for template generation, constraint generation, and constraint solving @templGenParam@ @consGenParams@ @solverParams@ respectively
-synthesize :: ExplorerParams -> HornSolverParams -> Goal -> [Formula] -> [Formula] -> IO (Either ErrorMessage [(RProgram, TypingState)], TimeStats)
+synthesize :: ExplorerParams -> HornSolverParams -> Goal -> [Formula] -> [Formula] -> IO (Either ErrorMessage [(RProgram, TypingState)])
 synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFixPointSolver reconstruction solverParams
   where
     -- | Stream of programs that satisfy the specification or type error
-    reconstruction :: HornSolver (Either ErrorMessage [(RProgram, TypingState)], TimeStats)
+    reconstruction :: HornSolver (Either ErrorMessage [(RProgram, TypingState)])
     reconstruction = let
         allSchema = gSpec goal : Map.elems (allSymbols (gEnvironment goal))
         typingParams = TypingParams {
@@ -49,9 +47,7 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _polynomialDomain = getPolynomialDomain (fmap _resourcePreds (gEnvironment goal ^. datatypes)) (gSpec goal),
                         _resourceArgs = _explorerResourceArgs explorerParams
                       }
-      in do cp0 <- lift $ lift startTiming  -- TODO time stats for this one as well?
-            res <- reconstruct explorerParams typingParams goal
-            return (res, snd cp0)
+      in reconstruct explorerParams typingParams goal
 
     -- | Qualifier generator for conditionals
     condQuals :: Environment -> [Formula] -> QSpace
