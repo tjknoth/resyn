@@ -1,43 +1,13 @@
---------------------------------------------------------------------------------
--- Insert into a binary tree
---------------------------------------------------------------------------------
+data Tree a <p :: a -> Bool> <q :: Int> where
+  Leaf :: Tree a <p> <q>
+  Node :: x: {a | | q}
+       -> l: Tree a <p> <{if (p x) then q else 0}>
+       -> r: Tree a <p> <{if (p x) then 0 else q}>
+       -> Tree a <p> <q>
 
--- Define a BST using refinement types to enforce strict ordering and no
--- duplicates. Each Node uses 2 potential to represent the two pointers to the
--- left and right subtrees.
-data BST a where
-  Empty :: BST a
-  Node :: x: {1**a| |2} -> l: BST {a | _v < x} -> r: BST {a | x < _v} -> BST a
-
--- Measure the number of nodes in the tree
-termination measure size :: BST a -> {Int | _v >= 0} where
-  Empty -> 0
-  Node _ l r -> 1 + size l + size r
-
--- A set of all elements in the tree
-measure elems :: BST a -> Set a where
-  Empty -> []
-  Node x l r -> [x] + elems l + elems r
-
--- The length of the path to where this element is stored in the tree, or where
--- it would be stored if inserted.
-measure pathTo :: x: a -> BST a -> {Int | _v >= 0} where
-  Empty -> 0
-  Node y l r -> if x < y
-                then 1 + pathTo x l
-                else if y < x
-                     then 1 + pathTo x r
-                     else 0
-
--- Check a function to insert a new element into the tree. We consume 2
--- pontential so that we can insert a node if needed, plus the cost of
--- traversing the tree.
-insert :: x: {1**a| |1} -> t: {BST a| |pathTo x _v} -> {BST a | elems _v == elems t + [x]}
-insert = \x . \t .
+--inserts an element into a binary search tree
+treeInsert :: x:a -> t: Tree a <{x > _0}> <{1}> -[1]-> Tree a <{x < _0}> <{0}>
+treeInsert = \x. \t.
   match t with
-    Empty -> Node x Empty Empty
-    Node y l r -> if x < y
-                  then Node y (insert x l) r
-                  else if x == y
-                       then Node y l r
-                       else Node y l (insert x r)
+    Leaf       -> Node x Leaf Leaf
+    Node n l r -> if x < n then treeInsert x l else treeInsert x r

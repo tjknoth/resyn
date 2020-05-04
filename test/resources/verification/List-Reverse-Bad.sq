@@ -1,26 +1,15 @@
--- Simple model of list memory semantics:
---   Constructing an element of a list requires enough heap space 
---   for the polymorphic type and a pointer to the next one.
---   We assume Nil requires no memory
-data List a where
-	Nil :: List a
-	Cons :: x: a -> xs: List a -> List a 
-  
-termination measure len :: List a -> {Int | _v >= 0} where
-  Nil -> 0
-  Cons x xs -> 1 + len xs  
+data List a <q :: Int> where
+	Nil :: List a <q>
+	Cons :: x: a -> xs: List {a | | q} <q> -> List a <q>
 
--- Traverses entire list once; given memory accordingly
-reverse' :: xs: List {a| |1} -[1]-> acc: List a -> List a
-reverse' = \xs. \acc.
+snoc :: x:a -> xs: List {a | | 1} <{0}> -[1]-> List a <{0}>
+snoc = \x. \xs.
   match xs with
-    Nil -> acc
-    Cons y ys -> reverse' ys (Cons y acc)
+    Nil       -> Cons x Nil
+    Cons y ys -> Cons y (snoc x ys)
 
--- Wrapper for version using accumulator
-reverse :: xs: List {a| |0} -> List a
+reverse :: xs: List {a | | 1} <{1}> -[1]-> List a <{0}>
 reverse = \xs. 
-  reverse' xs Nil
-
-
-
+  match xs with                       --xs :: List {a | | 1} <{1}>
+    Nil       -> Nil                  --y :: {a | | 1}, ys :: List {a | | 2} <{1}>
+    Cons y ys -> snoc y (reverse ys)  --reverse ys :: List {a | | 1} <{0}> 

@@ -4,7 +4,7 @@
 --   We assume Nil requires no memory
 data List a where
 	Nil :: List a
-	Cons :: x: a -[1]-> xs: List a -> List a
+	Cons :: x: a -> xs: List a -[1]-> List a
  
 -- Requires enough heap cells for 2 list nodes, given 1
 --  Should fail

@@ -22,6 +22,6 @@ append = \xs. \ys.
     Cons z zs -> Cons z (append zs ys)
 
 -- append xs ys requires memory proportional to the length of xs
-append2 :: xs: List {a| |0} -> ys: List {a| |2} -> zs: List {a| |1} -> {List a | len _v == len xs + len ys + len zs && elems _v == elems xs + elems ys + elems zs}
+append2 :: xs: List {a| |0} -> ys: List {a| |1} -> zs: List {a| |1} -> {List a | len _v == len xs + len ys + len zs && elems _v == elems xs + elems ys + elems zs}
 append2 = \xs. \ys. \zs. 
   append (append ys zs) xs
