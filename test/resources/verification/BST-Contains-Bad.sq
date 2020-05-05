@@ -14,12 +14,12 @@ measure elems :: BST a -> Set a where
 
 -- A function to check whether an element is inside a BST. Since we do not
 -- modify the tree, the only cost is that of traversal.
-contains :: x: a -> t: BST {a| |1} -[3]-> {Bool | _v == (x in elems t)}
+contains :: x: a -> t: BST {a| |1} -> {Bool | _v == (x in elems t)}
 contains = \x. \t.
   match t with
     Empty -> False
     Node y l r -> if x < y
-                  then contains x l
+                  then tick 3 (contains x l)
                   else if y < x
-                       then contains x r
+                       then tick 3 (contains x r)
                        else True

@@ -15,8 +15,8 @@ measure elems :: List a -> Set a where
   Cons x xs -> [x] + elems xs  
 
 -- append xs ys requires memory proportional to the length of xs
-append :: xs: List a -> ys: List a -[1]-> {List a | len _v == len xs + len ys && elems _v == elems xs + elems ys}
+append :: xs: List a -> ys: List a -> {List a | len _v == len xs + len ys && elems _v == elems xs + elems ys}
 append = \xs. \ys.
   match xs with
     Nil -> ys
-    Cons z zs -> Cons z (append zs ys)
+    Cons z zs -> Cons z (tick 1 (append zs ys))

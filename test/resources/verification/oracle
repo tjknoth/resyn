@@ -1,6 +1,6 @@
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-contains :: x:{1**a||0} -> t:{BST {1**a||1}||0} -[1]-> {Bool|_v == (x in elems t)|0}
+contains :: x:{1**a||0} -> t:{BST {1**a||1}||0} -> {Bool|_v == (x in elems t)|0}
 contains = \x . \t . 
     match t with
       Empty -> False
@@ -14,17 +14,17 @@ contains = \x . \t .
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-contains :: x:{1**a||0} -> t:{BST {1**a||1}||0} -[3]-> {Bool|_v == (x in elems t)|0}
+contains :: x:{1**a||0} -> t:{BST {1**a||1}||0} -> {Bool|_v == (x in elems t)|0}
 ./BST-Contains-Bad.sq:18: Error:
   Insufficient resources
-  when checking l ::
-  {BST {1**a||p36 + 1}||3 + -(fp17 + 0)}
+  when checking contains ::
+  x6:_ -> x5:_ -> {Bool|_v == (x in elems t)|0}
   in
   \x . \t . 
       match t with
         Node y l r -> 
           if x < y
-            then contains x l
+            then contains ?? ??
             else
               (?? :: {Bool|_v == (x in elems t)|0})
 
@@ -61,7 +61,7 @@ append2 :: xs:{List {1**a||0}||0} -> ys:{List {1**a||1}||0} -> zs:{List {1**a||1
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-append :: xs:{List {1**a||1}||0} -> ys:{List {1**a||0}||0} -[1]-> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+append :: xs:{List {1**a||1}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
 append = \xs . \ys . 
     match xs with
       Nil -> ys
@@ -70,20 +70,20 @@ append = \xs . \ys .
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-append :: xs:{List {1**a||0}||0} -> ys:{List {1**a||0}||0} -[1]-> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
+append :: xs:{List {1**a||0}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
 ./List-Append-Bad.sq:19: Error:
   Insufficient resources
-  when checking ys ::
-  {List {1**a||p2}||1 + -(fp14 + 0)}
+  when checking append ::
+  x6:_ -> x5:_ -> {List {1**a||p1}||-(fp6 + 0)}
   in
   \xs . \ys . 
       match xs with
-        Cons z zs -> Cons z (append zs
-                               ys)
+        Cons z zs -> Cons z (append ??
+                               ??)
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-compress :: xs:{List {1**a||1}||0} -[1]-> {List {1**a||0}||0}
+compress :: xs:{List {1**a||1}||0} -> {List {1**a||0}||0}
 compress = \xs . 
   match xs with
     Nil -> Nil
@@ -97,16 +97,15 @@ compress = \xs .
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-compress :: xs:{List {1**a||0}||0} -[1]-> {List {1**a||0}||0}
+compress :: xs:{List {1**a||0}||0} -> {List {1**a||0}||0}
 ./List-Compress-Bad.sq:16: Error:
   Insufficient resources
-  when checking ys ::
-  {List {1**a||p2}||1 + -(fp8 + 0)}
-  in
+  when checking compress ::
+  x1:_ -> {List {1**A3||0}||0} in
   \xs . 
     match xs with
       Cons y ys -> 
-        match compress ys with
+        match compress ?? with
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
@@ -118,10 +117,10 @@ Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was
 cons2 :: x:{2**a||1} -> {List {1**a||0}||0}
 ./List-Cons2-Bad.sq:12: Error:
   Insufficient resources
-  when checking Nil ::
-  {List {1**a||p1}||1 + -(fp10 + 0)}
+  when checking Cons ::
+  x5:_ -> x4:_ -> {List {1**a||p0}||-(fp2 + 0)}
   in
-  \x . Cons x (Cons x Nil)
+  \x . Cons x (Cons ?? ??)
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
@@ -132,14 +131,14 @@ append = \xs . \ys .
       Cons z zs -> Cons z (append zs
                              ys)
 
-attach :: <q :: Int> . x:{1**a||0} -> xs:{List {1**a||1 + q} <0>||0} -[1]-> {List {Pair {1**a||0}||q} <0>||0}
+attach :: <q :: Int> . x:{1**a||0} -> xs:{List {1**a||1 + q} <0>||0} -> {List {Pair {1**a||0}||q} <0>||0}
 attach = \x . \xs . 
     match xs with
       Nil -> Nil
       Cons y ys -> Cons (Pair x y)
                      (attach x ys)
 
-pairs :: xs:{List {1**a||2} <2>||0} -[1]-> {List {Pair {1**a||0}||0} <0>||0}
+pairs :: xs:{List {1**a||3} <2>||0} -> {List {Pair {1**a||0}||0} <0>||0}
 pairs = \xs . 
   match xs with
     Nil -> Nil
@@ -155,33 +154,33 @@ append = \xs . \ys .
       Cons z zs -> Cons z (append zs
                              ys)
 
-attach :: <q :: Int> . x:{1**a||0} -> xs:{List {1**a||1 + q} <0>||0} -[1]-> {List {Pair {1**a||0}||q} <0>||0}
+attach :: <q :: Int> . x:{1**a||0} -> xs:{List {1**a||1 + q} <0>||0} -> {List {Pair {1**a||0}||q} <0>||0}
 attach = \x . \xs . 
     match xs with
       Nil -> Nil
       Cons y ys -> Cons (Pair x y)
                      (attach x ys)
 
-pairs :: xs:{List {1**a||1} <2>||0} -[1]-> {List {Pair {1**a||0}||0} <0>||0}
+pairs :: xs:{List {1**a||1} <2>||0} -> {List {Pair {1**a||0}||0} <0>||0}
 ./List-Pairs-Bad.sq:21: Error:
   Insufficient resources
-  when checking ys ::
-  {List {1**a||p28 + 1} <2>||1 + -(fp22 + 0)}
+  when checking attach ::
+  x6:_ -> x5:_ -> {List {Pair {1**a||p13}||p14 + 1} <0>||-(fp10 + 0)}
   in
   \xs . 
     match xs with
-      Cons y ys -> append (attach y
-                             ys) (pairs ys)
+      Cons y ys -> append (attach ??
+                             ??) ??
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-snoc :: x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -[1]-> {List {1**a||0} <0>||0}
+snoc :: x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0}
 snoc = \x . \xs . 
     match xs with
       Nil -> Cons x Nil
       Cons y ys -> Cons y (snoc x ys)
 
-reverse :: xs:{List {1**a||2} <1>||0} -[1]-> {List {1**a||0} <0>||0}
+reverse :: xs:{List {1**a||2} <1>||0} -> {List {1**a||0} <0>||0}
 reverse = \xs . 
   match xs with
     Nil -> Nil
@@ -189,25 +188,25 @@ reverse = \xs .
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-snoc :: x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -[1]-> {List {1**a||0} <0>||0}
+snoc :: x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0}
 snoc = \x . \xs . 
     match xs with
       Nil -> Cons x Nil
       Cons y ys -> Cons y (snoc x ys)
 
-reverse :: xs:{List {1**a||1} <1>||0} -[1]-> {List {1**a||0} <0>||0}
+reverse :: xs:{List {1**a||1} <1>||0} -> {List {1**a||0} <0>||0}
 ./List-Reverse-Bad.sq:12: Error:
   Insufficient resources
-  when checking ys ::
-  {List {1**a||p17 + 1} <1>||1 + -(fp14 + 0)}
+  when checking reverse ::
+  x5:_ -> {List {1**a||p12 + 1} <0>||-(fp6 + 0)}
   in
   \xs . 
     match xs with
-      Cons y ys -> snoc y (reverse ys)
+      Cons y ys -> snoc y (reverse ??)
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-insert :: x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -[1]-> {List {1**a||0} <0>||0}
+insert :: x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0}
 insert = \x . \xs . 
     match xs with
       Nil -> Cons x Nil
@@ -216,7 +215,7 @@ insert = \x . \xs .
           then Cons y (insert x ys)
           else Cons x (Cons y ys)
 
-insertionSort :: xs:{List {1**a||2} <1>||0} -[1]-> {List {1**a||0} <0>||0}
+insertionSort :: xs:{List {1**a||2} <1>||0} -> {List {1**a||0} <0>||0}
 insertionSort = \xs . 
   match xs with
     Nil -> Nil
@@ -225,7 +224,7 @@ insertionSort = \xs .
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-insert :: x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -[1]-> {List {1**a||0} <0>||0}
+insert :: x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0}
 insert = \x . \xs . 
     match xs with
       Nil -> Cons x Nil
@@ -234,11 +233,11 @@ insert = \x . \xs .
           then Cons y (insert x ys)
           else Cons x (Cons y ys)
 
-insertionSort :: xs:{List {1**a||2} <0>||0} -[1]-> {List {1**a||0} <0>||0}
+insertionSort :: xs:{List {1**a||2} <0>||0} -> {List {1**a||0} <0>||0}
 ./List-InsertSort-Coarse-Bad.sq:22: Error:
   Insufficient resources
   when checking ys ::
-  {List {1**a||p17 + 2} <0>||1 + -(fp14 + 0)}
+  {List {1**a||p17 + 2} <0>||-(fp14 + 0)}
   in
   \xs . 
     match xs with
@@ -247,7 +246,7 @@ insertionSort :: xs:{List {1**a||2} <0>||0} -[1]-> {List {1**a||0} <0>||0}
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-subsetSum :: arg1:{EList {Int||0} <2>||0} -> arg0:{Int||0} -[1]-> {Bool||0}
+subsetSum :: arg1:{EList {Int||0} <2>||0} -> arg0:{Int||0} -> {Bool||0}
 subsetSum = \xs . \target . 
     match xs with
       Nil -> target == 0
@@ -257,20 +256,20 @@ subsetSum = \xs . \target .
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-subsetSum :: arg1:{EList {Int||0} <2>||0} -> arg0:{Int||0} -[4]-> {Bool||0}
+subsetSum :: arg1:{EList {Int||0} <2>||0} -> arg0:{Int||0} -> {Bool||0}
 ./List-Subset-Sum-Bad.sq:6: Error:
   Insufficient resources
-  when checking - ::
-  x14:_ -> x13:_ -> {Int||4 + -(fp22 + 0)}
+  when checking subsetSum ::
+  x10:_ -> x9:_ -> {Bool||-(fp18 + 0)}
   in
   \xs . \target . 
       match xs with
-        Cons hd tl -> (subsetSum tl (??
-                                       - ??)) || ??
+        Cons hd tl -> (subsetSum ?? ??)
+                        || ??
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-insert :: x:{1**a||0} -> xs:{List {1**a||if _v < x then 1 else 0} <0>||0} -[1]-> {List {1**a||0} <0>||0}
+insert :: x:{1**a||0} -> xs:{List {1**a||if _v < x then 1 else 0} <0>||0} -> {List {1**a||0} <0>||0}
 insert = \x . \xs . 
     match xs with
       Nil -> Cons x Nil
@@ -279,7 +278,7 @@ insert = \x . \xs .
           then Cons y (insert x ys)
           else Cons x (Cons y ys)
 
-insertionSort :: xs:{List {1**a||2} <if _1 < _0 then 1 else 0>||0} -[1]-> {List {1**a||0} <0>||0}
+insertionSort :: xs:{List {1**a||2} <if _1 < _0 then 1 else 0>||0} -> {List {1**a||0} <0>||0}
 insertionSort = \xs . 
   match xs with
     Nil -> Nil
@@ -288,7 +287,7 @@ insertionSort = \xs .
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-insert :: x:{1**a||0} -> xs:{List {1**a||if _v < x then 1 else 0} <0>||0} -[1]-> {List {1**a||0} <0>||0}
+insert :: x:{1**a||0} -> xs:{List {1**a||if _v < x then 1 else 0} <0>||0} -> {List {1**a||0} <0>||0}
 insert = \x . \xs . 
     match xs with
       Nil -> Cons x Nil
@@ -297,11 +296,11 @@ insert = \x . \xs .
           then Cons y (insert x ys)
           else Cons x (Cons y ys)
 
-insertionSort :: xs:{List {1**a||2} <if _1 > _0 then 1 else 0>||0} -[1]-> {List {1**a||0} <0>||0}
+insertionSort :: xs:{List {1**a||2} <if _1 > _0 then 1 else 0>||0} -> {List {1**a||0} <0>||0}
 ./List-InsertSort-Bad.sq:29: Error:
   Insufficient resources
   when checking ys ::
-  {List {1**a||(if _v < y then p23 else p24) + 2} <if _1 > _0 then 1 else 0>||1 + -(fp14 + 0)}
+  {List {1**a||(if _v < y then p23 else p24) + 2} <if _1 > _0 then 1 else 0>||-(fp14 + 0)}
   in
   \xs . 
     match xs with
@@ -310,7 +309,7 @@ insertionSort :: xs:{List {1**a||2} <if _1 > _0 then 1 else 0>||0} -[1]-> {List 
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-treeInsert :: x:{1**a||0} -> t:{Tree {1**a||0} <x < _0> <1>||0} -[1]-> {Tree {1**a||0} <x < _0> <0>||0}
+treeInsert :: x:{1**a||0} -> t:{Tree {1**a||0} <x < _0> <1>||0} -> {Tree {1**a||0} <x < _0> <0>||0}
 treeInsert = \x . \t . 
     match t with
       Leaf -> Node x Leaf Leaf
@@ -321,11 +320,11 @@ treeInsert = \x . \t .
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-treeInsert :: x:{1**a||0} -> t:{Tree {1**a||0} <x > _0> <1>||0} -[1]-> {Tree {1**a||0} <x < _0> <0>||0}
+treeInsert :: x:{1**a||0} -> t:{Tree {1**a||0} <x > _0> <1>||0} -> {Tree {1**a||0} <x < _0> <0>||0}
 ./BST-Insert-Bad.sq:10: Error:
   Insufficient resources
   when checking l ::
-  {Tree {1**a||p7} <x > _0> <1>||1 + -(fp29 + 0)}
+  {Tree {1**a||p7} <x > _0> <1>||-(fp29 + 0)}
   in
   \x . \t . 
       match t with
