@@ -37,6 +37,7 @@ import Synquid.Resolver (addAllVariables)
 import Synquid.Synthesis.Util hiding (throwError, writeLog)
 import Synquid.Solver.Monad
 import Synquid.Solver.Resource
+import Synquid.Solver.Types
 import Synquid.Solver.CEGIS (initCEGISState)
 
 import Data.Maybe

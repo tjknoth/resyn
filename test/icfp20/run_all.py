@@ -56,7 +56,7 @@ ALL_BENCHMARKS = [
         Benchmark('List-Nub', 'remove duplicates', ['-f=NONTERMINATING']),
         Benchmark('List-InsertSort-Coarse', 'insertion sort (coarse)', ['-f=NONTERMINATING']),
         Benchmark('List-SelectionSort','selection sort', ['-f=NONTERMINATING']),
-        # Benchmark('List-Merge-Sort-Quadratic','quadratic mergesort', ['-f=NONTERMINATING']),
+        # TODO: Benchmark('List-Merge-Sort-Quadratic','quadratic mergesort', ['-f=NONTERMINATING']),
         Benchmark('List-Quick-Sort-Quadratic','quadratic quicksort', ['-f=NONTERMINATING']),
         ]),
     BenchmarkGroup("Non-Polynomial", [], [

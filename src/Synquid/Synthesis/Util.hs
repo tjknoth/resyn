@@ -580,8 +580,8 @@ toVar env (Program _ t) = do
   return (Var (toSort $ baseTypeOf t) g, addLetBound g t env)
 
 
-freePotentialPrefix = "fp"
-condFreePotentialPrefix = "cfp"
+freePotentialPrefix = "fr"
+condFreePotentialPrefix = "cnd"
 
 writeLog level msg = do
   maxLevel <- asks . view $ _1 . explorerLogLevel

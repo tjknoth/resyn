@@ -5,26 +5,27 @@ data List a <q :: Int> where
   Nil  :: List a <q>
   Cons :: a -> List {a | | q} <q> -> List a <q>
  
-min :: x:a -> xs: List {a | | 1} <{0}> -[1]-> a
+min :: x:a -> xs: List {a | | 1} <{0}> -> a
 min = \x. \xs. 
   match xs with
     Nil       -> x
     Cons y ys -> 
       if y < x 
-        then min y ys 
-        else min x ys
+        then tick 1 (min y ys)
+        else tick 1 (min x ys)
 
-remove :: x:a -> xs: List {a| |1} <{0}> -[1]-> List a <{0}>
+remove :: x:a -> xs: List {a| |1} <{0}> -> List a <{0}>
 remove = \x. \xs.
   match xs with
     Nil       -> Nil
     Cons y ys -> 
       if x == y 
         then ys
-        else Cons y (remove x ys)
+        else Cons y (tick 1 (remove x ys))
 
-selectionSort :: List {a | | 6} <{3}> -[1]-> List a <{0}> 
+-- TODO: simplify bound?
+selectionSort :: List {a | | 6} <{3}> -> List a <{0}> 
 selectionSort = \xs. 
-  match xs with -- xs:5,4
-    Nil       -> Nil -- y: 5, ys:9,4
-    Cons y ys -> Cons (min y xs) (remove (min y xs) (selectionSort ys))
+  match xs with 
+    Nil       -> Nil 
+    Cons y ys -> Cons (tick 1 (min y xs)) (tick 1 (remove (tick 1 (min y xs)) (tick 1 (selectionSort ys))))

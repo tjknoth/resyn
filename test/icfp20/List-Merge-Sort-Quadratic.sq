@@ -5,17 +5,19 @@ data List a <q :: Int> where
   Nil  :: List a <q>
   Cons :: a -> List {a | | q} <q> -> List a <q>
 
-split :: <q :: Int>. <p :: Int>. List {a | | 1 + p} <{q}> -> Pair (List {a| |p} <{q}>)
-split = \xs. 
-  match xs with
+-- Overapproximate type for split
+split :: List a <{1}> -> Pair (List a <{1}>)
+split = \l. 
+  match l with
     Nil       -> Pair Nil Nil
-    Cons y ys -> 
-      match split ys with 
-        Pair u v -> Pair (Cons y v) u
+    Cons x xs ->
+      match xs with 
+        Nil -> Pair (Cons x Nil) Nil
+        Cons y ys ->
+          match tick 1 (split ys) with
+            Pair u v -> Pair (Cons x u) (Cons y v)
 
-cmp :: a -> a -[1]-> Bool
-
-merge :: List {a | | 1} <{0}> -> List {a | | 1} <{0}> -> List a <{0}> 
+merge :: List a <{0}> -> List a <{0}> -> List a <{0}> 
 merge = \ps. \qs.
   match ps with
     Nil       -> qs
@@ -23,18 +25,18 @@ merge = \ps. \qs.
       match qs with
         Nil       -> ps
         Cons y ys -> 
-          if cmp x y
+          if x <= y
             then Cons x (Cons y (merge xs ys))
             else Cons y (Cons x (merge xs ys))
 
 
-mergeSort :: List {a | | 2} <{5}> -> List a <{0}>
+mergeSort :: List a <{1}> -> List a <{0}>
 mergeSort = \xs.
   match xs with
     Nil       -> Nil
     Cons y ys ->   
       match ys with
-        Nil       -> Cons y Nil
+        Nil       -> xs
         Cons z zs ->
           match split xs with
             Pair u v -> merge (mergeSort u) (mergeSort v)

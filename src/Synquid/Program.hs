@@ -70,6 +70,7 @@ eraseTypes = fmap (const AnyT)
 symbolName (Program (PSymbol name) _) = name
 symbolList (Program (PSymbol name) _) = [name]
 symbolList (Program (PApp fun arg) _) = symbolList fun ++ symbolList arg
+symbolList (Program (PTick c body) _) = symbolList body
 
 symbolsOf (Program p _) = case p of
   PSymbol name -> Set.singleton name
