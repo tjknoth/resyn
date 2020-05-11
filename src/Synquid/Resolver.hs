@@ -602,6 +602,7 @@ resolveFormula fml = return fml
 -- Move conditional and match statements to top level of untyped program
 normalizeProgram :: UProgram -> UProgram
 normalizeProgram p@Program{content = (PSymbol name)} = p
+normalizeProgram p@Program{content = (PTick c prog)} = Program (PTick c (normalizeProgram prog)) AnyT
 -- Ensure no conditionals inside application
 normalizeProgram p@Program{content = (PApp fun arg)} =
   untypedProg $ case (isCond fun', isCond arg') of

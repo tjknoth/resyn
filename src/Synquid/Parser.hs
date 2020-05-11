@@ -74,6 +74,7 @@ identifier = Token.identifier lexer
 reserved = Token.reserved lexer
 reservedOp = Token.reservedOp lexer
 natural = fromIntegral <$> Token.natural lexer
+integer = fromIntegral <$> Token.integer lexer
 whiteSpace = Token.whiteSpace lexer
 angles = Token.angles lexer
 brackets = Token.brackets lexer
@@ -431,10 +432,20 @@ parseIf = do
   iElse <- parseImpl
   return $ untyped $ PIf iCond iThen iElse
 
-parseETerm = buildExpressionParser (exprTable mkUnary mkBinary False) parseAppTerm <?> "elimination term"
+-- parse a tick expression (can be an E- or I-term)
+parseTick :: Parser UProgram
+parseTick = do
+  reserved "tick"
+  cost <- integer
+  body <- parseImpl
+  return $ untyped $ PTick cost body
+
+
+parseETerm = buildExpressionParser (exprTable mkUnary mkBinary False) parseTerm <?> "elimination term"
   where
     mkUnary op = untyped . PApp (untyped $ PSymbol (unOpTokens Map.! op))
     mkBinary op p1 p2 = untyped $ PApp (untyped $ PApp (untyped $ PSymbol (binOpTokens Map.! op)) p1) p2
+    parseTerm = parseTick <|> parseAppTerm -- tick or application
     parseAppTerm = do
       head <- parseAtomTerm
       args <- many (sameOrIndented >> (try parseAtomTerm <|> parens parseImpl))

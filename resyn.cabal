@@ -77,6 +77,9 @@ Library
                     , keys >= 3.11
                     , extra >= 1.4
                     , bifunctors >= 5.0
+                    , conduit
+                    , conduit-extra
+                    , text
 --                    , limp >= 0.3
 --                    , limp-cbc >= 0.3
   

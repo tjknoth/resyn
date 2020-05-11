@@ -41,7 +41,7 @@ main = do
                lfp bfs
                out_file out_module outFormat resolve
                print_spec print_stats log_ 
-               resources mult forall cut nump constTime cegis_max ec res_solver) -> do
+               resources mult forall cut nump constTime cegis_max ec res_solver logfile) -> do
                   let 
                     resArgs = defaultResourceArgs {
                     _shouldCheckResources = resources,
@@ -49,7 +49,8 @@ main = do
                     _constantTime = constTime,
                     _cegisBound = cegis_max,
                     _enumerate = ec,
-                    _rsolver = res_solver
+                    _rsolver = res_solver,
+                    _sygusLog = logfile
                   }
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
@@ -138,7 +139,8 @@ data CommandLineArgs
         ct :: Bool,
         cegis_max :: Int,
         eac :: Bool,
-        res_solver :: ResourceSolver
+        res_solver :: ResourceSolver,
+        logfile :: Maybe String
       }
   deriving (Data, Typeable, Show, Eq)
 
@@ -175,7 +177,8 @@ synt = Synthesis {
   ct                  = False           &= help ("Require that all branching expressions consume a constant amount of resources (default: False)"),
   cegis_max           = 100             &= help ("Maximum number of iterations through the CEGIS loop (default: 100)"),
   eac                 = False           &= help ("Enumerate-and-check instead of round-trip resource analysis (default: False)"),
-  res_solver          = Incremental     &= help (unwords ["Which solver should be used for resource constraints?", show CVC4, show CEGIS, show Incremental, "(default: ", show Incremental, ")"])
+  res_solver          = Incremental     &= help (unwords ["Which solver should be used for resource constraints?", show CVC4, show CEGIS, show Incremental, "(default: ", show Incremental, ")"]),
+  logfile             = Nothing         &= help ("File for logging SYGUS constraints (default: no logging)")
   } &= auto &= help "Synthesize goals specified in the input file"
     where
       defaultFormat = outputFormat defaultSynquidParams
@@ -216,7 +219,8 @@ defaultResourceArgs = ResourceArgs {
   _constantTime = False,
   _cegisBound = 100,
   _enumerate = False,
-  _rsolver = Incremental
+  _rsolver = Incremental,
+  _sygusLog = Nothing
 }
 
 -- | Parameters for constraint solving

@@ -21,19 +21,20 @@ import Synquid.Pretty
 import Synquid.Solver.CEGIS
 import Synquid.Solver.Types
 import Synquid.Synthesis.Util hiding (writeLog)
+import Synquid.Solver.CVC4
 
-import Data.Maybe
-import Data.Set (Set)
+import           Data.Maybe
+import           Data.Set (Set)
 import qualified Data.Set as Set
-import Data.Map (Map)
+import           Data.Map (Map)
 import qualified Data.Map as Map
-import Data.List (tails)
-import Control.Monad.Logic
-import Control.Monad.Reader
-import Control.Lens
-import Debug.Trace
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Semigroup (sconcat)
+import           Data.List (tails)
+import           Control.Monad.Logic
+import           Control.Monad.Reader
+import           Control.Lens
+import           Debug.Trace
+import           Data.List.NonEmpty (NonEmpty(..))
+import           Data.Semigroup (sconcat)
 
 
 -- | Process, but do not solve, a set of resource constraints
@@ -292,7 +293,12 @@ deployHigherOrderSolver :: RMonad s
                         -> TCSolver s Bool
 -- Solve with synthesizer
 deployHigherOrderSolver CVC4 rfmls = do
-  error "CVC4 not yet supported"
+  let runInSolver = lift . lift . lift
+  log <- view (resourceArgs . sygusLog)
+  ufmls <- map (Var IntS) . Set.toList <$> use universalVars
+  universals <- collectUniversals rfmls ufmls
+  rvs <- use resourceVars
+  runInSolver $ solveWithCVC4 log rvs rfmls universals
 -- Solve with CEGIS (incremental or not)
 deployHigherOrderSolver _ rfmls = do
   let runInSolver = lift . lift . lift

@@ -3,8 +3,12 @@
 (synth-fun f ((y Int)) Int)
 
 (declare-var x Int)
-(declare-var y Int)
+;; (declare-var y Int)
 
-(constraint (= (f y) x))
+;; (constraint (and (= (f x) 1) (= (f x) 2)))
+;; (constraint (= (f x) 1))
+;; (constraint (= (f x) 2))
+;; (constraint (= (f x) 0))
+(constraint (> (f x) x))
 
 (check-synth)

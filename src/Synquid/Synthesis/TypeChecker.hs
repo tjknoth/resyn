@@ -152,6 +152,9 @@ reconstructI' env t (PLet x iDef@(Program (PFun _ _) _) iBody) = do -- lambda-le
   let ctx p = Program (PLet x uHole p) t
   pBody <- inContext ctx $ reconstructI env t iBody
   return $ ctx pBody
+--reconstructI' env t (PTick c body) = 
+--  let env' = over freePotential (`subtractFormulas` IntLit c) env
+--   in reconstructI env' t body
 reconstructI' env t@(LetT x tDef tBody) impl = 
   reconstructI' (addVariable x tDef env) tBody impl
 reconstructI' env t@(FunctionT _ tArg tRes c) impl = case impl of
@@ -295,6 +298,9 @@ reconstructE' env typ (PSymbol name) =
   case lookupSymbol name (arity typ) (hasSet typ) env of
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
     Just sch -> retrieveAndCheckVarType name sch typ env 
+reconstructE' env t (PTick c body) = 
+  let env' = over freePotential (`subtractFormulas` IntLit c) env
+   in reconstructE env' t body
 reconstructE' env typ p@(PApp iFun iArg) = do
   x <- runInSolver $ freshVar env "x"
   let fp = env ^. freePotential

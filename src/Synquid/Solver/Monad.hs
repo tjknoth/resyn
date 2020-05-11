@@ -48,7 +48,8 @@ data ResourceArgs = ResourceArgs {
   _constantTime :: Bool,
   _cegisBound :: Int,
   _enumerate :: Bool,
-  _rsolver :: ResourceSolver
+  _rsolver :: ResourceSolver,
+  _sygusLog :: Maybe String
 } 
 
 makeLenses ''ResourceArgs

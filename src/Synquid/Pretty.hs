@@ -355,6 +355,7 @@ prettyProgram (Program p typ) = case p of
     PFix fs e -> prettyProgram e
     PLet x e e' -> linebreak <> (align $ hang tab (keyword "let" <+> withType (text x) (typeOf e) <+> operator "=" </> prettyProgram e </> keyword "in") $+$ prettyProgram e')
     PHole -> if show (pretty typ) == dontCare then operator "??" else hlParens $ operator "?? ::" <+> pretty typ
+    PTick c p -> keyword "tick" <+> pretty c <+> parens (pretty p) 
     PErr -> keyword "error"
   where
     withType doc t = doc -- <> text ":" <+> pretty t

@@ -36,6 +36,7 @@ data BareProgram t =
   PFix ![Id] !(Program t) |                    -- ^ Fixpoint
   PLet !Id !(Program t) !(Program t) |         -- ^ Let binding
   PHole |                                      -- ^ Hole (program to fill in)
+  PTick Int !(Program t) |                     -- ^ Tick (cost annotation)
   PErr                                         -- ^ Error
   deriving (Show, Eq, Ord, Functor)
 
@@ -78,6 +79,7 @@ symbolsOf (Program p _) = case p of
   PMatch scr cases -> symbolsOf scr `Set.union` Set.unions (map (symbolsOf . expr) cases)
   PFix x body -> symbolsOf body
   PLet x def body -> symbolsOf def `Set.union` symbolsOf body
+  PTick c body -> symbolsOf body
   _ -> Set.empty
 
 errorProgram = Program PErr (vart dontCare ftrue)
@@ -97,6 +99,7 @@ programSubstituteSymbol name subterm (Program p t) = Program (programSubstituteS
     programSubstituteSymbol' (PMatch scr cases) = PMatch (pss scr) (map (\(Case ctr args pBody) -> Case ctr args (pss pBody)) cases)
     programSubstituteSymbol' (PFix args pBody) = PFix args (pss pBody)
     programSubstituteSymbol' (PLet x pDef pBody) = PLet x (pss pDef) (pss pBody)
+    programSubstituteSymbol' (PTick c pBody) = PTick c $ pss pBody
 
 
 -- | Convert an executable formula into a program

@@ -7,13 +7,12 @@
 (declare-var x Int)
 (declare-var y Int)
 
-(constraint (and
-              (= (f x y) (+ (g x y) (h x y)))
-              (=> (> x y) (>= (g x y) 1))
-              (>= (f x y) 0)
-              (>= (g x y) 0)
-              (>= (h x y) 0)
-              ))
+(constraint (= (f x y) (+ (g x y) (h x y))))
+(constraint (=> (> x y) (>= (g x y) 1)))
+(constraint (=> (<= x y) (< (g x y) 1)))
+(constraint (>= (f x y) 0))
+(constraint (>= (g x y) 0))
+(constraint (>= (h x y) 0))
 
 (check-synth)
 
