@@ -190,11 +190,11 @@ def write_csv():
                 outfile.write (b.name + ',')
                 result = results [b.name]
                 optstr = 'True' if result.optimized else '-'
-                outfile.write (result.spec_size + ',')
-                outfile.write (result.code_size + ',')
+                # outfile.write (result.spec_size + ',')
+                # outfile.write (result.code_size + ',')
                 outfile.write (format_time(result.time) + ',')
-                outfile.write (format_time(result.nres_time) + ',')
-                outfile.write (result.nres_code_size + ',')
+                # outfile.write (format_time(result.nres_time) + ',')
+                # outfile.write (result.nres_code_size + ',')
                 #outfile.write (result.eac_time + ',')
                 #outfile.write (optstr + ',')
                 outfile.write ('\n')
