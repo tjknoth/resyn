@@ -56,7 +56,7 @@ ALL_BENCHMARKS = [
         Benchmark('List-Nub', 'remove duplicates', ['-f=NONTERMINATING']),
         Benchmark('List-InsertSort-Coarse', 'insertion sort (coarse)', ['-f=NONTERMINATING']),
         Benchmark('List-SelectionSort','selection sort', ['-f=NONTERMINATING']),
-        # TODO: Benchmark('List-Merge-Sort-Quadratic','quadratic mergesort', ['-f=NONTERMINATING']),
+        Benchmark('List-Merge-Sort-Quadratic','quadratic mergesort', ['-f=NONTERMINATING']),
         Benchmark('List-Quick-Sort-Quadratic','quadratic quicksort', ['-f=NONTERMINATING']),
         ]),
     BenchmarkGroup("Non-Polynomial", [], [
@@ -104,7 +104,7 @@ def run_benchmark(name, opts, default_opts):
       end = time.time()
 
       print('{0:0.2f}'.format(end - start), end = ' ')
-      if synthesis_res.returncode: # Synthesis failed
+      if synthesis_res.returncode != 0: # Synthesis failed
           print(Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL, end = ' ')
           synthesis_output = ''
           results [name] = SynthesisResult(name, (end - start), '-', '-', '-', '-', '-')
@@ -152,7 +152,7 @@ def run_version(name, variant_id, variant_opts, logfile, with_res, results_file)
     if synthesis_res.returncode == 124:  # Timeout: record timeout
       print(Back.RED + Fore.RED + Style.BRIGHT + 'TIMEOUT' + Style.RESET_ALL, end = ' ')
       results_file[name].nres_time = -1
-    elif synthesis_res.returncode: # Synthesis failed: record failure
+    elif synthesis_res.returncode != 0: # Synthesis failed: record failure
       print(Back.RED + Fore.RED + Style.BRIGHT + 'FAIL' + Style.RESET_ALL, end = ' ')
       results_file[name].nres_time = -2
     else: # Synthesis succeeded: record time for variant
@@ -171,7 +171,8 @@ def run_version(name, variant_id, variant_opts, logfile, with_res, results_file)
           results_file[name].optimized = True
           results_file[name].nres_code_size = solution_size
       except StopIteration:
-          print('Unchanged', end=' ')
+          pass
+          # print('Unchanged', end=' ')
 
 def format_time(t):
     if isinstance(t, str):
