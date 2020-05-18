@@ -533,6 +533,7 @@ programNodeCount (Program p _) = case p of
   PMatch e cases -> 1 + programNodeCount e + sum (map (\(Case _ _ e) -> programNodeCount e) cases)
   PFix _ e -> programNodeCount e
   PLet x e e' -> 1 + programNodeCount e + programNodeCount e'
+  PTick _ e -> 1 + programNodeCount e
   PHole -> 0
   PErr -> 1
 
