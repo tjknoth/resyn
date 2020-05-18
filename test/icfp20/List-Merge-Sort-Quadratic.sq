@@ -5,7 +5,6 @@ data List a <q :: Int> where
   Nil  :: List a <q>
   Cons :: a -> List {a | | q} <q> -> List a <q>
 
--- Overapproximate type for split
 split :: List a <{1}> -> Pair (List a <{1}>)
 split = \l. 
   match l with

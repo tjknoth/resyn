@@ -10,26 +10,28 @@ module Synquid.Solver.CVC4 (
 import Synquid.Pretty
 import Synquid.Logic
 import Synquid.Util
+import Synquid.Program
 import Synquid.Solver.Types
 import Synquid.Solver.Monad
 
 import           Conduit
--- import           Data.Conduit
 import           Data.Conduit.Process
 import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
 import           Data.Map (Map)
--- import           Control.Monad.
+import qualified Data.Map as Map
+import           System.Exit
 
 solveWithCVC4 :: RMonad s
               => Maybe String
+              -> Environment
               -> Map String [Formula]
               -> [ProcessedRFormula]
               -> Universals
               -> s Bool
-solveWithCVC4 withLog rvars rfmls univs =
+solveWithCVC4 withLog env rvars rfmls univs =
   let log = maybe Direct Debug withLog
-   in parseSat <$> getResult log (assembleSygus rvars rfmls univs) 
+   in parseSat <$> getResult log (assembleSygus env rvars rfmls univs) 
 
 data ConstraintMode = Direct | Debug String -- pipe directly to solver, or write to file first for debugging
   deriving (Show, Eq)
@@ -42,6 +44,7 @@ data SygusGoal = SygusGoal {
 } deriving (Show, Eq)
 
 data SygusProblem = SygusProblem {
+  declarations :: Map Id DatatypeDef,
   constraints :: [Formula],
   functions :: [SygusGoal],
   universals :: [(Id, Sort)]
@@ -60,10 +63,13 @@ getResult mode problem = unwords . map T.unpack <$>
   case mode of
     Direct -> liftIO $ do 
       let cmd = unwords $ cvc4 ++ flags
-      (exitCode, res, err) <- sourceCmdWithStreams cmd (yieldMany (printSygus problem) .| mapC (T.pack . show) .| encodeUtf8C) -- stdin
+      let send = yieldMany (printSygus problem) .| mapC (T.pack . show) .| unlinesC .| encodeUtf8C
+      (exitCode, res, err) <- sourceCmdWithStreams cmd send -- stdin 
                                                        (decodeUtf8C .| sinkList) -- stdout 
                                                        (decodeUtf8C .| sinkList) -- stderr
-      return res -- TODO: is there something smarter than writing all output to memory?
+      case exitCode of 
+        ExitSuccess -> return res -- TODO: is there something smarter than writing all output to memory?
+        ExitFailure e -> error $ "CVC4 exited with error " ++ show e ++ "\n" ++ show (head err)
     Debug logfile -> liftIO $ do 
       runResourceT $ runConduit $ yieldMany (printSygus problem) 
                                .| mapC (T.pack . show) 
@@ -72,11 +78,19 @@ getResult mode problem = unwords . map T.unpack <$>
                                .| sinkFile logfile  -- write to file
       let cmd = unwords $ cvc4 ++ [logfile] ++ flags 
       (exitCode, res) <- sourceCmdWithConsumer cmd (decodeUtf8C .| sinkList)
-      return res 
+      case exitCode of 
+        ExitSuccess -> return res 
+        ExitFailure e -> error $ "CVC4 exited with error " ++ show e
 
-assembleSygus :: Map String [Formula] -> [ProcessedRFormula] -> Universals -> SygusProblem
-assembleSygus rvars rfmls univs = undefined
-  
+assembleSygus :: Environment -> Map String [Formula] -> [ProcessedRFormula] -> Universals -> SygusProblem
+assembleSygus env rvars rfmls univs = SygusProblem dts cs fs us
+  where
+    collectArgs (Var s x) = (x, s)
+    buildSygusGoal x args = SygusGoal x (length args) IntS (map collectArgs args)
+    cs = map (\rf -> _knownAssumptions rf |=>| _rconstraints rf) rfmls
+    fs = Map.elems $ Map.mapWithKey buildSygusGoal rvars  
+    us = map (\(_, Var s x) -> (x, s)) (uvars univs)
+    dts = _datatypes env
 
 ---------------------------------------------
 ---------------------------------------------
@@ -85,10 +99,10 @@ assembleSygus rvars rfmls univs = undefined
 ---------------------------------------------
 
 printSygus :: SygusProblem -> [Doc]
-printSygus (SygusProblem cs fs us) = header :
+printSygus (SygusProblem _ cs fs us) = header :
   (map declareGoal fs ++ map declareUniversal us ++ map declareConstraint cs ++ [footer])
 
-header :: Doc
+header :: Doc -- TODO: support datatypes in declaration?
 header = sexp (text "set-logic") ["LIA"]
 
 footer :: Doc
@@ -104,6 +118,9 @@ declareUniversal (x, s) = sexp (text "declare-var") [text x, pretty s]
 
 declareConstraint :: Formula -> Doc
 declareConstraint f = sexp (text "constraint") [asSexp f]
+
+declareData :: Id -> DatatypeDef -> Doc
+declareData dt (DatatypeDef tps pps pvs cs _ _) = sexp (text "declare-datatype") [dt]
 
 -- Print formula to sygus language
 asSexp :: Formula -> Doc

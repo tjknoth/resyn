@@ -128,7 +128,7 @@ embedAndProcessConstraint env extra rfml = do
        >=> instantiateUnknowns
        >=> instantiateAxioms env
        >=> elaborateAssumptions
-       >=> updateVars
+       >=> updateVariables
        >=> formatVariables
        >=> applyAssumptions
   if hasUnivs
@@ -142,8 +142,8 @@ embedAndProcessConstraint env extra rfml = do
 translateAndFinalize :: (MonadHorn s, RMonad s) => RawRFormula -> TCSolver s ProcessedRFormula 
 translateAndFinalize rfml = do 
   writeLog 3 $ indent 4 $ pretty (bodyFml rfml)
-  rfml' <- replaceAbstractPotentials rfml
-  z3lit <- lift . lift . lift $ translate $ bodyFml rfml'
+  -- rfml' <- replaceAbstractPotentials rfml -- unnecessary? why was this here?
+  z3lit <- lift . lift . lift $ translate $ bodyFml rfml
   return $ rfml {
     _knownAssumptions = ftrue,
     _unknownAssumptions = (),
@@ -237,8 +237,8 @@ elaborateAssumptions rfml = do
   let completeEmb = Set.fromList $ congruenceAxioms ++ concat instantiatedEmb
   return (set knownAssumptions completeEmb rfml, allPreds)
 
-updateVars :: MonadHorn s => (RawRFormula, Set Formula) -> TCSolver s RawRFormula
-updateVars (rfml, allPreds) = do
+updateVariables :: MonadHorn s => (RawRFormula, Set Formula) -> TCSolver s RawRFormula
+updateVariables (rfml, allPreds) = do
   -- substitute all universally quantified expressions in body, known, and allPreds  
   let substs = _varSubsts rfml
   cons <- use matchCases
@@ -293,12 +293,18 @@ deployHigherOrderSolver :: RMonad s
                         -> TCSolver s Bool
 -- Solve with synthesizer
 deployHigherOrderSolver CVC4 rfmls = do
-  let runInSolver = lift . lift . lift
-  log <- view (resourceArgs . sygusLog)
-  ufmls <- map (Var IntS) . Set.toList <$> use universalVars
-  universals <- collectUniversals rfmls ufmls
-  rvs <- use resourceVars
-  runInSolver $ solveWithCVC4 log rvs rfmls universals
+  -- check that there are no measures in problem domain
+  dom <- fromJust <$> asks _cegisDomain
+  case dom of
+    Variable -> do
+      let runInSolver = lift . lift . lift
+      log <- view (resourceArgs . sygusLog)
+      ufmls <- map (Var IntS) . Set.toList <$> use universalVars
+      universals <- collectUniversals rfmls ufmls
+      rvs <- use resourceVars
+      env <- use initEnv 
+      runInSolver $ solveWithCVC4 log env rvs rfmls universals
+    _ -> error "Cannot use CVC4 to solve resource constraints involving measures"  
 -- Solve with CEGIS (incremental or not)
 deployHigherOrderSolver _ rfmls = do
   let runInSolver = lift . lift . lift
