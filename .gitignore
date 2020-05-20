@@ -45,3 +45,4 @@ results
 *.smt2
 .ghci
 stack.yaml.lock
+logs/*
