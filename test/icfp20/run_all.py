@@ -31,7 +31,7 @@ RESOURCE_OPTS = []
 RESOURCES_OFF_OPT = ['-r=false']                                # Option to disable resource analysis
 FNULL = open(os.devnull, 'w')                                   # Null file
 
-PAPER_PATH = '.'
+PAPER_PATH = './'
 
 class Benchmark:
     def __init__(self, name, description, options=[], np = '-'):
