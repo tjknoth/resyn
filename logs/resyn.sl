@@ -1,5 +1,0 @@
-(set-logic LIA)
-(synth-fun f ((x Int)) Int)
-(declare-var x Int)
-(constraint (> (f x) x))
-(check-synth)

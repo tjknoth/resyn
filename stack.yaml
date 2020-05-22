@@ -8,7 +8,7 @@ extra-deps:
   - z3-4.3.1
 #  - limp-0.3.2.3
 #  - limp-cbc-0.3.2.3
-# extra-include-dirs:
-#  - <z3-home>/src/api
-# extra-lib-dirs:
-#  - <z3-home>/build  
+extra-include-dirs:
+  - /home/artifact/z3/include
+extra-lib-dirs:
+  - /home/artifact/z3/bin
