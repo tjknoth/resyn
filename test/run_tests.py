@@ -177,6 +177,8 @@ RESOURCE_VERIFICATION_BENCHMARKS = [
     ('List-Subset-Sum-Bad',          ['-f=Nonterminating']),
     ('List-InsertSort',              ['-f=Nonterminating', '--res-solver=CEGIS']),
     ('List-InsertSort-Bad',          ['-f=Nonterminating', '--res-solver=CEGIS']),
+    ('List-InsertSort-Compares',     ['-f=Nonterminating', '--res-solver=CEGIS']),
+    ('List-InsertSort-Compares-Bad', ['-f=Nonterminating', '--res-solver=CEGIS']),
     ('BST-Insert',                   ['-f=Nonterminating', '--res-solver=CEGIS']),
     ('BST-Insert-Bad',               ['-f=Nonterminating', '--res-solver=CEGIS'])
 ]

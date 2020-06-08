@@ -315,6 +315,45 @@ insertionSort :: xs:{List {1**a||2} <if _1 > _0 then 1 else 0>||0} -> {List {1**
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+insert :: x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0}
+insert = \x . \xs . 
+    match xs with
+      Nil -> Cons x Nil
+      Cons y ys -> 
+        if tick 1 (y < x)
+          then Cons y (insert x ys)
+          else Cons x (Cons y ys)
+
+insertionSort :: xs:{List {1**a||2} <1>||0} -> {List {1**a||0} <0>||0}
+insertionSort = \xs . 
+  match xs with
+    Nil -> Nil
+    Cons y ys -> tick 1 (insert y
+                           (tick 1 (insertionSort ys)))
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+insert :: x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0}
+insert = \x . \xs . 
+    match xs with
+      Nil -> Cons x Nil
+      Cons y ys -> 
+        if tick 1 (y < x)
+          then Cons y (insert x ys)
+          else Cons x (Cons y ys)
+
+insertionSort :: xs:{List {1**a||2} <0>||0} -> {List {1**a||0} <0>||0}
+./List-InsertSort-Compares-Bad.sq:19: Error:
+  Insufficient resources
+  when checking ys ::
+  {List {1**a||p17 + 2} <0>||-(fr14 + 0)}
+  in
+  \xs . 
+    match xs with
+      Cons y ys -> tick 1 (??)
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 treeInsert :: x:{1**a||0} -> t:{Tree {1**a||0} <x < _0> <1>||0} -> {Tree {1**a||0} <x < _0> <0>||0}
 treeInsert = \x . \t . 
     match t with
