@@ -15,7 +15,7 @@ contains = \x . \t .
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 contains :: x:{1**a||0} -> t:{BST {1**a||1}||0} -> {Bool|_v == (x in elems t)|0}
-./BST-Contains-Bad.sq:18: Error:
+neg/BST-Contains.sq:18: Error:
   Insufficient resources
   when checking contains ::
   x6:_ -> x5:_ -> {Bool|_v == (x in elems t)|0}
@@ -51,7 +51,7 @@ append = \xs . \ys .
                      (tick 1 (append zs ys))
 
 append2 :: xs:{List {1**a||0}||0} -> ys:{List {1**a||1}||0} -> zs:{List {1**a||1}||0} -> {List {1**a||0}|len _v == (len xs + len ys) + len zs && elems _v == (elems xs + elems ys) + elems zs|0}
-./List-Append2-Bad.sq:26: Error:
+neg/List-Append2.sq:26: Error:
   Insufficient resources
   when checking ys ::
   {List {1**a||p17 + 1}||-(fr14 + 0)}
@@ -71,7 +71,7 @@ append = \xs . \ys .
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 append :: xs:{List {1**a||0}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0}
-./List-Append-Bad.sq:19: Error:
+neg/List-Append.sq:19: Error:
   Insufficient resources
   when checking append ::
   x6:_ -> x5:_ -> {List {1**a||p1}||-(fr6 + 0)}
@@ -98,7 +98,7 @@ compress = \xs .
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 compress :: xs:{List {1**a||0}||0} -> {List {1**a||0}||0}
-./List-Compress-Bad.sq:16: Error:
+neg/List-Compress.sq:16: Error:
   Insufficient resources
   when checking compress ::
   x1:_ -> {List {1**A3||0}||0} in
@@ -116,7 +116,7 @@ cons2 = \x . tick 1 (Cons x
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 cons2 :: x:{2**a||1} -> {List {1**a||0}||0}
-./List-Cons2-Bad.sq:12: Error:
+neg/List-Cons2.sq:12: Error:
   Insufficient resources
   when checking Cons ::
   x5:_ -> x4:_ -> {List {1**a||p0}||-(fr2 + 0)}
@@ -164,7 +164,7 @@ attach = \x . \xs .
                      (tick 1 (attach x ys))
 
 pairs :: xs:{List {1**a||1} <2>||0} -> {List {Pair {1**a||0}||0} <0>||0}
-./List-Pairs-Bad.sq:21: Error:
+neg/List-Pairs.sq:21: Error:
   Insufficient resources
   when checking attach ::
   x6:_ -> x5:_ -> {List {Pair {1**a||p13}||p14 + 1} <0>||-(fr10 + 0)}
@@ -199,7 +199,7 @@ snoc = \x . \xs .
                      (tick 1 (snoc x ys))
 
 reverse :: xs:{List {1**a||1} <1>||0} -> {List {1**a||0} <0>||0}
-./List-Reverse-Bad.sq:12: Error:
+neg/List-Reverse.sq:12: Error:
   Insufficient resources
   when checking reverse ::
   x5:_ -> {List {1**a||p12 + 1} <0>||-(fr6 + 0)}
@@ -240,7 +240,7 @@ insert = \x . \xs .
           else Cons x (Cons y ys)
 
 insertionSort :: xs:{List {1**a||2} <0>||0} -> {List {1**a||0} <0>||0}
-./List-InsertSort-Coarse-Bad.sq:22: Error:
+neg/List-InsertSort-Coarse.sq:22: Error:
   Insufficient resources
   when checking ys ::
   {List {1**a||p17 + 2} <0>||-(fr14 + 0)}
@@ -262,7 +262,7 @@ subsetSum = \xs . \target .
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 subsetSum :: arg1:{EList {Int||0} <2>||0} -> arg0:{Int||0} -> {Bool||0}
-./List-Subset-Sum-Bad.sq:6: Error:
+neg/List-Subset-Sum.sq:6: Error:
   Insufficient resources
   when checking subsetSum ::
   x10:_ -> x9:_ -> {Bool||-(fr18 + 0)}
@@ -304,7 +304,7 @@ insert = \x . \xs .
           else Cons x (Cons y ys)
 
 insertionSort :: xs:{List {1**a||2} <if _1 > _0 then 1 else 0>||0} -> {List {1**a||0} <0>||0}
-./List-InsertSort-Bad.sq:29: Error:
+neg/List-InsertSort.sq:29: Error:
   Insufficient resources
   when checking ys ::
   {List {1**a||(if _v < y then p23 else p24) + 2} <if _1 > _0 then 1 else 0>||-(fr14 + 0)}
@@ -343,7 +343,7 @@ insert = \x . \xs .
           else Cons x (Cons y ys)
 
 insertionSort :: xs:{List {1**a||2} <0>||0} -> {List {1**a||0} <0>||0}
-./List-InsertSort-Compares-Bad.sq:19: Error:
+neg/List-InsertSort-Compares.sq:19: Error:
   Insufficient resources
   when checking ys ::
   {List {1**a||p17 + 2} <0>||-(fr14 + 0)}
@@ -366,7 +366,7 @@ treeInsert = \x . \t .
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 treeInsert :: x:{1**a||0} -> t:{Tree {1**a||0} <x > _0> <1>||0} -> {Tree {1**a||0} <x < _0> <0>||0}
-./BST-Insert-Bad.sq:10: Error:
+neg/BST-Insert.sq:10: Error:
   Insufficient resources
   when checking l ::
   {Tree {1**a||p7} <x > _0> <1>||-(fr29 + 0)}

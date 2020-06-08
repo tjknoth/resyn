@@ -3,7 +3,7 @@ data List a <q :: Int> where
   Cons :: x:a -> xs: List {a | | q} <q> -> List a <q>
 
 data Tree a <q :: Int> where
-  Leaf :: x:a -> Tree a <q>
+  Leaf :: x: {a| |q} -> Tree a <q>
   Node :: l: { Tree {a | | q} <q> | | q}
        -> r: Tree {a | | q} <q> 
        -> Tree a <q>
@@ -14,13 +14,13 @@ merge = \xs. \ys.
     Nil        -> ys
     Cons xh xt -> match ys with
                     Nil        -> xs
-                    Cons yh yt -> if xh < yh
-                                    then Cons xh (tick 1 (merge xt (Cons yh yt)))
-                                    else Cons yh (tick 1 (merge (Cons xh xt) yt))
+                    Cons yh yt -> if tick 1 (xh < yh)
+                                    then Cons xh (merge xt (Cons yh yt))
+                                    else Cons yh (merge (Cons xh xt) yt)
 
 --takes the contents of a tree and arranges them in a sorted list
-flatten :: Tree {a | | 1} <{3}> -> List a <{0}>
+flatten :: Tree a <{1}> -> List a <{0}>
 flatten = \t. 
   match t with
     Leaf x -> Cons x Nil
-    Node l r -> tick 1 (merge (tick 1 (flatten l)) (tick 1 (flatten r)))
+    Node l r -> merge (flatten l) (flatten r)

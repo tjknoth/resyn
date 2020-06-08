@@ -158,29 +158,17 @@ UNIT_TESTS = [
 
 RESOURCE_VERIFICATION_BENCHMARKS = [
     ('BST-Contains',                 ['-f=Nonterminating']),
-    ('BST-Contains-Bad',             ['-f=Nonterminating']),
     ('List-Append2',                 ['-f=Nonterminating']),
-    ('List-Append2-Bad',             ['-f=Nonterminating']),
     ('List-Append',                  ['-f=Nonterminating']),
-    ('List-Append-Bad',              ['-f=Nonterminating']),
     ('List-Compress',                ['-f=Nonterminating']),
-    ('List-Compress-Bad',            ['-f=Nonterminating']),
     ('List-Cons2',                   ['-f=Nonterminating']),
-    ('List-Cons2-Bad',               ['-f=Nonterminating']),
     ('List-Pairs',                   ['-f=Nonterminating']),
-    ('List-Pairs-Bad',               ['-f=Nonterminating']),
     ('List-Reverse',                 ['-f=Nonterminating']),
-    ('List-Reverse-Bad',             ['-f=Nonterminating']),
     ('List-InsertSort-Coarse',       ['-f=Nonterminating']),
-    ('List-InsertSort-Coarse-Bad',   ['-f=Nonterminating']),
     ('List-Subset-Sum',              ['-f=Nonterminating']),
-    ('List-Subset-Sum-Bad',          ['-f=Nonterminating']),
     ('List-InsertSort',              ['-f=Nonterminating', '--res-solver=CEGIS']),
-    ('List-InsertSort-Bad',          ['-f=Nonterminating', '--res-solver=CEGIS']),
     ('List-InsertSort-Compares',     ['-f=Nonterminating', '--res-solver=CEGIS']),
-    ('List-InsertSort-Compares-Bad', ['-f=Nonterminating', '--res-solver=CEGIS']),
     ('BST-Insert',                   ['-f=Nonterminating', '--res-solver=CEGIS']),
-    ('BST-Insert-Bad',               ['-f=Nonterminating', '--res-solver=CEGIS'])
 ]
 
 RESOURCE_SYNTHESIS_BENCHMARKS = [
@@ -256,9 +244,9 @@ def printok(str):
 def printwarn(str):
     print (Back.YELLOW + Fore.YELLOW + Style.BRIGHT + str + Style.RESET_ALL, end = ' ')
 
-def run_benchmark(name, opts, path='.'):
+def run_benchmark(name, opts, path='.', neg=False):
     global total_time
-    print (name, end=' ')
+    print (name + "(bad)" if neg else name, end=' ')
 
     with open(LOGFILE_NAME, 'a+') as logfile:
         start = time.time()
@@ -269,8 +257,7 @@ def run_benchmark(name, opts, path='.'):
         t = end - start
         print ('{0:0.2f}'.format(t), end=' ')
         total_time = total_time + t
-        bad_flag = name.endswith("-Bad")
-        if (bool(return_code) ^ bad_flag):
+        if (bool(return_code) ^ neg):
             printerr("FAIL")
         else:
             printok("OK")
@@ -415,8 +402,10 @@ if __name__ == '__main__':
         os.chdir('resources/verification')
         clear_log()
         for (name, args) in RESOURCE_VERIFICATION_BENCHMARKS:
-            run_benchmark(name, args)
+            run_benchmark(name, args, 'pos')
+            run_benchmark(name, args, 'neg', True)
         fail = check_diff()
+
         os.chdir('../..')
 
     if not fail and a.res_synth:

@@ -85,10 +85,12 @@ getResult mode problem = unwords . map T.unpack <$>
 assembleSygus :: Environment -> Map String [Formula] -> [ProcessedRFormula] -> Universals -> SygusProblem
 assembleSygus env rvars rfmls univs = SygusProblem dts cs fs us
   where
+    isData (DataS _ _) = True
+    isData _ = False
     collectArgs (Var s x) = (x, s)
     buildSygusGoal x args = SygusGoal x (length args) IntS (map collectArgs args)
     cs = map (\rf -> _knownAssumptions rf |=>| _rconstraints rf) rfmls
-    fs = Map.elems $ Map.mapWithKey buildSygusGoal rvars  
+    fs = Map.elems $ Map.mapWithKey buildSygusGoal $ fmap (filter (not . isData . sortOf)) rvars  
     us = map (\(_, Var s x) -> (x, s)) (uvars univs)
     dts = _datatypes env
 
@@ -97,6 +99,11 @@ assembleSygus env rvars rfmls univs = SygusProblem dts cs fs us
 -- Converting problem to sygus language
 ---------------------------------------------
 ---------------------------------------------
+
+prettyMono :: Sort -> Doc
+prettyMono (VarS _)    = pretty IntS
+prettyMono (DataS d _) = error $ "prettyMono: found data sort " ++ d
+prettyMono s           = pretty s
 
 printSygus :: SygusProblem -> [Doc]
 printSygus (SygusProblem _ cs fs us) = header :
@@ -109,18 +116,19 @@ footer :: Doc
 footer = parens $ text "check-synth"
 
 declareGoal :: SygusGoal -> Doc
-declareGoal (SygusGoal f _ outSort args) = sexp (text "synth-fun") [text f, prettyArgs, pretty outSort]
+declareGoal (SygusGoal f _ outSort args) = sexp (text "synth-fun") [text f, prettyArgs, prettyMono outSort]
   where
-    prettyArgs = parens $ hsep $ map (\(x, s) -> parens (text x <+> pretty s)) args
+    prettyArgs = parens $ hsep $ map (\(x, s) -> parens (text x <+> prettyMono s)) args
 
 declareUniversal :: (Id, Sort) -> Doc
-declareUniversal (x, s) = sexp (text "declare-var") [text x, pretty s]
+declareUniversal (x, s) = sexp (text "declare-var") [text x, prettyMono s]
 
 declareConstraint :: Formula -> Doc
 declareConstraint f = sexp (text "constraint") [asSexp f]
 
-declareData :: Id -> DatatypeDef -> Doc
-declareData dt (DatatypeDef tps pps pvs cs _ _) = sexp (text "declare-datatype") [dt]
+-- Unused for now -- just ignore datatypes
+-- declareData :: Id -> DatatypeDef -> Doc
+-- declareData dt (DatatypeDef tps pps pvs cs _ _) = sexp (text "declare-datatype") [dt]
 
 -- Print formula to sygus language
 asSexp :: Formula -> Doc
@@ -132,11 +140,25 @@ asSexp' f =
   (BoolLit False) -> text "false"
   (IntLit x)      -> pretty x
   (Var s x)       -> pretty x
-  (Unary op f)    -> sexp (pretty op) [asSexp f]
-  (Binary op f g) -> sexp (pretty op) [asSexp f, asSexp g]
+  (Unary op f)    -> sexp (prettyUOp op) [asSexp f]
+  (Binary op f g) -> sexp (prettyBOp op) [asSexp f, asSexp g]
   (Ite g t f)     -> sexp (text "ite") [asSexp g, asSexp t, asSexp f]
   (Pred s f xs)   -> sexp (text f) (map asSexp xs)
   _ -> error $ "unexpected formula sent to Sygus solver: " ++ show (pretty f)
+
+-- Need to handle cases where sygus syntax differs from synquid language
+prettyBOp :: BinOp -> Doc
+prettyBOp Implies = text "=>"
+prettyBOp Eq = text "="
+prettyBOp And = text "and"
+prettyBOp Or = text "or"
+prettyBOp op = pretty op
+
+-- Need to handle cases where sygus syntax differs from synquid language
+prettyUOp :: UnOp -> Doc
+prettyUOp Neg = pretty Neg
+prettyUOp Not = text "not"
+
 
 sexp :: Pretty a => Doc -> [a] -> Doc
 sexp f args = parens $ f <+> hsep (map pretty args)
