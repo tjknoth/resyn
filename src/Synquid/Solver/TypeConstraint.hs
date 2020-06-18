@@ -519,7 +519,7 @@ processConstraint (SharedEnv env envl envr)
       tass <- use typeAssignment
       pass <- use predAssignment
       let substAndGetScalars = fmap toMonotype . nonGhostScalars . over symbols (scalarSubstituteEnv tass)
-      let scalars = Map.assocs $ substAndGetScalars env
+      let scalars = map (\(x, t) -> (Just x, t)) $ Map.assocs $ substAndGetScalars env
       let scalarsl = Map.elems $ substAndGetScalars envl
       let scalarsr = Map.elems $ substAndGetScalars envr
       cm <- view (resourceArgs . checkMultiplicities) 

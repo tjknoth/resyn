@@ -462,19 +462,21 @@ generateSubstFromType subs x t =
 --   into which it is shared
 partitionType :: Bool
               -> Environment
-              -> (String, RType)
+              -> (Maybe String, RType)
               -> RType
               -> RType
               -> [Constraint]
 partitionType cm env (x, t@(ScalarT b _ f)) (ScalarT bl _ _) (ScalarT br _ _) 
   | f == fzero = partitionBase cm env (x, b) bl br
 partitionType cm env (x, t@(ScalarT b _ f)) (ScalarT bl _ fl) (ScalarT br _ fr)
-  = let vvtype = addRefinement t (varRefinement x (toSort b))
-        env'   = addVariable valueVarName vvtype env 
+  = let env' = 
+          case x of 
+            Nothing -> addVariable valueVarName t env  
+            Just n  -> addVariable valueVarName (addRefinement t (varRefinement n (toSort b))) env
     in SharedForm env' f fl fr : partitionBase cm env (x, b) bl br
 
 partitionBase cm env (x, DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _)
-  = concat $ zipWith3 (partitionType cm env) (zip (repeat x) ts) tsl tsr
+  = concat $ zipWith3 (partitionType cm env) (zip (repeat Nothing) ts) tsl tsr
 partitionBase cm env (x, b@(TypeVarT _ a m)) (TypeVarT _ _ ml) (TypeVarT _ _ mr)
   = [SharedForm env m ml mr | cm]
 partitionBase _ _ _ _ _ = []

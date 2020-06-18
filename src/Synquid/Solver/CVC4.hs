@@ -121,7 +121,10 @@ transformFmls rvars rfmls = fmap (\fml -> over rconstraints (substitute (_varSub
         x2 = xf f2
 
     -- Transforms for fresh vars -> fns
-    xf (Var IntS v) = Pred IntS v $ Map.findWithDefault [] v rvars
+    xf (Var IntS v) = 
+      case Map.findWithDefault [] v rvars of
+        [] -> Var IntS v 
+        args -> Pred IntS v args
 
     -- Everything else
     xf (SetLit s fs) = SetLit s (xf <$> fs)
