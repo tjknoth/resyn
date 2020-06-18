@@ -94,7 +94,6 @@ deriving instance Show FixpointStrategy
 deriving instance Typeable ResourceSolver
 deriving instance Data ResourceSolver
 deriving instance Eq ResourceSolver
-deriving instance Show ResourceSolver
 
 {-# ANN module "HLint: ignore Use camelCase" #-}
 {-# ANN module "HLint: ignore Redundant bracket" #-}

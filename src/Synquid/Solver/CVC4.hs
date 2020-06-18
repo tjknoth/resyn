@@ -15,6 +15,7 @@ import Synquid.Solver.Types
 import Synquid.Solver.Monad
 
 import           Conduit
+import           Control.Lens
 import           Data.Conduit.Process
 import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
@@ -31,7 +32,7 @@ solveWithCVC4 :: RMonad s
               -> s Bool
 solveWithCVC4 withLog env rvars rfmls univs =
   let log = maybe Direct Debug withLog
-   in parseSat <$> getResult log (assembleSygus env rvars rfmls univs) 
+   in getResult log (assembleSygus env rvars rfmls univs)
 
 data ConstraintMode = Direct | Debug String -- pipe directly to solver, or write to file first for debugging
   deriving (Show, Eq)
@@ -58,8 +59,8 @@ parseSat s =
 
 -- get output of cvc4 as string
 -- getResult :: MonadIO s => ConstraintMode -> SygusProblem -> s String
-getResult :: RMonad s => ConstraintMode -> SygusProblem -> s String
-getResult mode problem = unwords . map T.unpack <$>
+getResult :: RMonad s => ConstraintMode -> SygusProblem -> s Bool
+getResult mode problem =
   case mode of
     Direct -> liftIO $ do 
       let cmd = unwords $ cvc4 ++ flags
@@ -68,7 +69,7 @@ getResult mode problem = unwords . map T.unpack <$>
                                                        (decodeUtf8C .| sinkList) -- stdout 
                                                        (decodeUtf8C .| sinkList) -- stderr
       case exitCode of 
-        ExitSuccess -> return res -- TODO: is there something smarter than writing all output to memory?
+        ExitSuccess -> error "yeehaw"
         ExitFailure e -> error $ "CVC4 exited with error " ++ show e ++ "\n" ++ show (head err)
     Debug logfile -> liftIO $ do 
       runResourceT $ runConduit $ yieldMany (printSygus problem) 
@@ -76,10 +77,11 @@ getResult mode problem = unwords . map T.unpack <$>
                                .| unlinesC
                                .| encodeUtf8C 
                                .| sinkFile logfile  -- write to file
-      let cmd = unwords $ cvc4 ++ [logfile] ++ flags 
+      let cmd = unwords $ cvc4 ++ [logfile] ++ flags
       (exitCode, res) <- sourceCmdWithConsumer cmd (decodeUtf8C .| sinkList)
+      let r = parseSat $ unwords $ map T.unpack res
       case exitCode of 
-        ExitSuccess -> return res 
+        ExitSuccess -> return r
         ExitFailure e -> error $ "CVC4 exited with error " ++ show e
 
 assembleSygus :: Environment -> Map String [Formula] -> [ProcessedRFormula] -> Universals -> SygusProblem
@@ -88,11 +90,48 @@ assembleSygus env rvars rfmls univs = SygusProblem dts cs fs us
     isData (DataS _ _) = True
     isData _ = False
     collectArgs (Var s x) = (x, s)
+
     buildSygusGoal x args = SygusGoal x (length args) IntS (map collectArgs args)
-    cs = map (\rf -> _knownAssumptions rf |=>| _rconstraints rf) rfmls
-    fs = Map.elems $ Map.mapWithKey buildSygusGoal $ fmap (filter (not . isData . sortOf)) rvars  
+    vs = fmap (filter (not . isData . sortOf)) rvars  
+    cs = map (\rf -> _knownAssumptions rf |=>| _rconstraints rf) $ transformFmls vs rfmls
+    fs = Map.elems $ Map.mapWithKey buildSygusGoal vs
     us = map (\(_, Var s x) -> (x, s)) (uvars univs)
     dts = _datatypes env
+
+-- | Applies two transformations to each formula to make them usable
+-- | for CVC4:
+-- |
+-- | 1. Fresh annotations are changed from variables to function applications
+-- | 2. Any operations which exist only in the Synquid logic are transformed
+-- |    to their equivalent SyGuS forms
+transformFmls :: Map String [Formula] -- ^ We assume each list of formulas contains vars only, no datatypes
+              -> [ProcessedRFormula]
+              -> [ProcessedRFormula]
+transformFmls rvars rfmls = fmap (\fml -> over rconstraints (substitute (_varSubsts fml) . xf) fml) rfmls
+  where
+    -- We combine both transforms into the same function
+    -- This is probably poor form, but it also probably helps
+    -- with performance (only traversing through each formula once)
+
+    -- Transforms for SyGuS ops
+    xf (Binary Neq f1 f2) = Unary Not (Binary Eq (xf f1) (xf f2))
+    xf (Binary Iff f1 f2) = Binary And (Binary Implies x1 x2) (Binary Implies x2 x1)
+      where
+        x1 = xf f1
+        x2 = xf f2
+
+    -- Transforms for fresh vars -> fns
+    xf (Var IntS v) = Pred IntS v $ Map.findWithDefault [] v rvars
+
+    -- Everything else
+    xf (SetLit s fs) = SetLit s (xf <$> fs)
+    xf (Unary o f) = Unary o (xf f)
+    xf (Binary o f1 f2) = Binary o (xf f1) (xf f2)
+    xf (Ite i t e) = Ite (xf i) (xf t) (xf e)
+    xf (Pred s i fs) = Pred s i (xf <$> fs)
+    xf (Cons s i fs) = Cons s i (xf <$> fs)
+    xf (All fs gs) = All (xf fs) (xf gs)
+    xf x = x
 
 ---------------------------------------------
 ---------------------------------------------
@@ -167,4 +206,4 @@ cvc4 :: [String]
 cvc4 = ["cvc4"]
 
 flags :: [String]
-flags = ["--lang=sygus2", "--cegqi-si=all", "--cegqi-si-abort", "--cbqi", "--cbqi-prereg-inst"]
+flags = ["--lang=sygus2", "--sygus-si=all", "--cegqi", "--cegqi-prereg-inst"]
