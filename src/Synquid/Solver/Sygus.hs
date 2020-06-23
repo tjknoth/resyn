@@ -91,8 +91,7 @@ assembleSygus env rvars rfmls univs = SygusProblem dts cs fs us
 
     buildSygusGoal x args = SygusGoal x (length args) IntS (map collectArgs args)
     vs = fmap (filter (not . isData . sortOf)) rvars  
-    -- cs = map (\rf -> _knownAssumptions rf |=>| _rconstraints rf) $ transformFmls vs rfmls
-    cs = map _rconstraints $ transformFmls vs rfmls
+    cs = map (\rf -> _knownAssumptions rf |=>| _rconstraints rf) $ transformFmls vs rfmls
     fs = Map.elems $ Map.mapWithKey buildSygusGoal vs
     us = map (\(_, Var s x) -> (x, s)) $ filter (not . isData . sortOf . snd) (uvars univs)
     dts = _datatypes env
