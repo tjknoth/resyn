@@ -210,6 +210,28 @@ neg/List-Reverse.sq:12: Error:
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+replicate :: n:{Nat||0} -> x:{1**a||n} -> {List {1**a||0}|len _v == n|0}
+replicate = \n . \x . 
+    if n <= 0
+      then Nil
+      else Cons x (tick 1 (replicate
+                             (n - 1) x))
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+replicate :: n:{Nat||0} -> x:{1**a||n} -> {List {1**a||0}|len _v == n|0}
+neg/List-Replicate.sq:12: Error:
+  Insufficient resources
+  when checking replicate ::
+  x9:_ -> x8:_ -> {List {1**a||p4}||-(fr14 + 0)}
+  in
+  \n . \x . 
+      if n <= 0
+        then Nil
+        else Cons x (tick 2 (??))
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 insert :: x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0}
 insert = \x . \xs . 
     match xs with
