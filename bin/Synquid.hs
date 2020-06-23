@@ -15,16 +15,12 @@ import Synquid.Synthesis.Util
 import Synquid.HtmlOutput
 import Synquid.Solver.Types
 
-import Control.Monad
-import System.Exit
-import System.Console.CmdArgs
-import System.FilePath
-import Data.Char
-import Data.Time.Calendar
-import Data.Map ((!))
+import           Control.Monad
+import           System.Exit
+import           System.Console.CmdArgs
+import           Data.Time.Calendar
 import qualified Data.Map as Map
-import Data.Maybe (mapMaybe)
-import Control.Lens ((.~), (^.), (%~))
+import           Control.Lens ((.~), (^.), (%~))
 
 import Data.List.Split
 
@@ -41,7 +37,7 @@ main = do
                lfp bfs
                out_file out_module outFormat resolve
                print_spec print_stats log_ 
-               resources mult forall cut nump constTime cegis_max ec res_solver logfile) -> do
+               resources mult forall cut nump constTime cegis_max ec res_solver logfile cvc4cmd) -> do
                   let 
                     resArgs = defaultResourceArgs {
                     _shouldCheckResources = resources,
@@ -50,7 +46,8 @@ main = do
                     _cegisBound = cegis_max,
                     _enumerate = ec,
                     _rsolver = res_solver,
-                    _sygusLog = logfile
+                    _sygusLog = logfile,
+                    _cvc4 = cvc4cmd
                   }
                   let explorerParams = defaultExplorerParams {
                     _eGuessDepth = appMax,
@@ -139,7 +136,8 @@ data CommandLineArgs
         cegis_max :: Int,
         eac :: Bool,
         res_solver :: ResourceSolver,
-        logfile :: Maybe String
+        logfile :: Maybe String,
+        solve_sygus :: String
       }
   deriving (Data, Typeable, Show, Eq)
 
@@ -176,8 +174,9 @@ synt = Synthesis {
   ct                  = False           &= help ("Require that all branching expressions consume a constant amount of resources (default: False)"),
   cegis_max           = 100             &= help ("Maximum number of iterations through the CEGIS loop (default: 100)"),
   eac                 = False           &= help ("Enumerate-and-check instead of round-trip resource analysis (default: False)"),
-  res_solver          = Incremental     &= help (unwords ["Which solver should be used for resource constraints?", show CVC4, show CEGIS, show Incremental, "(default: ", show Incremental, ")"]),
-  logfile             = Nothing         &= help ("File for logging SYGUS constraints (default: no logging)")
+  res_solver          = Incremental     &= help (unwords ["Which solver should be used for resource constraints?", show SYGUS, show CEGIS, show Incremental, "(default: ", show Incremental, ")"]),
+  logfile             = Nothing         &= help ("File for logging SYGUS constraints (default: no logging)"),
+  solve_sygus         = "cvc4"          &= help ("Command to run SYGUS solver (default: \"cvc4\")")
   } &= auto &= help "Synthesize goals specified in the input file"
     where
       defaultFormat = outputFormat defaultSynquidParams
@@ -219,7 +218,8 @@ defaultResourceArgs = ResourceArgs {
   _cegisBound = 100,
   _enumerate = False,
   _rsolver = Incremental,
-  _sygusLog = Nothing
+  _sygusLog = Nothing,
+  _cvc4 = "cvc4"
 }
 
 -- | Parameters for constraint solving

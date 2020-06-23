@@ -665,14 +665,27 @@ applyPending :: Formula -> Formula
 applyPending f = 
   case f of
     WithSubst subst e -> WithSubst subst $ substitute subst e
-    SetLit s fs -> SetLit s $ map applyPending fs
-    Unary op e -> Unary op $ applyPending e
-    Binary op x y -> Binary op (applyPending x) (applyPending y)
-    Ite x y z -> Ite (applyPending x) (applyPending y) (applyPending z)
-    Pred s x args -> Pred s x $ map applyPending args
-    Cons s x args -> Cons s x $ map applyPending args
-    All x y -> All (applyPending x) (applyPending y)
-    _ -> f -- literal
+    SetLit s fs       -> SetLit s $ map applyPending fs
+    Unary op e        -> Unary op $ applyPending e
+    Binary op x y     -> Binary op (applyPending x) (applyPending y)
+    Ite x y z         -> Ite (applyPending x) (applyPending y) (applyPending z)
+    Pred s x args     -> Pred s x $ map applyPending args
+    Cons s x args     -> Cons s x $ map applyPending args
+    All x y           -> All (applyPending x) (applyPending y)
+    _                 -> f -- literal
+
+hasCtor :: Formula -> Bool
+hasCtor f = 
+  case f of
+    Cons{} -> True
+    SetLit _ fs   -> or $ map hasCtor fs 
+    WithSubst _ e -> hasCtor e
+    Unary _ e     -> hasCtor e
+    Binary _ x y  -> hasCtor x || hasCtor y
+    Ite x y z     -> hasCtor x || hasCtor y || hasCtor z
+    Pred _ _ args -> or $ map hasCtor args
+    All x y       -> hasCtor x || hasCtor y
+    _             -> False -- literal
 
   
 

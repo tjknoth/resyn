@@ -7,13 +7,12 @@ import Synquid.Logic
 import Synquid.Util
 
 import qualified Data.Set as Set
-import Data.Set (Set)
+import           Data.Set (Set)
 import qualified Data.Map as Map
-import Data.Map (Map)
-import Data.Bifunctor
-import Data.Bifoldable
-import Data.Maybe (catMaybes)
-import Debug.Trace
+import           Data.Map (Map)
+import           Data.Bifunctor
+import           Data.Bifoldable
+import           Data.Maybe (catMaybes)
 
 {- Type skeletons -}
 

@@ -18,7 +18,6 @@ import Synquid.Solver.Resource (getAnnotationStyle, getPolynomialDomain)
 
 import Data.List
 import Control.Monad
-import Control.Monad.State
 import Control.Lens
 import qualified Data.Set as Set
 import qualified Data.Map as Map

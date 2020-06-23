@@ -1,7 +1,5 @@
-module Synquid.Solver.CVC4 (
-    solveWithCVC4
-  , getResult -- TODO: don't export
-  , asSexp -- TODO: don't export
+module Synquid.Solver.Sygus (
+    solveWithSygus
   , ConstraintMode(..)
   , SygusProblem(..)
   , SygusGoal(..)
@@ -17,22 +15,22 @@ import Synquid.Solver.Monad
 import           Conduit
 import           Control.Lens
 import           Data.Conduit.Process
-import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           System.Exit
 
-solveWithCVC4 :: RMonad s
-              => Maybe String
-              -> Environment
-              -> Map String [Formula]
-              -> [ProcessedRFormula]
-              -> Universals
-              -> s Bool
-solveWithCVC4 withLog env rvars rfmls univs =
+solveWithSygus :: RMonad s
+               => Maybe String
+               -> String
+               -> Environment
+               -> Map String [Formula]
+               -> [ProcessedRFormula]
+               -> Universals
+               -> s Bool
+solveWithSygus withLog command env rvars rfmls univs =
   let log = maybe Direct Debug withLog
-   in getResult log (assembleSygus env rvars rfmls univs)
+   in getResult log command (assembleSygus env rvars rfmls univs)
 
 data ConstraintMode = Direct | Debug String -- pipe directly to solver, or write to file first for debugging
   deriving (Show, Eq)
@@ -59,11 +57,11 @@ parseSat s =
 
 -- get output of cvc4 as string
 -- getResult :: MonadIO s => ConstraintMode -> SygusProblem -> s String
-getResult :: RMonad s => ConstraintMode -> SygusProblem -> s Bool
-getResult mode problem =
+getResult :: RMonad s => ConstraintMode -> String -> SygusProblem -> s Bool
+getResult mode solver problem =
   case mode of
     Direct -> liftIO $ do 
-      let cmd = unwords $ cvc4 ++ flags
+      let cmd = unwords $ solver : flags
       let send = yieldMany (printSygus problem) .| mapC (T.pack . show) .| unlinesC .| encodeUtf8C
       (exitCode, res, err) <- sourceCmdWithStreams cmd send -- stdin 
                                                        (decodeUtf8C .| sinkList) -- stdout 
@@ -77,7 +75,7 @@ getResult mode problem =
                                .| unlinesC
                                .| encodeUtf8C 
                                .| sinkFile logfile  -- write to file
-      let cmd = unwords $ cvc4 ++ [logfile] ++ flags
+      let cmd = unwords $ solver : logfile : flags
       (exitCode, res) <- sourceCmdWithConsumer cmd (decodeUtf8C .| sinkList)
       let r = parseSat $ unwords $ map T.unpack res
       case exitCode of 
@@ -93,9 +91,10 @@ assembleSygus env rvars rfmls univs = SygusProblem dts cs fs us
 
     buildSygusGoal x args = SygusGoal x (length args) IntS (map collectArgs args)
     vs = fmap (filter (not . isData . sortOf)) rvars  
-    cs = map (\rf -> _knownAssumptions rf |=>| _rconstraints rf) $ transformFmls vs rfmls
+    -- cs = map (\rf -> _knownAssumptions rf |=>| _rconstraints rf) $ transformFmls vs rfmls
+    cs = map _rconstraints $ transformFmls vs rfmls
     fs = Map.elems $ Map.mapWithKey buildSygusGoal vs
-    us = map (\(_, Var s x) -> (x, s)) (uvars univs)
+    us = map (\(_, Var s x) -> (x, s)) $ filter (not . isData . sortOf . snd) (uvars univs)
     dts = _datatypes env
 
 -- | Applies two transformations to each formula to make them usable
@@ -107,7 +106,7 @@ assembleSygus env rvars rfmls univs = SygusProblem dts cs fs us
 transformFmls :: Map String [Formula] -- ^ We assume each list of formulas contains vars only, no datatypes
               -> [ProcessedRFormula]
               -> [ProcessedRFormula]
-transformFmls rvars rfmls = fmap (\fml -> over rconstraints (substitute (_varSubsts fml) . xf) fml) rfmls
+transformFmls rvars = fmap (\fml -> over rconstraints (substitute (_varSubsts fml) . xf) fml)
   where
     -- We combine both transforms into the same function
     -- This is probably poor form, but it also probably helps
@@ -128,6 +127,7 @@ transformFmls rvars rfmls = fmap (\fml -> over rconstraints (substitute (_varSub
 
     -- Everything else
     xf (SetLit s fs) = SetLit s (xf <$> fs)
+    xf (WithSubst s f) = substitute s $ xf f  -- transform, then apply pending subs
     xf (Unary o f) = Unary o (xf f)
     xf (Binary o f1 f2) = Binary o (xf f1) (xf f2)
     xf (Ite i t e) = Ite (xf i) (xf t) (xf e)
@@ -182,6 +182,7 @@ asSexp' f =
   (BoolLit False) -> text "false"
   (IntLit x)      -> pretty x
   (Var s x)       -> pretty x
+  -- (WithSubst _ e) -> asSexp' e 
   (Unary op f)    -> sexp (prettyUOp op) [asSexp f]
   (Binary op f g) -> sexp (prettyBOp op) [asSexp f, asSexp g]
   (Ite g t f)     -> sexp (text "ite") [asSexp g, asSexp t, asSexp f]
@@ -205,8 +206,8 @@ prettyUOp Not = text "not"
 sexp :: Pretty a => Doc -> [a] -> Doc
 sexp f args = parens $ f <+> hsep (map pretty args)
 
-cvc4 :: [String]
-cvc4 = ["cvc4"]
+-- cvc4 :: [String]
+-- cvc4 = ["cvc4-dev"] -- requires unstable cvc4 version
 
 flags :: [String]
 flags = ["--lang=sygus2", "--sygus-si=all", "--cegqi", "--cegqi-prereg-inst"]

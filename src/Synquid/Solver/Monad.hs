@@ -18,7 +18,6 @@ import Control.Lens
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Trans.Except
-import Control.Monad.Fail
 
 {- Monadic structure of solvers -}
 
@@ -49,7 +48,8 @@ data ResourceArgs = ResourceArgs {
   _cegisBound :: Int,
   _enumerate :: Bool,
   _rsolver :: ResourceSolver,
-  _sygusLog :: Maybe String
+  _sygusLog :: Maybe String,
+  _cvc4 :: String
 } 
 
 makeLenses ''ResourceArgs

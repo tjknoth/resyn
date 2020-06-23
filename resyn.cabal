@@ -37,7 +37,7 @@ Library
                     , Synquid.Solver.Resource
                     , Synquid.Solver.TypeConstraint
                     , Synquid.Solver.Types
-                    , Synquid.Solver.CVC4
+                    , Synquid.Solver.Sygus
                     , Synquid.Synthesis.Explorer
                     , Synquid.Synthesis.Synthesizer
                     , Synquid.Synthesis.TypeChecker

@@ -37,19 +37,18 @@ import Synquid.Resolver (addAllVariables)
 import Synquid.Synthesis.Util hiding (throwError, writeLog)
 import Synquid.Solver.Monad
 import Synquid.Solver.Resource
-import Synquid.Solver.Types
 import Synquid.Solver.CEGIS (initCEGISState)
 
-import Data.Maybe
+import           Data.Maybe
 import qualified Data.Set as Set
-import Data.Set (Set)
+import           Data.Set (Set)
 import qualified Data.Map as Map
-import Data.Map (Map)
-import Control.Monad.Reader
-import Control.Monad.State
-import Control.Monad.Trans.Except (throwE)
-import Control.Lens hiding (both)
-import Debug.Trace
+import           Data.Map (Map)
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Control.Monad.Trans.Except (throwE)
+import           Control.Lens hiding (both)
+import           Debug.Trace
 
 -- | Initial typing state in the initial environment @env@
 initTypingState :: MonadHorn s => Goal -> s TypingState

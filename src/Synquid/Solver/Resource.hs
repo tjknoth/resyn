@@ -21,7 +21,7 @@ import Synquid.Pretty
 import Synquid.Solver.CEGIS
 import Synquid.Solver.Types
 import Synquid.Synthesis.Util hiding (writeLog)
-import Synquid.Solver.CVC4
+import Synquid.Solver.Sygus
 
 import           Data.Maybe
 import           Data.Set (Set)
@@ -124,6 +124,7 @@ embedAndProcessConstraint env rfml = do
        >=> replaceAbstractPotentials
        >=> instantiateUnknowns
        >=> instantiateAxioms env
+       >=> filterAssumptions
        >=> elaborateAssumptions
        >=> updateVariables
        >=> formatVariables
@@ -209,6 +210,15 @@ replaceCons f@Cons{} = mkFuncVar f
 replaceCons f = f
 
 
+filterAssumptions :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
+filterAssumptions rfml = do
+  shouldFilter <- usesSygus
+  let rfml' = 
+        if shouldFilter
+          then over knownAssumptions (Set.filter (not . hasCtor)) rfml
+          else rfml
+  return rfml'
+
 -- Instantiate universally quantified expressions
 -- Generate congruence axioms
 elaborateAssumptions :: MonadHorn s => RawRFormula -> TCSolver s (RawRFormula, Set Formula)
@@ -248,8 +258,9 @@ formatVariables rfml = do
 applyAssumptions :: MonadHorn s
                  => RawRFormula
                  -> TCSolver s ProcessedRFormula
-applyAssumptions (RFormula known unknown preds substs fml) = do
-  let ass = conjunction $ Set.union known unknown
+applyAssumptions (RFormula known _ preds substs fml) = do
+  -- let ass = conjunction $ Set.union known unknown
+  let ass = conjunction known
   writeLog 3 $ indent 4 $ pretty (ass |=>| fml) -- conjunction (map lcToFml lcs))
   return $ RFormula ass () preds substs fml 
 
@@ -283,7 +294,7 @@ deployHigherOrderSolver :: RMonad s
                         -> [ProcessedRFormula]
                         -> TCSolver s Bool
 -- Solve with synthesizer
-deployHigherOrderSolver CVC4 oldfmls newfmls = do
+deployHigherOrderSolver SYGUS oldfmls newfmls = do
   let rfmls = oldfmls ++ newfmls
   -- check that there are no measures in problem domain
   dom <- fromJust <$> asks _cegisDomain
@@ -295,7 +306,8 @@ deployHigherOrderSolver CVC4 oldfmls newfmls = do
       universals <- collectUniversals rfmls ufmls
       rvs <- use resourceVars
       env <- use initEnv 
-      runInSolver $ solveWithCVC4 log env rvs rfmls universals
+      solverCmd <- view (resourceArgs . cvc4)
+      runInSolver $ solveWithSygus log solverCmd env rvs rfmls universals
     _ -> error "Cannot use CVC4 to solve resource constraints involving measures"  
 
 -- Solve with CEGIS (incremental or not)
@@ -569,6 +581,13 @@ subtypeOp :: Monad s => TCSolver s (Formula -> Formula -> Formula)
 subtypeOp = do
   ct <- view (resourceArgs . constantTime)
   return $ if ct then (|=|) else (|>=|)
+
+usesSygus :: Monad s => TCSolver s Bool
+usesSygus = do
+  solver <- view (resourceArgs . rsolver)
+  return $ case solver of
+    SYGUS -> True
+    _     -> False
 
 logUniversals :: Monad s => TCSolver s ()
 logUniversals = do 

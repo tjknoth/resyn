@@ -17,18 +17,17 @@ import Synquid.Error
 import Synquid.Pretty
 import Synquid.Util
 
-import Control.Monad.Except
-import Control.Monad.State
-import Control.Lens
+import           Control.Monad.Except
+import           Control.Monad.State
+import           Control.Lens
 import qualified Data.Map as Map
-import Data.Map (Map)
+import           Data.Map (Map)
 import qualified Data.Set as Set
-import Data.Set (Set)
-import Data.Maybe
-import Data.Either hiding (fromRight)
-import Data.List
+import           Data.Set (Set)
+import           Data.Maybe
+import           Data.List
 import qualified Data.Foldable as Foldable
-import Control.Arrow (first)
+import           Control.Arrow (first)
 
 
 {- Interface -}
@@ -225,7 +224,6 @@ resolveSignatures (MeasureDecl measureName _ _ post defCases args _) = do
       post' <- resolveTypeRefinement outSort post
       pos <- use currentPosition
       let ctors = datatype ^. constructors
-      let constantArgs = fmap (\(n, s) -> Var s n) args
       if length defCases /= length ctors
         then throwResError $ text "Definition of measure" <+> text measureName <+> text "must include one case per constructor of" <+> text dtName
         else do
