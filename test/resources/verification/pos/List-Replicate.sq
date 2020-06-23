@@ -1,0 +1,15 @@
+type Nat = {Int | _v >= 0}
+
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+  
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+	
+replicate :: n: Nat -> x: {a| |n} -> {List a | len _v == n}
+replicate = \n. \x.
+  if n <= 0
+    then Nil
+    else Cons x (tick 1 (replicate (n - 1) x))
