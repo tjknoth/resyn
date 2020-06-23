@@ -53,7 +53,6 @@ instance Semigroup AnnotationDomain where
 
 {- Types for solving resource formulas -}
 
-type PendingRSubst = Map Formula Substitution
 
 -- RFormula : Logical formula and meta-info
 data RFormula a b = RFormula {
@@ -61,7 +60,6 @@ data RFormula a b = RFormula {
   _unknownAssumptions :: !b,
   _renamedPreds :: !(Set Formula),
   _varSubsts :: !Substitution,
-  _pendingSubsts :: !PendingRSubst,
   _rconstraints :: !Formula -- ![FmlLC]
 } deriving (Eq, Show, Ord)
 

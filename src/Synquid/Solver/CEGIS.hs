@@ -185,33 +185,32 @@ applyPolynomial :: RMonad s
                 -> ProcessedRFormula
                 -> CEGISSolver s Formula
 applyPolynomial mkPolynomial mkFormula rfml =
-  applyPolynomial' mkPolynomial (_pendingSubsts rfml) (_varSubsts rfml) (mkFormula rfml)
+  applyPolynomial' mkPolynomial (_varSubsts rfml) (mkFormula rfml)
 
-applyPolynomial' mkPolynomial pendingSubs subs f = 
-  let sub = applyPolynomial' mkPolynomial pendingSubs subs in 
+applyPolynomial' mkPolynomial subs f =
+  let sub = applyPolynomial' mkPolynomial in 
   case f of 
     v@(Var s x)   -> do 
       polys <- use polynomials
       case Map.lookup x polys of 
         Nothing -> return v 
         Just p  -> 
-          let pending = fromMaybe Map.empty (Map.lookup v pendingSubs)
-              subst   = composeSubstitutions pending subs
-              p'      = substPolynomial x subst p in
-          mkPolynomial p' 
-    SetLit s fs   -> SetLit s <$> mapM sub fs
-    Unary op f    -> Unary op <$> sub f
-    Binary op f g -> Binary op <$> sub f <*> sub g 
-    Ite g t f     -> Ite <$> sub g <*> sub t <*> sub f
-    Pred s x fs   -> Pred s x <$> mapM sub fs
-    Cons s x fs   -> Cons s x <$> mapM sub fs 
-    All q f       -> All q <$> sub f -- there shouldn't be foralls by now anyway
+          let p'      = substPolynomial subs p
+           in mkPolynomial p' 
+    WithSubst p e -> WithSubst p <$> sub (subs `composeSubstitutions` p) e
+    SetLit s fs   -> SetLit s <$> mapM (sub subs) fs
+    Unary op f    -> Unary op <$> sub subs f
+    Binary op f g -> Binary op <$> sub subs f <*> sub subs g 
+    Ite g t f     -> Ite <$> sub subs g <*> sub subs t <*> sub subs f
+    Pred s x fs   -> Pred s x <$> mapM (sub subs) fs
+    Cons s x fs   -> Cons s x <$> mapM (sub subs) fs 
+    All q f       -> All q <$> sub subs f -- there shouldn't be foralls by now anyway
     Unknown s x   -> error $ "applySynthesisPolynomial: condition unknown " ++ x ++ " present"
     lit           -> return lit
 
 
-substPolynomial :: String -> Substitution -> Polynomial -> Polynomial 
-substPolynomial rvar subs = map subPterm
+substPolynomial :: Substitution -> Polynomial -> Polynomial 
+substPolynomial subs = map subPterm
   where 
     subPterm p@(PolynomialTerm _ Nothing) = p
     subPterm (PolynomialTerm c (Just (ustr, u))) = PolynomialTerm c (Just (ustr', u'))

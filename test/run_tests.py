@@ -164,7 +164,7 @@ RESOURCE_VERIFICATION_BENCHMARKS = [
     ('List-Cons2',                   ['-f=Nonterminating']),
     ('List-Pairs',                   ['-f=Nonterminating']),
     ('List-Reverse',                 ['-f=Nonterminating']),
-    ('List-Replicate',               ['-f=Nonterminating', '--res-solver=CEGIS'])
+    ('List-Replicate',               ['-f=Nonterminating', '--res-solver=CEGIS']),
     ('List-InsertSort-Coarse',       ['-f=Nonterminating']),
     ('List-Subset-Sum',              ['-f=Nonterminating']),
     ('List-InsertSort',              ['-f=Nonterminating', '--res-solver=CEGIS']),

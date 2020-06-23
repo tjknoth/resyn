@@ -257,6 +257,7 @@ fmlToAST = toAST -- . simplify
   where  -- Pulled from synquid -- keeping around in case bug shows up
     simplify expr = case expr of
       SetLit el xs -> SetLit el (map simplify xs)
+      WithSubst s e -> WithSubst s $ simplify e 
       Unary op e -> Unary op (simplify e)
       Binary op e1 e2 -> 
         let e1' = simplify e1
@@ -284,6 +285,7 @@ toAST expr = case expr of
   IntLit i -> mkIntNum i
   Var s name -> var s name
   Unknown _ name -> error $ unwords ["toAST: encountered a second-order unknown", name]
+  WithSubst _ e -> toAST e 
   Unary op e -> toAST e >>= unOp op
   Binary op e1 e2 -> join (binOp op <$> toAST e1 <*> toAST e2)
   Ite e0 e1 e2 -> do
