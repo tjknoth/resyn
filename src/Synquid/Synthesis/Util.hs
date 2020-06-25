@@ -263,7 +263,7 @@ checkResourceVar env x t = do
   tparams <- ask
   -- TODO: figure out how to use lenses so I can skip the intermediate bind
   -- tparams <- asks . view $ _2
-  let isRV = isResourceVariable env tstate (_cegisDomain tparams) x t
+  let isRV = isResourceVariable env tstate (_rSolverDomain tparams) x t
   return isRV
 
 mkResourceVar :: MonadHorn s
@@ -628,12 +628,9 @@ embedSynthesisEnv :: MonadHorn s
                   => Environment 
                   -> Formula 
                   -> Bool 
-                  -> Bool
                   -> TCSolver s (Set Formula)
-embedSynthesisEnv env fml consistency useMeasures = do 
-  let env' = if useMeasures 
-      then env { _measureDefs = allRMeasures env }
-      else env { _measureDefs = Map.empty } -- don't instantiate measures in certain cases
+embedSynthesisEnv env fml consistency = do 
+  let env' = env { _measureDefs = Map.empty } -- don't instantiate measures 
   embedEnv env' fml consistency True
 
 allUnknowns :: Environment -> Set Formula 
@@ -735,9 +732,9 @@ safeAddGhostVar name t@FunctionT{} env = return $ addGhostVariable name t env
 safeAddGhostVar name t@AnyT{} env = return $ addGhostVariable name t env
 safeAddGhostVar name t env = do 
   tstate <- get 
-  adomain <- asks _cegisDomain 
+  rdomain <- asks _rSolverDomain
   --return $ addGhostVariable name t env
-  if isResourceVariable env tstate adomain name t
+  if isResourceVariable env tstate rdomain name t
     then do 
       universalVars %= Set.insert name -- (Var (toSort (baseTypeOf t)) name)
       return $ addGhostVariable name t env
@@ -745,11 +742,11 @@ safeAddGhostVar name t env = do
 
 isResourceVariable :: Environment 
                    -> TypingState 
-                   -> Maybe AnnotationDomain
+                   -> RSolverDomain 
                    -> String
                    -> RType 
                    -> Bool 
-isResourceVariable _ _ Nothing _ _ = False
-isResourceVariable env tstate (Just _) x t = 
+isResourceVariable _ _ Constant _ _ = False
+isResourceVariable env tstate Dependent x t = 
   (x /= valueVarName) && not (Map.member x (_unresolvedConstants env))
 

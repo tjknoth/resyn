@@ -39,17 +39,14 @@ instance Pretty a => Pretty (LinearConstraint a) where
 -- | Wrapper for Z3 Model data structure
 type SMTModel = (Z3.Model, String)
 
-data AnnotationDomain = 
-  Variable | Measure | Both
+data RSolverDomain = Dependent | Constant
   deriving (Show, Eq)
 
-instance Semigroup AnnotationDomain where
- Variable <> Variable = Variable
- Variable <> _ = Both
- Measure <> Measure = Measure
- Measure <> _ = Both
- _ <> _ = Both
- 
+instance Semigroup RSolverDomain where
+  Dependent <> _ = Dependent
+  _ <> Dependent = Dependent
+  Constant <> Constant = Constant
+
 
 {- Types for solving resource formulas -}
 
@@ -58,7 +55,7 @@ instance Semigroup AnnotationDomain where
 data RFormula a b = RFormula {
   _knownAssumptions :: !a,
   _unknownAssumptions :: !b,
-  _renamedPreds :: !(Set Formula),
+  _ctors :: !(Set Formula),
   _varSubsts :: !Substitution,
   _rconstraints :: !Formula -- ![FmlLC]
 } deriving (Eq, Show, Ord)

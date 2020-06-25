@@ -62,8 +62,8 @@ data TypingParams = TypingParams {
   _predQualsGen :: Environment -> [Formula] -> [Formula] -> QSpace, -- ^ Qualifier generator for bound predicates
   _tcSolverSplitMeasures :: Bool,
   _tcSolverLogLevel :: Int,                                         -- ^ How verbose logging is
-  _cegisDomain :: Maybe AnnotationDomain,
-  _polynomialDomain :: Maybe AnnotationDomain,
+  _rSolverDomain :: RSolverDomain,
+  _polynomialDomain :: RSolverDomain,
   _resourceArgs :: ResourceArgs
 }
 

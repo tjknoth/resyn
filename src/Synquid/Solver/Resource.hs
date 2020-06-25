@@ -23,12 +23,10 @@ import Synquid.Solver.Types
 import Synquid.Synthesis.Util hiding (writeLog)
 import Synquid.Solver.Sygus
 
-import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Map (Map)
 import qualified Data.Map as Map
-import           Data.List (tails)
 import           Control.Monad.Logic
 import           Control.Monad.Reader
 import           Control.Lens
@@ -101,12 +99,12 @@ generateFormula' checkMults c = do
       let fml = mkRForm substs (wf |&| sharingFml)
       embedAndProcessConstraint env fml
     ConstantRes env -> do
-      substs <- renameValueVar env
+      substs <- renameValueVar env -- shouldn't be necessary here?
       f <- assertZeroPotential env 
       let fml = mkRForm substs f
       embedAndProcessConstraint env fml
     Transfer env env' -> do
-      substs <- renameValueVar env
+      substs <- renameValueVar env -- shouldn't be necessary here?
       fmls <- redistribute env env' 
       let fml = mkRForm substs $ conjunction fmls
       embedAndProcessConstraint env fml
@@ -119,23 +117,17 @@ embedAndProcessConstraint :: (MonadHorn s, RMonad s)
                           -> RawRFormula
                           -> TCSolver s ProcessedRFormula
 embedAndProcessConstraint env rfml = do
-  hasUnivs <- isJust <$> asks _cegisDomain
+  domain <- asks _rSolverDomain
   let go = embedConstraint env
        >=> replaceAbstractPotentials
        >=> instantiateUnknowns
-       >=> instantiateAxioms env
        >=> filterAssumptions
-       >=> elaborateAssumptions
        >=> updateVariables
        >=> formatVariables
        >=> applyAssumptions
-  if hasUnivs
-    then go rfml
-    else translateAndFinalize rfml
-    {- else return $ rfml {
-      _knownAssumptions = (),
-      _unknownAssumptions = ()
-    } -}
+  case domain of
+    Dependent -> go rfml
+    Constant  -> translateAndFinalize rfml
 
 translateAndFinalize :: (MonadHorn s, RMonad s) => RawRFormula -> TCSolver s ProcessedRFormula 
 translateAndFinalize rfml = do 
@@ -154,13 +146,12 @@ embedConstraint :: (MonadHorn s, RMonad s)
                 -> RawRFormula
                 -> TCSolver s RawRFormula
 embedConstraint env rfml = do 
-  useMeasures <- maybe False shouldUseMeasures <$> asks _cegisDomain
   -- Get assumptions related to all non-ghost scalar variables in context
   vars <- use universalVars
   -- Small hack -- need to ensure we grab the assumptions related to _v
   -- Note that sorts DO NOT matter here -- the embedder will ignore them.
   let vars' = Set.insert (Var AnyS valueVarName) $ Set.map (Var AnyS) vars
-  ass <- embedSynthesisEnv env (conjunction vars') True useMeasures
+  ass <- embedSynthesisEnv env (conjunction vars') True 
   -- Split embedding into known/unknown parts
   let emb = Set.filter (not . isUnknownForm) ass
   let unk = Set.filter isUnknownForm ass
@@ -195,16 +186,6 @@ instantiateUnknowns rfml = do
          $ set rconstraints fml'
          $ over knownAssumptions (Set.union unknown') rfml
 
--- Instantiate constructor axioms
-instantiateAxioms :: MonadHorn s => Environment -> RawRFormula -> TCSolver s RawRFormula
-instantiateAxioms env rfml = do 
-  let known = _knownAssumptions rfml
-  useMeasures <- maybe False shouldUseMeasures <$> asks _cegisDomain
-  let axioms = if useMeasures
-        then instantiateConsAxioms (env { _measureDefs = allRMeasures env } ) True Nothing (conjunction known)
-        else Set.empty
-  return $ over knownAssumptions (Set.union axioms) rfml
-
 
 replaceCons f@Cons{} = mkFuncVar f
 replaceCons f = f
@@ -219,30 +200,15 @@ filterAssumptions rfml = do
           else rfml
   return rfml'
 
--- Instantiate universally quantified expressions
--- Generate congruence axioms
-elaborateAssumptions :: MonadHorn s => RawRFormula -> TCSolver s (RawRFormula, Set Formula)
-elaborateAssumptions rfml = do 
-  -- Instantiate universals
-  res <- mapM instantiateForall $ Set.toList (_knownAssumptions rfml)
-  let instantiatedEmb = map fst res
-  -- Generate variables for predicate applications
-  let bodyPreds = gatherPreds (_rconstraints rfml)
-  -- Generate congruence axioms
-  let allPreds = Set.unions $ bodyPreds : map snd res
-  let congruenceAxioms = generateCongAxioms allPreds
-  let completeEmb = Set.fromList $ congruenceAxioms ++ concat instantiatedEmb
-  return (set knownAssumptions completeEmb rfml, allPreds)
-
 -- apply variable substitutions
-updateVariables :: MonadHorn s => (RawRFormula, Set Formula) -> TCSolver s RawRFormula
-updateVariables (rfml, allPreds) = do
+updateVariables :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
+updateVariables rfml  = do
   -- substitute all universally quantified expressions in body, known, and allPreds  
   let substs = _varSubsts rfml
   cons <- use matchCases
   let format = Set.map (transformFml mkFuncVar . substitute substs)
-  universalMeasures %= Set.union (Set.map (transformFml mkFuncVar) (Set.map (substitute substs) allPreds))
-  return $ set renamedPreds (format (cons `Set.union` allPreds))
+  -- universalMeasures %= Set.union (Set.map (transformFml mkFuncVar) (Set.map (substitute substs) allPreds))
+  return $ set ctors (format cons)
          $ over knownAssumptions (Set.map (substitute substs)) 
          $ over rconstraints (substitute substs) rfml
 
@@ -274,9 +240,9 @@ satisfyResources :: RMonad s
 satisfyResources oldfmls newfmls = do
   let rfmls = oldfmls ++ newfmls
   let runInSolver = lift . lift . lift
-  noUnivs <- isNothing <$> asks _cegisDomain
-  if noUnivs
-    then do
+  domain <- asks _rSolverDomain
+  case domain of
+    Constant -> do
       let fml = conjunction $ map bodyFml rfmls
       model <- runInSolver $ solveAndGetModel fml
       case model of
@@ -284,7 +250,7 @@ satisfyResources oldfmls newfmls = do
         Just m' -> do
           writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (snd m'))
           return True
-    else do
+    Dependent -> do
       solver <- view (resourceArgs . rsolver)
       deployHigherOrderSolver solver oldfmls newfmls 
 
@@ -296,19 +262,14 @@ deployHigherOrderSolver :: RMonad s
 -- Solve with synthesizer
 deployHigherOrderSolver SYGUS oldfmls newfmls = do
   let rfmls = oldfmls ++ newfmls
-  -- check that there are no measures in problem domain
-  dom <- fromJust <$> asks _cegisDomain
-  case dom of
-    Variable -> do
-      let runInSolver = lift . lift . lift
-      log <- view (resourceArgs . sygusLog)
-      ufmls <- map (Var IntS) . Set.toList <$> use universalVars
-      universals <- collectUniversals rfmls ufmls
-      rvs <- use resourceVars
-      env <- use initEnv 
-      solverCmd <- view (resourceArgs . cvc4)
-      runInSolver $ solveWithSygus log solverCmd env rvs rfmls universals
-    _ -> error "Cannot use CVC4 to solve resource constraints involving measures"  
+  let runInSolver = lift . lift . lift
+  log <- view (resourceArgs . sygusLog)
+  ufmls <- map (Var IntS) . Set.toList <$> use universalVars
+  universals <- collectUniversals rfmls ufmls
+  rvs <- use resourceVars
+  env <- use initEnv 
+  solverCmd <- view (resourceArgs . cvc4)
+  runInSolver $ solveWithSygus log solverCmd env rvs rfmls universals
 
 -- Solve with CEGIS (incremental or not)
 deployHigherOrderSolver _ oldfmls newfmls = do
@@ -342,14 +303,8 @@ storeCEGISState st = do
     resourceVars .= Map.empty
 
 -- Given a list of resource constraints, assemble the relevant universally quantified 
---   expressions for the CEGIS solver: renamed variables, constructor and measure applications
--- collectUniversals :: Monad s => [ProcessedRFormula] -> TCSolver s Universals
--- collectUniversals rfmls = do 
---   let preds = map (\(Var s x) -> (x, Var s x)) (collectUFs rfmls) 
---   return $ Universals (formatUniversals (collectVars rfmls)) preds
-
--- A different version of collectUniversals. 
---  Allows a list of extra formulas
+--   expressions for the CEGIS solver: renamed variables, constructor and measure applications.
+--   Allows a list of extra formulas.
 collectUniversals :: Monad s => [ProcessedRFormula] -> [Formula] -> TCSolver s Universals
 collectUniversals rfmls extra = do 
   let preds = map (\(Var s x) -> (x, Var s x)) (collectUFs rfmls) 
@@ -359,12 +314,7 @@ collectVars :: [ProcessedRFormula] -> [Formula]
 collectVars = concatMap (Map.elems . _varSubsts)
 
 collectUFs :: [ProcessedRFormula] -> [Formula]
-collectUFs = concatMap (Set.toList . _renamedPreds)
-
-shouldUseMeasures :: AnnotationDomain -> Bool
-shouldUseMeasures ad = case ad of
-    Variable -> False
-    _ -> True
+collectUFs = concatMap (Set.toList . _ctors)
 
 -- Nondeterministically redistribute top-level potentials between variables in context
 redistribute :: Monad s
@@ -483,89 +433,34 @@ isResourceConstraint ConstantRes{} = True
 isResourceConstraint Transfer{}    = True
 isResourceConstraint _             = False
 
--- Instantiate universally quantified expression with all possible arguments in the
---   quantified position. Also generate congruence axioms.
--- POSSIBLE PROBLEM: this doesn't really recurse looking for arbitrary foralls
---   It will find them if top-level or nested below a single operation. This SHOULD
---   be ok for our current scenario...
--- The function returns a pair, the first element of which is a list of all formulas,
---   including new predicate applications, the second is a set of just the instantiated apps
-instantiateForall :: Monad s => Formula -> TCSolver s ([Formula], Set Formula)
-instantiateForall f@All{} = instantiateForall' f
-instantiateForall f       = return ([f], gatherPreds f)
-
-instantiateForall' (All f g) = instantiateForall' g
-instantiateForall' f         = instantiatePred f
-
-instantiatePred :: Monad s => Formula -> TCSolver s ([Formula], Set Formula)
-instantiatePred fml@(Binary op p@(Pred s x args) axiom) = do
-  env <- use initEnv
-  case Map.lookup x (allRMeasures env) of
-    Nothing -> error $ show $ text "instantiatePred: measure definition not found" <+> pretty p
-    Just mdef -> do
-      let substs = allValidCArgs env mdef p
-      let allPreds = map (`substitute` p) substs
-      let allFmls = map (`substitute` fml) substs
-      return (allFmls, Set.fromList allPreds)
-
--- Replace predicate applications in formula f with appropriate variables,
---   collecting all such predicate applications present in f
-gatherPreds :: Formula -> Set Formula
-gatherPreds (Unary op f)    = gatherPreds f
-gatherPreds (Binary op f g) = gatherPreds f `Set.union` gatherPreds g
-gatherPreds (Ite g t f)     = Set.unions [gatherPreds g, gatherPreds t, gatherPreds f]
-gatherPreds (All f g)       = gatherPreds g -- maybe should handle quantified fmls...
-gatherPreds (SetLit s fs)   = Set.unions $ map gatherPreds fs
-gatherPreds f@Pred{}        = Set.singleton f
-gatherPreds f               = Set.empty
-
--- Generate all congruence axioms, given all instantiations of universally quantified
---   measure applications
-generateCongAxioms :: Set Formula -> [Formula]
-generateCongAxioms preds = concatMap assertCongruence $ Map.elems (groupPreds preds)
-  where
-    groupPreds = foldl (\pmap p@(Pred _ x _) -> Map.insertWith (++) x [p] pmap) Map.empty
-
--- Generate all congruence relations given a list of possible applications of
---   some measure
-assertCongruence :: [Formula] -> [Formula]
-assertCongruence allApps = map assertCongruence' (pairs allApps)
-  where
-    -- All pairs from a list
-    pairs xs = [(x, y) | (x:ys) <- tails xs, y <- ys]
-
-assertCongruence' (pl@(Pred _ ml largs), pr@(Pred _ mr rargs)) =
-  conjunction (zipWith (|=|) largs rargs) |=>| (pl |=| pr)
-assertCongruence' ms = error $ show $ text "assertCongruence: called with non-measure formulas:"
-  <+> pretty ms
-
-getAnnotationStyle :: Map String [Bool] -> [RSchema] -> Maybe AnnotationDomain 
+getAnnotationStyle :: Map String [Bool] -> [RSchema] -> RSolverDomain
 getAnnotationStyle flagMap schemas =
   let get sch = getAnnotationStyle' flagMap (getPredParamsSch sch) (toMonotype sch)
-   in case catMaybes (map get schemas) of
-        [] -> Nothing
-        (a:as) -> Just $ sconcat (a :| as) -- can probably skip the catmaybes? and combine semigroups?
+   in case map get schemas of
+        [] -> error "getAnnotationSyle: empty list of goal schema"
+        (a:as) -> sconcat (a :| as) -- can probably skip the catmaybes? and combine semigroups?
 
+getAnnotationStyle' :: Map String [Bool] -> Set String -> RType -> RSolverDomain 
 getAnnotationStyle' flagMap predParams t =
   let rforms = conjunction $ allRFormulas flagMap t
       allVars = getVarNames t
   in case (hasVar allVars rforms, hasMeasure predParams rforms) of
-      (True, True)  -> Just Both
-      (False, True) -> Just Measure
-      (True, _)     -> Just Variable
-      _             -> Nothing
+      (_, True)     -> error "Measures in resource annotations not supported"
+      (True, _)     -> Dependent
+      _             -> Constant 
 
-getPolynomialDomain :: Map String [Bool] -> RSchema -> Maybe AnnotationDomain
+getPolynomialDomain :: Map String [Bool] -> RSchema -> RSolverDomain
 getPolynomialDomain flagMap sch = getPolynomialDomain' flagMap (getPredParamsSch sch) (toMonotype sch)
 
+getPolynomialDomain' :: Map String [Bool] -> Set String -> RType -> RSolverDomain
 getPolynomialDomain' flagMap predParams t = 
   let rforms = conjunction $ allRFormulas flagMap t 
       allVars = getVarNames t
   in case (hasVarITE allVars rforms, hasMeasureITE predParams rforms) of 
-      (True, True)  -> Just Both
-      (False, True) -> Just Measure
-      (True, _)     -> Just Variable
-      _             -> Nothing
+      (_, True)     -> error "Measures in resource annotations not supported"
+      (True, _)     -> Dependent
+      _             -> Constant
+
 
 getPredParamsSch :: RSchema -> Set String
 getPredParamsSch (ForallP (PredSig x _ _) s) = Set.insert x (getPredParamsSch s)

@@ -69,7 +69,7 @@ solveWithCEGIS n rfmls universals = do
     --Just (rfmls', cx) ->
       do
         -- Update example list, attempt to find parameterization holding on all examples
-        rfmls' <- getRelevantPreds rfmls cx 
+        rfmls' <- getRelevantConstraints rfmls cx 
         writeLog 5 $ text "Violated formulas:" </> pretty (map bodyFml rfmls')
         params <- synthesize rfmls' cx
         case params of
@@ -137,11 +137,11 @@ verifyOnePass rfmls = do
 -- | 'getRelevantPreds' @rfml cx program polynomials@
 -- Given a counterexample @cx@, a @program@, and a list of verification conditions @rfmls@
 --   return only those violated by the model
-getRelevantPreds :: RMonad s
-                 => [ProcessedRFormula]
-                 -> Counterexample
-                 -> CEGISSolver s [ProcessedRFormula]
-getRelevantPreds rfmls cx = do
+getRelevantConstraints :: RMonad s
+                      => [ProcessedRFormula]
+                      -> Counterexample
+                      -> CEGISSolver s [ProcessedRFormula]
+getRelevantConstraints rfmls cx = do
   prog <- use rprogram
   let substRFml = applyPolynomial (mkEvalPolynomial prog cx) completeFml
   let check f = lift $ f `checkPredWithModel` model cx
@@ -310,9 +310,7 @@ updateCEGISState = do
   newRVs <- use resourceVars
   st <- use cegisState
   env <- use initEnv 
-  aDomain <- fromJust <$> asks _cegisDomain
-  let uMeasures = Map.assocs $ allRMeasures env
-  let init name info = initializePolynomial env pDomain uMeasures (name, info)
+  let init name info = initializePolynomial env pDomain (name, info)
   let newPolynomials = Map.mapWithKey init newRVs
   let newCoefficients = concat $ Map.elems $ fmap coefficientsOf newPolynomials 
   let newParameters = Map.fromList $ zip newCoefficients initialCoefficients 
@@ -336,42 +334,15 @@ initCEGISState = CEGISState {
 
 -- Initialize polynomial over universally quantified @fmls@, using variable prefix @s@
 initializePolynomial :: Environment
-                     -> Maybe AnnotationDomain
-                     -> [UMeasure]
+                     -> RSolverDomain 
                      -> (String, [Formula])
                      -> Polynomial
-initializePolynomial env Nothing _ (name, _) = [constantPTerm name]
-initializePolynomial env (Just sty) ms (name, uvars) =
-  constantPTerm name : initializePolynomial' env sty ms (name, uvars)
+initializePolynomial env Constant (name, _) = [constantPTerm name]
+initializePolynomial env Dependent (name, uvars) =
+  constantPTerm name : initializePolynomial' env (name, uvars)
 
-initializePolynomial' env Variable _ (name, uvars) = map (mkPTerm name) uvars
-initializePolynomial' env Measure ms (name, uvars) =
-  map (mkPTerm name) (allPossibleMeasureApps env uvars ms)
-initializePolynomial' env Both ms rvar =
-  initializePolynomial' env Variable ms rvar
-  ++ initializePolynomial' env Measure ms rvar
+initializePolynomial' env (name, uvars) = map (mkPTerm name) uvars
 
-allPossibleMeasureApps :: Environment
-                       -> [Formula]
-                       -> [UMeasure]
-                       -> [Formula]
-allPossibleMeasureApps env universals = concatMap (possibleMeasureApps env universals)
-
-possibleMeasureApps :: Environment
-                    -> [Formula]
-                    -> UMeasure
-                    -> [Formula]
-possibleMeasureApps env universals (m, MeasureDef inS outS defs cargs post) =
-  let possibleCArgs =
-        Set.toList $ Map.findWithDefault Set.empty m (env^.measureConstArgs)
-      sortAssignment args =
-        foldl assignSorts (Just Map.empty) (zip (map sortOf args) (map snd cargs))
-      mkPred args f = Pred outS m (args ++ [f])
-      attemptToAssign ass f =
-        (`sortSubstituteFml` f) <$> assignSorts ass (sortOf f, inS)
-      tryAllUniversals args =
-        map (mkPred args) $ mapMaybe (attemptToAssign (sortAssignment args)) universals
-  in  concatMap tryAllUniversals possibleCArgs
 
 -- All variables that can fill the "constant" argument slots -- those that
 --   unify with the formal type, given the non-constant argument
