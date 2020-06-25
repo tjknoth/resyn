@@ -174,7 +174,7 @@ synt = Synthesis {
   ct                  = False           &= help ("Require that all branching expressions consume a constant amount of resources (default: False)"),
   cegis_max           = 100             &= help ("Maximum number of iterations through the CEGIS loop (default: 100)"),
   eac                 = False           &= help ("Enumerate-and-check instead of round-trip resource analysis (default: False)"),
-  res_solver          = Incremental     &= help (unwords ["Which solver should be used for resource constraints?", show SYGUS, show CEGIS, show Incremental, "(default: ", show Incremental, ")"]),
+  res_solver          = CEGIS           &= help (unwords ["Which solver should be used for resource constraints?", show SYGUS, show CEGIS, show Incremental, "(default: ", show CEGIS, ")"]),
   logfile             = Nothing         &= help ("File for logging SYGUS constraints (default: no logging)"),
   solve_sygus         = "cvc4"          &= help ("Command to run SYGUS solver (default: \"cvc4\")")
   } &= auto &= help "Synthesize goals specified in the input file"
@@ -217,7 +217,7 @@ defaultResourceArgs = ResourceArgs {
   _constantTime = False,
   _cegisBound = 100,
   _enumerate = False,
-  _rsolver = Incremental,
+  _rsolver = CEGIS,
   _sygusLog = Nothing,
   _cvc4 = "cvc4"
 }
