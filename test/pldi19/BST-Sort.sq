@@ -24,9 +24,10 @@ measure ielems :: IList a -> Set a where
   INil -> []
   ICons x xs -> [x] + ielems xs  
 
+-- Annotated data constructor
 data BST a where
 	Empty :: BST a
-	Node  :: x: a -> l: BST {a | _v < x} -> r: BST {a | x < _v} -> BST a
+	Node  :: x: {a| |3} -> l: BST {a | _v < x} -> r: BST {a | x < _v} -> BST a
                           
 termination measure size :: BST a -> {Int | _v >= 0} where
   Empty -> 0
@@ -36,10 +37,10 @@ measure telems :: BST a -> Set a where
   Empty -> []
   Node x l r -> telems l + telems r + [x]
 
-insert :: x: a -> t: BST a -> {BST a | telems _v == telems t + [x]}
+insert :: x: {a| |3} -> t: BST a -> {BST a | telems _v == telems t + [x]}
 insert = ??
 
-toBST :: xs: List a -> {BST a | telems _v == elems xs}
+toBST :: xs: List {a| |3} -> {BST a | telems _v == elems xs}
 toBST = ??
 
 pivotAppend :: p: a -> xs: IList {a | _v < p} -> ys: IList {a | _v > p} -> {IList a | ilen _v == ilen xs + ilen ys + 1 && ielems _v == ielems xs + ielems ys + [p] }
@@ -48,5 +49,5 @@ pivotAppend = ??
 flatten :: t: BST a -> {IList a | ielems _v == telems t}
 flatten = ??
 
-sort :: xs: List a -> {IList a | ielems _v == elems xs}
+sort :: xs: List {a| |3} -> {IList a | ielems _v == elems xs}
 sort = ??

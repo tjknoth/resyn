@@ -1,40 +1,53 @@
-data IList where
-  Nil :: IList 
-  Cons :: x: {Int| |2} -> xs: IList -> IList 
+data List a where 
+  Nil :: List a 
+  Cons :: x: a -> xs: List a -> List a 
 
--- Measure with more than one argument
--- This is possible when all but the last argument (the relevant Datatype)
---   are constant
-measure aboveAll :: z: Int -> IList -> Bool where 
-  Nil -> True 
-  Cons y ys -> (y >= z) && (aboveAll z ys)
-
-termination measure len :: IList -> {Int | _v >= 0} where 
+termination measure len :: List a -> { Int | _v >= 0 } where 
   Nil -> 0
   Cons x xs -> 1 + len xs
 
--- Simple demonstration of verification using multi-argument measure
-filterAbove :: xs: IList -> x: Int -> {IList | aboveAll x _v}
-filterAbove = \xs . \x . 
-  match xs with 
-    Nil -> Nil 
-    Cons y ys -> 
-      if (y >= x)
-        then Cons y (filterAbove ys x)
-        else filterAbove ys x
+measure numeq :: x: a -> List a -> { Int | _v >= 0 }  where 
+  Nil -> 0
+  Cons y ys -> 
+    if x == y
+      then 1 + numeq x ys
+      else numeq x ys
 
--- Measure asserting that every element in a list is between
---   @lo@ and @hi@
-measure between :: lo: Int -> hi: Int -> IList -> Bool where 
-    Nil -> True 
-    Cons x xs -> (x > lo) && (x < hi) && (between lo hi xs)
-
--- This should fail to verify, as the filtering uses inclusive bounds
-filterBetween :: xs: IList -> lo: Int -> hi: Int -> {IList | between lo hi _v}
-filterBetween = \xs. \lo. \hi. 
+-- Verification test
+copies :: x: a -> xs: List a -> { Int | _v == numeq x xs } 
+copies = \x. \xs. 
   match xs with 
-    Nil -> Nil 
+    Nil -> 0
     Cons y ys -> 
-      if (y >= lo && y <= hi)
-        then Cons y (filterBetween ys lo hi)
-        else filterBetween ys lo hi
+      if y == x 
+        then 1 + copies x ys
+        else copies x ys
+
+-- Failing verification test
+copies' :: x: a -> xs: List a -> { Int | _v == numeq x xs }
+copies' = \x. \xs. 
+  match xs with 
+    Nil -> 0 
+    Cons y ys -> 
+      if x == y 
+        then 1 - copies' x ys 
+        else copies' x ys
+
+data BST a where
+  Empty :: BST a
+  Node  :: x: a -> l: BST {a | _v < x} -> r: BST {a | x < _v} -> BST a
+  
+data SortedList a where
+  SNil :: SortedList a
+  SCons:: x: a -> xs:SortedList { a | _v < x } -> SortedList a
+  
+measure bstBoundsEl :: el:a -> BST a -> Bool where
+  Empty -> True
+  Node x l r -> (el < x) && bstBoundsEl el l
+
+-- Verification test from Jimmy
+helper:: t:BST a -> sl:SortedList { a | bstBoundsEl _v t } -> SortedList a
+helper  = \t. \sl.
+    match t with
+        Empty -> sl
+        Node x l r -> SCons x sl

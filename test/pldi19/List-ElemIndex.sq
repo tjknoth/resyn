@@ -16,5 +16,5 @@ dec :: x: Int -> {Int | _v == x - 1}
 eq :: x: a -> y: a -> {Bool | _v == (x == y)}
 neq :: x: a -> y: a -> {Bool | _v == (x != y)}
 
-elemIndex :: <p :: Int -> a -> Bool> . x: a -> xs: {List a <p> | x in elems _v} -> {Int | p _v x}
+elemIndex :: <p :: Int -> a -> Bool> . x: a -> xs: {List {a| |1} <p> | x in elems _v} -[1]-> {Int | p _v x}
 elemIndex = ??

@@ -14,3 +14,15 @@ and :: x: Bool -> y: Bool -> {Bool | _v == (x && y)}
 -- Constant time version
 compare' :: xs: List {a| |1} -> ys: List a -[1]-> {Bool | _v == (len xs == len ys)}
 compare' = ?? 
+{-
+compare' = \xs . \ys . 
+    match xs with
+      Nil -> 
+        match ys with
+          Nil -> true
+          Cons x5 x6 -> false
+      Cons x9 x10 -> 
+        match ys with
+          Nil -> false
+          Cons x14 x15 -> compare' x10 x15
+-}

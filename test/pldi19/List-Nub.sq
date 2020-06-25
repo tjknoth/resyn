@@ -21,8 +21,8 @@ false :: {Bool | !_v}
 elem :: x: a -> xs: List a -> {Bool | _v == (x in elems xs)}
 elem = ??
 	
-nub' :: xs: List a -> acc: UList a -> {UList a | elems _v == elems acc + elems xs}
+nub' :: xs: List {a| |1} -> acc: UList a -[1]-> {UList a | elems _v == elems acc + elems xs}
 nub' = ??
 
-nub :: xs: List a -> {UList a | elems _v == elems xs}
+nub :: xs: List {a| |1} -> {UList a | elems _v == elems xs}
 nub = ??

@@ -1,0 +1,26 @@
+data List a <q :: Int> where
+  Nil  :: List a <q>
+  Cons :: x:a -> xs: List {a | | q} <q> -> List a <q>
+
+data Tree a <q :: Int> where
+  Leaf :: x: {a| |q} -> Tree a <q>
+  Node :: l: { Tree {a | | q} <q> | | q}
+       -> r: Tree {a | | q} <q> 
+       -> Tree a <q>
+
+merge :: List {a | | 1} <{0}> -> List {a | | 1} <{0}> -> List a <{0}>
+merge = \xs. \ys. 
+  match xs with
+    Nil        -> ys
+    Cons xh xt -> match ys with
+                    Nil        -> xs
+                    Cons yh yt -> if tick 1 (xh < yh)
+                                    then Cons xh (merge xt (Cons yh yt))
+                                    else Cons yh (merge (Cons xh xt) yt)
+
+--takes the contents of a tree and arranges them in a sorted list
+flatten :: Tree a <{1}> -> List a <{0}>
+flatten = \t. 
+  match t with
+    Leaf x -> Cons x Nil
+    Node l r -> merge (flatten l) (flatten r)

@@ -6,6 +6,9 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Nil -> 0
   Cons x xs -> 1 + len xs  
 	
-map :: f: (a -[1]-> b) -> xs: List {a| |1} -> {List b | len _v == len xs}
-map = ??
+map :: f: (a -> b) -> xs: List a -> {List b | len _v == len xs}
+map = ?? {-\f. \xs. 
+  match xs with 
+    Nil -> Nil 
+    Cons y ys -> Cons (f y) (map f ys) -}
 

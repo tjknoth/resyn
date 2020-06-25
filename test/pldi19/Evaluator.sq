@@ -6,9 +6,9 @@ data AST where
   Zero :: AST
   One :: AST
   Two :: AST
-  PlusNode :: l: AST -> r: AST -> AST
-  MinusNode :: l: AST -> r: AST -> AST
-  ProductNode :: l: AST -> r: AST -> AST
+  PlusNode :: l: {AST| |1} -> r: {AST| |1} -> AST
+  MinusNode :: l: {AST| |1} -> r: {AST| |1} -> AST
+  ProductNode :: l: {AST| |1} -> r: {AST| |1} -> AST
   
 termination measure size :: AST -> {Int | _v >= 0} where
   Zero -> 1
@@ -40,6 +40,5 @@ measure result2 :: PAST -> Int where
   IntNode x -> x
   OpNode op l r -> if op == 0 then result2 l + result2 r else (if op == 1 then result2 l - result2 r else result2 l * result2 r)
 
--- This doesn't really make sense... (annotation-wise)
-transform :: x: {AST| |2} -[1]-> {PAST | result2 _v == result x}
+transform :: x: AST -[1]-> {PAST | result2 _v == result x}
 transform = ??

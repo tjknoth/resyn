@@ -1,11 +1,15 @@
-flags:
-  synquid:
-    synquid: true
+flags: 
+  resyn:
+    resyn: true
 packages:
   - '.'
-resolver: lts-6.21
+resolver: lts-15.3
 extra-deps:
-  - z3-4.3.1
+  - z3-408.1
+#  - limp-0.3.2.3
+#  - limp-cbc-0.3.2.3
+nix:
+  packages: [zlib.dev, zlib.out, pkgconfig, z3]
 # extra-include-dirs:
 #  - <z3-home>/src/api
 # extra-lib-dirs:

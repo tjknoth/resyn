@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances #-}
 
 -- | Solver for second-order constraints
 module Synquid.Solver.HornClause (
@@ -11,10 +11,9 @@ module Synquid.Solver.HornClause (
   ) where
 
 import Synquid.Logic
-import Synquid.Solver.Monad
 import Synquid.Util
 import Synquid.Pretty
-import Synquid.Solver.CEGIS (RMonad(..))
+import Synquid.Solver.Monad
 
 import Data.List
 import Data.Maybe
@@ -25,8 +24,7 @@ import qualified Data.Map as Map
 import Control.Monad
 import Control.Monad.Reader
 import Control.Lens hiding (both)
-
-import Debug.Trace
+import Debug.Trace (traceShow)
 
 {- Interface -}
 
@@ -80,10 +78,10 @@ instance (Monad s, Applicative s, MonadSMT s) => MonadSMT (FixPointSolver s) whe
 
 instance (Monad s, Applicative s, RMonad s) => RMonad (FixPointSolver s) where
   solveAndGetModel = lift . solveAndGetModel
-  solveAndGetAssignment q f = lift $ solveAndGetAssignment q f
   modelGetAssignment s m = lift $ modelGetAssignment s m
-  modelGetUFs s m = lift $ modelGetUFs s m
-  evalInModel fs m measure = lift $ evalInModel fs m measure
+  checkPredWithModel f m = lift $ checkPredWithModel f m
+  filterPreds fs m  = lift $ filterPreds fs m
+  translate = lift . translate
 
  
 {- Implementation -}
@@ -206,7 +204,7 @@ greatestFixPoint quals extractAssumptions candidates = do
         
     debugOutput cands cand inv modified =
       writeLog 3 (vsep [
-        nest 2 $ text "Candidates" <+> parens (pretty $ length cands) $+$ (vsep $ map pretty cands), 
+        nest 2 $ text "Candidates" <+> parens (pretty $ length cands) $+$ vsep (map pretty cands), 
         text "Chosen candidate:" <+> pretty cand,
         text "Invalid Constraint:" <+> pretty inv,
         text "Strengthening:" <+> pretty modified])        
@@ -245,7 +243,6 @@ strengthen qmap extractAssumptions fml@(Binary Implies lhs rhs) sol = do
     unknownsList = Set.toList unknowns
     lhsQuals = setConcatMap (Set.fromList . lookupQualsSubst qmap) unknowns   -- available qualifiers for the whole antecedent
     usedLhsQuals = setConcatMap (valuation sol) unknowns `Set.union` knownConjuncts      -- already used qualifiers for the whole antecedent
-    rhsVars = Set.map varName $ varsOf rhs
     assumptions = setConcatMap extractAssumptions lhsQuals `Set.union`
                   setConcatMap extractAssumptions knownConjuncts `Set.union`
                   extractAssumptions rhs
@@ -330,7 +327,8 @@ filterSubsets check n = go [] [Set.empty]
 leastFixPoint :: MonadSMT s => ExtractAssumptions -> [Candidate] -> FixPointSolver s [Candidate]
 leastFixPoint _ [] = return []
 leastFixPoint extractAssumptions (cand@(Candidate sol _ _ _):rest) = do
-    fml@(Binary Implies lhs rhs) <- asks constraintPickStrategy >>= pickConstraint cand
+    fml <- asks constraintPickStrategy >>= pickConstraint cand
+    let (Binary Implies lhs rhs) = fml
     let lhs' = applySolution sol lhs
     let assumptions = extractAssumptions lhs' `Set.union` extractAssumptions (applySolution sol rhs)
     
@@ -383,7 +381,7 @@ weaken (Binary Implies lhs _) sol = return Nothing
 -- | 'pruneSolutions' @sols@: eliminate from @sols@ all solutions that are semantically stronger on all unknowns than another solution in @sols@ 
 pruneSolutions :: MonadSMT s => [Formula] -> [Solution] -> FixPointSolver s [Solution]
 pruneSolutions unknowns solutions = 
-  let isSubsumed sol sols = anyM (\s -> allM (\u -> isValidFml $ (conjunction $ valuation sol u) |=>| (conjunction $ valuation s u)) unknowns) sols
+  let isSubsumed sol = anyM (\s -> allM (\u -> isValidFml $ conjunction (valuation sol u) |=>| conjunction (valuation s u)) unknowns) 
   in prune isSubsumed solutions
   
 -- | 'pruneValuations' @vals@: eliminate from @vals@ all valuations that are semantically stronger than another pValuation in @vals@   

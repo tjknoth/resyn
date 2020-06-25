@@ -16,7 +16,6 @@ import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Control.Lens as Lens
-import Debug.Trace
 
 {- Program terms -}
 
@@ -37,6 +36,7 @@ data BareProgram t =
   PFix ![Id] !(Program t) |                    -- ^ Fixpoint
   PLet !Id !(Program t) !(Program t) |         -- ^ Let binding
   PHole |                                      -- ^ Hole (program to fill in)
+  PTick Int !(Program t) |                     -- ^ Tick (cost annotation)
   PErr                                         -- ^ Error
   deriving (Show, Eq, Ord, Functor)
 
@@ -70,6 +70,7 @@ eraseTypes = fmap (const AnyT)
 symbolName (Program (PSymbol name) _) = name
 symbolList (Program (PSymbol name) _) = [name]
 symbolList (Program (PApp fun arg) _) = symbolList fun ++ symbolList arg
+symbolList (Program (PTick c body) _) = symbolList body
 
 symbolsOf (Program p _) = case p of
   PSymbol name -> Set.singleton name
@@ -79,6 +80,7 @@ symbolsOf (Program p _) = case p of
   PMatch scr cases -> symbolsOf scr `Set.union` Set.unions (map (symbolsOf . expr) cases)
   PFix x body -> symbolsOf body
   PLet x def body -> symbolsOf def `Set.union` symbolsOf body
+  PTick c body -> symbolsOf body
   _ -> Set.empty
 
 errorProgram = Program PErr (vart dontCare ftrue)
@@ -98,6 +100,7 @@ programSubstituteSymbol name subterm (Program p t) = Program (programSubstituteS
     programSubstituteSymbol' (PMatch scr cases) = PMatch (pss scr) (map (\(Case ctr args pBody) -> Case ctr args (pss pBody)) cases)
     programSubstituteSymbol' (PFix args pBody) = PFix args (pss pBody)
     programSubstituteSymbol' (PLet x pDef pBody) = PLet x (pss pDef) (pss pBody)
+    programSubstituteSymbol' (PTick c pBody) = PTick c $ pss pBody
 
 
 -- | Convert an executable formula into a program
@@ -193,7 +196,8 @@ data DatatypeDef = DatatypeDef {
   _predParams :: [PredSig],         -- ^ Signatures of predicate parameters
   _predVariances :: [Bool],         -- ^ For each predicate parameter, whether it is contravariant
   _constructors :: [Id],            -- ^ Constructor names
-  _wfMetric :: (Maybe Id)           -- ^ Name of the measure that serves as well founded termination metric
+  _wfMetric :: (Maybe Id),          -- ^ Name of the measure that serves as well founded termination metric
+  _resourcePreds :: [Bool]          -- ^ For each predicate parameter, whether or not it appears in potential expressions
 } deriving (Show, Eq, Ord)
 
 makeLenses ''DatatypeDef
@@ -220,8 +224,8 @@ makeLenses ''MeasureDef
 type SymbolMap = Map Int (Map Id RSchema)  -- Variables and constants indexed by arity
 
 -- Map from measure ID to a list, where each element is a set 
---  of possible instantiations of the relevant argument
-type ArgMap = Map Id [Set Formula] 
+--  of possible argument vectors
+type ArgMap = Map Id (Set [Formula])
 
 -- | Typing environment
 data Environment = Environment {
@@ -229,6 +233,7 @@ data Environment = Environment {
   _symbols :: SymbolMap,                     -- ^ Variables and constants (with their refinement types), indexed by arity
   _ghostSymbols :: (Set Id),                 -- ^ Set of names of variables that do not carry potential -- ignored in sharing and transfer constraints
   _freePotential :: Formula,                 -- ^ Extra free potential, used only for weakening
+  _condFreePotential :: [Formula],           -- ^ Possible conditional structures for free potential expressions
   _boundTypeVars :: [Id],                    -- ^ Bound type variables
   _boundPredicates :: [PredSig],             -- ^ Argument sorts of bound abstract refinements
   _assumptions :: (Set Formula),             -- ^ Unknown assumptions
@@ -236,14 +241,15 @@ data Environment = Environment {
   _usedScrutinees :: [RProgram],             -- ^ Program terms that has already been scrutinized
   _unfoldedVars :: (Set Id),                 -- ^ In eager match mode, datatype variables that can be scrutinized
   _letBound :: (Set Id),                     -- ^ Subset of symbols that are let-bound
+  _measureConstArgs :: ArgMap,
   -- | Constant part:
   _constants :: (Set Id),                    -- ^ Subset of symbols that are constants
   _datatypes :: (Map Id DatatypeDef),        -- ^ Datatype definitions
   _globalPredicates :: (Map Id [Sort]),      -- ^ Signatures (resSort:argSorts) of module-level logic functions (measures, predicates)
   _measureDefs :: (Map Id MeasureDef),       -- ^ Measure definitions
+  _resourceMeasures :: (Set Id),             -- ^ Measure definitions used in resource analysis 
   _typeSynonyms :: (Map Id ([Id], RType)),   -- ^ Type synonym definitions
-  _unresolvedConstants :: (Map Id RSchema),  -- ^ Unresolved types of components (used for reporting specifications with macros)
-  _measureConstArgs :: ArgMap                -- ^ Map from measure names to possible valuations of each constant argument in the measure
+  _unresolvedConstants :: (Map Id RSchema)   -- ^ Unresolved types of components (used for reporting specifications with macros)
 } deriving (Show)
 
 makeLenses ''Environment
@@ -259,6 +265,7 @@ emptyEnv = Environment {
   _symbols = Map.empty,
   _ghostSymbols = Set.empty,
   _freePotential = fzero,
+  _condFreePotential = [],
   _boundTypeVars = [],
   _boundPredicates = [],
   _assumptions = Set.empty,
@@ -270,6 +277,7 @@ emptyEnv = Environment {
   _globalPredicates = Map.empty,
   _datatypes = Map.empty,
   _measureDefs = Map.empty,
+  _resourceMeasures = Set.empty,
   _typeSynonyms = Map.empty,
   _unresolvedConstants = Map.empty,
   _measureConstArgs = Map.empty
@@ -277,12 +285,16 @@ emptyEnv = Environment {
 
 -- Used to carry around symbols, list of ghosts, and free potential expression 
 --   in resource constraints without storing all the extra stuff.
-mkResourceEnv syms ghosts fp = 
+mkResourceEnv syms ghosts fp cfps = 
   emptyEnv {
     _symbols = syms,
     _ghostSymbols = ghosts,
-    _freePotential = fp
+    _freePotential = fp,
+    _condFreePotential = cfps
   }
+
+totalConditionalFP :: Environment -> Formula 
+totalConditionalFP = sumFormulas . _condFreePotential
 
 -- | 'symbolsOfArity' @n env@: all symbols of arity @n@ in @env@
 symbolsOfArity n env = Map.findWithDefault Map.empty n (env ^. symbols)
@@ -377,9 +389,9 @@ addGhostVariable :: Id -> RType -> Environment -> Environment
 addGhostVariable name t = addVariable name t . (ghostSymbols %~ Set.insert name)
 
 addPolyVariable :: Id -> RSchema -> Environment -> Environment
-addPolyVariable name sch e =  let n = arity (toMonotype sch) in (symbols %~ Map.insertWith Map.union n (Map.singleton name sch)) e
-  where
-    n = arity (toMonotype sch)
+addPolyVariable name sch e = 
+  let n = arity (toMonotype sch) in 
+  (symbols %~ Map.insertWith Map.union n (Map.singleton name sch)) e
 
 -- | 'addPolyConstant' @name sch env@ : add type binding @name@ :: @sch@ to @env@
 addPolyConstant :: Id -> RSchema -> Environment -> Environment
@@ -457,7 +469,30 @@ allPredicates env = Map.fromList (map (\(PredSig pName argSorts resSort) -> (pNa
 -- | 'allMeasuresOf' @dtName env@ : all measure of datatype with name @dtName@ in @env@
 allMeasuresOf dtName env = Map.filter (\(MeasureDef (DataS sName _) _ _ _ _) -> dtName == sName) $ env ^. measureDefs
 
-allIntMeasuresOf dtName env = Map.filter (\(MeasureDef _ s _ _ _) -> s == IntS) (allMeasuresOf dtName env)
+allRMeasuresOf dtName env = Map.filterWithKey checkM $ env ^. measureDefs 
+  where 
+    checkM m (MeasureDef (DataS sName _) _ _ _ _) = (dtName == sName) && m `Set.member` (env ^. resourceMeasures)
+
+allRMeasures env = Map.filterWithKey (\m _ -> m `Set.member` (env ^. resourceMeasures)) $ env ^. measureDefs
+
+rMeasuresFromSch :: Map Id [Bool] -> RSchema -> Set String
+rMeasuresFromSch flagMap sch = rMeasuresFromSch' flagMap (toMonotype sch)
+
+rMeasuresFromSch' flagMap typ =
+  let rforms = allRFormulas flagMap typ
+  in  Set.unions $ map getAllRPreds rforms
+
+extractResourceParams :: BareDeclaration -> [Bool]
+extractResourceParams (DataDecl dtName tParams pVarParams ctors) =
+  let preds = map fst pVarParams 
+      returnsInt ps = predSigResSort ps == IntS
+      isInt = map returnsInt preds
+      computedWith ps = any (Set.member (predSigName ps)) (map (\(ConstructorSig _ t) -> (predsOfPotential isInt t)) ctors)
+      -- exists a constructor where p occurs in an integer-sorted predicate
+      -- exists a constructor where p occurs in a potential. (not necessary in )
+      usedForResourceAnalysis p = returnsInt p || computedWith p
+  in map usedForResourceAnalysis preds
+extractResourceParams _ = error "extractResourceParams given non-datatype declaration"
 
 -- | 'allMeasurePostconditions' @baseT env@ : all nontrivial postconditions of measures of @baseT@ in case it is a datatype
 allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env =
@@ -468,8 +503,6 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
                    if isAbstract then map contentProperties allMeasures else [] ++
                    if includeQuanitifed then map elemProperties allMeasures else []
   where
-    allPossibleArgs (_, sort) = map (Var sort) $ Map.keys $ allScalarsOfSort env sort 
-
     extractPost (mName, MeasureDef _ outSort _ [] fml) =
       if fml == ftrue
         then [Nothing]
@@ -486,7 +519,7 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
     -- TODO: should potentials transfer as well?
     contentProperties (mName, MeasureDef (DataS _ vars) a _ _ _) = case elemIndex a vars of
       Nothing -> Nothing
-      Just i -> let (ScalarT elemT fml pot) = tArgs !! i -- @mName@ "returns" one of datatype's parameters: transfer the refinement onto the value of the measure
+      Just i -> let (ScalarT elemT fml _) = tArgs !! i -- @mName@ "returns" one of datatype's parameters: transfer the refinement onto the value of the measure
                 in let
                     elemSort = toSort elemT
                     measureApp = Pred elemSort mName [Var (toSort baseT) valueVarName]
@@ -495,7 +528,7 @@ allMeasurePostconditions includeQuanitifed baseT@(DatatypeT dtName tArgs _) env 
     -- TODO: is potential relevant?
     elemProperties (mName, MeasureDef (DataS _ vars) (SetS a) _ _ _) = case elemIndex a vars of
       Nothing -> Nothing
-      Just i -> let (ScalarT elemT fml pot) = tArgs !! i -- @mName@ is a set of datatype "elements": add an axiom that every element of the set has that property
+      Just i -> let (ScalarT elemT fml _) = tArgs !! i -- @mName@ is a set of datatype "elements": add an axiom that every element of the set has that property
                 in if fml == ftrue || fml == ffalse || not (Set.null $ unknownsOf fml)
                     then Nothing
                     else  let
@@ -514,13 +547,28 @@ typeSubstituteEnv tass = over symbols (Map.map (Map.map (schemaSubstitute tass))
 scalarSubstituteEnv :: TypeSubstitution -> SymbolMap -> SymbolMap
 scalarSubstituteEnv tass syms = 
   let scalars = (fromMaybe Map.empty $ Map.lookup 0 syms) :: Map Id RSchema
-  in  Map.insert 0 (Map.map (schemaSubstitute tass) scalars) syms
+   in Map.insert 0 (Map.map (schemaSubstitute tass) scalars) syms
+
+scalarPredSubstituteEnv :: Substitution -> SymbolMap -> SymbolMap
+scalarPredSubstituteEnv pass syms = 
+  let scalars = (fromMaybe Map.empty $ Map.lookup 0 syms)
+   in Map.insert 0 (Map.map (fmap (typeSubstitutePred pass)) scalars) syms
 
 -- | Insert weakest refinement
 refineTop :: Environment -> SType -> RType
+refineTop env (ScalarT (DatatypeT name tArgs []) _ _) = ScalarT (DatatypeT name (map (refineTop env) tArgs) []) ftrue defPotential
 refineTop env (ScalarT (DatatypeT name tArgs pArgs) _ _) =
-  let variances = env ^. (datatypes . to (Map.! name) . predVariances) in
-  ScalarT (DatatypeT name (map (refineTop env) tArgs) (map (BoolLit . not) variances)) ftrue defPotential
+  let variances = env ^. (datatypes . to (Map.! name) . predVariances) 
+      predSorts = map predSigResSort $ env ^. (datatypes . to (Map.! name) . predParams)
+      makeTop variance BoolS = BoolLit . not $ variance
+      makeTop variance IntS  = ptop  
+  in ScalarT (DatatypeT name (map (refineTop env) tArgs) (zipWith makeTop variances predSorts)) ftrue defPotential
+  --ScalarT (DatatypeT name (map (refineTop env) tArgs) (map (BoolLit . not) variances)) ftrue defPotential -- APs: discriminate between pred/AP
+  {-(case (predSigResSort . head . _predParams $ (env ^. datatypes) Map.! name) of
+                                                         BoolS -> (map (BoolLit . not) variances)
+                                                         IntS  -> (map (const ptop) variances))) 
+                                                       ftrue defPotential
+  -}
 refineTop _ (ScalarT IntT _ _) = ScalarT IntT ftrue defPotential
 refineTop _ (ScalarT BoolT _ _) = ScalarT BoolT ftrue defPotential
 refineTop _ (ScalarT (TypeVarT vSubst a _) _ _) = ScalarT (TypeVarT vSubst a defMultiplicity) ftrue defPotential
@@ -529,9 +577,14 @@ refineTop env (FunctionT x tArg tFun c) = FunctionT x (refineBot env tArg) (refi
 -- | Insert strongest refinement
 -- TODO: maybe shouldn't use default potentials and multiplicities?
 refineBot :: Environment -> SType -> RType
+refineBot env (ScalarT (DatatypeT name tArgs []) _ _) = ScalarT (DatatypeT name (map (refineBot env) tArgs) []) ffalse defPotential
 refineBot env (ScalarT (DatatypeT name tArgs pArgs) _ _) =
   let variances = env ^. (datatypes . to (Map.! name) . predVariances) in
-  ScalarT (DatatypeT name (map (refineBot env) tArgs) (map BoolLit variances)) ffalse defPotential
+  --ScalarT (DatatypeT name (map (refineBot env) tArgs) (map BoolLit variances)) ffalse defPotential -- APs: discriminate between pred/AP
+  ScalarT (DatatypeT name (map (refineBot env) tArgs) (case (predSigResSort . head . _predParams $ (env ^. datatypes) Map.! name) of
+                                                         BoolS -> (map BoolLit variances)
+                                                         IntS  -> (map (const pbot) variances))) 
+                                                       ffalse defPotential
 refineBot _ (ScalarT IntT _ _) = ScalarT IntT ffalse defPotential
 refineBot _ (ScalarT BoolT _ _) = ScalarT BoolT ffalse defPotential
 refineBot _ (ScalarT (TypeVarT vSubst a _) _ _) = ScalarT (TypeVarT vSubst a defMultiplicity) ffalse defPotential
@@ -567,37 +620,31 @@ isSynthesisGoal _ = False
 
 -- | Typing constraints
 data Constraint = 
-  Subtype !Environment !RType !RType !Bool !Id
-  | RSubtype !Environment !Formula !Formula !Id
-  | WellFormed !Environment !RType !Id
+  Subtype !Environment !RType !RType !Bool 
+  | RSubtype !Environment !Formula !Formula 
+  | WellFormed !Environment !RType 
   | WellFormedCond !Environment !Formula
   | WellFormedMatchCond !Environment !Formula
-  | WellFormedPredicate !Environment ![Sort] !Id
-  | SharedEnv !Environment !Environment !Environment !Id
-  | SharedForm !Environment !Formula !Formula !Formula !Id
-  | Transfer !Environment !Environment !Id
-  | ConstantRes !Environment !Id
+--  | WellFormedPredicate !Environment ![Sort] !Id -- APs: changed to make Pretty.hs show correct predicate constraints
+  | WellFormedPredicate !Environment ![Sort] !Sort !Id
+  | SharedEnv !Environment !Environment !Environment 
+  | SharedForm !Environment !Formula !Formula !Formula 
+  | Transfer !Environment !Environment
+  | ConstantRes !Environment
   deriving (Show, Eq, Ord)
 
 
 
-labelOf (Subtype _ _ _ _ l)    = l
-labelOf (RSubtype _ _ _ l)     = l
-labelOf (WellFormed _ _ l)     = l
-labelOf (SharedEnv _ _ _ l)    = l
-labelOf (SharedForm _ _ _ _ l) = l
-labelOf (Transfer _ _ l)       = l
-labelOf _                      = ""
-
-envFrom (Subtype e _ _ _ _)         = e
-envFrom (RSubtype e _ _ _)          = e
-envFrom (WellFormed e _ _)          = e
+envFrom (Subtype e _ _ _)           = e
+envFrom (RSubtype e _ _)            = e
+envFrom (WellFormed e _)            = e
 envFrom (WellFormedCond e _)        = e
-envFrom (WellFormedPredicate e _ _) = e
-envFrom (SharedEnv e _ _ _)         = e
-envFrom (SharedForm e _ _ _ _)      = e
-envFrom (ConstantRes e _)           = e
-envFrom (Transfer e _ _)            = e
+-- envFrom (WellFormedPredicate e _ _) = e -- APs: adjusted to reflect new signature
+envFrom (WellFormedPredicate e _ _ _) = e
+envFrom (SharedEnv e _ _)           = e
+envFrom (SharedForm e _ _ _)        = e
+envFrom (ConstantRes e)             = e
+envFrom (Transfer e _)              = e
 
 isCTConstraint ConstantRes{} = True
 isCTConstraint _             = False
@@ -642,7 +689,7 @@ generateSchema :: Environment -> Id -> [(Maybe Id, Sort)] -> Sort -> Formula -> 
 generateSchema e name inSorts outSort post = predPolymorphic allPredParams [] name inSorts outSort post
   where
     allPredParams = concat $ fmap ((getPredParams e) . snd) inSorts
-    allTypeParams = concat $ fmap ((getTypeParams e) . snd) inSorts
+    -- allTypeParams = concat $ fmap ((getTypeParams e) . snd) inSorts
 
 getTypeParams :: Environment -> Sort -> [Id]
 getTypeParams e (DataS name _) = case Map.lookup name (e ^. datatypes) of
@@ -679,41 +726,56 @@ genSkeleton name preds inSorts outSort post = Monotype $ uncurry 0 inSorts
     pforms = fmap predform preds
     predform x = Pred AnyS x []
 
-getAllPreds :: Formula -> Set Id
-getAllPreds (Binary _ l r) = getAllPreds l `Set.union` getAllPreds r
-getAllPreds (Unary _ f)    = getAllPreds f
-getAllPreds (Ite g t f)    = getAllPreds g `Set.union` getAllPreds t `Set.union` getAllPreds f 
-getAllPreds (All _ f)      = getAllPreds f
-getAllPreds (Pred _ x fs)  = Set.insert x (Set.unions (map getAllPreds fs))
-getAllPreds _              = Set.empty 
+getAllRPreds :: Formula -> Set Id
+getAllRPreds (Binary _ l r)   = getAllRPreds l `Set.union` getAllRPreds r
+getAllRPreds (Unary _ f)      = getAllRPreds f
+getAllRPreds (Ite g t f)      = getAllRPreds g `Set.union` getAllRPreds t `Set.union` getAllRPreds f 
+getAllRPreds (All _ f)        = getAllRPreds f
+getAllRPreds (Pred IntS x fs) = Set.insert x (Set.unions (map getAllRPreds fs))
+getAllRPreds (Pred _ x fs)    = Set.empty
+getAllRPreds _                = Set.empty 
 
 -- Return a map from the IDs of multi-argument measures to a list of sets of possible 
 --   instantiations of those constant arguments by scraping the schema annotations
 getAllCArgsFromSchema :: Environment -> RSchema -> ArgMap
-getAllCArgsFromSchema env sch = Map.filter (not . null) $
-  let allForms = (allRefinementsOf sch) ++ (allRFormulas True (toMonotype sch))
-      measures = Map.keys (env ^. measureDefs)
-  in Map.unionsWith combineArgLists $ map (getAllCArgs measures) allForms
+getAllCArgsFromSchema env sch = Map.filter (not . null) $ 
+  getAllCArgsFromType env (toMonotype sch)
 
-combineArgLists = zipWith Set.union
+
+getAllCArgsFromType :: Environment -> RType -> ArgMap 
+getAllCArgsFromType env (FunctionT x argT resT _) = 
+  let vv = Var (toSort (baseTypeOf argT)) x 
+      -- measures = Map.keys (env ^. measureDefs)
+      flagMap = fmap _resourcePreds $ env ^. datatypes
+      allForms = allRFormulas flagMap argT
+      cargs = Map.unionsWith combineArgLists $ map (getAllCArgs vv) allForms
+  in  Map.union cargs (getAllCArgsFromType env resT) 
+getAllCArgsFromType _ LetT{}    = error "getAllCArgsFromType: Contextual type in top-level schema." 
+getAllCArgsFromType _ ScalarT{} = Map.empty
+getAllCArgsFromType _ AnyT      = Map.empty 
+
+combineArgLists = Set.union 
 
 -- Given a set of all measure IDs, a map from measure IDs to a list of sets of possible 
 --   arguments for each of its constant argument slots
-getAllCArgs :: [Id] -> Formula -> ArgMap
-getAllCArgs ms (Binary op l r) = Map.unionWith combineArgLists (getAllCArgs ms l) (getAllCArgs ms r)
-getAllCArgs ms (Unary _ f)     = getAllCArgs ms f
-getAllCArgs ms (Ite g t f)     = Map.unionsWith combineArgLists [(getAllCArgs ms g), (getAllCArgs ms t), (getAllCArgs ms f)]
-getAllCArgs ms (All _ f)       = getAllCArgs ms f -- Ignore quantifier
-getAllCArgs ms (Pred _ x fs)   = getCArgs ms x fs
+getAllCArgs :: Formula -> Formula -> ArgMap
+getAllCArgs vv (Binary op l r) = Map.unionWith combineArgLists (getAllCArgs vv l) (getAllCArgs vv r)
+getAllCArgs vv (Unary _ f)     = getAllCArgs vv f
+getAllCArgs vv (Ite g t f)     = Map.unionsWith combineArgLists [(getAllCArgs vv g), (getAllCArgs vv t), (getAllCArgs vv f)]
+getAllCArgs vv (All _ f)       = getAllCArgs vv f -- Ignore quantified formula
+getAllCArgs vv (Pred _ x fs)   = getCArgs vv x fs
 getAllCArgs _ _                = Map.empty
 
-getCArgs :: [Id] -> String -> [Formula] -> ArgMap
-getCArgs ms name fs = Map.singleton name $ map Set.singleton $
-  if elem name ms
-    then init fs
-    else []
+getCArgs :: Formula -> Id -> [Formula] -> ArgMap
+getCArgs vv name fs = 
+  Map.singleton name $ 
+    Set.singleton $
+      map (substitute (Map.singleton valueVarName vv)) $
+        init fs
 
--- Default set implementation -- Needed to typecheck measures involving sets
+
+{- Set implementation -- used to check refinements on measures over sets -}
+
 defaultSetType :: BareDeclaration
 defaultSetType = DataDecl name typeVars preds cons
   where
@@ -721,7 +783,7 @@ defaultSetType = DataDecl name typeVars preds cons
     typeVars = ["a"]
     preds = []
     cons = [empty,single,insert]
-    empty = ConstructorSig emptySetCtor (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential)
+    empty  = ConstructorSig emptySetCtor (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential)
     single = ConstructorSig singletonCtor (FunctionT "x" (ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential) (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential) defCost)
     insert = ConstructorSig insertSetCtor (FunctionT "x" (ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential) (FunctionT "xs" (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential) (ScalarT (DatatypeT setTypeName [ScalarT (TypeVarT Map.empty "a" defMultiplicity) (BoolLit True) defPotential] []) (BoolLit True) defPotential) defCost) defCost)
 

@@ -1,0 +1,32 @@
+data Pair a where
+  Pair :: a -> a -> Pair a
+
+
+data List a <q :: a -> a -> Int> where
+  Nil  :: List a <q>
+  Cons :: x:a -> xs: List {a | | q x _v} <q> -> List a <q>
+
+
+{-
+data List a where
+  Nil  :: List a
+  Cons :: x:a -> xs: List a -> List a 
+-}
+
+insert :: x:a -> xs: List {a | | if (_v < x) then 1 else 0} <{0}>
+              -> List a <{0}>
+insert = \x. \xs. 
+  match xs with 
+    Nil       -> Cons x Nil
+    Cons y ys -> if y < x
+                   then Cons y (tick 1 (insert x ys))
+                   else Cons x (Cons y ys)
+
+
+
+insertionSort :: xs: List {a | | 2} <{if _1 > _0 then 1 else 0}>
+  -> List a <{0}>
+insertionSort = \xs.
+  match xs with 
+    Nil       -> Nil
+    Cons y ys -> tick 1 (insert y (tick 1 (insertionSort ys)))

@@ -22,7 +22,6 @@ import Control.Monad.Logic
 import Control.Monad.Reader
 import Control.Lens
 import qualified Data.Set as Set
-import Debug.Trace
 
 
 -- | 'reconstruct' @eParams tParams goal@ : reconstruct missing types and terms in the body of @goal@ so that it represents a valid type judgment;
@@ -37,7 +36,7 @@ reconstruct eParams tParams goal = do
     initTS <- initTypingState goal'
     runExplorer (eParams { _sourcePos = gSourcePos goal' }) tParams (Reconstructor reconstruct') initTS (go goal')
   where
-    reconstruct' = if tParams ^. enumAndCheck then reconstructAndCheck else reconstructTopLevel
+    reconstruct' = if tParams^.(resourceArgs . enumerate) then reconstructAndCheck else reconstructTopLevel
     go g = do
       pMain <- reconstruct' g { gDepth = _auxDepth eParams }  -- Reconstruct the program
       p <- flip insertAuxSolutions pMain <$> use solvedAuxGoals      -- Insert solutions for auxiliary goals stored in @solvedAuxGoals@
@@ -59,7 +58,11 @@ reconstructTopLevel :: (MonadSMT s, MonadHorn s, RMonad s)
                     => Goal 
                     -> Explorer s RProgram
 reconstructTopLevel (Goal funName env (ForallT a sch) impl depth pos s) = reconstructTopLevel (Goal funName (addTypeVar a env) sch impl depth pos s)
-reconstructTopLevel (Goal funName env (ForallP sig sch) impl depth pos s) = reconstructTopLevel (Goal funName (addBoundPredicate sig env) sch impl depth pos s)
+reconstructTopLevel (Goal funName env (ForallP sig sch) impl depth pos s) = do
+  -- check if pred is resource var
+  when (predSigResSort sig == IntS) $ -- add int-valued pred param as resource var 
+    runInSolver $ resourceVars %= insertRVar (predSigName sig, [])
+  reconstructTopLevel (Goal funName (addBoundPredicate sig env) sch impl depth pos s)
 reconstructTopLevel (Goal funName env (Monotype typ@FunctionT{}) impl depth _ synth) = local (set (_1 . auxDepth) depth) reconstructFix
   where
     reconstructFix = do
@@ -95,7 +98,7 @@ reconstructTopLevel (Goal funName env (Monotype typ@FunctionT{}) impl depth _ sy
           (tRes', seenLast) <- recursiveTypeTuple tRes fml
           return (FunctionT x tArg tRes' cost, seenLast)
         Just (argLt, argLe) -> do
-          y <- freshVar env "x"
+          y <- runInSolver $ freshVar env "x"
           let yForVal = Map.singleton valueVarName (Var (toSort $ baseTypeOf tArg) y)
           (tRes', seenLast) <- recursiveTypeTuple (renameVar (isBound env) x y tArg tRes) (fml `orClean` substitute yForVal argLt)
           if seenLast
@@ -111,7 +114,7 @@ reconstructTopLevel (Goal funName env (Monotype typ@FunctionT{}) impl depth _ sy
       case terminationRefinement x tArg of
         Nothing -> (\t -> FunctionT x tArg t cost) <$> recursiveTypeFirst tRes
         Just (argLt, _) -> do
-          y <- freshVar env "x"
+          y <- runInSolver $ freshVar env "x"
           return $ FunctionT y (addRefinement tArg argLt) (renameVar (isBound env) x y tArg tRes) cost
     recursiveTypeFirst t = return t
 
@@ -149,6 +152,11 @@ reconstructI' env t (PLet x iDef@(Program (PFun _ _) _) iBody) = do -- lambda-le
   let ctx p = Program (PLet x uHole p) t
   pBody <- inContext ctx $ reconstructI env t iBody
   return $ ctx pBody
+--reconstructI' env t (PTick c body) = 
+--  let env' = over freePotential (`subtractFormulas` IntLit c) env
+--   in reconstructI env' t body
+reconstructI' env t@(LetT x tDef tBody) impl = 
+  reconstructI' (addVariable x tDef env) tBody impl
 reconstructI' env t@(FunctionT _ tArg tRes c) impl = case impl of
   PFun y impl -> exploreFunction env (FunctionT y tArg tRes c) (\e t -> reconstructI e t impl) 
   PSymbol f -> do
@@ -160,18 +168,16 @@ reconstructI' env t@ScalarT{} impl = case impl of
   PFun _ _ -> throwErrorWithDescription $ text "Cannot assign non-function type" </> squotes (pretty t) </>
                            text "to lambda term" </> squotes (pretty $ untyped impl)
 
-  -- Why don't I need this? 
-  {- 
   PLet x iDef iBody -> do -- E-term let (since lambda-let was considered before)
-    (pDef, _) <- inContext (\p -> Program (PLet x p (Program PHole t)) t) $ reconstructETopLevel env AnyT iDef
+    pDef <- inContext (\p -> Program (PLet x p (Program PHole t)) t) $ reconstructETopLevel env AnyT iDef
     let (env', tDef) = embedContext env (typeOf pDef)
-    pBody <- inContext (\p -> Program (PLet x pDef p) t) $ reconstructI (safeAddVariable x tDef env') t iBody
+    env'' <- safeAddVariable x tDef env' 
+    pBody <- inContext (\p -> Program (PLet x pDef p) t) $ reconstructI env'' t iBody
     return $ Program (PLet x pDef pBody) t
-  -}   
    
   PIf (Program PHole AnyT) iThen iElse -> do
-    (cEnv, bEnv) <- shareContext env "if ??"
-    cUnknown <- Unknown Map.empty <$> freshId "C"
+    (cEnv, bEnv) <- shareContext env 
+    cUnknown <- Unknown Map.empty <$> runInSolver (freshId "C")
     addConstraint $ WellFormedCond bEnv cUnknown
     pThen <- inContext (\p -> Program (PIf (Program PHole boolAll) p (Program PHole t)) t) 
       $ reconstructI (addAssumption cUnknown bEnv) t iThen
@@ -183,10 +189,10 @@ reconstructI' env t@ScalarT{} impl = case impl of
     return $ Program (PIf pCond pThen pElse) t
   
   PIf iCond iThen iElse -> do
-    (cEnv, bEnv) <- shareContext env $ show $ text "if" <+> plain (pretty iCond)
+    (cEnv, bEnv) <- shareContext env 
     pCond <- inContext (\p -> Program (PIf p (Program PHole t) (Program PHole t)) t) 
       $ reconstructIE cEnv (ScalarT BoolT ftrue defPotential) iCond
-    let (bEnv', ScalarT BoolT cond pot) = embedContext bEnv $ typeOf pCond
+    let (bEnv', ScalarT BoolT cond _) = embedContext bEnv $ typeOf pCond
     pThen <- inContext (\p -> Program (PIf pCond p (Program PHole t)) t) 
       $ reconstructI (addAssumption (substitute (Map.singleton valueVarName ftrue) cond) bEnv') t iThen
     pElse <- inContext (\p -> Program (PIf pCond pThen p) t) 
@@ -196,7 +202,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
   PMatch iScr iCases -> do
     (consNames, consTypes) <- unzip <$> checkCases Nothing iCases
     let scrT = refineTop env $ shape $ lastType $ head consTypes
-    (cEnv, bEnv) <- shareContext env $ show $ text "match" <+> plain (pretty iScr)
+    (cEnv, bEnv) <- shareContext env 
     pScrutinee <- inContext (\p -> Program (PMatch p []) t) 
       $ reconstructIE cEnv scrT iScr
     let (bEnv', tScr) = embedContext bEnv (typeOf pScrutinee)
@@ -217,8 +223,8 @@ reconstructI' env t@ScalarT{} impl = case impl of
       Nothing -> throwErrorWithDescription $ text "Not in scope: data constructor" </> squotes (text consName)
       Just consSch -> do
                         consT <- instantiate env consSch True args -- Set argument names in constructor type to user-provided binders
-                        let consT' = typeMultiply fzero consT
-                        case lastType consT' of
+                        -- let consT' = typeMultiply fzero consT
+                        case lastType consT of
                           (ScalarT (DatatypeT dtName _ _) _ _) -> do
                             case mName of
                               Nothing -> return ()
@@ -227,7 +233,7 @@ reconstructI' env t@ScalarT{} impl = case impl of
                             if arity (toMonotype consSch) /= length args
                               then throwErrorWithDescription $ text "Constructor" </> squotes (text consName)
                                             </> text "expected" </> pretty (arity (toMonotype consSch)) </> text "binder(s) and got" <+> pretty (length args)
-                              else ((consName, consT') :) <$> checkCases (Just dtName) cs
+                              else ((consName, consT) :) <$> checkCases (Just dtName) cs
                           _ -> throwErrorWithDescription $ text "Not in scope: data constructor" </> squotes (text consName)
     checkCases _ [] = return []
 
@@ -239,12 +245,13 @@ reconstructCase :: (MonadSMT s, MonadHorn s, RMonad s)
                 -> Case RType 
                 -> RType 
                 -> Explorer s (Case RType)
-reconstructCase env scrVar pScrutinee t (Case consName args iBody) consT = cut $ do
+reconstructCase env scrVar pScrutinee t c@(Case consName args iBody) consT = cut $ do
   -- matchConsType simply assigns type variables appropriately
-  runInSolver $ matchConsType (lastType consT) (typeOf pScrutinee)
+  runInSolver $ matchConsType env (lastType consT) (typeOf pScrutinee)
   consT' <- runInSolver $ currentAssignment consT 
   (syms, ass) <- caseSymbols env scrVar args consT'
   caseEnv <- foldM (\e (x, t) -> safeAddVariable x t e) (addAssumption ass env) syms
+  storeCase caseEnv c
   pCaseExpr <- local (over (_1 . matchDepth) (-1 +)) $
                inContext (\p -> Program (PMatch pScrutinee [Case consName args p]) t) $
                reconstructI caseEnv t iBody
@@ -257,7 +264,7 @@ reconstructIE :: (MonadSMT s, MonadHorn s, RMonad s)
               -> UProgram
               -> Explorer s RProgram
 reconstructIE env typ p = do 
-  env' <- transferPotential env ""
+  env' <- transferPotential env 
   reconstructETopLevel env' typ p
 
 -- | 'reconstructE' @env t impl@ :: reconstruct unknown types and terms in a judgment @env@ |- @impl@ :: @t@ where @impl@ is an elimination term
@@ -291,15 +298,22 @@ reconstructE' env typ (PSymbol name) =
   case lookupSymbol name (arity typ) (hasSet typ) env of
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
     Just sch -> retrieveAndCheckVarType name sch typ env 
+reconstructE' env typ (PTick c body) = 
+  let env' = over freePotential (`subtractFormulas` IntLit c) env in
+  do 
+    pBody' <- inContext (\p -> Program (PTick c uHole) typ) $ reconstructE env' typ body
+    return $ Program (PTick c pBody') (typeOf pBody') 
 reconstructE' env typ p@(PApp iFun iArg) = do
-  x <- freshVar env "x"
+  x <- runInSolver $ freshVar env "x"
   let fp = env ^. freePotential
-  (fp', fp'') <- shareFreePotential env True fp $ show $ plain $ pretty p
-  (env1, env2) <- shareContext (env { _freePotential = fp' }) $ show $ plain $ pretty p
+  let cfps = env ^. condFreePotential
+  --(fp', fp'') <- shareFreePotential env fp $ show $ plain $ pretty p
+  --(env1, env2) <- shareContext (env { _freePotential = fp' }) $ show $ plain $ pretty p
+  (env1, env2, fp'') <- shareAndExtractFP env fp cfps 
   pFun <- inContext (\p -> Program (PApp p uHole) typ) 
     $ reconstructE env1 (FunctionT x AnyT typ defCost) iFun
-  let tp@(FunctionT x tArg tRes _) = typeOf pFun
-  let (FunctionT x' tArg' tRes' _) = shiftCost tp
+  let tp@(FunctionT x _ _ _) = typeOf pFun
+  let (FunctionT _ tArg' tRes' _) = shiftCost tp
   pApp <- if isFunctionType tArg'
     then do -- Higher-order argument: its value is not required for the function type, enqueue an auxiliary goal
       d <- asks . view $ _1 . auxDepth
@@ -322,7 +336,7 @@ reconstructE' env typ p@(PApp iFun iArg) = do
                       impl <- etaExpand tArg f
                       _ <- enqueueGoal env tArg impl d
                       return ()
-          Just (env', def) -> auxGoals %= ((Goal f env' (Monotype tArg) def d noPos True) :) -- This is a locally defined function: add an aux goal with its body
+          Just (env', def) -> auxGoals %= (Goal f env' (Monotype tArg) def d noPos True :) -- This is a locally defined function: add an aux goal with its body
         return iArg
       _ -> enqueueGoal env tArg iArg d -- HO argument is an abstraction: enqueue a fresh goal
 
@@ -346,13 +360,13 @@ checkAnnotation env t t' p = do
     Right t'' -> do
       ctx <- asks . view $ _1 . context
       writeLog 2 $ text "Checking consistency of type annotation" <+> pretty t'' <+> text "with" <+> pretty t <+> text "in" $+$ pretty (ctx (Program p t''))
-      addSubtypeConstraint env t'' t True (show (plain (pretty p)))
+      addSubtypeConstraint env t'' t True 
 
       fT <- runInSolver $ finalizeType t
       fT'' <- runInSolver $ finalizeType t''
       pos <- asks . view $ _1 . sourcePos
       typingState . errorContext .= (pos, text "when checking consistency of type annotation" </> pretty fT'' </> text "with" </> pretty fT </> text "in" $+$ pretty (ctx (Program p t'')))
-      runInSolver solveTypeConstraints 
+      runInSolver solveTypeConstraints
       typingState . errorContext .= (noPos, empty)
 
       tass' <- use (typingState . typeAssignment)
@@ -360,7 +374,7 @@ checkAnnotation env t t' p = do
 
 -- | 'etaExpand' @t@ @f@: for a symbol @f@ of a function type @t@, the term @\X0 . ... \XN . f X0 ... XN@ where @f@ is fully applied
 etaExpand t f = do
-  args <- replicateM (arity t) (freshId "X")
+  args <- replicateM (arity t) (runInSolver (freshId "X"))
   let body = foldl (\e1 e2 -> untyped $ PApp e1 e2) (untyped (PSymbol f)) (map (untyped . PSymbol) args)
   return $ foldr (\x p -> untyped $ PFun x p) body args
 

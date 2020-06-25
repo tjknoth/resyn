@@ -7,11 +7,12 @@ import Synquid.Logic
 import Synquid.Util
 
 import qualified Data.Set as Set
-import Data.Set (Set)
+import           Data.Set (Set)
 import qualified Data.Map as Map
-import Data.Map (Map)
-import Data.Bifunctor
-import Data.Bifoldable
+import           Data.Map (Map)
+import           Data.Bifunctor
+import           Data.Bifoldable
+import           Data.Maybe (catMaybes)
 
 {- Type skeletons -}
 
@@ -25,7 +26,7 @@ data BaseType r p =
 -- | Type skeletons (parametrized by refinements, potentials)
 data TypeSkeleton r p =
   ScalarT !(BaseType r p) !r !p |
-  FunctionT !Id !(TypeSkeleton r p) !(TypeSkeleton r p) !Integer |
+  FunctionT !Id !(TypeSkeleton r p) !(TypeSkeleton r p) !Int |
   LetT !Id !(TypeSkeleton r p) !(TypeSkeleton r p) |
   AnyT
   deriving (Show, Eq, Ord)
@@ -43,7 +44,7 @@ instance Bifunctor BaseType where
   bimap _ _ IntT = IntT
 
 instance Bifoldable TypeSkeleton where 
-  bifoldMap f g (ScalarT b r p) = f r `mappend` g p
+  bifoldMap f g (ScalarT b r p) = f r `mappend` g p `mappend` bifoldMap f g b
   bifoldMap f g (FunctionT x argT resT c) = bifoldMap f g argT `mappend` bifoldMap f g resT
   bifoldMap f g (LetT x t bodyT) = bifoldMap f g bodyT 
   bifoldMap _ _ AnyT = mempty
@@ -70,12 +71,6 @@ type RSchema = SchemaSkeleton RType
 -- | Refinement base type
 type RBase = BaseType Formula Formula
 
--- Like bifoldMap but doesn't consider base types
-combine f g (ScalarT b r p) = f r `mappend` g p
-combine f g (FunctionT _ argT resT _) = combine f g argT `mappend` combine f g resT
-combine f g (LetT _ _ bodyT) = combine f g bodyT
-combine _ _ AnyT = mempty
-
 -- Ignore multiplicity and potential when comparing baseTypes
 equalShape :: RBase -> RBase -> Bool
 equalShape (TypeVarT s name _) (TypeVarT s' name' m') = (TypeVarT s name defMultiplicity :: RBase ) == (TypeVarT s' name' defMultiplicity :: RBase)
@@ -84,7 +79,7 @@ equalShape t t' = t == t'
 
 defPotential = IntLit 0
 defMultiplicity = IntLit 1 
-defCost = 0
+defCost = 0 :: Int
 
 potentialPrefix = "p"
 multiplicityPrefix = "m"
@@ -175,7 +170,7 @@ varsOfType (FunctionT x tArg tRes _) = varsOfType tArg `Set.union` Set.delete x 
 varsOfType (LetT x tDef tBody) = varsOfType tDef `Set.union` Set.delete x (varsOfType tBody)
 varsOfType AnyT = Set.empty
 
--- | Free variables of a type
+-- | Predicates mentioned in a type
 predsOfType :: RType -> Set Id
 predsOfType (ScalarT baseT fml _) = predsOfBase baseT `Set.union` predsOf fml --`Set.union` predsOf pot
   where
@@ -185,9 +180,24 @@ predsOfType (FunctionT _ tArg tRes _) = predsOfType tArg `Set.union` predsOfType
 predsOfType (LetT _ tDef tBody) = predsOfType tDef `Set.union` predsOfType tBody
 predsOfType AnyT = Set.empty
 
+-- | Predicates mentioned in an integer-sorted predicate argument position, 
+--     or in a potential annotation 
+predsOfPotential :: [Bool] -> RType -> Set Id
+predsOfPotential isInt t = 
+  let go = predsOfPotential isInt
+      predsFromBase (DatatypeT dt tArgs pArgs) = 
+        Set.unions (map go tArgs) `Set.union` Set.unions (map (\(_, p) -> predsOf p) (filter fst (zip isInt pArgs)))
+      predsFromBase _ = Set.empty in
+  case t of
+    (ScalarT baseT _ pfml)    -> predsFromBase baseT `Set.union` predsOf pfml 
+    (FunctionT _ tArg tRes _) -> go tArg `Set.union` go tRes
+    (LetT _ tDef tBody)       -> go tDef `Set.union`  go tBody
+    AnyT                      -> Set.empty
+
+
 varRefinement x s = Var s valueVarName |=| Var s x
-isVarRefinemnt (Binary Eq (Var _ v) (Var _ _)) = v == valueVarName
-isVarRefinemnt _ = False
+isVarRefinement (Binary Eq (Var _ v) (Var _ _)) = v == valueVarName
+isVarRefinement _ = False
 
 
 -- | Polymorphic type skeletons (parametrized by refinements)
@@ -258,7 +268,6 @@ typeSubstitute subst (FunctionT x tArg tRes cost) = FunctionT x (typeSubstitute 
 typeSubstitute subst (LetT x tDef tBody) = LetT x (typeSubstitute subst tDef) (typeSubstitute subst tBody)
 typeSubstitute _ AnyT = AnyT
 
-
 noncaptureTypeSubst :: [Id] -> [RType] -> RType -> RType
 noncaptureTypeSubst tVars tArgs t =
   let tFresh = typeSubstitute (Map.fromList $ zip tVars (map vartAll distinctTypeVars)) t
@@ -295,7 +304,7 @@ typeVarsOf _ = Set.empty
 
 -- | 'updateAnnotations' @t m p@ : "multiply" @t@ by multiplicity @m@, then add on surplus potential @p@
 updateAnnotations :: RType -> Formula -> Formula -> RType
-updateAnnotations t@ScalarT{} mult = addPotential (typeMultiply mult t)
+updateAnnotations t@ScalarT{} mult = safeAddPotential (typeMultiply mult t)
 
 schemaMultiply p = fmap (typeMultiply p)
 
@@ -308,13 +317,25 @@ baseTypeMultiply fml (TypeVarT subs name mul) = TypeVarT subs name (multiplyForm
 baseTypeMultiply fml (DatatypeT name tArgs pArgs) = DatatypeT name (map (typeMultiply fml) tArgs) pArgs
 baseTypeMultiply fml t = t
 
+safeAddPotential :: RType -> Formula -> RType 
+safeAddPotential (ScalarT base ref pot) f = ScalarT base ref (safeAddFormulas pot f)
+safeAddPotential (LetT x tDef tBody) f    = LetT x tDef (safeAddPotential tBody f)
+safeAddPotential t _ = t
+
+-- safeAddFormulas f g : Adds f to g -- if g is a conditional, it pushes f into the conditional structure
+--  used as a hack to make conditional solver work w polynomials
+safeAddFormulas :: Formula -> Formula -> Formula
+safeAddFormulas f (Ite f1 f2 f3) = Ite f1 (addFormulas f f2) (addFormulas f f3)
+safeAddFormulas f g = addFormulas f g
+
+
 addPotential :: RType -> Formula -> RType 
 addPotential (ScalarT base ref pot) f = ScalarT base ref (addFormulas pot f)
 addPotential (LetT x tDef tBody) f    = LetT x tDef (addPotential tBody f)
 addPotential t _ = t
 
 subtractPotential :: RType -> Formula -> RType
-subtractPotential (ScalarT base ref pot) f = ScalarT base ref (subtractFormulas pot f)
+subtractPotential (ScalarT base ref pot) f = ScalarT base ref (addFormulas pot (fneg f)) -- (negateFml f))
 subtractPotential (LetT x tDef tBody) f = LetT x tDef (subtractPotential tBody f)
 subtractPotential t _ = t
 
@@ -337,7 +358,7 @@ shape AnyT = AnyT
 
 -- | Conjoin refinement to a type
 addRefinement :: RType -> Formula -> RType
-addRefinement (ScalarT base fml pot) fml' = if isVarRefinemnt fml'
+addRefinement (ScalarT base fml pot) fml' = if isVarRefinement fml'
   then ScalarT base fml' pot -- the type of a polymorphic variable does not require any other refinements
   else ScalarT base (fml `andClean` fml') pot
 addRefinement (LetT x tDef tBody) fml = LetT x tDef (addRefinement tBody fml)
@@ -393,12 +414,12 @@ intersection isBound (FunctionT x tArg tRes c) (FunctionT y tArg' tRes' c') = Fu
 
 -- Move cost annotations to next arrow or to scalar argument type before applying function
 shiftCost :: RType -> RType
-shiftCost (FunctionT x argT resT c) = 
-  if isScalarType resT
-    then FunctionT x (addPotential argT (IntLit c)) resT 0 
-    else FunctionT x argT (addCostToArrow resT) 0
-  where 
-    addCostToArrow (FunctionT y a r cost) = FunctionT y a r (cost + c)
+shiftCost (FunctionT x argT resT c) = FunctionT x (addPotential argT (IntLit c)) resT 0
+  --if isScalarType resT
+  --  then FunctionT x (addPotential argT (IntLit c)) resT 0 
+  --  else FunctionT x argT (addCostToArrow resT) 0
+  --where 
+  --  addCostToArrow (FunctionT y a r cost) = FunctionT y a r (cost + c)
 
 -- | Instantiate unknowns in a type
 -- TODO: eventually will need to instantiate potential variables as well
@@ -413,13 +434,26 @@ allRefinementsOf' (FunctionT _ argT resT _) = allRefinementsOf' argT ++ allRefin
 allRefinementsOf' _ = error "allRefinementsOf called on contextual or any type"
 
 -- | 'allRFormulas' @t@ : return all resource-related formulas (potentials and multiplicities) from a refinement type @t@
-allRFormulas True = bifoldMap (const []) (: [])
-allRFormulas False = combine (const []) (: [])
+allRFormulas :: Map Id [Bool] -> RType -> [Formula]
+allRFormulas flagMap t = 
+  let concretePotentials = bifoldMap (const []) (: []) t
+      abstractPotentials = allAbstractPotentials flagMap t 
+  in concretePotentials ++ abstractPotentials
+ -- collect potential annotations
+ -- collect resource preds
 
--- Return a set of all formulas (potential, multiplicity, refinement) of a type. 
---   Doesn't mean anything necesssarily, used to embed environment assumptions
-allFormulasOf True = bifoldMap Set.singleton Set.singleton
-allFormulasOf False = combine Set.singleton Set.singleton 
+allAbstractPotentials :: Map Id [Bool] -> RType -> [Formula]
+allAbstractPotentials flagMap (ScalarT b _ pot) = allAbstractPotentialsBase flagMap b
+allAbstractPotentials flagMap (FunctionT _ argT resT _) = allAbstractPotentials flagMap argT ++ allAbstractPotentials flagMap resT
+allAbstractPotentials flagMap (LetT _ tDef tBody) = allAbstractPotentials flagMap tDef ++ allAbstractPotentials flagMap tBody
+allAbstractPotentials _ AnyT = []
+
+allAbstractPotentialsBase :: Map Id [Bool] -> RBase -> [Formula]
+allAbstractPotentialsBase flagMap (DatatypeT dt ts preds) = 
+  case Map.lookup dt flagMap of
+    Nothing     -> error $ "allAbstractPotentialsBase: datatype " ++ dt ++ " not found"
+    Just rflags -> catMaybes $ zipWith (\isRes pred -> if isRes then Just pred else Nothing) rflags preds
+allAbstractPotentialsBase _ _ = []
 
 allArgSorts :: RType -> [Sort]
 allArgSorts (FunctionT _ (ScalarT b _ _) resT _) = toSort b : allArgSorts resT

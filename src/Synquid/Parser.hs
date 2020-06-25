@@ -1,7 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 
 -- | The parser for Synquid's program specification DSL.
-module Synquid.Parser (parseFromFile, parseProgram, toErrorMessage, parseFmlFromFile) where
+module Synquid.Parser (parseFromFile, parseProgram, toErrorMessage, readFormula) where
 
 import Synquid.Logic
 import Synquid.Type
@@ -22,7 +22,6 @@ import Text.Parsec.Expr
 import Text.Parsec.Indent
 import Text.Parsec.Error
 import Text.PrettyPrint.ANSI.Leijen (text, vsep)
-
 import Debug.Trace
 
 {- Interface -}
@@ -35,12 +34,11 @@ parseProgram = whiteSpace *> option [] (block parseDeclaration) <* eof
 parseFromFile :: Parser a -> String -> IO (Either ParseError a)
 parseFromFile aParser fname = do
   input <- readFile fname
-  return $ runIndent fname $ runParserT aParser () fname input
+  return $ runIndentParser aParser () fname input -- $ runParserT aParser () fname input
 
-parseFmlFromFile :: String -> IO (Either ParseError Formula)
-parseFmlFromFile file = do 
-  input <- readFile file
-  return $ runIndent file $ runParserT parseFormula () file input
+-- Used for testing
+readFormula :: String -> IO (Either ParseError Formula)
+readFormula str = return $ runIndentParser parseFormula () "" str
 
 toErrorMessage :: ParseError -> ErrorMessage
 toErrorMessage err = ErrorMessage ParseError (errorPos err)
@@ -57,7 +55,6 @@ opStart = nub (map head opNames)
 opLetter :: [Char]
 opLetter = nub (concatMap tail opNames)
 
-synquidDef :: Token.GenLanguageDef String st (State SourcePos)
 synquidDef = Token.LanguageDef
   commentStart
   commentEnd
@@ -71,21 +68,19 @@ synquidDef = Token.LanguageDef
   opNames
   True
 
-lexer :: Token.GenTokenParser String st (State SourcePos)
 lexer = Token.makeTokenParser synquidDef
 
 identifier = Token.identifier lexer
 reserved = Token.reserved lexer
 reservedOp = Token.reservedOp lexer
-natural = Token.natural lexer
+natural = fromIntegral <$> Token.natural lexer
+integer = fromIntegral <$> Token.integer lexer
 whiteSpace = Token.whiteSpace lexer
 angles = Token.angles lexer
 brackets = Token.brackets lexer
 parens = Token.parens lexer
 braces = Token.braces lexer
-comma = Token.comma lexer
 commaSep = Token.commaSep lexer
-commaSep1 = Token.commaSep1 lexer
 dot = Token.dot lexer
 
 {- Declarations -}
@@ -437,10 +432,20 @@ parseIf = do
   iElse <- parseImpl
   return $ untyped $ PIf iCond iThen iElse
 
-parseETerm = buildExpressionParser (exprTable mkUnary mkBinary False) parseAppTerm <?> "elimination term"
+-- parse a tick expression (can be an E- or I-term)
+parseTick :: Parser UProgram
+parseTick = do
+  reserved "tick"
+  cost <- integer
+  body <- parseImpl
+  return $ untyped $ PTick cost body
+
+
+parseETerm = buildExpressionParser (exprTable mkUnary mkBinary False) parseTerm <?> "elimination term"
   where
     mkUnary op = untyped . PApp (untyped $ PSymbol (unOpTokens Map.! op))
     mkBinary op p1 p2 = untyped $ PApp (untyped $ PApp (untyped $ PSymbol (binOpTokens Map.! op)) p1) p2
+    parseTerm = parseTick <|> parseAppTerm -- tick or application
     parseAppTerm = do
       head <- parseAtomTerm
       args <- many (sameOrIndented >> (try parseAtomTerm <|> parens parseImpl))
@@ -501,11 +506,6 @@ attachPosBefore :: Parser a -> Parser (Pos a)
 attachPosBefore = liftM2 Pos getPosition
 
 {- Debug -}
-
-printRefPos :: String -> Parser ()
-printRefPos msg = do
-  pos <- get
-  trace (msg ++ show pos) $ return ()
 
 printCurPos :: String -> Parser ()
 printCurPos msg = do

@@ -17,18 +17,17 @@ import Synquid.Error
 import Synquid.Pretty
 import Synquid.Util
 
-import Control.Monad.Except
-import Control.Monad.State
-import Control.Lens
+import           Control.Monad.Except
+import           Control.Monad.State
+import           Control.Lens
 import qualified Data.Map as Map
-import Data.Map (Map)
+import           Data.Map (Map)
 import qualified Data.Set as Set
-import Data.Set (Set)
-import Data.Maybe
-import Data.List
+import           Data.Set (Set)
+import           Data.Maybe
+import           Data.List
 import qualified Data.Foldable as Foldable
-import Control.Arrow (first)
-import Debug.Trace
+import           Control.Arrow (first)
 
 
 {- Interface -}
@@ -83,7 +82,8 @@ resolveDecls declarations =
         spec = allSymbols env Map.! name
         myMutuals = Map.findWithDefault [] name allMutuals
         toRemove = drop (fromJust $ elemIndex name allNames) allNames \\ myMutuals -- All goals after and including @name@, except mutuals
-        env' = foldr removeVariable env toRemove
+        flagMap = fmap _resourcePreds (env ^. datatypes)
+        env' = (foldr removeVariable env toRemove) { _resourceMeasures = rMeasuresFromSch flagMap spec }
       in Goal name env' spec impl 0 pos synth
     extractPos pass (Pos pos decl) = do
       currentPosition .= pos
@@ -124,12 +124,14 @@ resolveDeclaration (FuncDecl funcName typeSchema) = do
 resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
   let
     (pParams, pVariances) = unzip pVarParams
+    resParams = extractResourceParams d
     datatype = DatatypeDef {
       _typeParams = tParams,
       _predParams = pParams,
       _predVariances = pVariances,
       _constructors = map constructorName ctors,
-      _wfMetric = Nothing
+      _wfMetric = Nothing,
+      _resourcePreds = resParams
     }
   environment %= addDatatype dtName datatype
   let addPreds typ = foldl (flip ForallP) (Monotype typ) pParams
@@ -214,7 +216,8 @@ resolveSignatures (DataDecl dtName tParams pParams ctors) = mapM_ resolveConstru
           environment %= addPolyConstant name sch''
         else throwResError (commaSep [text "Constructor" <+> text name <+> text "must return type" <+> pretty nominalType, text "got" <+> pretty returnType])
 resolveSignatures (MeasureDecl measureName _ _ post defCases args _) = do
-  (outSort : mArgs) <- uses (environment . globalPredicates) (Map.! measureName)
+  sorts <- uses (environment . globalPredicates) (Map.! measureName)
+  let (outSort : mArgs) = sorts
   case last mArgs of 
     inSort@(DataS dtName sArgs) -> do
       datatype <- uses (environment . datatypes) (Map.! dtName)
@@ -321,8 +324,8 @@ resolveSchema sch = do
         (throwResError $ text "Duplicate predicate variables" <+> text predName)
         (return ())
       mapM_ resolveSort argSorts
-      when (resSort /= BoolS) $
-        throwResError (text "Bound predicate variable" <+> text predName <+> text "must return Bool")
+   -- when (resSort /= BoolS) $ -- APs: removed to allow for APs
+     -- throwResError (text "Bound predicate variable" <+> text predName <+> text "must return Bool")
       sch' <- withLocalEnv $ do
         environment %= addBoundPredicate sig
         resolveSchema' sch
@@ -340,7 +343,7 @@ resolveType s@(ScalarT (DatatypeT name tArgs pArgs) fml pot) = do
       t' <- substituteTypeSynonym name tArgs >>= resolveType
       fml' <- resolveTypeRefinement (toSort $ baseTypeOf t') fml
       return $ addRefinement t' fml'
-    Just (DatatypeDef tParams pParams _ _ _) -> do
+    Just (DatatypeDef tParams pParams _ _ _ _) -> do
       when (length tArgs /= length tParams) $
         throwResError $ text "Datatype" <+> text name <+> text "expected" <+> pretty (length tParams) <+> text "type arguments and got" <+> pretty (length tArgs) <+> pretty tParams
       when (length pArgs /= length pParams) $
@@ -357,13 +360,21 @@ resolveType s@(ScalarT (DatatypeT name tArgs pArgs) fml pot) = do
       return $ ScalarT baseT' fml' pot'
   where
     resolvePredArg :: (Sort -> Sort) -> PredSig -> Formula -> Resolver Formula
-    resolvePredArg subst (PredSig _ argSorts BoolS) fml = withLocalEnv $ do
+{-  resolvePredArg subst (PredSig _ argSorts BoolS) fml = withLocalEnv $ do -- APs: changed to allow resolution of non predicate APs
       let argSorts' = map subst argSorts
       let vars = zipWith Var argSorts' deBrujns
       environment %= addAllVariables vars
       case fml of
         Pred _ p [] -> resolveTypeRefinement AnyS (Pred BoolS p vars)
         _ -> resolveTypeRefinement AnyS fml
+-}
+    resolvePredArg subst (PredSig _ argSorts resSort) fml = withLocalEnv $ do
+      let argSorts' = map subst argSorts
+      let vars = zipWith Var argSorts' deBrujns
+      environment %= addAllVariables vars
+      case fml of
+        Pred _ p [] -> resolveTypeAnnotation resSort AnyS (Pred resSort p vars)
+        _ -> resolveTypeAnnotation resSort AnyS fml
 
 resolveType (ScalarT baseT fml pot) = ScalarT <$> resolveBaseType baseT <*> resolveTypeRefinement (toSort baseT) fml <*> resolveTypePotential (toSort baseT) pot 
 
@@ -382,7 +393,7 @@ resolveType (FunctionT x tArg tRes c)
 resolveType AnyT = return AnyT
 
 
-resolveBaseType :: RBase -> Resolver (RBase)
+resolveBaseType :: RBase -> Resolver RBase
 resolveBaseType (TypeVarT subs name mult) = do
   mult' <- resolveTypePotential (VarS name) mult
   return $ TypeVarT subs name mult'
@@ -396,7 +407,7 @@ resolveSort s@(DataS name sArgs) = do
   ds <- use $ environment . datatypes
   case Map.lookup name ds of
     Nothing -> throwResError $ text "Datatype" <+> text name <+> text "is undefined in sort" <+> pretty s
-    Just (DatatypeDef tParams _ _ _ _) -> do
+    Just (DatatypeDef tParams _ _ _ _ _) -> do
       let n = length tParams
       when (length sArgs /= n) $ throwResError $ text "Datatype" <+> text name <+> text "expected" <+> pretty n <+> text "type arguments and got" <+> pretty (length sArgs)
       mapM_ resolveSort sArgs
@@ -553,11 +564,12 @@ resolveFormula (Pred _ name argFmls) = do
     Just (args, body) -> resolveFormula (substitute (Map.fromList $ zip args argFmls) body)
     Nothing -> do
       ps <- uses environment allPredicates
-      (resSort : argSorts) <- case Map.lookup name ps of
-                                Nothing -> throwResError $ text "Predicate or measure" <+> text name <+> text "is undefined"
-                                Just sorts -> ifM (Map.member name <$> use (environment . globalPredicates))
-                                                (instantiate sorts) -- if global, treat type variables as free
-                                                (return sorts) -- otherwise, treat type variables as bound
+      sorts <- case Map.lookup name ps of
+                  Nothing -> throwResError $ text "Predicate or measure" <+> text name <+> text "is undefined"
+                  Just sorts -> ifM (Map.member name <$> use (environment . globalPredicates))
+                                  (instantiate sorts) -- if global, treat type variables as free
+                                  (return sorts) -- otherwise, treat type variables as bound
+      let (resSort : argSorts) = sorts
       if length argFmls /= length argSorts
           then throwResError $ text "Expected" <+> pretty (length argSorts) <+> text "arguments for predicate or measure" <+> text name <+> text "and got" <+> pretty (length argFmls)
           else do
@@ -571,7 +583,8 @@ resolveFormula (Cons _ name argFmls) = do
     Nothing -> throwResError $ text "Data constructor" <+> text name <+> text "is undefined"
     Just consSch -> do
       let consT = toMonotype consSch
-      (resSort : argSorts) <- instantiate $ map (toSort . baseTypeOf) $ lastType consT : allArgTypes consT
+      sorts <- instantiate $ map (toSort . baseTypeOf) $ lastType consT : allArgTypes consT
+      let (resSort : argSorts) = sorts
       if length argSorts /= length argFmls
         then throwResError $ text "Constructor" <+> text name <+> text "expected" <+> pretty (length argSorts) <+> text "arguments and got" <+> pretty (length argFmls)
         else do
@@ -587,6 +600,7 @@ resolveFormula fml = return fml
 -- Move conditional and match statements to top level of untyped program
 normalizeProgram :: UProgram -> UProgram
 normalizeProgram p@Program{content = (PSymbol name)} = p
+normalizeProgram p@Program{content = (PTick c prog)} = Program (PTick c (normalizeProgram prog)) AnyT
 -- Ensure no conditionals inside application
 normalizeProgram p@Program{content = (PApp fun arg)} =
   untypedProg $ case (isCond fun', isCond arg') of

@@ -16,5 +16,5 @@ termination measure size :: Tree a -> {Int | _v >= 0} where
 
 append :: xs: List a -> ys: List a -> {List a | len _v == len xs + len ys}	
 	
-flatten :: t: Tree a -> {List a | len _v == size t}
+flatten :: t: Tree {a| |2} -[1]-> {List a | len _v == size t}
 flatten = ??

@@ -73,6 +73,7 @@ import qualified Text.PrettyPrint.ANSI.Leijen as L
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import Data.Map (Map)
+import Data.Set (Set)
 import Data.List
 import Data.Maybe (fromMaybe)
 
@@ -193,17 +194,18 @@ fmlDocAt n fml = condHlParens (n' <= n) (
     SetLit s elems -> hlBrackets $ commaSep $ map fmlDoc elems
     Var s name -> if name == valueVarName then special name else text name
     Unknown s name -> if Map.null s then text name else hMapDoc pretty pretty s <> text name
+    WithSubst _ e -> fmlDocAt n' e
     Unary op e -> pretty op <> fmlDocAt n' e
     Binary op e1 e2 -> fmlDocAt n' e1 <+> pretty op <+> fmlDocAt n' e2
     Ite e0 e1 e2 -> keyword "if" <+> fmlDoc e0 <+> keyword "then" <+> fmlDoc e1 <+> keyword "else" <+> fmlDoc e2
     Pred b name args -> text name <+> hsep (map (fmlDocAt n') args)
     Cons b name args -> hlParens (text name <+> hsep (map (fmlDocAt n') args))
     All x e -> keyword "forall" <+> pretty x <+> operator "." <+> fmlDoc e
-    ASTLit _ a s -> text s 
+    Z3Lit _ a s -> text s 
   )
   where
     n' = power fml
-    withSort s doc = doc <> text ":" <> pretty s
+    -- withSort s doc = doc <> text ":" <> pretty s
 
 simpleFmlDoc = simpleFmlDocAt 0
 
@@ -216,23 +218,27 @@ simpleFmlDocAt n fml = condHlParens (n' <= n) (
     SetLit s elems -> hlBrackets $ commaSep $ map fmlDoc elems
     Var s name -> if name == valueVarName then special name else text name
     Unknown s name -> if Map.null s then text name else hMapDoc pretty pretty s <> text name
+    WithSubst _ e -> simpleFmlDocAt n' e
     Unary op e -> pretty op <> simpleFmlDocAt n' e
     Binary And f (Binary Ge _ (IntLit 0)) -> simpleFmlDoc f
+    Binary Implies f g -> fmlDocAt n' f <+> pretty Implies <+> simpleFmlDocAt n' g
     Binary op e1 e2 -> simpleFmlDocAt n' e1 <+> pretty op <+> simpleFmlDocAt n' e2
     Ite e0 e1 e2 -> keyword "if" <+> simpleFmlDoc e0 <+> keyword "then" <+> simpleFmlDoc e1 <+> keyword "else" <+> simpleFmlDoc e2
     Pred b name args -> text name <+> hsep (map (simpleFmlDocAt n') args)
     Cons b name args -> hlParens (text name <+> hsep (map (simpleFmlDocAt n') args))
     All x e -> keyword "forall" <+> pretty x <+> operator "." <+> simpleFmlDoc e
-    ASTLit _ a s -> text s 
+    Z3Lit _ a s -> text s 
   )
   where
     n' = power fml
-    withSort s doc = doc <> text ":" <> pretty s
+    -- withSort s doc = doc <> text ":" <> pretty s
 
 instance Pretty Formula where pretty = fmlDoc
 
-instance Pretty Valuation where
-  pretty val = braces $ commaSep $ map pretty $ Set.toList val
+--instance Pretty Valuation where
+--  pretty val = braces $ commaSep $ map pretty $ Set.toList val
+instance Pretty a => Pretty (Set a) where 
+   pretty xs = braces $ commaSep $ map pretty $ Set.toList xs
 
 instance Pretty Solution where
   pretty = hMapDoc text pretty
@@ -256,7 +262,7 @@ prettyBase prettyType base = case base of
       subs = if Map.null s 
                then empty 
                else hMapDoc pretty pretty s
-      mult = pretty m <> operator "**"
+      -- mult = pretty m <> operator "**"
   DatatypeT name tArgs pArgs -> text name <+> hsep (map prettyType tArgs) <+> hsep (map (hlAngles . pretty) pArgs)
 
 instance (Pretty p, Pretty (TypeSkeleton () p)) => Pretty (BaseType () p) where
@@ -298,7 +304,7 @@ prettyTypeAt n t = condHlParens (n' <= n) (
   where
     n' = typePower t
 
-arrow :: Integer -> String
+arrow :: Int -> String
 arrow c = if c == 0 then "->" else "-[" ++ show c ++ "]->"
 
 instance Pretty RType where
@@ -351,6 +357,7 @@ prettyProgram (Program p typ) = case p of
     PFix fs e -> prettyProgram e
     PLet x e e' -> linebreak <> (align $ hang tab (keyword "let" <+> withType (text x) (typeOf e) <+> operator "=" </> prettyProgram e </> keyword "in") $+$ prettyProgram e')
     PHole -> if show (pretty typ) == dontCare then operator "??" else hlParens $ operator "?? ::" <+> pretty typ
+    PTick c p -> keyword "tick" <+> pretty c <+> parens (pretty p) 
     PErr -> keyword "error"
   where
     withType doc t = doc -- <> text ":" <+> pretty t
@@ -370,7 +377,7 @@ instance Pretty MeasureCase where
 instance Pretty MeasureDef where
   pretty (MeasureDef inSort outSort defs constArgs post) = nest 2 (prettyMeasureDefaults constArgs <+> pretty inSort <+> text "->" <+> pretty outSort <+> braces (pretty post) $+$ vsep (map pretty defs))
 
-prettyBinding (name, typ) = text name <+> operator "::" <+> pretty typ
+-- prettyBinding (name, typ) = text name <+> operator "::" <+> pretty typ
 
 
 prettyAssumptions env = commaSep (map pretty (Set.toList $ env ^. assumptions))
@@ -402,34 +409,36 @@ instance Show SortConstraint where
   show = show . pretty
 
 prettyConstraint :: Constraint -> Doc
-prettyConstraint (Subtype env t1 t2 True label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "/\\" <+> pretty t2 -- <+> text "src:" <+> pretty label
-prettyConstraint (Subtype env t1 t2 _ label) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "<:" <+> pretty t2 -- <+> text "src:" <+> pretty label
-prettyConstraint (RSubtype env p1 p2 label) = pretty env <+> operator "|-" <+> pretty p1 <+> operator ">=" <+> pretty p2 -- <+> text "src:" <+> pretty label
-prettyConstraint (WellFormed env t label) = prettyBindings env <+> operator "|-" <+> pretty t -- <+> text "src:" <+> pretty label
+prettyConstraint (Subtype env t1 t2 True) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "/\\" <+> pretty t2 
+prettyConstraint (Subtype env t1 t2 _) = pretty env <+> operator "|-" <+> pretty t1 <+> operator "<:" <+> pretty t2 
+prettyConstraint (RSubtype env p1 p2) = pretty env <+> operator "|-" <+> pretty p1 <+> operator ">=" <+> pretty p2 
+prettyConstraint (WellFormed env t) = prettyBindings env <+> operator "|-" <+> pretty t 
 prettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 prettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
-prettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
-prettyConstraint (SharedEnv e e' e'' label) = text "Shared scalars:" <+> prettyScalars e <+> pretty (_freePotential e)
+--prettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS -- APs: changed to better reflect pred constraints
+prettyConstraint (WellFormedPredicate _ argSorts resSort p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") argSorts) <+> pretty resSort
+prettyConstraint (SharedEnv e e' e'') = prettyScalars e <+> pretty (_freePotential e)
   <+> operator "\\/" </> nest 4 (prettyScalars e' <+> pretty (_freePotential e') 
-  <+> operator "||" <+> prettyScalars e'' <+> pretty (_freePotential e'')) -- <+> text "src:" <+> plain (pretty label))
-prettyConstraint (SharedForm env f fl fr label) = text "Shared potential:" <+> pretty env <+> operator "|-" 
-  <+> pretty f <+> operator "\\/" <+> pretty fl <+> operator "||" <+> pretty fr -- <+> text "src:" <+> plain (pretty label)
-prettyConstraint (ConstantRes env label) = text "CT expression:" <+> text label <+> text "from scalars:" <+> prettyScalars env -- <+> text "src:" <+> pretty label
-prettyConstraint (Transfer env env' _) = prettyScalars env <+> text "~" <+> prettyScalars env' <+> pretty (_freePotential env')
+  <+> operator "||" <+> prettyScalars e'' <+> pretty (_freePotential e'')) 
+prettyConstraint (SharedForm env f fl fr) = pretty env <+> operator "|-" 
+  <+> pretty f <+> operator "\\/" <+> pretty fl <+> operator "||" <+> pretty fr 
+prettyConstraint (ConstantRes env) = text "CT from scalars:" <+> prettyScalars env 
+prettyConstraint (Transfer env env') = prettyScalars env <+> text "~" <+> prettyScalars env' <+> pretty (_freePotential env')
 
 -- Do not show environment
 simplePrettyConstraint :: Constraint -> Doc
-simplePrettyConstraint (Subtype _env t1 t2 True label) = pretty t1 <+> operator "/\\" <+> pretty t2 
-simplePrettyConstraint (Subtype _env t1 t2 _ label) = pretty t1 <+> operator "<:" <+> pretty t2
-simplePrettyConstraint (RSubtype env p1 p2 label) = pretty p1 <+> operator ">=" <+> pretty p2 -- <+> text "src:" <+> pretty label
-simplePrettyConstraint (WellFormed env t label) = prettyBindings env <+> operator "|-" <+> pretty t 
+simplePrettyConstraint (Subtype _env t1 t2 True) = pretty t1 <+> operator "/\\" <+> pretty t2 
+simplePrettyConstraint (Subtype _env t1 t2 _) = pretty t1 <+> operator "<:" <+> pretty t2
+simplePrettyConstraint (RSubtype env p1 p2) = pretty p1 <+> operator ">=" <+> pretty p2 
+simplePrettyConstraint (WellFormed env t) = prettyBindings env <+> operator "|-" <+> pretty t 
 simplePrettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <+> pretty c
 simplePrettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
-simplePrettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS
-simplePrettyConstraint (SharedEnv e e' e'' label) = prettyScalars e <+> operator "\\/" </> prettyScalars e' <+> operator "||" <+> prettyScalars e''
-simplePrettyConstraint (SharedForm env f fl fr label) = pretty f <+> operator "\\/" <+> pretty fl <+> operator "||" <+> pretty fr -- <+> text "src:" <+> plain (pretty label)
-simplePrettyConstraint (ConstantRes env label) = text "CT:" <+> text label <+> text "from scalars:" <+> prettyScalars env 
-simplePrettyConstraint (Transfer env env' _) = prettyScalars env <+> text "~" <+> prettyScalars env'
+--simplePrettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS -- APs: changed to better reflect pred constraints
+simplePrettyConstraint (WellFormedPredicate _ argSorts resSort p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") argSorts) <+> pretty resSort
+simplePrettyConstraint (SharedEnv e e' e'') = prettyScalars e <+> operator "\\/" </> prettyScalars e' <+> operator "||" <+> prettyScalars e''
+simplePrettyConstraint (SharedForm env f fl fr) = pretty f <+> operator "\\/" <+> pretty fl <+> operator "||" <+> pretty fr 
+simplePrettyConstraint (ConstantRes env) = text "CT from scalars:" <+> prettyScalars env 
+simplePrettyConstraint (Transfer env env') = prettyScalars env <+> text "~" <+> prettyScalars env'
 
 instance Pretty Constraint where
   pretty = prettyConstraint
@@ -526,6 +535,7 @@ programNodeCount (Program p _) = case p of
   PMatch e cases -> 1 + programNodeCount e + sum (map (\(Case _ _ e) -> programNodeCount e) cases)
   PFix _ e -> programNodeCount e
   PLet x e e' -> 1 + programNodeCount e + programNodeCount e'
+  PTick _ e -> 1 + programNodeCount e
   PHole -> 0
   PErr -> 1
 
@@ -560,3 +570,4 @@ lfill w d        = case renderCompact d of
 -- Helper for printing conjunctions line-by-line for readability
 prettyConjuncts :: [Formula] -> Doc
 prettyConjuncts fmls = vsep $ fmap simpleFmlDoc fmls
+

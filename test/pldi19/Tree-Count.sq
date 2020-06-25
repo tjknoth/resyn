@@ -10,5 +10,5 @@ zero :: {Int | _v == 0}
 one :: {Int | _v == 1}
 plus :: x: Int -> y: Int -> {Int | _v == x + y}
 	
-countNodes :: t: Tree a -> {Int | _v == size t}
+countNodes :: t: Tree {a| |2} -[1]-> {Int | _v == size t}
 countNodes = ??

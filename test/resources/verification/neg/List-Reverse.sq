@@ -1,0 +1,15 @@
+data List a <q :: Int> where
+	Nil :: List a <q>
+	Cons :: x: a -> xs: List {a | | q} <q> -> List a <q>
+
+snoc :: x:a -> xs: List {a | | 1} <{0}> -> List a <{0}>
+snoc = \x. \xs.
+  match xs with
+    Nil       -> Cons x Nil
+    Cons y ys -> Cons y (tick 1 (snoc x ys))
+
+reverse :: xs: List {a | | 1} <{1}> -> List a <{0}>
+reverse = \xs. 
+  match xs with                      
+    Nil       -> Nil                 
+    Cons y ys -> tick 1 (snoc y (tick 1 (reverse ys)))

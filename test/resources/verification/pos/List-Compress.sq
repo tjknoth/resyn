@@ -1,0 +1,24 @@
+-- Simple model of list memory semantics:
+--   Constructing an element of a list requires enough heap space 
+--   for the polymorphic type and a pointer to the next one.
+--   We assume Nil requires no memory
+data List a where
+  Nil :: List a
+  Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs 
+
+-- Linear-memory implementation
+compress :: xs: List {a| |1} -> List a
+compress = \xs.
+  match xs with
+    Nil -> Nil 
+    Cons y ys -> 
+      match tick 1 (compress ys) with 
+        Nil -> Cons y Nil 
+        Cons z zs -> 
+          if y == z
+            then Cons z zs
+            else Cons y (Cons z zs)

@@ -12,13 +12,12 @@ measure elems :: List a -> Set a where
 
 inline min x y = if x <= y then x else y  
 
--- append :: xs: List a -> ys: {List a | | min (len xs) (len _v)} -1> {List a | elems _v == elems xs + elems ys}  
-append :: xs: List a -> ys: List a -> {List a | elems _v == elems xs + elems ys}
-append = ??
--- append = \xs . \ys .
--- match xs with
-    -- Nil -> ys
-    -- Cons x xxs -> 
-    -- match ys with
-        -- Nil -> xs
-        -- Cons y yys -> Cons x (Cons y (append xxs yys))
+union :: xs: List a -> ys: {List a | | min (len xs) (len _v) } -[1]-> {List a | elems _v == elems xs + elems ys}  
+union = \xs . \ys .
+  match xs with
+    Nil -> ys
+    Cons x xxs -> 
+      match ys with
+        Nil -> xs
+        Cons y yys -> ?? -- Cons x (Cons y (union xxs yys))
+        

@@ -10,8 +10,8 @@ import subprocess
 from colorama import init, Fore, Back, Style
 
 # Parameters
-SYNQUID_PATH_LINUX = ['stack', 'exec', '--', 'synquid']
-SYNQUID_PATH_WINDOWS = ['Synquid.exe']
+SYNQUID_PATH_LINUX = ['stack', 'exec', '--', 'resyn']
+SYNQUID_PATH_WINDOWS = ['Resyn.exe']
 BENCH_PATH = '.'
 LOGFILE_NAME = 'results.log'
 ORACLE_NAME = 'oracle'
@@ -61,7 +61,7 @@ BENCHMARKS = {
               ('List-Compress',       []),
               # Insertion sort
               ('List-InsertSort',     []),
-              ('List-Fold-Sort',      ['-m=1', '-a=2', '-e']),
+              ('List-Fold-Sort',      ['-m=1', '-a=2', '--explicit-match']),
               # Merge sort
               ('List-Split',          ['-m=3']),
               ('IncList-Merge',       ['-f=AllArguments']),
@@ -108,16 +108,16 @@ BENCHMARKS = {
               ('AVL-BalR0',           ['-a 2']),
               ('AVL-BalRL',           ['-a 2', '-u']),
               ('AVL-BalRR',           ['-a 2', '-u']),
-              ('AVL-Balance',         ['-a 2', '-e']),
+              ('AVL-Balance',         ['-a 2', '--explicit-match']),
               ('AVL-Insert',          ['-a 2']),
               ('AVL-ExtractMin',      ['-a 2']),
               ('AVL-Delete',          ['-a 2', '-m 1']),
           ],
   'rbt' : [
     # Red-black trees
-    ('RBT-BalanceL',        ['-a 2', '-u', '-z']),
-    ('RBT-BalanceR',        ['-a 2', '-u', '-z']),
-    ('RBT-Insert',          ['-a 2', '-m 1', '-z']),
+    ('RBT-BalanceL',        ['-a 2', '-u']),
+    ('RBT-BalanceR',        ['-a 2', '-u']),
+    ('RBT-Insert',          ['-a 2', '-m 1']),
           ]
 }
 
@@ -141,42 +141,35 @@ DEMO_BENCHMARKS = [
     ('List-Replicate',      []),
     ('List-Reverse',        []),
     ('NNF',                 []),
-    ('Sort-Fold',           ['-m 1', '-a 2', '-e']),
+    ('Sort-Fold',           ['-m 1', '-a 2', '--explicit-match']),
+]
+
+UNIT_TESTS = [
+    ('Constructors',         []),
+    ('Pairs',                []),
+    ('HigherOrder',          []),
+    ('TypeAbduction',        []),
+    ('Measure',              []),
+    ('Instantiation',        []),
+    ('MultiArgMeasure',      []),
+    ('HOChecking',           []),
+    ('Incr',                 []),
 ]
 
 RESOURCE_VERIFICATION_BENCHMARKS = [
-    #('BST-Contains-Bad',    []),
-    ('BST-Contains',        []),
-    ('BST-Delete-Bad',      []),
-    ('BST-Delete',          []),
-    ('BST-Insert-Bad',      []),
-    ('BST-Insert',          []),
-    ('BST-Replicate-Bad',   []),
-    ('BST-Replicate',       []),
-    ('List-Append-Bad',     []),
-    ('List-Append',         []),
-    ('List-Append2-Bad',    []),
-    ('List-Append2',        []),
-    ('List-Compress-Bad',   []),
-    ('List-Compress',       []),
-    ('List-Cons2-Bad',      []),
-    ('List-Cons2',          []),
-    ('List-Delete-Bad',     []),
-    ('List-Delete',         []),
-    ('List-Double-Bad',     []),
-    ('List-Double',         []),
-    #('List-Fold-Bad',       []),
-    #('List-Fold',           []),
-    #('List-Insert-Bad',     []),
-    ('List-Insert',         []),
-    ('List-Replicate-Bad',  []),
-    ('List-Replicate',      []),
-    ('List-Reverse-Bad',    []),
-    ('List-Reverse',        []),
-    ('Queue-Dequeue-Bad',   []),
-    ('Queue-Dequeue',       []),
-    ('Queue-Enqueue-Bad',   []),
-    ('Queue-Enqueue',       []),
+    ('BST-Contains',                 ['-f=Nonterminating']),
+    ('List-Append2',                 ['-f=Nonterminating']),
+    ('List-Append',                  ['-f=Nonterminating']),
+    ('List-Compress',                ['-f=Nonterminating']),
+    ('List-Cons2',                   ['-f=Nonterminating']),
+    ('List-Pairs',                   ['-f=Nonterminating']),
+    ('List-Reverse',                 ['-f=Nonterminating']),
+    ('List-Replicate',               ['-f=Nonterminating', '--res-solver=CEGIS']),
+    ('List-InsertSort-Coarse',       ['-f=Nonterminating']),
+    ('List-Subset-Sum',              ['-f=Nonterminating']),
+    ('List-InsertSort',              ['-f=Nonterminating', '--res-solver=CEGIS']),
+    ('List-InsertSort-Compares',     ['-f=Nonterminating']),
+    ('BST-Insert',                   ['-f=Nonterminating', '--res-solver=CEGIS']),
 ]
 
 RESOURCE_SYNTHESIS_BENCHMARKS = [
@@ -231,7 +224,8 @@ class SynthesisResult:
 def cmdline():
     import argparse
     a = argparse.ArgumentParser()
-    a.add_argument('--synquid', help='synquid command')
+    a.add_argument('--resyn', help='resyn command')
+    a.add_argument('--nr', action='store_true', help='disable resource analysis')
     a.add_argument('--unit', action='store_true', help='run unit tests')
     a.add_argument('--check', action='store_true', help='run type checking tests')
     a.add_argument('--synt', action='store_true', help='run synthesis tests')
@@ -251,9 +245,9 @@ def printok(str):
 def printwarn(str):
     print (Back.YELLOW + Fore.YELLOW + Style.BRIGHT + str + Style.RESET_ALL, end = ' ')
 
-def run_benchmark(name, opts, path='.'):
+def run_benchmark(name, opts, path='.', neg=False):
     global total_time
-    print (name, end=' ')
+    print (name + "(bad)" if neg else name, end=' ')
 
     with open(LOGFILE_NAME, 'a+') as logfile:
         start = time.time()
@@ -264,8 +258,7 @@ def run_benchmark(name, opts, path='.'):
         t = end - start
         print ('{0:0.2f}'.format(t), end=' ')
         total_time = total_time + t
-        bad_flag = name.endswith("-Bad")
-        if (bool(return_code) ^ bad_flag):
+        if (bool(return_code) ^ neg):
             printerr("FAIL")
         else:
             printok("OK")
@@ -273,7 +266,7 @@ def run_benchmark(name, opts, path='.'):
         print()
 
 def run_resyn_benchmark(name, opts, path='.'):
-    global total_time 
+    global total_time
     print (name, end=' ')
 
     with open(LOGFILE_NAME, 'a+') as logfile:
@@ -284,7 +277,7 @@ def run_resyn_benchmark(name, opts, path='.'):
         end = time.time()
         rtime = res_end - start
         print ('{0:0.2f}'.format(rtime), end=' ')
-        total_time = total_time + rtime 
+        total_time = total_time + rtime
 
         logfile.seek(0, os.SEEK_END)
         logfile.write(with_res.stdout)
@@ -301,13 +294,6 @@ def run_resyn_benchmark(name, opts, path='.'):
         except StopIteration:
             print('Unchanged')
 
-
-def run_test(name, path='.'):
-    print (name)
-
-    with open(LOGFILE_NAME, 'a+') as logfile:
-      logfile.seek(0, os.SEEK_END)
-      subprocess.call(synquid_path + COMMON_OPTS + [os.path.join (path, name + '.sq')], stdout=logfile, stderr=logfile)
 
 def write_times(benchmarks):
     with open(OUTFILE_NAME, 'w') as outfile:
@@ -327,8 +313,8 @@ def check_diff ():
         shutil.copyfile(LOGFILE_NAME,ORACLE_NAME)
     else:
         # Compare log with oracle
-        fromlines = open(ORACLE_NAME, 'U').readlines()
-        tolines = open(LOGFILE_NAME, 'U').readlines()
+        fromlines = open(ORACLE_NAME).readlines()
+        tolines = open(LOGFILE_NAME).readlines()
         diff = difflib.unified_diff(fromlines, tolines, n=0)
 
         # Check if diff is empty
@@ -359,8 +345,8 @@ if __name__ == '__main__':
     a = cmdline()
 
     # Determine the synquid command to use:
-    if a.synquid:
-        synquid_path = a.synquid
+    if a.resyn:
+        synquid_path = a.resyn
     if platform.system() in ['Linux', 'Darwin']:
         synquid_path = SYNQUID_PATH_LINUX
     else:
@@ -373,7 +359,7 @@ if __name__ == '__main__':
       a.synt = True
 
     sections = [s.lower() for s in a.sections]
-    try: 
+    try:
         os.chdir('test')
     except Exception:
         pass
@@ -382,45 +368,51 @@ if __name__ == '__main__':
         # Run unit tests
         os.chdir('unit')
         print(os.getcwd())
-        clear_log() 
-        for name in os.listdir('.'):
-            filename, file_extension = os.path.splitext(name)
-            if file_extension == '.sq':
-                run_test(filename)
+        clear_log()
+        # for name in os.listdir('.'):
+        #    filename, file_extension = os.path.splitext(name)
+        #    if file_extension == '.sq':
+        #        run_test(filename)
+        for (name, args) in UNIT_TESTS:
+            run_benchmark(name, args)
         fail = check_diff()
         os.chdir('..')
 
     if not fail and a.check:
         # Run type checking benchmarks
         os.chdir('checking')
-        clear_log() 
+        clear_log()
         for (name, args) in CHECKING_BENCHMARKS:
+            args += RESOURCE_FALSE
             run_benchmark(name, args)
         fail = check_diff()
         os.chdir('..')
 
     if not fail and a.demo:
         # Test online demos
-        os.chdir('demo') 
-        clear_log() 
+        os.chdir('demo')
+        clear_log()
         for (name, args) in DEMO_BENCHMARKS:
+            args += RESOURCE_FALSE
             run_benchmark(name, args)
         fail = check_diff()
         os.chdir('..')
 
     if not fail and a.res_verif:
-        # Run resource-aware verification benchmarks
+        # Run resource-aware verification tests
         os.chdir('resources/verification')
-        clear_log() 
+        clear_log()
         for (name, args) in RESOURCE_VERIFICATION_BENCHMARKS:
-            run_benchmark(name, args)
+            run_benchmark(name, args, 'pos')
+            run_benchmark(name, args, 'neg', True)
         fail = check_diff()
+
         os.chdir('../..')
 
     if not fail and a.res_synth:
-        # Run resource-aware synthesis benchmarks
+        # Run resource-aware synthesis tests
         os.chdir('resources/synthesis')
-        clear_log() 
+        clear_log()
         for (name, args) in RESOURCE_SYNTHESIS_BENCHMARKS:
             if a.optimize:
                 run_resyn_benchmark(name, args)
@@ -432,10 +424,12 @@ if __name__ == '__main__':
     if not fail and a.synt:
         # Run synthesis benchmarks in 'current' directory
         os.chdir('current')
-        clear_log() 
+        clear_log()
         for sec in SECTIONS:
             if sec in sections or 'all' in sections:
                 for (name, args) in BENCHMARKS[sec]:
+                    if a.nr:
+                        args += RESOURCE_FALSE
                     run_benchmark(name, args, sec)
 
         print('TOTAL', '{0:0.2f}'.format(total_time))

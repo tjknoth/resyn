@@ -1,9 +1,8 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, TupleSections, TemplateHaskell #-}
 
 -- | Interface to Z3
 module Synquid.Z3 (
   Z3State,
-  Declarable(..),
   evalZ3State,
   modelGetAssignment,
   function,
@@ -14,10 +13,9 @@ import Synquid.Logic
 import Synquid.Type
 import Synquid.Program
 import Synquid.Solver.Monad
+import Synquid.Solver.Types
 import Synquid.Util
 import Synquid.Pretty
-import Z3.Monad hiding (Z3Env, newEnv, Sort)
-import qualified Z3.Base as Z3
 
 import Data.Maybe
 import Data.List
@@ -31,11 +29,35 @@ import Control.Monad
 import Control.Monad.Extra (mapMaybeM)
 import Control.Monad.Trans.State
 import Control.Lens hiding (both)
-import Debug.Trace
 import Control.Monad.State.Class (MonadState)
+import Z3.Monad hiding (Z3Env, newEnv, Sort)
+import qualified Z3.Base as Z3
 
 
-initZ3Data env env' renv = Z3Data {
+
+data Z3Env = Z3Env {
+  envSolver  :: Z3.Solver,
+  envContext :: Z3.Context
+}
+
+-- | Z3 state while building constraints
+data Z3Data = Z3Data {
+  _mainEnv :: Z3Env,                          -- ^ Z3 environment for the main solver
+  _sorts :: Map Sort Z3.Sort,                 -- ^ Mapping from Synquid sorts to Z3 sorts
+  _vars :: Map Id Z3.AST,                     -- ^ AST nodes for scalar variables
+  _functions :: Map Id Z3.FuncDecl,           -- ^ Function declarations for measures, predicates, and constructors
+  _storedDatatypes :: Set Id,                 -- ^ Datatypes mapped directly to Z3 datatypes (monomorphic and non-recursive)
+  _controlLiterals :: Bimap Formula Z3.AST,   -- ^ Control literals for computing UNSAT cores
+  _auxEnv :: Z3Env,                           -- ^ Z3 environment for the auxiliary solver
+  _boolSortAux :: Maybe Z3.Sort,              -- ^ Boolean sort in the auxiliary solver
+  _controlLiteralsAux :: Bimap Formula Z3.AST -- ^ Control literals for computing UNSAT cores in the auxiliary solver
+}
+
+makeLenses ''Z3Data
+
+type Z3State = StateT Z3Data IO
+
+initZ3Data env env' = Z3Data {
   _mainEnv = env,
   _sorts = Map.empty,
   _vars = Map.empty,
@@ -73,11 +95,12 @@ instance MonadSMT Z3State where
 instance RMonad Z3State where
   solveAndGetModel fml = do
     (r, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
+   
     setASTPrintMode Z3_PRINT_SMTLIB_FULL
     fmlAst <- fmlToAST fml
     astStr <- astToString fmlAst
     -- Throw error if unknown result: could probably do this a better way since r' is now unused
-    let r' = case r of 
+    let _ = case r of 
               Unsat -> False 
               Sat   -> True
               _     -> error $ "solveWithModel: Z3 returned Unknown for AST " ++ astStr 
@@ -87,113 +110,48 @@ instance RMonad Z3State where
         mdStr <- modelToString md 
         return $ Just (md, mdStr)
 
-  solveAndGetAssignment fml vals = do 
-    (_, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
-    case m of 
-      Nothing -> return Nothing 
-      Just md -> do 
-        mstr <- modelToString md 
-        modelGetAssignment vals (md, mstr)
-
-  modelGetAssignment vals (m, mstr) = 
-    (Just . Map.fromList . catMaybes) <$> mapM (getAssignment m) vals
+  modelGetAssignment vals (m, _) = 
+    Map.fromList . catMaybes <$> mapM (getAssignmentForVar m . Var astS) vals
     where 
       astS = IntS -- TODO: maybe be smarter about this!
-      varFun s = fmlToAST (Var astS s) -- Z3 AST node for variable 
-      getAssignment model name = do 
-        vFun <- varFun name
-        c <- modelEval model vFun True
-        case c of 
-          Nothing -> return Nothing 
-          Just ast -> do 
-            astLit <- mkASTLit astS ast
-            return $ Just (name, astLit)
+  
+  checkPredWithModel fml (model, _) = do 
+    ast <- fmlToAST fml
+    val <- modelEval model ast True
+    case val of 
+      Nothing -> return False
+      Just res -> getBool res
 
-  modelGetUFs ms model = do 
-    interps <- getInterps ms (fst model)
-    return $ Map.fromList $ zip (map fst ms) interps
+  filterPreds rfmls (model, _) = mapMaybeM checkAndGetAssignment rfmls
+    where
+      checkAndGetAssignment :: ProcessedRFormula -> Z3State (Maybe ProcessedRFormula)
+      checkAndGetAssignment rfml = do 
+        let vars = Map.elems . _varSubsts $ rfml 
+        let isRelevant f = isJust <$> modelEval model f False -- No model completion
+        vfuns <- mapM fmlToAST vars
+        ifM (anyM isRelevant vfuns)
+          (return (Just rfml))
+          (return Nothing)
 
-  evalInModel fs (model, modelStr) measure = do 
-    let eval x = modelEval model x True
-    -- Attempt to evaluate all arguments
-    maybeArgs <- mapM (fmlToAST >=> eval) fs
-    -- Construct list of AST literals (if all were evaluated successfully)
-    args <- mapM (\a -> sequence (mkASTLit IntS <$> a)) maybeArgs
-    case sequence args of 
-      Nothing -> error $ "Error evaluating arguments to " ++ modelStr ++ " " ++ show (pretty fs)
-      Just as -> 
-        case Map.lookup as (_entries measure) of 
-          Nothing -> return $ measure^.defaultVal
-          Just res -> return res
+  translate fml = do 
+    f' <- local $ fmlToAST fml
+    setASTPrintMode Z3_PRINT_SMTLIB_FULL
+    str <- astToString f' 
+    return $ Z3Lit AnyS f' str
 
--- Get interpretations of a set of measures in a given model
-getInterps :: (Declarable a, UF a) => [(String, a)] -> Model -> Z3State [Z3UFun]
-getInterps ms model = mapMaybeM (`getMInterp` model) ms
-
--- Get interpretation of a given measure in a given model
-getMInterp :: (Declarable a, UF a) => (String, a) -> Model -> Z3State (Maybe Z3UFun)
-getMInterp (name, def) model = do 
-  let targs = argSorts def
-  fun <- declare def (resSort def) name targs
-  hasI <- hasInterp model fun
-  if not hasI 
-    then return Nothing
-    else case targs of 
-        [] -> interpretConst fun 
-        _  -> interpretFunction fun 
-  where 
-    interpretConst f = do 
-      interp <- getConstInterp model f
-      case interp of 
-        Nothing -> return Nothing 
-        Just intp -> do
-          const <- mkASTLit (resSort def) intp
-          return $ Just Z3UFun {
-            _functionName = name,
-            _entries = Map.empty,
-            _defaultVal = const
-          }
-    interpretFunction f = do 
-      interp <- getFuncInterp model f
-      case interp of 
-        Nothing -> return Nothing
-        Just intp -> do  
-          elseVal <- funcInterpGetElse intp >>= mkASTLit (resSort def)
-          entries <- getFuncEntries name model intp
-          return $ Just Z3UFun {
-            _functionName = name,
-            _entries = entries, 
-            _defaultVal = elseVal
-          }
-
--- Given a function interpretation, get a map from arguments to interpretations
---   If the function takes multiple arguments, we treat their sum as a single argument
-getFuncEntries :: String -> Model -> FuncInterp -> Z3State (Map [Formula] Formula)
-getFuncEntries mname mod interp = do 
-  numE <- funcInterpGetNumEntries interp
-  entries <- mapM (getIndexedEntry mname mod interp) [0..(numE - 1)] 
-  return $ Map.fromList entries
-
--- Get the argument-result pair at the ith entry of a given function interpretation
-getIndexedEntry :: String -> Model -> FuncInterp -> Int -> Z3State ([Formula], Formula)
-getIndexedEntry mname mod interp i = do 
-  entry <- funcInterpGetEntry interp i
-  numA <- funcEntryGetNumArgs entry
-  let eval x = modelEval mod x True
-  args <- sequence <$> mapM (funcEntryGetArg entry >=> eval) [0..(numA - 1)] 
-  case args of 
-    Nothing -> error $ "Error evaluating function entry in measure " ++ mname
-    Just as -> do
-      args' <- mapM (mkASTLit IntS) as
-      res <- funcEntryGetValue entry >>= mkASTLit IntS
-      return (args', res)
+getAssignmentForVar :: Z3.Model -> Formula -> Z3State (Maybe (String, Formula))
+getAssignmentForVar model v@(Var s x) = do 
+  var <- fmlToAST v
+  val <- modelEval model var True 
+  fml <- sequence $ mkASTLit s <$> val 
+  return $ (x,) <$> fml
 
 mkASTLit :: Sort -> AST -> Z3State Formula
-mkASTLit s ast = ASTLit s ast <$> astToString ast
+mkASTLit s ast = Z3Lit s ast <$> astToString ast
 
 convertDatatypes :: Map Id RSchema -> [(Id, DatatypeDef)] -> Z3State ()
 convertDatatypes _ [] = return ()
-convertDatatypes symbols ((dtName, DatatypeDef [] _ _ ctors@(_:_) _):rest) = do
+convertDatatypes symbols ((dtName, DatatypeDef [] _ _ ctors@(_:_) _ _):rest) = do
   ifM (uses storedDatatypes (Set.member dtName))
     (return ()) -- This datatype has already been processed as a dependency
     (do
@@ -289,18 +247,36 @@ withAuxSolver c = do
 
 evalZ3State :: Z3State a -> IO a
 evalZ3State f = do
-  -- env <- newEnv (Just QF_AUFLIA) stdOpts
-  -- env' <- newEnv (Just QF_AUFLIA) stdOpts
-  --env <- newEnv (Just AUFLIA) stdOpts
-  --env' <- newEnv (Just AUFLIA) stdOpts
   env <- newEnv Nothing stdOpts
   env' <- newEnv Nothing stdOpts
-  renv <- newEnv Nothing stdOpts
-  evalStateT f $ initZ3Data env env' renv
+  evalStateT f $ initZ3Data env env' 
 
 -- | Convert a first-order constraint to a Z3 AST.
 fmlToAST :: Formula -> Z3State AST
-fmlToAST = toAST
+fmlToAST = toAST -- . simplify
+  {-
+  where  -- Pulled from synquid -- keeping around in case bug shows up
+    simplify expr = case expr of
+      SetLit el xs -> SetLit el (map simplify xs)
+      WithSubst s e -> WithSubst s $ simplify e 
+      Unary op e -> Unary op (simplify e)
+      Binary op e1 e2 -> 
+        let e1' = simplify e1
+            e2' = simplify e2
+        in case sortOf e1' of
+             BoolS -> case op of
+                        Le -> e1' |=>| e2'
+                        Ge -> e2' |=>| e1'
+                        Lt -> fnot e1' |&| e2'
+                        Gt -> fnot e2' |&| e1'
+                        _  -> Binary op e1' e2' 
+             _ -> Binary op e1' e2'
+      Ite e0 e1 e2 -> Ite (simplify e0) (simplify e1) (simplify e2)
+      Pred s name args -> Pred s name (map simplify args)
+      Cons s name args -> Cons s name (map simplify args)
+      All v e -> All v (simplify e)
+      _ -> expr 
+  -}
 
 -- | Convert a Synquid refinement term to a Z3 AST
 toAST :: Formula -> Z3State AST
@@ -311,6 +287,7 @@ toAST expr = case expr of
   IntLit i -> mkIntNum i
   Var s name -> var s name
   Unknown _ name -> error $ unwords ["toAST: encountered a second-order unknown", name]
+  WithSubst _ e -> toAST e 
   Unary op e -> toAST e >>= unOp op
   Binary op e1 e2 -> join (binOp op <$> toAST e1 <*> toAST e2)
   Ite e0 e1 e2 -> do
@@ -327,7 +304,7 @@ toAST expr = case expr of
     decl <- typeConstructor s name tArgs
     mapM toAST args >>= mkApp decl
   All v e -> accumAll [v] e
-  ASTLit _ a _ -> return a
+  Z3Lit _ a _ -> return a
   where
     setLiteral el xs = do
       emp <- toZ3Sort el >>= mkEmptySet

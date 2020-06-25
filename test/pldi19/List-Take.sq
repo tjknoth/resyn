@@ -15,5 +15,10 @@ termination measure len :: List a -> {Int | _v >= 0} where
   Cons x xs -> 1 + len xs  
 	
 take :: n: Nat -> xs: {List a | len _v >= n | n} -[1]-> {List a | len _v == n}
-take = ??
-
+take = \n. \xs. 
+  if n <= 0 
+    then Nil 
+    else 
+      match xs with 
+        Nil -> Nil
+        Cons y ys -> Cons y (take (dec n) ys)

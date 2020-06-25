@@ -20,5 +20,5 @@ dec :: x: Int -> {Int | _v == x - 1}
 
 type Nat = {Int | _v >= 0}
 	
-range :: size: Nat -> lo: Int -> {UList {Int | lo <= _v && _v <= lo + size} | len _v == size}
+range :: size: Nat -> lo: {Int| |size} -[1]-> {UList {Int | lo <= _v && _v <= lo + size} | len _v == size}
 range = ??

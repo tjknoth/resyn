@@ -12,5 +12,5 @@ measure telems :: BST a -> Set a where
   
 qualifier {x <= y, x != y}
 
-delete :: t: BST a -> x: a -> {BST a | telems _v == telems t - [x]}
+delete :: t: BST {a| |2} -> x: a -[1]-> {BST a | telems _v == telems t - [x]}
 delete = ??

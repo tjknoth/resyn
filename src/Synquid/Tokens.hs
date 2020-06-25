@@ -11,7 +11,7 @@ import Data.Char
 keywords :: [String]
 keywords = ["Bool", "data", "else", "error", "False", "if", "in", "inline", 
   "Int", "let", "match", "measure", "predicate", "qualifier", "Set", "termination",
-  "then", "True", "type", "with", "where"
+  "then", "True", "type", "with", "where", "tick"
   ]
 
 -- | Names of unary operators    
