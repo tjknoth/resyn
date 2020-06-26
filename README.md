@@ -5,7 +5,7 @@ an upper bound on the programs' resource usage.
 
 For example, given the following type as the specification:
 ```
-replicate :: n:Nat -> x:{n**a| |n} -[1]-> {List a | len _v = n}
+replicate :: n:Nat -> x:{a| |n} -[1]-> {List a | len _v = n}
 ```
 and an appropriate set of components, Resyn will automatically generate a program: 
 ```
