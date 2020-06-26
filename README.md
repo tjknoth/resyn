@@ -56,7 +56,7 @@ Resource Types paper (citation coming soon!).
 Finally, polymorphism implies resource polymorphism. 
 One can instnatiate type variables with a potential-annotated type
 in order to use functions in different contexts. 
-Instantiating `List {a| |1}` with `a -> {Int| |2}` yields
+Instantiating `List {a| |1}` with `a |-> {Int| |2}` yields
 `List {Int| |3}`, for example.
 One can use program expressions in resource annotations.
 
@@ -73,11 +73,11 @@ One can use program expressions in resource annotations.
 * When solving resource constraints with dependent annotations, one has a choice
   of three solvers. The incremental CEGIS solver currently has
   some bugs with constraints involving abstract potentials.
-  One can also use CVC4 as a (currently slow) backend. To do so, install a
+  One can also use [CVC4](https://cvc4.github.io/) as a (currently slow) backend. To do so, install a
   version of CVC4 released after 4/20/20, and set `--res-solver=cvc4`.
 
 ## Papers ## 
-[Resource-Guided Program Synthesis](https://arxiv.org/abs/1904.07415)
+[Resource-Guided Program Synthesis (PLDI '19)](https://arxiv.org/abs/1904.07415)
 
 
-[Liquid Resource Types](#)
+[Liquid Resource Types (ICFP '20)](#)
