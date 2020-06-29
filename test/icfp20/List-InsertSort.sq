@@ -16,10 +16,8 @@ insert = \x. \xs.
                    else Cons x (Cons y ys)
 
 
-{-
 insertionSort :: xs: List {a | | 2} <{if _1 < _0 then 1 else 0}> -> List a <{0}>
 insertionSort = \xs.
   match xs with 
     Nil       -> Nil
     Cons y ys -> tick 1 (insert y (tick 1 (insertionSort ys)))
--}

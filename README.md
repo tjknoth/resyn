@@ -1,6 +1,6 @@
 # Resyn #
 
-Resyn synthesizes programs from _liquid resource types_, according to 
+Resyn synthesizes programs from _liquid resource types_ (ICFP '20), according to 
 an upper bound on the programs' resource usage. 
 
 For example, given the following type as the specification:
@@ -60,6 +60,8 @@ Instantiating `List {a| |1}` with `a |-> {Int| |2}` yields
 `List {Int| |3}`, for example.
 One can use program expressions in resource annotations.
 
+Details on the language and syntax can also be found in the wiki.
+
 
 ## Try Resyn ##
 * [Resyn demo](http://comcom.csail.mit.edu/comcom/#ReSyn)
@@ -68,8 +70,8 @@ One can use program expressions in resource annotations.
 
 ## Usage notes ##
 * Resource analysis makes termination checking unnecessary (as long some
-  operations actually consume resources), so one should run Resyn with `-f
-  Nonterminating`
+  operations actually consume resources), so to avoid proving termination (via a
+  "termination metric", one can run Resyn with `-f Nonterminating`
 * When solving resource constraints with dependent annotations, one has a choice
   of three solvers. The incremental CEGIS solver currently has
   some bugs with constraints involving abstract potentials.
@@ -77,6 +79,9 @@ One can use program expressions in resource annotations.
   version of CVC4 released after 4/20/20, and set `--res-solver=cvc4`.
 
 ## Papers ## 
+Technical details on the language and type system can be found in the research
+papers:
+
 [Resource-Guided Program Synthesis (PLDI '19)](https://arxiv.org/abs/1904.07415)
 
 

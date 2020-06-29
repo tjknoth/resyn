@@ -17,10 +17,10 @@ import Synquid.Solver.Monad
 import Synquid.Solver.TypeConstraint hiding (freshId, freshVar)
 
 import qualified Data.Map as Map
-import Data.Map (Map)
-import Control.Monad.Logic
-import Control.Monad.Reader
-import Control.Lens
+import           Data.Map (Map)
+import           Control.Monad.Logic
+import           Control.Monad.Reader
+import           Control.Lens
 import qualified Data.Set as Set
 
 
