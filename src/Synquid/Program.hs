@@ -625,7 +625,6 @@ data Constraint =
   | WellFormed !Environment !RType 
   | WellFormedCond !Environment !Formula
   | WellFormedMatchCond !Environment !Formula
---  | WellFormedPredicate !Environment ![Sort] !Id -- APs: changed to make Pretty.hs show correct predicate constraints
   | WellFormedPredicate !Environment ![Sort] !Sort !Id
   | SharedEnv !Environment !Environment !Environment 
   | SharedForm !Environment !Formula !Formula !Formula 

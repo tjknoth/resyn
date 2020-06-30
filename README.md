@@ -85,4 +85,4 @@ papers:
 [Resource-Guided Program Synthesis (PLDI '19)](https://arxiv.org/abs/1904.07415)
 
 
-[Liquid Resource Types (ICFP '20)](#)
+[Liquid Resource Types (ICFP '20)](https://arxiv.org/abs/2006.16233)
