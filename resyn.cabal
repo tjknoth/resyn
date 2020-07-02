@@ -80,6 +80,7 @@ Library
                     , conduit
                     , conduit-extra
                     , text
+                    , pretty-simple
 --                    , limp >= 0.3
 --                    , limp-cbc >= 0.3
   

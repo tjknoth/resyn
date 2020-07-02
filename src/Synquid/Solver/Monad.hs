@@ -47,6 +47,7 @@ data ResourceArgs = ResourceArgs {
   _constantTime :: Bool,
   _cegisBound :: Int,
   _enumerate :: Bool,
+  _inferResources :: Bool,
   _rsolver :: ResourceSolver,
   _sygusLog :: Maybe String,
   _cvc4 :: String

@@ -694,28 +694,27 @@ potentialVars :: QMap -> Formula -> Set Id
 potentialVars qmap fml = Set.map varName $ varsOf $ bottomValuation qmap fml
 
 -- | 'freshId' @prefix@ : fresh identifier starting with @prefix@
-freshId :: Monad s => String -> TCSolver s String
+freshId :: Monad s => String -> TCSolver s Id
 freshId prefix = do
   i <- uses idCount (Map.findWithDefault 0 prefix)
   idCount %= Map.insert prefix (i + 1)
   return $ prefix ++ show i
 
--- | 'freshId' @prefix@ : fresh identifier starting with @prefix@, using an underscore
+-- | 'freshVersion' @prefix@ : fresh identifier starting with @prefix@, using an underscore
 --    to differentiate from normal freshIds -- only used for resource constraints.
-freshVersion :: Monad s => String -> TCSolver s String
+freshVersion :: Monad s => String -> TCSolver s Id
 freshVersion prefix = do
   i <- uses versionCount (Map.findWithDefault 0 prefix)
   versionCount %= Map.insert prefix (i + 1)
   return $ prefix ++ "_" ++ show i
 
 
-freshVar :: Monad s => Environment -> String -> TCSolver s String
+freshVar :: Monad s => Environment -> String -> TCSolver s Id
 freshVar env prefix = do
   x <- freshId prefix
   if Map.member x (allSymbols env)
     then freshVar env prefix
     else return x
-
 
 freshValueVarSub :: Monad s => Sort -> TCSolver s Substitution
 freshValueVarSub s = Map.singleton valueVarName <$> (Var s <$> freshValueVarId)

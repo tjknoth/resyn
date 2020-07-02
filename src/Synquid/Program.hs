@@ -232,6 +232,7 @@ data Environment = Environment {
   -- | Variable part:
   _symbols :: SymbolMap,                     -- ^ Variables and constants (with their refinement types), indexed by arity
   _ghostSymbols :: (Set Id),                 -- ^ Set of names of variables that do not carry potential -- ignored in sharing and transfer constraints
+  _inferVarSymbols :: (Set Id),              -- ^ Set of generated potential variables whose values will be inferred
   _freePotential :: Formula,                 -- ^ Extra free potential, used only for weakening
   _condFreePotential :: [Formula],           -- ^ Possible conditional structures for free potential expressions
   _boundTypeVars :: [Id],                    -- ^ Bound type variables
@@ -264,6 +265,7 @@ instance Ord Environment where
 emptyEnv = Environment {
   _symbols = Map.empty,
   _ghostSymbols = Set.empty,
+  _inferVarSymbols = Set.empty,
   _freePotential = fzero,
   _condFreePotential = [],
   _boundTypeVars = [],
@@ -656,6 +658,7 @@ data Goal = Goal {
   gImpl :: UProgram,            -- ^ Implementation template
   gDepth :: Int,                -- ^ Maximum level of auxiliary goal nesting allowed inside this goal
   gSourcePos :: SourcePos,      -- ^ Source Position,
+  gInferredPotlVars :: Set Id,  -- ^ Set of potential vars to infer for this fn
   gSynthesize :: Bool           -- ^ Synthesis flag (false implies typechecking only)
 } deriving (Show, Eq, Ord)
 

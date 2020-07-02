@@ -37,7 +37,7 @@ main = do
                lfp bfs
                out_file out_module outFormat resolve
                print_spec print_stats log_ 
-               resources mult forall cut nump constTime cegis_max ec res_solver logfile cvc4cmd) -> do
+               resources mult forall cut nump constTime cegis_max ec infer res_solver logfile cvc4cmd) -> do
                   let 
                     resArgs = defaultResourceArgs {
                     _shouldCheckResources = resources,
@@ -45,6 +45,7 @@ main = do
                     _constantTime = constTime,
                     _cegisBound = cegis_max,
                     _enumerate = ec,
+                    _inferResources = infer,
                     _rsolver = res_solver,
                     _sygusLog = logfile,
                     _cvc4 = cvc4cmd
@@ -135,6 +136,7 @@ data CommandLineArgs
         ct :: Bool,
         cegis_max :: Int,
         eac :: Bool,
+        infer :: Bool,
         res_solver :: ResourceSolver,
         logfile :: Maybe String,
         solve_sygus :: String
@@ -174,6 +176,7 @@ synt = Synthesis {
   ct                  = False           &= help ("Require that all branching expressions consume a constant amount of resources (default: False)"),
   cegis_max           = 100             &= help ("Maximum number of iterations through the CEGIS loop (default: 100)"),
   eac                 = False           &= help ("Enumerate-and-check instead of round-trip resource analysis (default: False)"),
+  infer               = False           &= help ("Infer all resource bounds (default: False)"),
   res_solver          = CEGIS           &= help (unwords ["Which solver should be used for resource constraints?", show SYGUS, show CEGIS, show Incremental, "(default: ", show CEGIS, ")"]),
   logfile             = Nothing         &= help ("File for logging SYGUS constraints (default: no logging)"),
   solve_sygus         = "cvc4"          &= help ("Command to run SYGUS solver (default: \"cvc4\")")
@@ -217,6 +220,7 @@ defaultResourceArgs = ResourceArgs {
   _constantTime = False,
   _cegisBound = 100,
   _enumerate = False,
+  _inferResources = False,
   _rsolver = CEGIS,
   _sygusLog = Nothing,
   _cvc4 = "cvc4"
@@ -279,7 +283,8 @@ runOnFile :: SynquidParams -> ExplorerParams -> HornSolverParams
 runOnFile synquidParams explorerParams solverParams file libs = do
   declsByFile <- parseFromFiles (libs ++ [file])
   let decls = concat $ map snd declsByFile
-  case resolveDecls decls of
+  let infer = explorerParams ^. (explorerResourceArgs . inferResources)
+  case resolveDecls infer decls of
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure
     Right (goals, cquals, tquals) -> when (not $ resolveOnly synquidParams) $ do
       results <- mapM (synthesizeGoal cquals tquals) (requested goals)
