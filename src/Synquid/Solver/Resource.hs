@@ -124,7 +124,7 @@ embedAndProcessConstraint env rfml = do
        >=> filterAssumptions
        >=> updateVariables
        >=> formatVariables
-       >=> applyAssumptions
+       >=> joinAssumptions
   case domain of
     Dependent -> go rfml
     Constant  -> translateAndFinalize rfml
@@ -221,10 +221,10 @@ formatVariables rfml = do
          $ over rconstraints (transformFml mkFuncVar) rfml
 
 -- Produce final formula
-applyAssumptions :: MonadHorn s
+joinAssumptions :: MonadHorn s
                  => RawRFormula
                  -> TCSolver s ProcessedRFormula
-applyAssumptions (RFormula known _ preds substs fml) = do
+joinAssumptions (RFormula known _ preds substs fml) = do
   -- let ass = conjunction $ Set.union known unknown
   let ass = conjunction known
   writeLog 3 $ indent 4 $ pretty (ass |=>| fml) -- conjunction (map lcToFml lcs))
@@ -263,13 +263,13 @@ deployHigherOrderSolver :: RMonad s
 deployHigherOrderSolver SYGUS oldfmls newfmls = do
   let rfmls = oldfmls ++ newfmls
   let runInSolver = lift . lift . lift
-  log <- view (resourceArgs . sygusLog)
+  logfile <- view (resourceArgs . sygusLog)
   ufmls <- map (Var IntS) . Set.toList <$> use universalVars
   universals <- collectUniversals rfmls ufmls
-  rvs <- use resourceVars
+  rvars <- use resourceVars
   env <- use initEnv 
   solverCmd <- view (resourceArgs . cvc4)
-  runInSolver $ solveWithSygus log solverCmd env rvs rfmls universals
+  runInSolver $ solveWithSygus logfile solverCmd env rvars universals oldfmls newfmls
 
 -- Solve with CEGIS (incremental or not)
 deployHigherOrderSolver _ oldfmls newfmls = do
@@ -284,7 +284,7 @@ deployHigherOrderSolver _ oldfmls newfmls = do
   writeLog 5 $ pretty $ conjunction $ map completeFml rfmls
   logUniversals
   
-  let go = solveWithCEGIS cMax rfmls universals
+  let go = solveWithCEGIS cMax universals rfmls
   (sat, cstate') <- runInSolver $ runCEGIS go cstate
   storeCEGISState cstate'
   return sat
@@ -303,18 +303,16 @@ storeCEGISState st = do
     resourceVars .= Map.empty
 
 -- Given a list of resource constraints, assemble the relevant universally quantified 
---   expressions for the CEGIS solver: renamed variables, constructor and measure applications.
+--   expressions for the CEGIS solver: renamed variables and constructor apps
 --   Allows a list of extra formulas.
 collectUniversals :: Monad s => [ProcessedRFormula] -> [Formula] -> TCSolver s Universals
-collectUniversals rfmls extra = do 
-  let preds = map (\(Var s x) -> (x, Var s x)) (collectUFs rfmls) 
-  return $ Universals (formatUniversals (extra ++ collectVars rfmls)) preds
+collectUniversals rfmls existing = do 
+  -- Do not need to substitute in constructors; substitutions are only for nameless rep (_v, de bruijns)
+  let formatCons = Set.map ((\(Var s x) -> (x, Var s x)) . transformFml mkFuncVar)
+  ufs <- formatCons <$> use matchCases
+  let newvars = concatMap (Map.elems . _varSubsts) rfmls
+  return $ Universals (formatUniversals (existing ++ newvars)) (Set.toList ufs)
 
-collectVars :: [ProcessedRFormula] -> [Formula]
-collectVars = concatMap (Map.elems . _varSubsts)
-
-collectUFs :: [ProcessedRFormula] -> [Formula]
-collectUFs = concatMap (Set.toList . _ctors)
 
 -- Nondeterministically redistribute top-level potentials between variables in context
 redistribute :: Monad s

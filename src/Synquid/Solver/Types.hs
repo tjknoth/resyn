@@ -56,7 +56,7 @@ data RFormula a b = RFormula {
   _knownAssumptions :: !a,
   _unknownAssumptions :: !b,
   _ctors :: !(Set Formula),
-  _varSubsts :: !Substitution,
+  _varSubsts :: !Substitution, -- substitutions for _v and de bruijns
   _rconstraints :: !Formula -- ![FmlLC]
 } deriving (Eq, Show, Ord)
 
@@ -81,7 +81,7 @@ type UMeasure = (String, MeasureDef)
 
 data Universals = Universals {
   uvars :: ![UVar],
-  ufuns :: ![UVar]
+  ucons :: ![UVar]
 } deriving (Show, Eq, Ord)
 
 -- Term of a polynomial: coefficient * universal

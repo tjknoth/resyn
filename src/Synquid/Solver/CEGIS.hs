@@ -42,10 +42,10 @@ runCEGIS = runStateT
 -- | Solve formula containing universally quantified expressions with counterexample-guided inductive synthesis
 solveWithCEGIS :: RMonad s
                => Int
-               -> [ProcessedRFormula]
                -> Universals
+               -> [ProcessedRFormula]
                -> CEGISSolver s Bool
-solveWithCEGIS 0 rfmls universals = do
+solveWithCEGIS 0 universals rfmls = do
   -- Base case: If there is a counterexample, @fml@ is UNSAT, SAT otherwise
   counterexample <- verify rfmls universals 
   case counterexample of
@@ -55,7 +55,7 @@ solveWithCEGIS 0 rfmls universals = do
       writeLog 4 $ text "Last counterexample:" <+> text (maybe "" (snd . model) counterexample)
       return False
 
-solveWithCEGIS n rfmls universals = do
+solveWithCEGIS n universals rfmls = do
   -- Attempt to find point for which current parameterization fails
   counterexample <- verify rfmls universals 
   --res <- verifyOnePass rfmls 
@@ -80,7 +80,7 @@ solveWithCEGIS n rfmls universals = do
             updateProgram p
             pstr <- printParams 
             writeLog 6 $ text "Params:" <+> pstr
-            solveWithCEGIS (n - 1) rfmls universals
+            solveWithCEGIS (n - 1) universals rfmls
 
 
 
@@ -107,7 +107,7 @@ verify rfmls universals = do
   vars <- lift . sequence
     $ (modelGetAssignment (map fst (uvars universals)) <$> model)
   measures <- lift . sequence
-    $ (modelGetAssignment (map fst (ufuns universals)) <$> model)
+    $ (modelGetAssignment (map fst (ucons universals)) <$> model)
   return $ CX <$> measures <*> vars <*> model
 
 {-
@@ -427,7 +427,6 @@ constantPTerm s = PolynomialTerm (constPolynomialVar s) Nothing
 initialCoefficients = repeat $ IntLit 0
 
 universalToString (Var _ x) = x
-universalToString p = mkFuncString p
 
 writeLog level msg = do
   maxLevel <- use cegisSolverLogLevel

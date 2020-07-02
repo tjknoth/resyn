@@ -20,16 +20,19 @@ import           Data.Map (Map)
 import qualified Data.Map as Map
 import           System.Exit
 
+-- | Satisfiability interface to sygus solver
 solveWithSygus :: RMonad s
-               => Maybe String
-               -> String
-               -> Environment
-               -> Map String [Formula]
-               -> [ProcessedRFormula]
-               -> Universals
+               => Maybe String         -- logfile
+               -> String               -- solver command 
+               -> Environment          -- typing context
+               -> Map String [Formula] -- map from goal to vars in scope
+               -> Universals           -- universally quantified expressions
+               -> [ProcessedRFormula]  -- "old" constraints
+               -> [ProcessedRFormula]  -- "new" constraints
                -> s Bool
-solveWithSygus withLog command env rvars rfmls univs =
+solveWithSygus withLog command env rvars univs oldfmls newfmls =
   let log = maybe Direct Debug withLog
+      rfmls = oldfmls ++ newfmls
    in getResult log command (assembleSygus env rvars rfmls univs)
 
 data ConstraintMode = Direct | Debug String -- pipe directly to solver, or write to file first for debugging
