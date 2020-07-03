@@ -5,7 +5,6 @@ module Synquid.Solver.Types where
 
 import Synquid.Logic
 import Synquid.Pretty
-import Synquid.Program
 
 import Data.Set (Set)
 import Data.Map (Map)
@@ -39,17 +38,44 @@ instance Pretty a => Pretty (LinearConstraint a) where
 -- | Wrapper for Z3 Model data structure
 type SMTModel = (Z3.Model, String)
 
-data RSolverDomain = Dependent | Constant
+-- Universally quantified variable
+data UVar = UVar Sort String
+  deriving (Show, Eq, Ord)
+
+-- Don't need to substitute in constructors (can't contain nameless reps)
+data UCons = UCons Sort String
+  deriving (Show, Eq, Ord)
+
+sortOfUVar (UVar s _) = s
+nameOfUVar (UVar _ x) = x
+asVar (UVar s x) = Var s x
+nameOfUCons (UCons _ x) = x
+
+universalToString (Var _ x) = x
+
+substituteUVar :: Substitution -> UVar -> UVar
+substituteUVar sub (UVar s x) = 
+  case substitute sub (Var s x) of
+    (Var s' x') -> UVar s' x'
+    f           -> error $ unwords ["substituteUVar: returned non-variable term", show (pretty f)]
+
+data RDomain = Constant | Dependent
   deriving (Show, Eq)
 
-instance Semigroup RSolverDomain where
+instance Semigroup RDomain where
   Dependent <> _ = Dependent
   _ <> Dependent = Dependent
   Constant <> Constant = Constant
 
+data RSolverDomain = RSD {
+  _generalDomain :: RDomain,     -- Is anything dependent?
+  _polyDomain :: RDomain, -- Should polynomials be dependent?
+  _renamedVars :: [UVar]  -- All renamed variables
+} deriving (Show, Eq)
+
+makeLenses ''RSolverDomain
 
 {- Types for solving resource formulas -}
-
 
 -- RFormula : Logical formula and meta-info
 data RFormula a b = RFormula {
@@ -71,17 +97,12 @@ instance Pretty (RFormula a b) where
 {- Types for CEGIS solver -}
 
 -- Coefficient valuations in a valid program
-type ResourceSolution = Map String Formula
-
--- Universally quantified variable
-type UVar = (String, Formula)
-
--- Uninterpreted function (measure) relevant for constraint solving
-type UMeasure = (String, MeasureDef)
+newtype RSolution = RSolution { unRSolution :: Map String Formula }
+  deriving (Show, Eq)
 
 data Universals = Universals {
   uvars :: ![UVar],
-  ucons :: ![UVar]
+  ucons :: ![UCons]
 } deriving (Show, Eq, Ord)
 
 -- Term of a polynomial: coefficient * universal
@@ -91,20 +112,20 @@ data PolynomialTerm = PolynomialTerm {
 } deriving (Eq, Show, Ord)
 
 -- Polynomial represented as a list of coefficient-variable pairs 
-type Polynomial = [PolynomialTerm]
+newtype Polynomial = Polynomial { unPolynomial :: [PolynomialTerm] } 
 
 -- Map from resource variable name to its corresponding polynomial
-type PolynomialSkeletons = Map String Polynomial
+newtype PolynomialSkeletons = Skeletons { unSkeletons :: Map String Polynomial }
 
 -- Map from universally quantified expression (in string form) to its valuation
 data Counterexample = CX {
-  funcInterps :: !(Map String Formula),
-  variables :: !(Map String Formula),
+  consInterps :: !RSolution,
+  variables :: !RSolution,
   model :: !SMTModel
 } deriving (Eq)
 
 data CEGISState = CEGISState {
-  _rprogram :: !ResourceSolution,
+  _rprogram :: !RSolution,
   _polynomials :: !PolynomialSkeletons,
   _coefficients :: ![String],
   _cegisSolverLogLevel :: !Int,

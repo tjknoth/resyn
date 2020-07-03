@@ -219,7 +219,8 @@ defaultResourceArgs = ResourceArgs {
   _enumerate = False,
   _rsolver = CEGIS,
   _sygusLog = Nothing,
-  _cvc4 = "cvc4"
+  _cvc4 = "cvc4",
+  _resourceDomain = RSD Constant Constant []
 }
 
 -- | Parameters for constraint solving

@@ -111,7 +111,7 @@ instance RMonad Z3State where
         return $ Just (md, mdStr)
 
   modelGetAssignment vals (m, _) = 
-    Map.fromList . catMaybes <$> mapM (getAssignmentForVar m . Var astS) vals
+    RSolution . Map.fromList . catMaybes <$> mapM (getAssignmentForVar m . Var astS) vals
     where 
       astS = IntS -- TODO: maybe be smarter about this!
   

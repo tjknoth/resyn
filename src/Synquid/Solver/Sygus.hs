@@ -49,7 +49,7 @@ data SygusProblem = SygusProblem {
   declarations :: Map Id DatatypeDef,
   constraints :: [Formula],
   functions :: [SygusGoal],
-  universals :: [(Id, Sort)]
+  universals :: [UVar]
 } deriving (Show, Eq)
 
 -- Parse satisfiability from CVC4 output
@@ -96,7 +96,7 @@ assembleSygus env rvars rfmls univs = SygusProblem dts cs fs us
     vs = fmap (filter (not . isData . sortOf)) rvars  
     cs = map (\rf -> _knownAssumptions rf |=>| _rconstraints rf) $ transformFmls vs rfmls
     fs = Map.elems $ Map.mapWithKey buildSygusGoal vs
-    us = map (\(_, Var s x) -> (x, s)) $ filter (not . isData . sortOf . snd) (uvars univs)
+    us = filter (not . isData . sortOfUVar) (uvars univs)
     dts = _datatypes env
 
 -- | Applies two transformations to each formula to make them usable
@@ -164,8 +164,8 @@ declareGoal (SygusGoal f _ outSort args) = sexp (text "synth-fun") [text f, pret
   where
     prettyArgs = parens $ hsep $ map (\(x, s) -> parens (text x <+> prettyMono s)) args
 
-declareUniversal :: (Id, Sort) -> Doc
-declareUniversal (x, s) = sexp (text "declare-var") [text x, prettyMono s]
+declareUniversal :: UVar -> Doc
+declareUniversal (UVar s x) = sexp (text "declare-var") [text x, prettyMono s]
 
 declareConstraint :: Formula -> Doc
 declareConstraint f = sexp (text "constraint") [asSexp f]

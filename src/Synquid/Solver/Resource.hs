@@ -117,7 +117,7 @@ embedAndProcessConstraint :: (MonadHorn s, RMonad s)
                           -> RawRFormula
                           -> TCSolver s ProcessedRFormula
 embedAndProcessConstraint env rfml = do
-  domain <- asks _rSolverDomain
+  domain <- view (resourceArgs . resourceDomain . generalDomain) 
   let go = embedConstraint env
        >=> replaceAbstractPotentials
        >=> instantiateUnknowns
@@ -240,7 +240,7 @@ satisfyResources :: RMonad s
 satisfyResources oldfmls newfmls = do
   let rfmls = oldfmls ++ newfmls
   let runInSolver = lift . lift . lift
-  domain <- asks _rSolverDomain
+  domain <- view (resourceArgs . resourceDomain . generalDomain) 
   case domain of
     Constant -> do
       let fml = conjunction $ map bodyFml rfmls
@@ -308,7 +308,7 @@ storeCEGISState st = do
 collectUniversals :: Monad s => [ProcessedRFormula] -> [Formula] -> TCSolver s Universals
 collectUniversals rfmls existing = do 
   -- Do not need to substitute in constructors; substitutions are only for nameless rep (_v, de bruijns)
-  let formatCons = Set.map ((\(Var s x) -> (x, Var s x)) . transformFml mkFuncVar)
+  let formatCons = Set.map ((\(Var s x) -> UCons s x) . transformFml mkFuncVar)
   ufs <- formatCons <$> use matchCases
   let newvars = concatMap (Map.elems . _varSubsts) rfmls
   return $ Universals (formatUniversals (existing ++ newvars)) (Set.toList ufs)
@@ -431,14 +431,14 @@ isResourceConstraint ConstantRes{} = True
 isResourceConstraint Transfer{}    = True
 isResourceConstraint _             = False
 
-getAnnotationStyle :: Map String [Bool] -> [RSchema] -> RSolverDomain
+getAnnotationStyle :: Map String [Bool] -> [RSchema] -> RDomain
 getAnnotationStyle flagMap schemas =
   let get sch = getAnnotationStyle' flagMap (getPredParamsSch sch) (toMonotype sch)
    in case map get schemas of
         [] -> error "getAnnotationSyle: empty list of goal schema"
         (a:as) -> sconcat (a :| as) -- can probably skip the catmaybes? and combine semigroups?
 
-getAnnotationStyle' :: Map String [Bool] -> Set String -> RType -> RSolverDomain 
+getAnnotationStyle' :: Map String [Bool] -> Set String -> RType -> RDomain 
 getAnnotationStyle' flagMap predParams t =
   let rforms = conjunction $ allRFormulas flagMap t
       allVars = getVarNames t
@@ -447,10 +447,10 @@ getAnnotationStyle' flagMap predParams t =
       (True, _)     -> Dependent
       _             -> Constant 
 
-getPolynomialDomain :: Map String [Bool] -> RSchema -> RSolverDomain
+getPolynomialDomain :: Map String [Bool] -> RSchema -> RDomain
 getPolynomialDomain flagMap sch = getPolynomialDomain' flagMap (getPredParamsSch sch) (toMonotype sch)
 
-getPolynomialDomain' :: Map String [Bool] -> Set String -> RType -> RSolverDomain
+getPolynomialDomain' :: Map String [Bool] -> Set String -> RType -> RDomain
 getPolynomialDomain' flagMap predParams t = 
   let rforms = conjunction $ allRFormulas flagMap t 
       allVars = getVarNames t

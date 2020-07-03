@@ -28,7 +28,7 @@ class (Monad s, Applicative s, MonadFail s) => MonadSMT s where
 
 class (Monad s, Applicative s, MonadIO s) => RMonad s where
   solveAndGetModel :: Formula -> s (Maybe SMTModel)                                  -- ^ 'solveAndGetModel' @fml@: Evaluate @fml@ and, if satisfiable, return the model object
-  modelGetAssignment :: [String] -> SMTModel -> s (Map String Formula)               -- ^ 'modelGetAssignment' @vals@ @m@: Get assignments of all variables @vals@ in model @m@
+  modelGetAssignment :: [String] -> SMTModel -> s RSolution                          -- ^ 'modelGetAssignment' @vals@ @m@: Get assignments of all variables @vals@ in model @m@
   checkPredWithModel :: Formula -> SMTModel -> s Bool                                -- ^ 'checkWithModel' @fml model@: check if boolean-sorted formula holds under a given model
   filterPreds :: [ProcessedRFormula] -> SMTModel -> s [ProcessedRFormula]
   translate :: Formula -> s Formula
@@ -49,7 +49,8 @@ data ResourceArgs = ResourceArgs {
   _enumerate :: Bool,
   _rsolver :: ResourceSolver,
   _sygusLog :: Maybe String,
-  _cvc4 :: String
+  _cvc4 :: String,
+  _resourceDomain :: RSolverDomain
 } 
 
 makeLenses ''ResourceArgs
@@ -62,8 +63,6 @@ data TypingParams = TypingParams {
   _predQualsGen :: Environment -> [Formula] -> [Formula] -> QSpace, -- ^ Qualifier generator for bound predicates
   _tcSolverSplitMeasures :: Bool,
   _tcSolverLogLevel :: Int,                                         -- ^ How verbose logging is
-  _rSolverDomain :: RSolverDomain,
-  _polynomialDomain :: RSolverDomain,
   _resourceArgs :: ResourceArgs
 }
 

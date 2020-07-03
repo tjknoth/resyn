@@ -13,19 +13,19 @@ import Synquid.Solver.Monad
 import Synquid.Solver.Types
 -- import Synquid.Solver.TypeConstraint
 
-import Data.Maybe
-import Data.List
+import           Data.Maybe
+import           Data.List
 import qualified Data.Map as Map
-import Data.Map (Map)
+import           Data.Map (Map)
 import qualified Data.Set as Set
-import Data.Set (Set)
-import Data.Char
-import Control.Monad.Logic
-import Control.Monad.State
-import Control.Monad.Reader
-import Control.Lens
-import Control.Monad.Extra (mapMaybeM)
-import Debug.Trace
+import           Data.Set (Set)
+import           Data.Char
+import           Control.Monad.Logic
+import           Control.Monad.State
+import           Control.Monad.Reader
+import           Control.Lens
+import           Control.Monad.Extra (mapMaybeM)
+import           Debug.Trace
 
 {- Types -}
 
@@ -263,7 +263,8 @@ checkResourceVar env x t = do
   tparams <- ask
   -- TODO: figure out how to use lenses so I can skip the intermediate bind
   -- tparams <- asks . view $ _2
-  let isRV = isResourceVariable env tstate (_rSolverDomain tparams) x t
+  domain <- view $ resourceArgs . resourceDomain . generalDomain 
+  let isRV = isResourceVariable env tstate domain x t
   return isRV
 
 mkResourceVar :: MonadHorn s
@@ -732,9 +733,9 @@ safeAddGhostVar name t@FunctionT{} env = return $ addGhostVariable name t env
 safeAddGhostVar name t@AnyT{} env = return $ addGhostVariable name t env
 safeAddGhostVar name t env = do 
   tstate <- get 
-  rdomain <- asks _rSolverDomain
+  domain <- view (resourceArgs . resourceDomain . generalDomain)
   --return $ addGhostVariable name t env
-  if isResourceVariable env tstate rdomain name t
+  if isResourceVariable env tstate domain name t
     then do 
       universalVars %= Set.insert name -- (Var (toSort (baseTypeOf t)) name)
       return $ addGhostVariable name t env
@@ -742,11 +743,11 @@ safeAddGhostVar name t env = do
 
 isResourceVariable :: Environment 
                    -> TypingState 
-                   -> RSolverDomain 
+                   -> RDomain
                    -> String
                    -> RType 
                    -> Bool 
-isResourceVariable _ _ Constant _ _ = False
+isResourceVariable env tstate Constant x t = False
 isResourceVariable env tstate Dependent x t = 
   (x /= valueVarName) && not (Map.member x (_unresolvedConstants env))
 
