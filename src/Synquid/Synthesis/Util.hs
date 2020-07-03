@@ -61,7 +61,7 @@ data ExplorerParams = ExplorerParams {
   _explorerLogLevel :: Int,               -- ^ How verbose logging is
   _shouldCut :: Bool,                     -- ^ Should cut the search upon synthesizing a functionally correct branch
   _numPrograms :: Int,                    -- ^ Number of programs to search for
-  _explorerResourceArgs :: ResourceArgs   -- ^ Arguments relevant to resource analysis
+  _explorerResourceArgs :: ResourceParams -- ^ Arguments relevant to resource analysis
 }
 
 makeLenses ''ExplorerParams
@@ -263,7 +263,7 @@ checkResourceVar env x t = do
   tparams <- ask
   -- TODO: figure out how to use lenses so I can skip the intermediate bind
   -- tparams <- asks . view $ _2
-  domain <- view $ resourceArgs . resourceDomain . generalDomain 
+  domain <- view $ resourceArgs . rSolverDomain
   let isRV = isResourceVariable env tstate domain x t
   return isRV
 
@@ -733,7 +733,7 @@ safeAddGhostVar name t@FunctionT{} env = return $ addGhostVariable name t env
 safeAddGhostVar name t@AnyT{} env = return $ addGhostVariable name t env
 safeAddGhostVar name t env = do 
   tstate <- get 
-  domain <- view (resourceArgs . resourceDomain . generalDomain)
+  domain <- view (resourceArgs . rSolverDomain)
   --return $ addGhostVariable name t env
   if isResourceVariable env tstate domain name t
     then do 

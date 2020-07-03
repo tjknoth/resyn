@@ -12,7 +12,6 @@ import Synquid.Resolver
 import Synquid.Synthesis.TypeChecker
 import Synquid.Synthesis.Util
 import Synquid.Solver.Monad
-import Synquid.Solver.Types
 import Synquid.Solver.HornClause
 import Synquid.Solver.TypeConstraint
 import Synquid.Solver.Resource (getAnnotationStyle, getPolynomialDomain)
@@ -38,7 +37,7 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
         allSchema = gSpec goal : Map.elems (allSymbols (gEnvironment goal))
         rdom = getAnnotationStyle (fmap _resourcePreds (gEnvironment goal ^. datatypes)) allSchema
         pdom = getPolynomialDomain (fmap _resourcePreds (gEnvironment goal ^. datatypes)) (gSpec goal)
-        adj = set generalDomain rdom . set polyDomain pdom
+        adj = set rSolverDomain rdom . set polynomialDomain pdom
         typingParams = TypingParams {
                         _condQualsGen = condQuals,
                         _matchQualsGen = matchQuals,
@@ -46,7 +45,7 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _predQualsGen = predQuals,
                         _tcSolverSplitMeasures = _splitMeasures explorerParams,
                         _tcSolverLogLevel = _explorerLogLevel explorerParams,
-                        _resourceArgs = over resourceDomain adj (_explorerResourceArgs explorerParams)
+                        _resourceArgs = adj (_explorerResourceArgs explorerParams)
                       }
       in reconstruct explorerParams typingParams goal
 

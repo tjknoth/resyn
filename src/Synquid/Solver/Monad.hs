@@ -41,7 +41,7 @@ class (Monad s, Applicative s, MonadFail s) => MonadHorn s where
   pruneQualifiers :: QSpace -> s QSpace                                                       -- ^ Prune redundant qualifiers
 
 -- | Command line arguments relevant to resource analysis
-data ResourceArgs = ResourceArgs {
+data ResourceParams = ResourceParams {
   _shouldCheckResources :: Bool,
   _checkMultiplicities :: Bool,
   _constantTime :: Bool,
@@ -50,10 +50,11 @@ data ResourceArgs = ResourceArgs {
   _rsolver :: ResourceSolver,
   _sygusLog :: Maybe String,
   _cvc4 :: String,
-  _resourceDomain :: RSolverDomain
+  _rSolverDomain :: RDomain,
+  _polynomialDomain :: RDomain
 } 
 
-makeLenses ''ResourceArgs
+makeLenses ''ResourceParams
 
 -- | Parameters of type constraint solving
 data TypingParams = TypingParams {
@@ -63,7 +64,7 @@ data TypingParams = TypingParams {
   _predQualsGen :: Environment -> [Formula] -> [Formula] -> QSpace, -- ^ Qualifier generator for bound predicates
   _tcSolverSplitMeasures :: Bool,
   _tcSolverLogLevel :: Int,                                         -- ^ How verbose logging is
-  _resourceArgs :: ResourceArgs
+  _resourceArgs :: ResourceParams
 }
 
 makeLenses ''TypingParams

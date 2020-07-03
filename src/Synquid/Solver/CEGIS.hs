@@ -299,7 +299,7 @@ mkPolynomialVar annotation f = textFrom f ++ "_" ++ toText annotation
 --   variables, update the state of the CEGIS solver
 updateCEGISState :: Monad s => TCSolver s CEGISState
 updateCEGISState = do  
-  pDomain <- view (resourceArgs . resourceDomain . polyDomain)
+  pDomain <- view (resourceArgs . polynomialDomain)
   ll <- view tcSolverLogLevel
   newRVs <- use resourceVars
   st <- use cegisState

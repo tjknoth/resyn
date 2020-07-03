@@ -70,14 +70,6 @@ instance Semigroup RDomain where
   _ <> Dependent = Dependent
   Constant <> Constant = Constant
 
-data RSolverDomain = RSD {
-  _generalDomain :: RDomain,     -- Is anything dependent?
-  _polyDomain :: RDomain, -- Should polynomials be dependent?
-  _renamedVars :: [UVar]  -- All renamed variables
-} deriving (Show, Eq)
-
-makeLenses ''RSolverDomain
-
 {- Types for solving resource formulas -}
 
 -- RFormula : Logical formula and meta-info

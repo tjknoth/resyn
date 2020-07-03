@@ -117,7 +117,7 @@ embedAndProcessConstraint :: (MonadHorn s, RMonad s)
                           -> RawRFormula
                           -> TCSolver s ProcessedRFormula
 embedAndProcessConstraint env rfml = do
-  domain <- view (resourceArgs . resourceDomain . generalDomain) 
+  domain <- view (resourceArgs . rSolverDomain) 
   let go = embedConstraint env
        >=> replaceAbstractPotentials
        >=> instantiateUnknowns
@@ -240,7 +240,7 @@ satisfyResources :: RMonad s
 satisfyResources oldfmls newfmls = do
   let rfmls = oldfmls ++ newfmls
   let runInSolver = lift . lift . lift
-  domain <- view (resourceArgs . resourceDomain . generalDomain) 
+  domain <- view (resourceArgs . rSolverDomain) 
   case domain of
     Constant -> do
       let fml = conjunction $ map bodyFml rfmls
@@ -309,7 +309,7 @@ collectUniversals :: Monad s => [ProcessedRFormula] -> [Formula] -> TCSolver s U
 collectUniversals rfmls existing = do 
   -- Do not need to substitute in constructors; substitutions are only for nameless rep (_v, de bruijns)
   let formatCons = Set.map ((\(Var s x) -> UCons s x) . transformFml mkFuncVar)
-  ufs <- formatCons <$> use matchCases
+  ufs <- formatCons <$> use matchCases 
   let newvars = concatMap (Map.elems . _varSubsts) rfmls
   return $ Universals (formatUniversals (existing ++ newvars)) (Set.toList ufs)
 
