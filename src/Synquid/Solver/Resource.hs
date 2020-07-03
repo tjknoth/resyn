@@ -248,7 +248,7 @@ satisfyResources oldfmls newfmls = do
       case model of
         Nothing -> return False
         Just m' -> do
-          writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (snd m'))
+          writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (modelStr m'))
           return True
     Dependent -> do
       solver <- view (resourceArgs . rsolver)

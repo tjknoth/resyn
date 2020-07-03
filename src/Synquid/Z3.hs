@@ -108,21 +108,21 @@ instance RMonad Z3State where
       Nothing -> return Nothing
       Just md -> do 
         mdStr <- modelToString md 
-        return $ Just (md, mdStr)
+        return $ Just $ SMTModel md mdStr
 
-  modelGetAssignment vals (m, _) = 
+  modelGetAssignment vals (SMTModel m _) = 
     RSolution . Map.fromList . catMaybes <$> mapM (getAssignmentForVar m . Var astS) vals
     where 
       astS = IntS -- TODO: maybe be smarter about this!
   
-  checkPredWithModel fml (model, _) = do 
+  checkPredWithModel fml (SMTModel model _) = do 
     ast <- fmlToAST fml
     val <- modelEval model ast True
     case val of 
       Nothing -> return False
       Just res -> getBool res
 
-  filterPreds rfmls (model, _) = mapMaybeM checkAndGetAssignment rfmls
+  filterPreds rfmls (SMTModel model _) = mapMaybeM checkAndGetAssignment rfmls
     where
       checkAndGetAssignment :: ProcessedRFormula -> Z3State (Maybe ProcessedRFormula)
       checkAndGetAssignment rfml = do 

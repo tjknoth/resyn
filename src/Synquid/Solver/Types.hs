@@ -36,7 +36,10 @@ instance Pretty a => Pretty (LinearConstraint a) where
   pretty (LC op f g) = pretty f <+> pretty op <+> pretty g
 
 -- | Wrapper for Z3 Model data structure
-type SMTModel = (Z3.Model, String)
+data SMTModel = SMTModel {
+  model :: Z3.Model,
+  modelStr :: String 
+} deriving Eq
 
 -- Universally quantified variable
 data UVar = UVar Sort String
@@ -121,7 +124,7 @@ newtype PolynomialSkeletons = Skeletons { unSkeletons :: Map String Polynomial }
 data Counterexample = CX {
   consInterps :: !RSolution,
   variables :: !RSolution,
-  model :: !SMTModel
+  cxmodel :: !SMTModel
 } deriving (Eq)
 
 data CEGISState = CEGISState {

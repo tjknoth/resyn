@@ -50,7 +50,7 @@ solveWithCEGIS 0 universals rfmls = do
     Nothing -> return True
     Just cx -> do
       traceM "warning: CEGIS failed on last iteration"
-      writeLog 4 $ text "Last counterexample:" <+> text (maybe "" (snd . model) counterexample)
+      writeLog 4 $ text "Last counterexample:" <+> text (maybe "" (modelStr . cxmodel) counterexample)
       return False
 
 solveWithCEGIS n universals rfmls = do
@@ -101,7 +101,7 @@ verify rfmls universals = do
   writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
   -- Query solver for a counterexample
   model <- lift $ solveAndGetModel cxQuery
-  writeLog 4 $ text "CX model:" <+> text (maybe "" snd model)
+  writeLog 4 $ text "CX model:" <+> text (maybe "" modelStr model)
   vars <- lift . sequence
     $ (modelGetAssignment (map nameOfUVar (uvars universals)) <$> model)
   measures <- lift . sequence
@@ -142,7 +142,7 @@ getRelevantConstraints :: RMonad s
 getRelevantConstraints rfmls cx = do
   prog <- use rprogram
   let substRFml = applyPolynomial (mkEvalPolynomial prog cx) completeFml
-  let check f = lift $ f `checkPredWithModel` model cx
+  let check f = lift $ f `checkPredWithModel` cxmodel cx
   let isSatisfied rfml = check =<< substRFml rfml
   filterM (fmap not . isSatisfied) rfmls
 
@@ -162,7 +162,7 @@ synthesize rfmls counterexample = do
   allCoefficients <- use coefficients
   writeLog 7 $ text "CEGIS param query:" </> pretty paramQuery 
   model <- lift $ solveAndGetModel (conjunction paramQuery)
-  writeLog 8 $ text "Param model:" <+> text (maybe "" snd model)
+  writeLog 8 $ text "Param model:" <+> text (maybe "" modelStr model)
   lift . sequence $ (modelGetAssignment allCoefficients <$> model)
 
 -- | Substitute a counterexample into a set of resource formulas
