@@ -34,6 +34,7 @@ import           Debug.Trace
 import           Data.List.NonEmpty (NonEmpty(..))
 import           Data.Semigroup (sconcat)
 
+import Debug.Pretty.Simple
 
 -- | Process, but do not solve, a set of resource constraints
 simplifyRCs :: (MonadHorn s, MonadSMT s, RMonad s)
@@ -241,18 +242,38 @@ satisfyResources oldfmls newfmls = do
   let rfmls = oldfmls ++ newfmls
   let runInSolver = lift . lift . lift
   domain <- asks _rSolverDomain
+  infdRVars <- use inferredRVars
+  let tryInfer = not $ Map.null infdRVars
   case domain of
     Constant -> do
-      let fml = conjunction $ map bodyFml rfmls
-      model <- runInSolver $ solveAndGetModel fml
-      case model of
-        Nothing -> return False
-        Just m' -> do
-          writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (snd m'))
-          return True
+      if tryInfer
+        then do
+          let fml = conjunction $ map bodyFml rfmls
+          vs <- use inferredRVars
+          -- TODO: order we optimize in is arbitrary rn
+          model <- runInSolver $ optimizeAndGetModel fml (Map.toList vs)
+          case model of
+            Nothing -> return False
+            Just m' -> do
+              writeLog 6 $ nest 2 (text "Solved + inferred with model") </> nest 6 (text (snd m'))
+              vs' <- runInSolver $ modelGetAssignment (Map.keys vs) m'
+              inferredRVars %= Map.union (fmap Just vs')
+              return True
+        else do
+          let fml = conjunction $ map bodyFml rfmls
+          model <- runInSolver $ solveAndGetModel fml
+          case model of
+            Nothing -> return False
+            Just m' -> do
+              writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (snd m'))
+              return True
     Dependent -> do
-      solver <- view (resourceArgs . rsolver)
-      deployHigherOrderSolver solver oldfmls newfmls 
+      if tryInfer
+        -- TODO: infer dependent resources
+        then error "Can't infer dependent resources"
+        else do
+          solver <- view (resourceArgs . rsolver)
+          deployHigherOrderSolver solver oldfmls newfmls 
 
 deployHigherOrderSolver :: RMonad s
                         => ResourceSolver

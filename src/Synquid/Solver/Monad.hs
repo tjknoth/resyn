@@ -28,6 +28,7 @@ class (Monad s, Applicative s, MonadFail s) => MonadSMT s where
 
 class (Monad s, Applicative s, MonadIO s) => RMonad s where
   solveAndGetModel :: Formula -> s (Maybe SMTModel)                                  -- ^ 'solveAndGetModel' @fml@: Evaluate @fml@ and, if satisfiable, return the model object
+  optimizeAndGetModel :: Formula -> [(String, Maybe Formula)] -> s (Maybe SMTModel)  -- ^ 'optimizeAndGetModel' @fml vs@: Evaluate @fml@ and optimize for inferred potl vars @vs@ in decreasing order of importance; if satisfiable, return the model object. @vs@ is a listified map from the name of the var to its previous value as a formula, if it has one.
   modelGetAssignment :: [String] -> SMTModel -> s (Map String Formula)               -- ^ 'modelGetAssignment' @vals@ @m@: Get assignments of all variables @vals@ in model @m@
   checkPredWithModel :: Formula -> SMTModel -> s Bool                                -- ^ 'checkWithModel' @fml model@: check if boolean-sorted formula holds under a given model
   filterPreds :: [ProcessedRFormula] -> SMTModel -> s [ProcessedRFormula]
@@ -83,7 +84,8 @@ data TypingState = TypingState {
   _versionCount :: Map String Int,              -- ^ Number of unique identifiers issued so far
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
   _resourceConstraints :: [ProcessedRFormula],  -- ^ Constraints relevant to resource analysis
-  _resourceVars :: Map String [Formula],        -- ^ Set of variables created to replace potential/multiplicity annotations
+  _resourceVars :: Map Id [Formula],            -- ^ Set of variables created to replace potential/multiplicity annotations; maps from name of potl var to arguments the potl var depends on
+  _inferredRVars :: Map Id (Maybe Formula),     -- ^ A map from the id of an inferred variable to the formula we think it has, if it's already been inferred
   _matchCases :: Set Formula,                   -- ^ Set of all generated match cases
   _cegisState :: CEGISState,                    -- ^ Current state of CEGIS solver
   -- Temporary state:

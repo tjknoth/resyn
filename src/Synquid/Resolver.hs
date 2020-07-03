@@ -29,8 +29,6 @@ import           Data.List
 import qualified Data.Foldable as Foldable
 import           Control.Arrow (first)
 
-import Debug.Pretty.Simple
-
 {- Interface -}
 
 data ResolverState = ResolverState {
@@ -72,7 +70,7 @@ initResolverState infer = ResolverState {
 -- | The first argument determines if we should infer potentials for all fn args
 resolveDecls :: Bool -> [Declaration] -> Either ErrorMessage ([Goal], [Formula], [Formula])
 resolveDecls tryInfer declarations =
-  case runExcept (execStateT go (pTraceShow declarations (initResolverState tryInfer))) of
+  case runExcept (execStateT go (initResolverState tryInfer)) of
     Left msg -> Left msg
     Right st ->
       Right (typecheckingGoals st ++ synthesisGoals st, st ^. condQualifiers, st ^. typeQualifiers)
@@ -144,10 +142,10 @@ resolveDeclaration (FuncDecl funcName typeSchema) = do
     gt :: RType -> Resolver RType
     gt (ScalarT (DatatypeT di tyargs absps) ref _) = do
       tyargs' <- mapM gt tyargs
-      pVar <- freshInferredPotl funcName "ip"
+      pVar <- freshInferredPotl funcName "I"
       return $ ScalarT (DatatypeT di tyargs' absps) ref (Var IntS pVar)
     gt (ScalarT dt ref _) = do
-      pVar <- freshInferredPotl funcName "ip"
+      pVar <- freshInferredPotl funcName "I"
       return $ ScalarT dt ref (Var IntS pVar)
     gt (FunctionT i d c cs) = do
       dom <- gt d
@@ -749,9 +747,13 @@ freshInferredPotl :: Id -> String -> Resolver Id
 freshInferredPotl fname prefix = do
   i <- use idCount 
   idCount %= (+ 1)
-  let id = prefix ++ show i
-  inferredPotlVars %= Map.insertWith (++) fname [id]
-  return id
+  let x = prefix ++ show i
+  syms <- uses environment allSymbols
+  if Map.member x syms -- to avoid name collisions with existing vars
+    then freshInferredPotl fname prefix
+    else do
+      inferredPotlVars %= Map.insertWith (++) fname [x]
+      return x
 
 -- | 'instantiate' @sorts@: replace all sort variables in @sorts@ with fresh sort variables
 instantiate :: [Sort] -> Resolver [Sort]

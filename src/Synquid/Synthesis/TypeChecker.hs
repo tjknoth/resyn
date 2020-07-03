@@ -23,6 +23,8 @@ import           Control.Monad.Reader
 import           Control.Lens
 import qualified Data.Set as Set
 
+import Debug.Pretty.Simple
+
 -- | 'reconstruct' @eParams tParams goal@ : reconstruct missing types and terms in the body of @goal@ so that it represents a valid type judgment;
 -- return a type error if that is impossible
 reconstruct :: (MonadSMT s, MonadHorn s, RMonad s) 

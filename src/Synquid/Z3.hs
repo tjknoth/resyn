@@ -30,14 +30,14 @@ import Control.Monad.Extra (mapMaybeM)
 import Control.Monad.Trans.State
 import Control.Lens hiding (both)
 import Control.Monad.State.Class (MonadState)
+import Control.Monad.IO.Class ( liftIO )
 import Z3.Monad hiding (Z3Env, newEnv, Sort)
 import qualified Z3.Base as Z3
 
-
-
 data Z3Env = Z3Env {
-  envSolver  :: Z3.Solver,
-  envContext :: Z3.Context
+  envSolver   :: Z3.Solver,
+  envContext  :: Z3.Context,
+  envOptimize :: Z3.Optimize
 }
 
 -- | Z3 state while building constraints
@@ -110,6 +110,47 @@ instance RMonad Z3State where
         mdStr <- modelToString md 
         return $ Just (md, mdStr)
 
+  optimizeAndGetModel fml vs = do
+    -- In order to do our inference, we try two things:
+    -- 1. Use our already inferred variables and only infer values for things that don't have values already
+    -- 2. If this doesn't result in SAT, try inferring (optimizing) all inferrable variables.
+
+    fmlAst <- fmlToAST fml
+
+    -- Try 1: use inferred values if possible.
+    (r, m) <- local $ ((optimizeAssert fmlAst) >> (mapM_ useOrInfer vs)) >> optimizeCheckAndGetModel
+   
+    setASTPrintMode Z3_PRINT_SMTLIB_FULL
+    astStr <- astToString fmlAst
+    case m of  
+      Just md -> do 
+        mdStr <- modelToString md 
+        return $ Just (md, mdStr)
+      Nothing -> do
+        -- Try 1 failed
+        -- Now we do Try 2: infer everything
+        (r', m') <- local $ (optimizeAssert fmlAst) >> (mapM_ inferOnly vs) >> optimizeCheckAndGetModel
+
+        -- Throw error if unknown result: could probably do this a better way?
+        -- optimizeCheckAndGetModel doesn't return a model if unknown, but
+        -- this was throwing an error before, so preserving previous behavior...
+        let _ = case r' of 
+                  Unsat -> False 
+                  Sat   -> True
+                  _     -> error $ "solveWithModel: Z3 returned Unknown for AST " ++ astStr 
+        case m' of
+          Just md -> do
+            mdStr <- modelToString md 
+            return $ Just (md, mdStr)
+          Nothing -> return Nothing
+    where
+      -- TODO: these fns assume scalar values for inferred potentials; is this ok??
+      useOrInfer (name, Just fml) = fmlToAST (Binary Eq (Var IntS name) fml) >>= optimizeAssert
+
+      useOrInfer (name, Nothing)  = void $ fmlToAST (Var IntS name) >>= optimizeMinimize
+
+      inferOnly (name, _) = fmlToAST (Var IntS name) >>= optimizeMinimize
+
   modelGetAssignment vals (m, _) = 
     Map.fromList . catMaybes <$> mapM (getAssignmentForVar m . Var astS) vals
     where 
@@ -139,6 +180,7 @@ instance RMonad Z3State where
     str <- astToString f' 
     return $ Z3Lit AnyS f' str
 
+-- TODO: Use "getConstInterp" in implementation instead?
 getAssignmentForVar :: Z3.Model -> Formula -> Z3State (Maybe (String, Formula))
 getAssignmentForVar model v@(Var s x) = do 
   var <- fmlToAST v
@@ -226,6 +268,9 @@ instance MonadZ3 Z3State where
   getSolver = gets (envSolver . _mainEnv)
   getContext = gets (envContext . _mainEnv)
 
+instance MonadOptimize Z3State where
+  getOptimize = gets (envOptimize . _mainEnv)
+
 -- | Create a new Z3 environment.
 newEnv :: Maybe Logic -> Opts -> IO Z3Env
 newEnv mbLogic opts =
@@ -233,7 +278,8 @@ newEnv mbLogic opts =
     setOpts cfg opts
     ctx <- Z3.mkContext cfg
     solver <- maybe (Z3.mkSolver ctx) (Z3.mkSolverForLogic ctx) mbLogic
-    return $ Z3Env solver ctx
+    opt <- Z3.mkOptimize ctx
+    return $ Z3Env solver ctx opt
 
 -- | Use auxiliary solver to execute a Z3 computation
 withAuxSolver :: Z3State a -> Z3State a
@@ -529,3 +575,12 @@ getAllMUSs' controlLitsAux mustHave cores = do
           maximize' (checked ++ setRest) unsetRest
 
     debugOutput label fmls = debug 2 (text label <+> pretty fmls) $ return ()
+
+optimizeCheckAndGetModel :: MonadOptimize z3 => z3 (Result, Maybe Z3.Model)
+optimizeCheckAndGetModel = do
+  res <- optimizeCheck []
+  mbModel <- case res of
+               Sat -> Just <$> optimizeGetModel
+               _   -> return Nothing
+  return (res, mbModel)
+
