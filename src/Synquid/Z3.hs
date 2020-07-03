@@ -34,6 +34,8 @@ import Control.Monad.IO.Class ( liftIO )
 import Z3.Monad hiding (Z3Env, newEnv, Sort)
 import qualified Z3.Base as Z3
 
+import Debug.Pretty.Simple
+
 data Z3Env = Z3Env {
   envSolver   :: Z3.Solver,
   envContext  :: Z3.Context,
@@ -111,14 +113,30 @@ instance RMonad Z3State where
         return $ Just (md, mdStr)
 
   optimizeAndGetModel fml vs = do
-    -- In order to do our inference, we try two things:
-    -- 1. Use our already inferred variables and only infer values for things that don't have values already
-    -- 2. If this doesn't result in SAT, try inferring (optimizing) all inferrable variables.
+    -- Because Z3 can't backtrack and retract assertions, we have to infer all of our variables
+    -- each time, and we can never make assertions about the inferred values of these variables
+    -- (i.e. we can't reuse an inferred value of a variable with something like
+    --
+    --   (assert (= (I2 2)))
+    --
+    -- because if giving I2 this value later on makes this unsat, we have no way of undoing this
+    -- assignment/assertion.
+    --
+    -- If we were to instead give I2 a value like:
+    --
+    --   (define-fun I2 () Int 5)
+    --
+    -- we'd still be stuck with the same problem, since we can't redefine funs.
+    --
+    -- And "inlining" the inferred vars by just replacing them in the formula would allow
+    -- for the inferred potls to have different values for different assertions, which
+    -- is also bad.
+    --
+    -- So we just infer everything every time
 
     fmlAst <- fmlToAST fml
 
-    -- Try 1: use inferred values if possible.
-    (r, m) <- local $ ((optimizeAssert fmlAst) >> (mapM_ useOrInfer vs)) >> optimizeCheckAndGetModel
+    (r, m) <- local $ (optimizeAssert fmlAst) >> (mapM_ inferOnly vs) >> optimizeCheckAndGetModel
    
     setASTPrintMode Z3_PRINT_SMTLIB_FULL
     astStr <- astToString fmlAst
@@ -126,29 +144,9 @@ instance RMonad Z3State where
       Just md -> do 
         mdStr <- modelToString md 
         return $ Just (md, mdStr)
-      Nothing -> do
-        -- Try 1 failed
-        -- Now we do Try 2: infer everything
-        (r', m') <- local $ (optimizeAssert fmlAst) >> (mapM_ inferOnly vs) >> optimizeCheckAndGetModel
-
-        -- Throw error if unknown result: could probably do this a better way?
-        -- optimizeCheckAndGetModel doesn't return a model if unknown, but
-        -- this was throwing an error before, so preserving previous behavior...
-        let _ = case r' of 
-                  Unsat -> False 
-                  Sat   -> True
-                  _     -> error $ "solveWithModel: Z3 returned Unknown for AST " ++ astStr 
-        case m' of
-          Just md -> do
-            mdStr <- modelToString md 
-            return $ Just (md, mdStr)
-          Nothing -> return Nothing
+      Nothing -> return Nothing
     where
-      -- TODO: these fns assume scalar values for inferred potentials; is this ok??
-      useOrInfer (name, Just fml) = fmlToAST (Binary Eq (Var IntS name) fml) >>= optimizeAssert
-
-      useOrInfer (name, Nothing)  = void $ fmlToAST (Var IntS name) >>= optimizeMinimize
-
+      -- TODO: this fns assumes scalar values for inferred potentials; is this ok??
       inferOnly (name, _) = fmlToAST (Var IntS name) >>= optimizeMinimize
 
   modelGetAssignment vals (m, _) = 
@@ -580,7 +578,7 @@ optimizeCheckAndGetModel :: MonadOptimize z3 => z3 (Result, Maybe Z3.Model)
 optimizeCheckAndGetModel = do
   res <- optimizeCheck []
   mbModel <- case res of
-               Sat -> Just <$> optimizeGetModel
-               _   -> return Nothing
+               Unsat -> return Nothing
+               _     -> Just <$> optimizeGetModel
   return (res, mbModel)
 

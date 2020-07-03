@@ -29,6 +29,8 @@ import           Data.List
 import qualified Data.Foldable as Foldable
 import           Control.Arrow (first)
 
+import Debug.Pretty.Simple
+
 {- Interface -}
 
 data ResolverState = ResolverState {
@@ -90,7 +92,7 @@ resolveDecls tryInfer declarations =
         flagMap = fmap _resourcePreds (env ^. datatypes)
         env' = (foldr removeVariable env toRemove) { _resourceMeasures = rMeasuresFromSch flagMap spec }
         pVars = Set.fromList $ Map.findWithDefault [] name inferredPVars
-      in Goal name env' spec impl 0 pos pVars synth
+      in Goal name (pTraceShowId env') spec impl 0 pos pVars synth
     extractPos pass (Pos pos decl) = do
       currentPosition .= pos
       pass decl
