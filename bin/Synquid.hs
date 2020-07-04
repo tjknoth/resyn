@@ -314,6 +314,9 @@ runOnFile synquidParams explorerParams solverParams file libs = do
       case mProg of
         Left typeErr -> pdoc (pretty typeErr) >> pdoc empty >> exitFailure
         Right progs  -> do
+          -- Print inferred type
+          let infer = explorerParams ^. (explorerResourceArgs . inferResources)
+          when infer $ mapM_ (\p -> pdoc (prettyWithInferred ((snd p) ^. inferredRVars) (gSpec goal))) progs
           -- Print synthesized program
           when (gSynthesize goal) $ mapM_ (\p -> pdoc (prettySolution goal (fst p)) >> pdoc empty) progs
           let result = assembleResult goal progs

@@ -92,7 +92,7 @@ resolveDecls tryInfer declarations =
         flagMap = fmap _resourcePreds (env ^. datatypes)
         env' = (foldr removeVariable env toRemove) { _resourceMeasures = rMeasuresFromSch flagMap spec }
         pVars = Set.fromList $ Map.findWithDefault [] name inferredPVars
-      in Goal name (pTraceShowId env') spec impl 0 pos pVars synth
+      in Goal name env' spec impl 0 pos pVars synth
     extractPos pass (Pos pos decl) = do
       currentPosition .= pos
       pass decl
@@ -238,8 +238,37 @@ resolveDeclaration (InlineDecl name args body) =
 resolveSignatures :: BareDeclaration -> Resolver ()
 resolveSignatures (FuncDecl name _)  = do
   sch <- uses environment ((Map.! name) . allSymbols)
-  sch' <- resolveSchema sch
-  environment %= addPolyConstant name sch'
+  sch' <- inferAbstractPotls >=> resolveSchema $ sch
+  environment %= addPolyConstant name (pTraceShowId sch')
+  environment %= addUnresolvedConstant name sch'
+  where
+    inferAbstractPotls (ForallT name ss) = inferAbstractPotls ss >>= return . ForallT name
+    inferAbstractPotls (ForallP name ss) = inferAbstractPotls ss >>= return . ForallP name
+    inferAbstractPotls (Monotype t) = go t >>= return . Monotype
+
+    go og@(ScalarT (DatatypeT dtName tArgs pArgs) ref pred) = do
+      ds <- use $ environment . datatypes
+      case Map.lookup dtName ds of
+        Just (DatatypeDef _ _ _ _ _ rPreds) -> do
+          tryInfer <- pTraceShow (pArgs, rPreds) (use infer)
+          pArgs' <- zipWithM (maybeFreshPotl tryInfer) pArgs rPreds
+          return (ScalarT (DatatypeT dtName tArgs pArgs') ref pred)
+        Nothing -> return og
+    go og@(ScalarT _ _ _) = return og
+    go (FunctionT name dom cod cost) = do
+      dom' <- go dom
+      cod' <- go cod
+      return $ FunctionT name dom' cod' cost
+    go (LetT name def body) = do
+      def' <- go def
+      body' <- go body
+      return $ LetT name def' body'
+    gt AnyT = return AnyT
+
+    maybeFreshPotl tryInfer arg isPred
+      | isPred && tryInfer = fmap (Var IntS) $ freshInferredPotl name "A"
+      | otherwise          = return arg
+      
 resolveSignatures (DataDecl dtName tParams pParams ctors) = mapM_ resolveConstructorSignature ctors
   where
     resolveConstructorSignature (ConstructorSig name _) = do

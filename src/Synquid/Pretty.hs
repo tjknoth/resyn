@@ -44,6 +44,7 @@ module Synquid.Pretty (
   mkTable,
   mkTableLaTeX,
   -- * Programs
+  prettyWithInferred,
   prettySpec,
   prettySolution,
   -- * Counting
@@ -310,7 +311,6 @@ arrow c = if c == 0 then "->" else "-[" ++ show c ++ "]->"
 instance Pretty RType where
   pretty = prettyType
 
-
 prettySchema :: Pretty (TypeSkeleton r p) => SchemaSkeleton (TypeSkeleton r p) -> Doc
 prettySchema sch = case sch of
   Monotype t -> pretty t
@@ -324,6 +324,27 @@ instance Pretty SSchema where
 instance Pretty RSchema where
   pretty = prettySchema
 
+-- | 'prettyWithInferred' @ts sch@ : pretty print an RSchema with inferred potential values replaced
+prettyWithInferred :: Map Id (Maybe Formula) -> RSchema -> Doc
+prettyWithInferred ts sch = pretty (go sch)
+  where
+    go :: RSchema -> RSchema
+    go (ForallT i s) = ForallT i $ go s
+    go (ForallP i s) = ForallP i $ go s
+    go (Monotype b) = Monotype $ gt b
+
+    -- TODO: this assumes inferred potls can only be vars
+    gt :: RType -> RType
+    gt (ScalarT (DatatypeT di ta abs) ref v) =
+      ScalarT (DatatypeT di (fmap gt ta) (fmap f abs)) ref (f v)
+    gt (ScalarT dt ref v) =
+      ScalarT dt ref (f v)
+    gt x = x
+
+    f v@(Var IntS pVar) = case Map.findWithDefault (Just v) pVar ts of
+      Just x  -> x
+      Nothing -> v
+    f x = x
 
 {- Programs -}
 
