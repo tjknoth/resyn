@@ -29,8 +29,6 @@ import           Data.List
 import qualified Data.Foldable as Foldable
 import           Control.Arrow (first)
 
-import Debug.Pretty.Simple
-
 {- Interface -}
 
 data ResolverState = ResolverState {
@@ -239,7 +237,7 @@ resolveSignatures :: BareDeclaration -> Resolver ()
 resolveSignatures (FuncDecl name _)  = do
   sch <- uses environment ((Map.! name) . allSymbols)
   sch' <- inferAbstractPotls >=> resolveSchema $ sch
-  environment %= addPolyConstant name (pTraceShowId sch')
+  environment %= addPolyConstant name sch'
   environment %= addUnresolvedConstant name sch'
   where
     inferAbstractPotls (ForallT name ss) = inferAbstractPotls ss >>= return . ForallT name
@@ -250,7 +248,7 @@ resolveSignatures (FuncDecl name _)  = do
       ds <- use $ environment . datatypes
       case Map.lookup dtName ds of
         Just (DatatypeDef _ _ _ _ _ rPreds) -> do
-          tryInfer <- pTraceShow (pArgs, rPreds) (use infer)
+          tryInfer <- use infer
           pArgs' <- zipWithM (maybeFreshPotl tryInfer) pArgs rPreds
           return (ScalarT (DatatypeT dtName tArgs pArgs') ref pred)
         Nothing -> return og
@@ -263,7 +261,7 @@ resolveSignatures (FuncDecl name _)  = do
       def' <- go def
       body' <- go body
       return $ LetT name def' body'
-    gt AnyT = return AnyT
+    go AnyT = return AnyT
 
     maybeFreshPotl tryInfer arg isPred
       | isPred && tryInfer = fmap (Var IntS) $ freshInferredPotl name "A"

@@ -325,9 +325,11 @@ instance Pretty RSchema where
   pretty = prettySchema
 
 -- | 'prettyWithInferred' @ts sch@ : pretty print an RSchema with inferred potential values replaced
-prettyWithInferred :: Map Id (Maybe Formula) -> RSchema -> Doc
-prettyWithInferred ts sch = pretty (go sch)
+prettyWithInferred :: Map Id (Maybe Formula) -> Goal -> Doc
+prettyWithInferred ts g@(Goal name _ _ _ _ _ _ _) = text name <+> operator "::" <+> pretty (go sch)
   where
+    sch = unresolvedSpec g
+
     go :: RSchema -> RSchema
     go (ForallT i s) = ForallT i $ go s
     go (ForallP i s) = ForallP i $ go s
@@ -339,9 +341,14 @@ prettyWithInferred ts sch = pretty (go sch)
       ScalarT (DatatypeT di (fmap gt ta) (fmap f abs)) ref (f v)
     gt (ScalarT dt ref v) =
       ScalarT dt ref (f v)
-    gt x = x
+    gt (FunctionT i d c cs) = FunctionT i (gt d) (gt c) cs
+    gt (LetT i def body) = LetT i (gt def) (gt body)
+    gt AnyT = AnyT
 
-    f v@(Var IntS pVar) = case Map.findWithDefault (Just v) pVar ts of
+    -- TODO: This only works if the formula is only an inference var and nothing else
+    --       If the formula isn't only an inference var but contains one, this
+    --       doesn't replace it
+    f v@(Var IntS pVar) = case Map.findWithDefault Nothing pVar ts of
       Just x  -> x
       Nothing -> v
     f x = x
