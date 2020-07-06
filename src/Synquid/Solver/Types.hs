@@ -77,13 +77,14 @@ data RFormula a b = RFormula {
   _knownAssumptions :: !a,
   _unknownAssumptions :: !b,
   _ctors :: !(Set Formula),
-  _varSubsts :: !Substitution, -- substitutions for _v and de bruijns
+  _localUniversals :: !(Set Formula), -- substitutions for _v and de bruijns
   _rconstraints :: !Formula -- ![FmlLC]
 } deriving (Eq, Show, Ord)
 
 makeLenses ''RFormula
 
 type RawRFormula = RFormula (Set Formula) (Set Formula)
+type KnownRFormula = RFormula (Set Formula) () -- All unknowns are instantiated
 type ProcessedRFormula = RFormula Formula () 
 
 instance Pretty (RFormula a b) where 

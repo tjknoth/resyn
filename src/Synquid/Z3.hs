@@ -126,7 +126,7 @@ instance RMonad Z3State where
     where
       checkAndGetAssignment :: ProcessedRFormula -> Z3State (Maybe ProcessedRFormula)
       checkAndGetAssignment rfml = do 
-        let vars = Map.elems . _varSubsts $ rfml 
+        let vars = Set.toList $ _localUniversals rfml
         let isRelevant f = isJust <$> modelEval model f False -- No model completion
         vfuns <- mapM fmlToAST vars
         ifM (anyM isRelevant vfuns)

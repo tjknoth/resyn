@@ -176,14 +176,13 @@ applyCounterexample rfmls cx = do
   let fml' = substitute (unRSolution (allVariables cx)) fml
   lift $ translate fml'
 
--- TODO: are examples ever applied to the actual variables?? not in polynomials?
 applyPolynomial :: RMonad s 
                 => (Polynomial -> CEGISSolver s Formula)
                 -> (ProcessedRFormula -> Formula)
                 -> ProcessedRFormula
                 -> CEGISSolver s Formula
 applyPolynomial mkPolynomial mkFormula rfml =
-  applyPolynomial' mkPolynomial (_varSubsts rfml) (mkFormula rfml)
+  applyPolynomial' mkPolynomial Map.empty (mkFormula rfml)
 
 applyPolynomial' mkPolynomial subs f =
   let sub = applyPolynomial' mkPolynomial in 
