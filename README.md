@@ -72,6 +72,12 @@ Details on the language and syntax can also be found in the wiki.
 * Resource analysis makes termination checking unnecessary (as long some
   operations actually consume resources), so to avoid proving termination (via a
   "termination metric", one can run Resyn with `-f Nonterminating`
+* By default, Resyn is a "round-trip" type checker. This useful for detecting
+  errors early when synthesizing, but less useful when using Resyn as a
+  typechecker. The flag `--eac` will run Resyn in "enumerate" mode; waiting to
+  solve resource constraints after processing the whole program. This will
+  improve performance significantly when using Resyn as a typechecker (but
+  degrade synthesis performance).
 * When solving resource constraints with dependent annotations, one has a choice
   of three solvers. The incremental CEGIS solver currently has
   some bugs with constraints involving abstract potentials.

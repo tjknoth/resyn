@@ -110,7 +110,7 @@ instance RMonad Z3State where
       Nothing -> return Nothing
       Just md -> do 
         mdStr <- modelToString md 
-        return $ Just (md, mdStr)
+        return $ Just $ SMTModel md mdStr
 
   optimizeAndGetModel fml vs = do
     -- Because Z3 can't backtrack and retract assertions, we have to infer all of our variables
@@ -136,36 +136,35 @@ instance RMonad Z3State where
 
     fmlAst <- fmlToAST fml
 
-    (r, m) <- local $ (optimizeAssert fmlAst) >> (mapM_ inferOnly vs) >> optimizeCheckAndGetModel
+    (_, m) <- local $ (optimizeAssert fmlAst) >> (mapM_ inferOnly vs) >> optimizeCheckAndGetModel
    
     setASTPrintMode Z3_PRINT_SMTLIB_FULL
-    astStr <- astToString fmlAst
     case m of  
       Just md -> do 
         mdStr <- modelToString md 
-        return $ Just (md, mdStr)
+        return $ Just $ SMTModel md mdStr
       Nothing -> return Nothing
     where
       -- TODO: this fns assumes scalar values for inferred potentials; is this ok??
       inferOnly (name, _) = fmlToAST (Var IntS name) >>= optimizeMinimize
 
-  modelGetAssignment vals (m, _) = 
-    Map.fromList . catMaybes <$> mapM (getAssignmentForVar m . Var astS) vals
+  modelGetAssignment vals (SMTModel m _) = 
+    RSolution . Map.fromList . catMaybes <$> mapM (getAssignmentForVar m . Var astS) vals
     where 
       astS = IntS -- TODO: maybe be smarter about this!
   
-  checkPredWithModel fml (model, _) = do 
+  checkPredWithModel fml (SMTModel model _) = do 
     ast <- fmlToAST fml
     val <- modelEval model ast True
     case val of 
       Nothing -> return False
       Just res -> getBool res
 
-  filterPreds rfmls (model, _) = mapMaybeM checkAndGetAssignment rfmls
+  filterPreds rfmls (SMTModel model _) = mapMaybeM checkAndGetAssignment rfmls
     where
       checkAndGetAssignment :: ProcessedRFormula -> Z3State (Maybe ProcessedRFormula)
       checkAndGetAssignment rfml = do 
-        let vars = Map.elems . _varSubsts $ rfml 
+        let vars = Set.toList $ _localUniversals rfml
         let isRelevant f = isJust <$> modelEval model f False -- No model completion
         vfuns <- mapM fmlToAST vars
         ifM (anyM isRelevant vfuns)
@@ -578,7 +577,7 @@ optimizeCheckAndGetModel :: MonadOptimize z3 => z3 (Result, Maybe Z3.Model)
 optimizeCheckAndGetModel = do
   res <- optimizeCheck []
   mbModel <- case res of
-               Unsat -> return Nothing
-               _     -> Just <$> optimizeGetModel
+               Sat -> Just <$> optimizeGetModel
+               _   -> return Nothing
   return (res, mbModel)
 

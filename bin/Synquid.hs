@@ -214,7 +214,7 @@ defaultExplorerParams = ExplorerParams {
   _explorerResourceArgs = defaultResourceArgs
 }
 
-defaultResourceArgs = ResourceArgs {
+defaultResourceArgs = ResourceParams {
   _shouldCheckResources = True,
   _checkMultiplicities = True,
   _constantTime = False,
@@ -223,7 +223,9 @@ defaultResourceArgs = ResourceArgs {
   _inferResources = False,
   _rsolver = CEGIS,
   _sygusLog = Nothing,
-  _cvc4 = "cvc4"
+  _cvc4 = "cvc4",
+  _rSolverDomain = Constant,
+  _polynomialDomain = Constant
 }
 
 -- | Parameters for constraint solving

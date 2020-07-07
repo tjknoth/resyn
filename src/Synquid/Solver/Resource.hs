@@ -80,32 +80,30 @@ generateFormula' :: (MonadHorn s, RMonad s)
 generateFormula' checkMults c = do
   writeLog 4 $ indent 2 $ simplePrettyConstraint c <+> operator "~>"
   let mkRForm = RFormula Set.empty Set.empty Set.empty
-  let freeParams = deBrujnOrVee 3  -- TODO: better solution. 3 is arbitrary.
+  let freeParams = take 3 deBrujns  -- TODO: better solution. 3 is arbitrary.
   case c of
     Subtype{} -> error $ show $ text "generateFormula: subtype constraint present:" <+> pretty c
     WellFormed{} -> error $ show $ text "generateFormula: well-formedness constraint present:" <+> pretty c
     RSubtype env pl pr -> do
-      op <- subtypeOp
-      substs1 <- freshenFormula env freeParams pl
-      substs2 <- freshenFormula env freeParams pr
-      let substs = Map.union substs1 substs2
-      let fml = mkRForm substs $ pl `op` pr
+      op <- subtypeOp 
+      vs1 <- getLocals env freeParams pl
+      vs2 <- getLocals env freeParams pr
+      let vs = Set.union vs1 vs2
+      let fml = mkRForm vs $ pl `op` pr
       embedAndProcessConstraint env fml 
     SharedForm env f fl fr -> do
       let sharingFml = f |=| (fl |+| fr)
       let wf = conjunction [f |>=| fzero, fl |>=| fzero, fr |>=| fzero]
-      substs <- renameValueVar env
-      let fml = mkRForm substs (wf |&| sharingFml)
+      let vs = getValueVar env
+      let fml = mkRForm vs (wf |&| sharingFml)
       embedAndProcessConstraint env fml
     ConstantRes env -> do
-      substs <- renameValueVar env -- shouldn't be necessary here?
       f <- assertZeroPotential env 
-      let fml = mkRForm substs f
+      let fml = mkRForm Set.empty f
       embedAndProcessConstraint env fml
     Transfer env env' -> do
-      substs <- renameValueVar env -- shouldn't be necessary here?
       fmls <- redistribute env env' 
-      let fml = mkRForm substs $ conjunction fmls
+      let fml = mkRForm Set.empty $ conjunction fmls
       embedAndProcessConstraint env fml
     _ -> error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
 
@@ -116,14 +114,14 @@ embedAndProcessConstraint :: (MonadHorn s, RMonad s)
                           -> RawRFormula
                           -> TCSolver s ProcessedRFormula
 embedAndProcessConstraint env rfml = do
-  domain <- asks _rSolverDomain
+  domain <- view (resourceArgs . rSolverDomain) 
   let go = embedConstraint env
        >=> replaceAbstractPotentials
        >=> instantiateUnknowns
        >=> filterAssumptions
-       >=> updateVariables
-       >=> formatVariables
-       >=> applyAssumptions
+       >=> getConstructors 
+       >=> formatConstructors
+       >=> joinAssumptions
   case domain of
     Dependent -> go rfml
     Constant  -> translateAndFinalize rfml
@@ -177,11 +175,11 @@ replaceAbsPreds rvs (All _ _) = error "replaceAbsPreds: found forall you should 
 replaceAbsPreds _ f = f
 
 -- Use strongest possible assignment to unknown assumptions
-instantiateUnknowns :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
+instantiateUnknowns :: MonadHorn s => RawRFormula -> TCSolver s KnownRFormula
 instantiateUnknowns rfml = do 
   unknown' <- assignUnknowns (_unknownAssumptions rfml)
   fml' <- assignUnknownsInFml (_rconstraints rfml)
-  return $ set unknownAssumptions Set.empty
+  return $ set unknownAssumptions ()
          $ set rconstraints fml'
          $ over knownAssumptions (Set.union unknown') rfml
 
@@ -189,8 +187,7 @@ instantiateUnknowns rfml = do
 replaceCons f@Cons{} = mkFuncVar f
 replaceCons f = f
 
-
-filterAssumptions :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
+filterAssumptions :: MonadHorn s => KnownRFormula -> TCSolver s KnownRFormula
 filterAssumptions rfml = do
   shouldFilter <- usesSygus
   let rfml' = 
@@ -200,31 +197,24 @@ filterAssumptions rfml = do
   return rfml'
 
 -- apply variable substitutions
-updateVariables :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
-updateVariables rfml  = do
-  -- substitute all universally quantified expressions in body, known, and allPreds  
-  let substs = _varSubsts rfml
+getConstructors :: MonadHorn s => KnownRFormula -> TCSolver s KnownRFormula
+getConstructors rfml  = do
   cons <- use matchCases
-  let format = Set.map (transformFml mkFuncVar . substitute substs)
-  -- universalMeasures %= Set.union (Set.map (transformFml mkFuncVar) (Set.map (substitute substs) allPreds))
-  return $ set ctors (format cons)
-         $ over knownAssumptions (Set.map (substitute substs)) 
-         $ over rconstraints (substitute substs) rfml
+  let format = Set.map (transformFml mkFuncVar)
+  return $ set ctors (format cons) rfml
 
 -- Turn predicate / constructor applications into variables 
-formatVariables :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
-formatVariables rfml = do 
+formatConstructors :: MonadHorn s => KnownRFormula -> TCSolver s KnownRFormula
+formatConstructors rfml = do 
   let update = Set.map (transformFml mkFuncVar)
-  return $ over unknownAssumptions update 
-         $ over knownAssumptions update 
+  return $ over knownAssumptions update 
          $ over rconstraints (transformFml mkFuncVar) rfml
 
 -- Produce final formula
-applyAssumptions :: MonadHorn s
-                 => RawRFormula
+joinAssumptions :: MonadHorn s
+                 => KnownRFormula
                  -> TCSolver s ProcessedRFormula
-applyAssumptions (RFormula known _ preds substs fml) = do
-  -- let ass = conjunction $ Set.union known unknown
+joinAssumptions (RFormula known _ preds substs fml) = do
   let ass = conjunction known
   writeLog 3 $ indent 4 $ pretty (ass |=>| fml) -- conjunction (map lcToFml lcs))
   return $ RFormula ass () preds substs fml 
@@ -239,7 +229,7 @@ satisfyResources :: RMonad s
 satisfyResources oldfmls newfmls = do
   let rfmls = oldfmls ++ newfmls
   let runInSolver = lift . lift . lift
-  domain <- asks _rSolverDomain
+  domain <- view (resourceArgs . rSolverDomain)
   infdRVars <- use inferredRVars
   let tryInfer = not $ Map.null infdRVars
   case domain of
@@ -253,9 +243,9 @@ satisfyResources oldfmls newfmls = do
           case model of
             Nothing -> return False
             Just m' -> do
-              writeLog 6 $ nest 2 (text "Solved + inferred with model") </> nest 6 (text (snd m'))
+              writeLog 6 $ nest 2 (text "Solved + inferred with model") </> nest 6 (text (modelStr m'))
               vs' <- runInSolver $ modelGetAssignment (Map.keys vs) m'
-              inferredRVars %= Map.union (fmap Just vs')
+              inferredRVars %= Map.union (fmap Just . unRSolution $ vs')
               return True
         else do
           let fml = conjunction $ map bodyFml rfmls
@@ -263,7 +253,7 @@ satisfyResources oldfmls newfmls = do
           case model of
             Nothing -> return False
             Just m' -> do
-              writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (snd m'))
+              writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (modelStr m'))
               return True
     Dependent -> do
       if tryInfer
@@ -282,13 +272,13 @@ deployHigherOrderSolver :: RMonad s
 deployHigherOrderSolver SYGUS oldfmls newfmls = do
   let rfmls = oldfmls ++ newfmls
   let runInSolver = lift . lift . lift
-  log <- view (resourceArgs . sygusLog)
+  logfile <- view (resourceArgs . sygusLog)
   ufmls <- map (Var IntS) . Set.toList <$> use universalVars
   universals <- collectUniversals rfmls ufmls
-  rvs <- use resourceVars
+  rvars <- use resourceVars
   env <- use initEnv 
   solverCmd <- view (resourceArgs . cvc4)
-  runInSolver $ solveWithSygus log solverCmd env rvs rfmls universals
+  runInSolver $ solveWithSygus logfile solverCmd env rvars universals oldfmls newfmls
 
 -- Solve with CEGIS (incremental or not)
 deployHigherOrderSolver _ oldfmls newfmls = do
@@ -303,7 +293,7 @@ deployHigherOrderSolver _ oldfmls newfmls = do
   writeLog 5 $ pretty $ conjunction $ map completeFml rfmls
   logUniversals
   
-  let go = solveWithCEGIS cMax rfmls universals
+  let go = solveWithCEGIS cMax universals rfmls
   (sat, cstate') <- runInSolver $ runCEGIS go cstate
   storeCEGISState cstate'
   return sat
@@ -322,18 +312,16 @@ storeCEGISState st = do
     resourceVars .= Map.empty
 
 -- Given a list of resource constraints, assemble the relevant universally quantified 
---   expressions for the CEGIS solver: renamed variables, constructor and measure applications.
+--   expressions for the CEGIS solver: renamed variables and constructor apps
 --   Allows a list of extra formulas.
 collectUniversals :: Monad s => [ProcessedRFormula] -> [Formula] -> TCSolver s Universals
-collectUniversals rfmls extra = do 
-  let preds = map (\(Var s x) -> (x, Var s x)) (collectUFs rfmls) 
-  return $ Universals (formatUniversals (extra ++ collectVars rfmls)) preds
+collectUniversals rfmls existing = do 
+  -- Do not need to substitute in constructors; substitutions are only for nameless rep (_v, de bruijns)
+  let formatCons = Set.map ((\(Var s x) -> UCons s x) . transformFml mkFuncVar)
+  ufs <- formatCons <$> use matchCases 
+  let newvars = Set.toList $ Set.unions $ map _localUniversals rfmls -- concatMap (Map.elems . _varSubsts) rfmls
+  return $ Universals (formatUniversals (existing ++ newvars)) (Set.toList ufs)
 
-collectVars :: [ProcessedRFormula] -> [Formula]
-collectVars = concatMap (Map.elems . _varSubsts)
-
-collectUFs :: [ProcessedRFormula] -> [Formula]
-collectUFs = concatMap (Set.toList . _ctors)
 
 -- Nondeterministically redistribute top-level potentials between variables in context
 redistribute :: Monad s
@@ -376,45 +364,40 @@ allPotentials env = Map.mapMaybeWithKey substTopPotential $ toMonotype <$> nonGh
        in WithSubst sub . substitute sub <$> topPotentialOf t
 
 -- Generate fresh version of _v
-renameValueVar :: Monad s => Environment -> TCSolver s Substitution
-renameValueVar env = do 
-  let univs = Map.filterWithKey (\x _ -> x == valueVarName) $ symbolsOfArity 0 env
-  Map.traverseWithKey freshen univs
-  where 
-    sortFrom = toSort . baseTypeOf . toMonotype
-    freshen x sch = do 
-      x' <- freshVersion x 
-      return $ Var (sortFrom sch) x'
-
+getValueVar :: Environment -> Set Formula
+getValueVar env = 
+  let sortFrom = toSort . baseTypeOf . toMonotype in
+  case Map.lookup valueVarName (symbolsOfArity 0 env) of
+    Nothing -> Set.empty
+    Just sch -> Set.singleton $ Var (sortFrom sch) valueVarName
 
 -- generate fresh value var if it's present
 -- then traverse formula, generating de bruijns as needed (and passing upwards)
-freshenFormula :: Monad s => Environment -> [String] -> Formula -> TCSolver s Substitution
-freshenFormula env fList f = do
-  subst <- renameValueVar env
-  freshenFormula' fList subst f
+getLocals :: Monad s => Environment -> [String] -> Formula -> TCSolver s (Set Formula)
+getLocals env fList f = do
+  -- subst <- renameValueVar env
+  let vs = getValueVar env
+  getLocals' fList vs f
 
-freshenFormula' :: Monad s => [String] -> Substitution -> Formula -> TCSolver s Substitution -- APs
-freshenFormula' fList subst (Var sort id) 
-  | id `elem` fList = do
-      var' <- Var sort <$> freshVersion id
-      return $ Map.insertWith (\_ x -> x) id var' subst
+getLocals' :: Monad s => [String] -> Set Formula -> Formula -> TCSolver s (Set Formula) -- APs
+getLocals' fList subst (Var sort id) 
+  | id `elem` fList = -- do
+      return $ Set.insert (Var sort id) subst
+      -- let var' = Var sort id -- <$> freshVersion id
+      -- return $ Map.insertWith (\_ x -> x) id var' subst
   | otherwise = return subst
-freshenFormula' fList subst (Unary _ fml) =
-  freshenFormula' fList subst fml
-freshenFormula' fList subst (Binary _ fml1 fml2) =
-  Map.union <$> freshenFormula' fList subst fml1 <*> freshenFormula' fList subst fml2
-freshenFormula' fList subst (Ite i t e) =
-  Map.union <$> (Map.union <$> freshenFormula' fList subst i <*> 
-    freshenFormula' fList subst t) <*> freshenFormula' fList subst e
-freshenFormula' fList subst (Pred _ _ fmls) = 
-  Map.unions <$> mapM (freshenFormula' fList subst) fmls
-freshenFormula' fList subst (Cons _ _ fmls) = 
-  Map.unions <$> mapM (freshenFormula' fList subst) fmls
-freshenFormula' _ subst x = return subst
-
-deBrujnOrVee :: Int -> [String]
-deBrujnOrVee n = valueVarName : take n deBrujns
+getLocals' fList subst (Unary _ fml) =
+  getLocals' fList subst fml
+getLocals' fList subst (Binary _ fml1 fml2) =
+  Set.union <$> getLocals' fList subst fml1 <*> getLocals' fList subst fml2
+getLocals' fList subst (Ite i t e) =
+  Set.union <$> (Set.union <$> getLocals' fList subst i <*> 
+    getLocals' fList subst t) <*> getLocals' fList subst e
+getLocals' fList subst (Pred _ _ fmls) = 
+  Set.unions <$> mapM (getLocals' fList subst) fmls
+getLocals' fList subst (Cons _ _ fmls) = 
+  Set.unions <$> mapM (getLocals' fList subst) fmls
+getLocals' _ subst x = return subst
 
 
 -- Generate sharing constraints, given a type and the two types
@@ -452,14 +435,14 @@ isResourceConstraint ConstantRes{} = True
 isResourceConstraint Transfer{}    = True
 isResourceConstraint _             = False
 
-getAnnotationStyle :: Map String [Bool] -> [RSchema] -> RSolverDomain
+getAnnotationStyle :: Map String [Bool] -> [RSchema] -> RDomain
 getAnnotationStyle flagMap schemas =
   let get sch = getAnnotationStyle' flagMap (getPredParamsSch sch) (toMonotype sch)
    in case map get schemas of
         [] -> error "getAnnotationSyle: empty list of goal schema"
         (a:as) -> sconcat (a :| as) -- can probably skip the catmaybes? and combine semigroups?
 
-getAnnotationStyle' :: Map String [Bool] -> Set String -> RType -> RSolverDomain 
+getAnnotationStyle' :: Map String [Bool] -> Set String -> RType -> RDomain 
 getAnnotationStyle' flagMap predParams t =
   let rforms = conjunction $ allRFormulas flagMap t
       allVars = getVarNames t
@@ -468,10 +451,10 @@ getAnnotationStyle' flagMap predParams t =
       (True, _)     -> Dependent
       _             -> Constant 
 
-getPolynomialDomain :: Map String [Bool] -> RSchema -> RSolverDomain
+getPolynomialDomain :: Map String [Bool] -> RSchema -> RDomain
 getPolynomialDomain flagMap sch = getPolynomialDomain' flagMap (getPredParamsSch sch) (toMonotype sch)
 
-getPolynomialDomain' :: Map String [Bool] -> Set String -> RType -> RSolverDomain
+getPolynomialDomain' :: Map String [Bool] -> Set String -> RType -> RDomain
 getPolynomialDomain' flagMap predParams t = 
   let rforms = conjunction $ allRFormulas flagMap t 
       allVars = getVarNames t

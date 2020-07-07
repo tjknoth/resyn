@@ -5,7 +5,7 @@ module Synquid.Synthesis.Synthesizer (
 
 import Synquid.Util
 import Synquid.Logic
-import Synquid.Type
+import Synquid.Type hiding (set)
 import Synquid.Program
 import Synquid.Z3
 import Synquid.Resolver
@@ -16,9 +16,9 @@ import Synquid.Solver.HornClause
 import Synquid.Solver.TypeConstraint
 import Synquid.Solver.Resource (getAnnotationStyle, getPolynomialDomain)
 
-import Data.List
-import Control.Monad
-import Control.Lens
+import           Data.List
+import           Control.Monad
+import           Control.Lens
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 
@@ -35,6 +35,9 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
     reconstruction :: HornSolver (Either ErrorMessage [(RProgram, TypingState)])
     reconstruction = let
         allSchema = gSpec goal : Map.elems (allSymbols (gEnvironment goal))
+        rdom = getAnnotationStyle (fmap _resourcePreds (gEnvironment goal ^. datatypes)) allSchema
+        pdom = getPolynomialDomain (fmap _resourcePreds (gEnvironment goal ^. datatypes)) (gSpec goal)
+        adj = set rSolverDomain rdom . set polynomialDomain pdom
         typingParams = TypingParams {
                         _condQualsGen = condQuals,
                         _matchQualsGen = matchQuals,
@@ -42,9 +45,7 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _predQualsGen = predQuals,
                         _tcSolverSplitMeasures = _splitMeasures explorerParams,
                         _tcSolverLogLevel = _explorerLogLevel explorerParams,
-                        _rSolverDomain = getAnnotationStyle (fmap _resourcePreds (gEnvironment goal ^. datatypes)) allSchema,
-                        _polynomialDomain = getPolynomialDomain (fmap _resourcePreds (gEnvironment goal ^. datatypes)) (gSpec goal),
-                        _resourceArgs = _explorerResourceArgs explorerParams
+                        _resourceArgs = adj (_explorerResourceArgs explorerParams)
                       }
       in reconstruct explorerParams typingParams goal
 

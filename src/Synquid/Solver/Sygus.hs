@@ -20,16 +20,19 @@ import           Data.Map (Map)
 import qualified Data.Map as Map
 import           System.Exit
 
+-- | Satisfiability interface to sygus solver
 solveWithSygus :: RMonad s
-               => Maybe String
-               -> String
-               -> Environment
-               -> Map String [Formula]
-               -> [ProcessedRFormula]
-               -> Universals
+               => Maybe String         -- logfile
+               -> String               -- solver command 
+               -> Environment          -- typing context
+               -> Map String [Formula] -- map from goal to vars in scope
+               -> Universals           -- universally quantified expressions
+               -> [ProcessedRFormula]  -- "old" constraints
+               -> [ProcessedRFormula]  -- "new" constraints
                -> s Bool
-solveWithSygus withLog command env rvars rfmls univs =
+solveWithSygus withLog command env rvars univs oldfmls newfmls =
   let log = maybe Direct Debug withLog
+      rfmls = oldfmls ++ newfmls
    in getResult log command (assembleSygus env rvars rfmls univs)
 
 data ConstraintMode = Direct | Debug String -- pipe directly to solver, or write to file first for debugging
@@ -46,7 +49,7 @@ data SygusProblem = SygusProblem {
   declarations :: Map Id DatatypeDef,
   constraints :: [Formula],
   functions :: [SygusGoal],
-  universals :: [(Id, Sort)]
+  universals :: [UVar]
 } deriving (Show, Eq)
 
 -- Parse satisfiability from CVC4 output
@@ -94,7 +97,7 @@ assembleSygus env rvars rfmls univs = SygusProblem dts cs fs us
     vs = fmap (filter (not . isData . sortOf)) rvars  
     cs = map (\rf -> _knownAssumptions rf |=>| _rconstraints rf) $ transformFmls vs rfmls
     fs = Map.elems $ Map.mapWithKey buildSygusGoal vs
-    us = map (\(_, Var s x) -> (x, s)) $ filter (not . isData . sortOf . snd) (uvars univs)
+    us = filter (not . isData . sortOfUVar) (uvars univs)
     dts = _datatypes env
 
 -- | Applies two transformations to each formula to make them usable
@@ -106,7 +109,7 @@ assembleSygus env rvars rfmls univs = SygusProblem dts cs fs us
 transformFmls :: Map String [Formula] -- ^ We assume each list of formulas contains vars only, no datatypes
               -> [ProcessedRFormula]
               -> [ProcessedRFormula]
-transformFmls rvars = fmap (\fml -> over rconstraints (substitute (_varSubsts fml) . xf) fml)
+transformFmls rvars = fmap (over rconstraints xf)
   where
     -- We combine both transforms into the same function
     -- This is probably poor form, but it also probably helps
@@ -162,8 +165,8 @@ declareGoal (SygusGoal f _ outSort args) = sexp (text "synth-fun") [text f, pret
   where
     prettyArgs = parens $ hsep $ map (\(x, s) -> parens (text x <+> prettyMono s)) args
 
-declareUniversal :: (Id, Sort) -> Doc
-declareUniversal (x, s) = sexp (text "declare-var") [text x, prettyMono s]
+declareUniversal :: UVar -> Doc
+declareUniversal (UVar s x) = sexp (text "declare-var") [text x, prettyMono s]
 
 declareConstraint :: Formula -> Doc
 declareConstraint f = sexp (text "constraint") [asSexp f]

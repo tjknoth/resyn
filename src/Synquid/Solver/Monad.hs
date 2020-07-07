@@ -29,7 +29,7 @@ class (Monad s, Applicative s, MonadFail s) => MonadSMT s where
 class (Monad s, Applicative s, MonadIO s) => RMonad s where
   solveAndGetModel :: Formula -> s (Maybe SMTModel)                                  -- ^ 'solveAndGetModel' @fml@: Evaluate @fml@ and, if satisfiable, return the model object
   optimizeAndGetModel :: Formula -> [(String, Maybe Formula)] -> s (Maybe SMTModel)  -- ^ 'optimizeAndGetModel' @fml vs@: Evaluate @fml@ and optimize for inferred potl vars @vs@ in decreasing order of importance; if satisfiable, return the model object. @vs@ is a listified map from the name of the var to its previous value as a formula, if it has one.
-  modelGetAssignment :: [String] -> SMTModel -> s (Map String Formula)               -- ^ 'modelGetAssignment' @vals@ @m@: Get assignments of all variables @vals@ in model @m@
+  modelGetAssignment :: [String] -> SMTModel -> s RSolution                          -- ^ 'modelGetAssignment' @vals@ @m@: Get assignments of all variables @vals@ in model @m@
   checkPredWithModel :: Formula -> SMTModel -> s Bool                                -- ^ 'checkWithModel' @fml model@: check if boolean-sorted formula holds under a given model
   filterPreds :: [ProcessedRFormula] -> SMTModel -> s [ProcessedRFormula]
   translate :: Formula -> s Formula
@@ -42,7 +42,7 @@ class (Monad s, Applicative s, MonadFail s) => MonadHorn s where
   pruneQualifiers :: QSpace -> s QSpace                                                       -- ^ Prune redundant qualifiers
 
 -- | Command line arguments relevant to resource analysis
-data ResourceArgs = ResourceArgs {
+data ResourceParams = ResourceParams {
   _shouldCheckResources :: Bool,
   _checkMultiplicities :: Bool,
   _constantTime :: Bool,
@@ -51,10 +51,12 @@ data ResourceArgs = ResourceArgs {
   _inferResources :: Bool,
   _rsolver :: ResourceSolver,
   _sygusLog :: Maybe String,
-  _cvc4 :: String
+  _cvc4 :: String,
+  _rSolverDomain :: RDomain,
+  _polynomialDomain :: RDomain
 } 
 
-makeLenses ''ResourceArgs
+makeLenses ''ResourceParams
 
 -- | Parameters of type constraint solving
 data TypingParams = TypingParams {
@@ -64,9 +66,7 @@ data TypingParams = TypingParams {
   _predQualsGen :: Environment -> [Formula] -> [Formula] -> QSpace, -- ^ Qualifier generator for bound predicates
   _tcSolverSplitMeasures :: Bool,
   _tcSolverLogLevel :: Int,                                         -- ^ How verbose logging is
-  _rSolverDomain :: RSolverDomain,
-  _polynomialDomain :: RSolverDomain,
-  _resourceArgs :: ResourceArgs
+  _resourceArgs :: ResourceParams
 }
 
 makeLenses ''TypingParams
