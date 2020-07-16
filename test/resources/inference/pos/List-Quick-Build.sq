@@ -1,0 +1,27 @@
+data Pair a where
+	Pair :: x:a -> y:a -> Pair a
+  
+data List a <q :: Int> where
+	Nil :: List a <q>
+	Cons :: x: a -> xs: List {a | | q} <q> -> List a <q>
+
+data Tree a <q :: Int> where
+        Leaf :: Tree a <q>
+        Node :: x:a -> l: Tree {a | | q} <q> -> r: Tree {a | | q} <q> -> Tree a <q>
+
+partition :: x:a -> xs: List {a | | 1} <{0}> -[1]-> Pair (List a <{0}>)
+partition = \x. \xs.
+  match xs with 
+    Nil       -> Pair Nil Nil
+    Cons y ys -> 
+      match partition x ys with
+        Pair u v -> if y < x then Pair (Cons y u) v
+                             else Pair u (Cons y v)
+build :: List {a | | 4} <{0}> -[1]-> Tree {a | | 1} <{ -1}>
+build = \xs.
+  match xs with
+    Nil       -> Leaf
+    Cons y ys ->                               -- y :: {a | | 4}, ys :: List {a | | 4} <0>
+      match partition y ys with                -- partition y ys :: Pair (List {a | | 3} <0>)
+        Pair u v -> Node y (build u) (build v) -- u :: List {a | | 3} <0>, build u :: Tree a <{-1}>
+

@@ -6,8 +6,7 @@ data List a <q :: Int> where
   Nil  :: List a <q>
   Cons :: x:a -> xs: List {a | | q} <q> -> List a <q>
 
-insert :: x:a -> xs: List {a | | 1} <{0}>
-              -> List a <{0}>
+insert :: x:a -> xs: List {a | | 1} <{0}> -> List a <{0}>
 insert = \x. \xs. 
   match xs with 
     Nil       -> Cons x Nil
@@ -17,8 +16,7 @@ insert = \x. \xs.
 
 
 
-insertionSort :: xs: List {a | | 2} <{1}>
-  -> List a <{0}>
+insertionSort :: xs: List {a | | 2} <{1}> -> List a <{0}>
 insertionSort = \xs.
   match xs with 
     Nil       -> Nil

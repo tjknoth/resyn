@@ -1,0 +1,32 @@
+data Pair a where
+  Pair :: a -> a -> Pair a
+
+data List a <q :: Int> where
+  Nil :: List a <q>
+  Cons :: a -> List {a | | q} <q> -> List a <q>
+
+-- Need parameters q,r to ensure that x and xs can have different amts of potential 
+partition :: <q :: Int>. <r :: Int>. x:a -> xs:List {a| |r + 1} <{q}> -> Pair (List {a| |r} <{q}>)
+partition = \p. \xs.  
+  match xs with
+    Nil -> Pair Nil Nil
+    Cons y ys -> 
+      match tick 1 (partition p ys) with
+        Pair ls gs -> 
+          if y <= p
+            then Pair (Cons y ls) gs
+            else Pair ls (Cons y gs)
+
+append :: xs: List {a | | 1} <{0}> -> ys: List a <{0}> -> List a <{0}>
+append = \xs. \ys.
+  match xs with
+    Nil       -> ys
+    Cons z zs -> Cons z (tick 1 (append zs ys))
+
+quickSort :: xs: List a <{2}> -> List a <{0}>
+quickSort = \xs. 
+  match xs with
+    Nil -> Nil
+    Cons y ys ->
+      match partition y ys with 
+        Pair ls gs -> append (quickSort ls) (Cons y (quickSort gs))
