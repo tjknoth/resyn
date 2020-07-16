@@ -33,6 +33,7 @@ import           Control.Lens
 import           Debug.Trace
 import           Data.List.NonEmpty (NonEmpty(..))
 import           Data.Semigroup (sconcat)
+import           Data.Maybe
 
 
 -- | Process, but do not solve, a set of resource constraints
@@ -398,8 +399,11 @@ partitionType cm env (x, t@(ScalarT b _ f)) (ScalarT bl _ fl) (ScalarT br _ fr)
             Just n  -> addVariable valueVarName (addRefinement t (varRefinement n (toSort b))) env
     in SharedForm env' f fl fr : partitionBase cm env (x, b) bl br
 
-partitionBase cm env (x, DatatypeT _ ts _) (DatatypeT _ tsl _) (DatatypeT _ tsr _)
-  = concat $ zipWith3 (partitionType cm env) (zip (repeat Nothing) ts) tsl tsr
+partitionBase cm env (x, DatatypeT _ ts ps) (DatatypeT _ tsl psl) (DatatypeT _ tsr psr)
+  = let split p1 p2 p3 = if sortOf p1 == IntS then Just (SharedForm env p1 p2 p3) else Nothing
+        bases = concat $ zipWith3 (partitionType cm env) (zip (repeat Nothing) ts) tsl tsr
+        aps = catMaybes $ zipWith3 split ps psl psr
+     in bases ++ aps
 partitionBase cm env (x, b@(TypeVarT _ a m)) (TypeVarT _ _ ml) (TypeVarT _ _ mr)
   = [SharedForm env m ml mr | cm]
 partitionBase _ _ _ _ _ = []

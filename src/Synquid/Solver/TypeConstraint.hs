@@ -408,8 +408,6 @@ processPredicate c@(WellFormedPredicate env argSorts BoolS p) = do
   where
     isFreeVariable tass a = not (isBound env a) && not (Map.member a tass)
 processPredicate (WellFormedPredicate env _ IntS p) = do
-  -- let u = p
-  --addPredAssignment p (Unknown  u)
   resourceVars %= insertRVar (p, [])
   return ()
 processPredicate c = modify $ addTypingConstraint c
@@ -626,14 +624,12 @@ fresh :: MonadHorn s => Environment -> RType -> TCSolver s RType
 fresh env (ScalarT b@(TypeVarT vSubst a m) _ p) | not (isBound env a) = do
   -- Free type variable: replace with fresh free type variable
   a' <- freshId "A"
-  -- p' <- safeFreshPot env (Just b) p
   p' <- freshPotentials env (Just b) p
   return $ ScalarT (TypeVarT vSubst a' m) ftrue p'
 fresh env (ScalarT baseT _ p) = do
   baseT' <- freshBase baseT
   -- Replace refinement with fresh predicate unknown:
   k <- freshId "U"
-  -- p' <- safeFreshPot env (Just baseT) p
   p' <- freshPotentials env (Just baseT) p
   return $ ScalarT baseT' (Unknown Map.empty k) p'
   where
@@ -642,27 +638,13 @@ fresh env (ScalarT baseT _ p) = do
       tArgs' <- mapM (fresh env) tArgs
       -- Replace predicate arguments with fresh predicate variables:
       let (DatatypeDef tParams pParams _ _ _ _) = (env ^. datatypes) Map.! name
-      -- pArgs' <- mapM (\sig -> freshPred env . map (noncaptureSortSubst tParams (map (toSort . baseTypeOf) tArgs')) . predSigArgSorts $ sig) pParams -- APs: changed to reflect new signature of freshPred 
       pArgs' <- mapM (\sig -> (freshPred env . map (noncaptureSortSubst tParams (map (toSort . baseTypeOf) tArgs')) $ predSigArgSorts sig) (predSigResSort sig)) pParams
       return $ DatatypeT name tArgs' pArgs'
     -- Ensure fresh base type has multiplicity 1 to avoid zeroing other formulas during unification
-    --freshBase (TypeVarT subs a m) = return $ TypeVarT subs a defMultiplicity
     freshBase baseT = return baseT
 fresh env (FunctionT x tArg tFun c) =
   liftM2 (\t r -> FunctionT x t r c) (fresh env tArg) (fresh env tFun)
 fresh env t = let (env', t') = embedContext env t in fresh env' t'
-
-{-freshPred env sorts = do -- APs: changed signature to allow for access to return type of predicate
-  p' <- freshId "P"
-  modify $ addTypingConstraint (WellFormedPredicate env sorts p')
-  let args = zipWith Var sorts deBrujns
-  return $ Pred BoolS p' args
--}
-freshPred env argSorts resSort = do
-  p' <- freshId "P"
-  modify $ addTypingConstraint (WellFormedPredicate env argSorts resSort p')
-  let args = zipWith Var argSorts deBrujns
-  return $ Pred resSort p' args
 
 -- | Set valuation of unknown @name@ to @valuation@
 -- and re-check all potentially affected constraints in all candidates
@@ -689,7 +671,6 @@ matchConsType env formal@(ScalarT (DatatypeT d vars pVars) _ _) actual@(ScalarT 
   = do
       writeLog 3 $ text "Matching constructor type" $+$ pretty formal $+$ text "with scrutinee" $+$ pretty actual
       zipWithM_ (\(ScalarT (TypeVarT _ a _) ftrue _) t -> addTypeAssignment a t) vars args
-      -- zipWithM_ (\(Pred BoolS p _) fml -> addPredAssignment p fml) pVars pArgs -- APs: Modified signature to match against APs as well as predicates
       zipWithM_ (\(Pred _ p _) fml -> addPredAssignment p fml) pVars pArgs
 matchConsType _ t t' = error $ show $ text "matchConsType: cannot match" <+> pretty t <+> text "against" <+> pretty t'
 
