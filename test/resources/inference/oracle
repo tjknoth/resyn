@@ -269,26 +269,6 @@ subsetSum = \xs . \target .
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-split :: <a> . arg0:{List {1**a||I0} <F9>||I1} -[1]-> {Pair {List {1**a||I2} <0>||I3}||I4}
-split :: <a> . arg0:{List {1**a||1} <0>||0} -[1]-> {Pair {List {1**a||0} <0>||0}||0} (inferred)
-split = \xs . 
-  match xs with
-    Nil -> Pair xs xs
-    Cons y ys -> 
-      match split ys with
-        Pair ls rs -> Pair rs (Cons y
-                                 ls)
-
-build :: <a> . xs:{List {1**a||I5} <F10>||I6} -[1]-> {Tree {1**a||I7} <F11>||I8}
-pos/List-Merge-Build.sq:23: Error:
-  Cannot find sufficiently strong refinements
-  when checking error in
-  \xs . 
-    match xs with
-      Nil -> error
-
-Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
-Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 merge :: <a> . arg1:{List {1**a||I0} <F10>||I1} -> arg0:{List {1**a||I2} <F11>||I3} -> {List {1**a||I4} <F12>||I5}
 merge :: <a> . arg1:{List {1**a||1} <0>||0} -> arg0:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0} (inferred)
 merge = \xs . \ys . 
@@ -311,24 +291,6 @@ flatten = \t .
     Leaf x -> Cons x Nil
     Node l r -> merge (flatten l)
                   (flatten r)
-
-Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
-Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-partition :: <a> . x:{1**a||I0} -> xs:{List {1**a||I1} <F10>||I2} -[1]-> {Pair {List {1**a||I3} <0>||I4}||I5}
-partition :: <a> . x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -[1]-> {Pair {List {1**a||0} <0>||0}||0} (inferred)
-partition = \x . \xs . 
-    match xs with
-      Nil -> Pair Nil Nil
-      Cons y ys -> 
-        match partition x ys with
-          Pair u v -> 
-            if y < x
-              then Pair (Cons y u) v
-              else Pair u (Cons y v)
-
-build :: <a> . arg0:{List {1**a||I6} <F11>||I7} -[1]-> {Tree {1**a||I8} <F12>||I9}
-<no file name>:1: Error:
-  Insufficient resources
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
@@ -378,7 +340,7 @@ Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was
 treeInsert :: <a> . x:{1**a||I0} -> t:{Tree {1**a||I1} <x < _0> <F5>||I2} -> {Tree {1**a||I3} <x < _0> <F6>||I4}
 resyn: Can't infer dependent resources
 CallStack (from HasCallStack):
-  error, called at src/Synquid/Solver/Resource.hs:262:14 in resyn-0.1-4MhUEoTXxhG3lBXQ6fCuOn:Synquid.Solver.Resource
+  error, called at src/Synquid/Solver/Resource.hs:263:14 in resyn-0.1-4MhUEoTXxhG3lBXQ6fCuOn:Synquid.Solver.Resource
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 resyn: neg/List-Quick-Sort-Quadratic.sq: openFile: does not exist (No such file or directory)
