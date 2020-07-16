@@ -29,6 +29,8 @@ import           Data.List
 import qualified Data.Foldable as Foldable
 import           Control.Arrow (first)
 
+import Debug.Pretty.Simple
+
 {- Interface -}
 
 data ResolverState = ResolverState {
@@ -42,6 +44,7 @@ data ResolverState = ResolverState {
   _sortConstraints :: [SortConstraint],
   _currentPosition :: SourcePos,
   _idCount :: Int,
+  _pvarCount :: Int,
   _potentialVars :: Set Id,
   _infer :: Bool, -- ^ whether we should attempt to infer fn arg pot'ls
   _inferredPotlVars :: Map Id [Id]  -- ^ maps fn name to associated inferred pot'ls, in order of priority
@@ -61,6 +64,7 @@ initResolverState infer = ResolverState {
   _sortConstraints = [],
   _currentPosition = noPos,
   _idCount = 0,
+  _pvarCount = 0,
   _potentialVars = Set.empty,
   _infer = infer,
   _inferredPotlVars = Map.empty
@@ -90,8 +94,9 @@ resolveDecls tryInfer declarations =
         flagMap = fmap _resourcePreds (env ^. datatypes)
         env' = (foldr removeVariable env toRemove) { _resourceMeasures = rMeasuresFromSch flagMap spec }
         -- This partition business is so that all abs potl vars (i.e. vars that start with an F) will
-        -- be at the front of the list, and will be prioritized by Z3
-        pVars = uncurry (++) $ partition (\(x:_) -> x == 'F') $ Map.findWithDefault [] name inferredPVars
+        -- be at the end of the list and won't be prioritized by Z3 (this is to avoid unintuitive inferred
+        -- potls)
+        pVars = uncurry (++) $ partition (\(x:_) -> x /= 'F') $ Map.findWithDefault [] name inferredPVars
       in Goal name env' spec impl 0 pos pVars synth
     extractPos pass (Pos pos decl) = do
       currentPosition .= pos
@@ -247,9 +252,9 @@ resolveSignatures (FuncDecl name _)  = do
     go og@(ScalarT (DatatypeT dtName tArgs pArgs) ref pred) = do
       ds <- use $ environment . datatypes
       case Map.lookup dtName ds of
-        Just (DatatypeDef _ _ _ _ _ rPreds) -> do
+        Just (DatatypeDef _ preds _ _ _ _) -> do
           tryInfer <- use infer
-          pArgs' <- zipWithM (maybeFreshPotl tryInfer) pArgs rPreds
+          pArgs' <- zipWithM (maybeFreshPotl tryInfer) pArgs (fmap isResParam preds)
           return (ScalarT (DatatypeT dtName tArgs pArgs') ref pred)
         Nothing -> return og
     go og@(ScalarT _ _ _) = return og
@@ -266,6 +271,11 @@ resolveSignatures (FuncDecl name _)  = do
     maybeFreshPotl tryInfer arg isPred
       | isPred && tryInfer = fmap (Var IntS) $ freshInferredPotl name "F"
       | otherwise          = return arg
+
+    -- Checks if an abstract arg is a predicate or a resource
+    -- This is different than what extractResourceParams generates because we only
+    -- check whether the return type of the abstract argument is an Int or not
+    isResParam p = predSigResSort p == IntS
       
 resolveSignatures (DataDecl dtName tParams pParams ctors) = mapM_ resolveConstructorSignature ctors
   where
@@ -774,8 +784,8 @@ freshId p s = do
 -- | corresponding to the pot'l of a fn argument which will be inferred
 freshInferredPotl :: Id -> String -> Resolver Id
 freshInferredPotl fname prefix = do
-  i <- use idCount 
-  idCount %= (+ 1)
+  i <- use pvarCount 
+  pvarCount %= (+ 1)
   let x = prefix ++ show i
   syms <- uses environment allSymbols
   if Map.member x syms -- to avoid name collisions with existing vars

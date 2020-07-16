@@ -86,7 +86,7 @@ data TypingState = TypingState {
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
   _resourceConstraints :: [ProcessedRFormula],  -- ^ Constraints relevant to resource analysis
   _resourceVars :: Map Id [Formula],            -- ^ Set of variables created to replace potential/multiplicity annotations; maps from name of potl var to arguments the potl var depends on
-  _inferredRVars :: OMap Id (Maybe Formula),     -- ^ A map from the id of an inferred variable to the formula we think it has, if it's already been inferred
+  _inferredRVars :: PotlSubstitution,           -- ^ A map from the id of an inferred variable to the formula we think it has, if it's already been inferred
   _matchCases :: Set Formula,                   -- ^ Set of all generated match cases
   _cegisState :: CEGISState,                    -- ^ Current state of CEGIS solver
   -- Temporary state:

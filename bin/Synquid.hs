@@ -7,6 +7,7 @@ import Synquid.Program
 import Synquid.Error
 import Synquid.Pretty
 import Synquid.Parser
+import Synquid.Logic (Formula(..))
 import Synquid.Resolver (resolveDecls)
 import Synquid.Solver.Monad hiding (name)
 import Synquid.Solver.HornClause
@@ -15,18 +16,22 @@ import Synquid.Synthesis.Util
 import Synquid.HtmlOutput
 import Synquid.Solver.Types
 
+import           Control.Applicative ((<|>))
 import           Control.Monad
+import           Control.Monad.State hiding (fix)
 import           System.Exit
 import           System.Console.CmdArgs
 import           Data.Time.Calendar
 import qualified Data.Map as Map
-import           Control.Lens ((.~), (^.), (%~))
+import           Data.Map.Ordered (OMap)
+import qualified Data.Map.Ordered as OMap
+import           Control.Lens ((.~), (^.), (%~), (&))
 
 import Data.List.Split
 
 programName = "resyn"
 versionName = "0.1"
-releaseDate = fromGregorian 2016 8 11
+releaseDate = fromGregorian 2020 7 15
 
 -- | Type-check and synthesize a program, according to command-line arguments
 main = do
@@ -289,7 +294,7 @@ runOnFile synquidParams explorerParams solverParams file libs = do
   case resolveDecls infer decls of
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure
     Right (goals, cquals, tquals) -> when (not $ resolveOnly synquidParams) $ do
-      results <- mapM (synthesizeGoal cquals tquals) (requested goals)
+      (results, _) <- runStateT (mapM (synthesizeGoal cquals tquals) (requested goals)) OMap.empty
       when (not (null results) && showStats synquidParams) $ printStats results declsByFile
       return ()
 
@@ -306,23 +311,51 @@ runOnFile synquidParams explorerParams solverParams file libs = do
       Just filt -> filter (\goal -> gName goal `elem` filt) goals
       _ -> goals
     pdoc = printDoc (outputFormat synquidParams)
+
+    synthesizeGoal :: [Formula] -> [Formula] -> Goal -> StateT PotlSubstitution IO SynthesisResult
     synthesizeGoal cquals tquals goal = do
-      when ((gSynthesize goal) && (showSpec synquidParams)) $ pdoc (prettySpec goal)
+      liftIO $ when ((gSynthesize goal) && (showSpec synquidParams)) $ pdoc (prettySpec goal)
       -- print empty
       -- print $ vMapDoc pretty pretty (allSymbols $ gEnvironment goal)
       -- print $ pretty (gSpec goal)
       -- print $ vMapDoc pretty pretty (_measures $ gEnvironment goal)
-      mProg <- synthesize (updateExplorerParams explorerParams goal) (updateSolverParams solverParams goal) goal cquals tquals
+
+      -- Update this goal with the inferred potential variables we know so far
+      pvars <- get
+      let env' = gEnvironment goal
+               & unresolvedConstants %~ fmap (schemaSubstitutePotl pvars)
+               & symbols %~ fmap (fmap (schemaSubstitutePotl pvars))
+      let goal' = goal { gEnvironment = env' }
+      
+      mProg <- liftIO $ synthesize (updateExplorerParams explorerParams goal') (updateSolverParams solverParams goal') goal' cquals tquals
       case mProg of
-        Left typeErr -> pdoc (pretty typeErr) >> pdoc empty >> exitFailure
+        Left typeErr -> liftIO $ pdoc (pretty typeErr) >> pdoc empty >> exitFailure
         Right progs  -> do
           -- Print inferred type
           let tryInfer = explorerParams ^. (explorerResourceArgs . inferResources)
-          when tryInfer $ mapM_ (\p -> pdoc ((prettyWithInferred ((snd p) ^. inferredRVars) goal) <+> text "(inferred)")) progs
+          liftIO $ when tryInfer $ mapM_ (\p -> pdoc ((prettyWithInferred ((snd p) ^. inferredRVars) goal') <+> text "(inferred)")) progs
+
+          -- Update our state with our inferred potl vars
+          -- TODO: We can't just add the new inferred potl vars as-is because they're Z3Lits
+          -- which might have references to freed Z3 AST nodes. To avoid having freed AST literals in our Map,
+          -- we're just manually assuming that we get ints back and convert it this way.
+          -- This is hideously unsafe and janky since:
+          --
+          -- a) We always assume we're gonna get back a Z3Lit, but also
+          -- b) We always assume we're gonna get back just a number as the string
+          --
+          -- This is fine for now, but will have to be fixed once we have dependent potentials.
+          mapM_ (\p -> modify $ OMap.unionWithR (\_ -> (<|>)) (fmap (fmap z3litToInt) $ (snd p) ^. inferredRVars)) progs 
+          
           -- Print synthesized program
-          when (gSynthesize goal) $ mapM_ (\p -> pdoc (prettySolution goal (fst p)) >> pdoc empty) progs
-          let result = assembleResult goal progs
+          liftIO $ when (gSynthesize goal') $ mapM_ (\p -> pdoc (prettySolution goal' (fst p)) >> pdoc empty) progs
+          let result = assembleResult goal' progs
+          
           return result
+
+    z3litToInt (Z3Lit _ _ s) = IntLit (read s :: Int)
+    z3litToInt x = x
+  
     assembleResult goal ps = SynthesisResult (fst (head ps)) (snd (head ps)) (tail ps) goal
     updateLogLevel goal orig = if gSynthesize goal then orig else 0 -- prevent logging while type checking measures
 

@@ -327,33 +327,9 @@ instance Pretty RSchema where
   pretty = prettySchema
 
 -- | 'prettyWithInferred' @ts sch@ : pretty print an RSchema with inferred potential values replaced
-prettyWithInferred :: OMap Id (Maybe Formula) -> Goal -> Doc
-prettyWithInferred ts g@(Goal name _ _ _ _ _ _ _) = text name <+> operator "::" <+> pretty (go sch)
-  where
-    sch = unresolvedSpec g
-
-    go :: RSchema -> RSchema
-    go (ForallT i s) = ForallT i $ go s
-    go (ForallP i s) = ForallP i $ go s
-    go (Monotype b) = Monotype $ gt b
-
-    -- TODO: this assumes inferred potls can only be vars
-    gt :: RType -> RType
-    gt (ScalarT (DatatypeT di ta abs) ref v) =
-      ScalarT (DatatypeT di (fmap gt ta) (fmap f abs)) ref (f v)
-    gt (ScalarT dt ref v) =
-      ScalarT dt ref (f v)
-    gt (FunctionT i d c cs) = FunctionT i (gt d) (gt c) cs
-    gt (LetT i def body) = LetT i (gt def) (gt body)
-    gt AnyT = AnyT
-
-    -- TODO: This only works if the formula is only an inference var and nothing else
-    --       If the formula isn't only an inference var but contains one, this
-    --       doesn't replace it
-    f v@(Var IntS pVar) = case OMap.lookup pVar ts of
-      Just (Just x)  -> x
-      _              -> v
-    f x = x
+prettyWithInferred :: PotlSubstitution -> Goal -> Doc
+prettyWithInferred ts g@(Goal name _ _ _ _ _ _ _) =
+  text name <+> operator "::" <+> pretty (schemaSubstitutePotl ts (unresolvedSpec g))
 
 {- Programs -}
 
