@@ -1,0 +1,27 @@
+-- Simple model of list memory semantics:
+--   Constructing an element of a list requires enough heap space 
+--   for the polymorphic type and a pointer to the next one.
+--   We assume Nil requires no memory
+data List a where
+  Nil :: List a
+  Cons :: x: a -> xs: List a -> List a
+
+termination measure len :: List a -> {Int | _v >= 0} where
+  Nil -> 0
+  Cons x xs -> 1 + len xs  
+  
+measure elems :: List a -> Set a where
+  Nil -> []
+  Cons x xs -> [x] + elems xs  
+
+-- append xs ys requires memory proportional to the length of xs
+append :: xs: List {a| |1} -> ys: List a -> {List a | len _v == len xs + len ys && elems _v == elems xs + elems ys}
+append = \xs. \ys.
+  match xs with
+    Nil -> ys
+    Cons z zs -> Cons z (tick 1 (append zs ys))
+
+-- append xs ys requires memory proportional to the length of xs
+append2 :: xs: List {a| |0} -> ys: List {a| |2} -> zs: List {a| |1} -> {List a | len _v == len xs + len ys + len zs && elems _v == elems xs + elems ys + elems zs}
+append2 = \xs. \ys. \zs. 
+  append (append ys zs) xs

@@ -1,0 +1,24 @@
+data Pair a where
+  Pair :: a -> a -> Pair a
+
+data List a <q :: Int> where
+  Nil  :: List a <q>
+  Cons :: x:a -> xs: List {a | | q} <q> -> List a <q>
+
+append :: xs: List {a | | 1} <{0}> -> ys: List a <{0}> -> List a <{0}>
+append = \xs. \ys.
+  match xs with
+    Nil       -> ys
+    Cons z zs -> Cons z (tick 1 (append zs ys))
+
+attach :: <q :: Int>. x:a -> xs: List {a | | 1 + q} <{0}> -> List {Pair a | | q} <{0}>
+attach = \x. \xs.
+  match xs with
+    Nil       -> Nil
+    Cons y ys -> Cons (Pair x y) (tick 1 (attach x ys))
+
+pairs :: xs: List {a | | 3} <{2}> -> List (Pair a) <{0}>
+pairs = \xs.
+  match xs with
+    Nil       -> Nil
+    Cons y ys -> tick 1 (append (tick 1 (attach y ys)) (tick 1 (pairs ys)))

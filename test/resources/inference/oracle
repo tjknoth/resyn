@@ -1,0 +1,195 @@
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+size :: arg0:{BST {1**a||0}||0} -> {Int|_v >= 0|0} (inferred)
+elems :: arg0:{BST {1**a||0}||0} -> {DSet {1**a||0}||0} (inferred)
+contains :: <a> . x:{1**a||I0} -> t:{BST {1**a||I1}||I2} -> {Bool|_v == (x in elems t)|I3}
+contains :: <a> . x:{1**a||0} -> t:{BST {1**a||1}||0} -> {Bool|_v == (x in elems t)|0} (inferred)
+contains = \x . \t . 
+    match t with
+      Empty -> False
+      Node y l r -> 
+        if x < y
+          then tick 1 (contains x l)
+          else 
+            if y < x
+              then tick 1 (contains x r)
+              else True
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+len :: arg0:{List {1**a||0}||0} -> {Int|_v >= 0|0} (inferred)
+elems :: arg0:{List {1**a||0}||0} -> {DSet {1**a||0}||0} (inferred)
+append :: <a> . xs:{List {1**a||I0}||I1} -> ys:{List {1**a||I2}||I3} -> {List {1**a||I4}|len _v == len xs + len ys && elems _v == elems xs + elems ys|I5}
+append :: <a> . xs:{List {1**a||1}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0} (inferred)
+append = \xs . \ys . 
+    match xs with
+      Nil -> ys
+      Cons z zs -> Cons z
+                     (tick 1 (append zs ys))
+
+append2 :: <a> . xs:{List {1**a||I6}||I7} -> ys:{List {1**a||I8}||I9} -> zs:{List {1**a||I10}||I11} -> {List {1**a||I12}|len _v == (len xs + len ys) + len zs && elems _v == (elems xs + elems ys) + elems zs|I13}
+append2 :: <a> . xs:{List {1**a||0}||0} -> ys:{List {1**a||2}||0} -> zs:{List {1**a||1}||0} -> {List {1**a||0}|len _v == (len xs + len ys) + len zs && elems _v == (elems xs + elems ys) + elems zs|0} (inferred)
+append2 = \xs . \ys . \zs .
+      append (append ys zs) xs
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+len :: arg0:{List {1**a||0}||0} -> {Int|_v >= 0|0} (inferred)
+elems :: arg0:{List {1**a||0}||0} -> {DSet {1**a||0}||0} (inferred)
+append :: <a> . xs:{List {1**a||I0}||I1} -> ys:{List {1**a||I2}||I3} -> {List {1**a||I4}|len _v == len xs + len ys && elems _v == elems xs + elems ys|I5}
+append :: <a> . xs:{List {1**a||1}||0} -> ys:{List {1**a||0}||0} -> {List {1**a||0}|len _v == len xs + len ys && elems _v == elems xs + elems ys|0} (inferred)
+append = \xs . \ys . 
+    match xs with
+      Nil -> ys
+      Cons z zs -> Cons z
+                     (tick 1 (append zs ys))
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+len :: arg0:{List {1**a||0}||0} -> {Int|_v >= 0|0} (inferred)
+compress :: <a> . xs:{List {1**a||I0}||I1} -> {List {1**a||I2}||I3}
+compress :: <a> . xs:{List {1**a||1}||0} -> {List {1**a||0}||0} (inferred)
+compress = \xs . 
+  match xs with
+    Nil -> Nil
+    Cons y ys -> 
+      match tick 1 (compress ys) with
+        Nil -> Cons y Nil
+        Cons z zs -> 
+          if y == z
+            then Cons z zs
+            else Cons y (Cons z zs)
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+cons2 :: <a> . x:{2**a||I0} -> {List {1**a||I1}||I2}
+cons2 :: <a> . x:{2**a||2} -> {List {1**a||0}||0} (inferred)
+cons2 = \x . tick 1 (Cons x
+                       (tick 1 (Cons x Nil)))
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+snoc :: <a> . x:{1**a||I0} -> xs:{List {1**a||I1} <F9>||I2} -> {List {1**a||I3} <F10>||I4}
+snoc :: <a> . x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0} (inferred)
+snoc = \x . \xs . 
+    match xs with
+      Nil -> Cons x Nil
+      Cons y ys -> Cons y
+                     (tick 1 (snoc x ys))
+
+reverse :: <a> . xs:{List {1**a||I5} <F11>||I6} -> {List {1**a||I7} <F12>||I8}
+reverse :: <a> . xs:{List {1**a||2} <1>||0} -> {List {1**a||0} <0>||0} (inferred)
+reverse = \xs . 
+  match xs with
+    Nil -> Nil
+    Cons y ys -> tick 1 (snoc y
+                           (tick 1 (reverse ys)))
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+insert :: <a> . x:{1**a||I0} -> xs:{List {1**a||I1} <F9>||I2} -> {List {1**a||I3} <F10>||I4}
+insert :: <a> . x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0} (inferred)
+insert = \x . \xs . 
+    match xs with
+      Nil -> Cons x Nil
+      Cons y ys -> 
+        if y < x
+          then Cons y (tick 1 (insert x
+                                 ys))
+          else Cons x (Cons y ys)
+
+insertionSort :: <a> . xs:{List {1**a||I5} <F11>||I6} -> {List {1**a||I7} <F12>||I8}
+insertionSort :: <a> . xs:{List {1**a||2} <1>||0} -> {List {1**a||0} <0>||0} (inferred)
+insertionSort = \xs . 
+  match xs with
+    Nil -> Nil
+    Cons y ys -> tick 1 (insert y
+                           (tick 1 (insertionSort ys)))
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+subsetSum :: arg1:{EList {Int||I0} <F4>||I1} -> arg0:{Int||I2} -> {Bool||I3}
+subsetSum :: arg1:{EList {Int||0} <2>||0} -> arg0:{Int||0} -> {Bool||0} (inferred)
+subsetSum = \xs . \target . 
+    match xs with
+      Nil -> target == 0
+      Cons hd tl -> (tick 1 (subsetSum
+                               tl (target - hd))) ||
+                      (tick 1 (subsetSum tl target))
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+insert :: <a> . x:{1**a||I0} -> xs:{List {1**a||I1} <F9>||I2} -> {List {1**a||I3} <F10>||I4}
+insert :: <a> . x:{1**a||0} -> xs:{List {1**a||1} <1>||0} -> {List {1**a||0} <1>||0} (inferred)
+insert = \x . \xs . 
+    match xs with
+      Nil -> Cons x Nil
+      Cons y ys -> 
+        if y < x
+          then Cons y (tick 1 (insert x
+                                 ys))
+          else Cons x (Cons y ys)
+
+insertionSort :: <a> . xs:{List {1**a||I5} <F11>||I6} -> {List {1**a||I7} <F12>||I8}
+insertionSort :: <a> . xs:{List {1**a||2} <1>||0} -> {List {1**a||0} <1>||0} (inferred)
+insertionSort = \xs . 
+  match xs with
+    Nil -> Nil
+    Cons y ys -> tick 1 (insert y
+                           (tick 1 (insertionSort ys)))
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+insert :: <a> . x:{1**a||I0} -> xs:{List {1**a||I1} <F9>||I2} -> {List {1**a||I3} <F10>||I4}
+insert :: <a> . x:{1**a||0} -> xs:{List {1**a||1} <1>||0} -> {List {1**a||0} <1>||0} (inferred)
+insert = \x . \xs . 
+    match xs with
+      Nil -> Cons x Nil
+      Cons y ys -> 
+        if tick 1 (y < x)
+          then Cons y (insert x ys)
+          else Cons x (Cons y ys)
+
+insertionSort :: <a> . xs:{List {1**a||I5} <F11>||I6} -> {List {1**a||I7} <F12>||I8}
+insertionSort :: <a> . xs:{List {1**a||2} <1>||0} -> {List {1**a||0} <1>||0} (inferred)
+insertionSort = \xs . 
+  match xs with
+    Nil -> Nil
+    Cons y ys -> tick 1 (insert y
+                           (tick 1 (insertionSort ys)))
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+append :: <a> . xs:{List {1**a||I0} <F17>||I1} -> ys:{List {1**a||I2} <F18>||I3} -> {List {1**a||I4} <F19>||I5}
+append :: <a> . xs:{List {1**a||1} <0>||0} -> ys:{List {1**a||0} <0>||0} -> {List {1**a||0} <0>||0} (inferred)
+append = \xs . \ys . 
+    match xs with
+      Nil -> ys
+      Cons z zs -> Cons z
+                     (tick 1 (append zs ys))
+
+attach :: <a> . <q :: Int> . x:{1**a||I6} -> xs:{List {1**a||I7} <F20>||I8} -> {List {Pair {1**a||I9}||I10} <F21>||I11}
+attach :: <a> . <q :: Int> . x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -> {List {Pair {1**a||0}||0} <0>||0} (inferred)
+attach = \x . \xs . 
+    match xs with
+      Nil -> Nil
+      Cons y ys -> Cons (Pair x y)
+                     (tick 1 (attach x ys))
+
+pairs :: <a> . xs:{List {1**a||I12} <F22>||I13} -> {List {Pair {1**a||I14}||I15} <F23>||I16}
+<no file name>:1: Error:
+  Insufficient resources
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+len :: arg0:{List {1**a||0}||0} -> {Int|_v >= 0|0} (inferred)
+replicate :: <a> . n:{Int|_v >= 0|0} -> x:{1**a||I1} -> {List {1**a||I2}|len _v == n|I3}
+<no file name>:1: Error:
+  Insufficient resources
+
+Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
+Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
+treeInsert :: <a> . x:{1**a||I0} -> t:{Tree {1**a||I1} <x < _0> <F5>||I2} -> {Tree {1**a||I3} <x < _0> <F6>||I4}
+resyn: Can't infer dependent resources
+CallStack (from HasCallStack):
+  error, called at src/Synquid/Solver/Resource.hs:262:14 in resyn-0.1-4MhUEoTXxhG3lBXQ6fCuOn:Synquid.Solver.Resource

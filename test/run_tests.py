@@ -172,6 +172,25 @@ RESOURCE_VERIFICATION_BENCHMARKS = [
     ('BST-Insert',                   ['-f=Nonterminating', '--res-solver=CEGIS']),
 ]
 
+RESOURCE_INFERENCE_POS_BENCHMARKS = [
+    ('BST-Contains',                 ['--eac', '--infer', '-f=Nonterminating']),
+    ('List-Append2',                 ['--eac', '--infer', '-f=Nonterminating']),
+    ('List-Append',                  ['--eac', '--infer', '-f=Nonterminating']),
+    ('List-Compress',                ['--eac', '--infer', '-f=Nonterminating']),
+    ('List-Cons2',                   ['--eac', '--infer', '-f=Nonterminating']),
+    ('List-Reverse',                 ['--eac', '--infer', '-f=Nonterminating']),
+    ('List-InsertSort-Coarse',       ['--eac', '--infer', '-f=Nonterminating']),
+    ('List-Subset-Sum',              ['--eac', '--infer', '-f=Nonterminating']),
+    ('List-InsertSort',              ['--eac', '--infer', '-f=Nonterminating', '--res-solver=CEGIS']),
+    ('List-InsertSort-Compares',     ['--eac', '--infer', '-f=Nonterminating']),
+]
+
+RESOURCE_INFERENCE_NEG_BENCHMARKS = [
+    ('List-Pairs',                   ['--eac', '--infer', '-f=Nonterminating']),
+    ('List-Replicate',               ['--eac', '--infer', '-f=Nonterminating', '--res-solver=CEGIS']),
+    ('BST-Insert',                   ['--eac', '--infer', '-f=Nonterminating', '--res-solver=CEGIS']),
+]
+
 RESOURCE_SYNTHESIS_BENCHMARKS = [
     ('BinHeap-Insert',      []),
     ('BST-Delete',          []),
@@ -232,15 +251,16 @@ def cmdline():
     a.add_argument('--sections', nargs="*", choices=SECTIONS + ['all'], default=['all'], help=('which synthesis tests to run'))
     a.add_argument('--demo', action='store_true', help='run demo tests')
     a.add_argument('--res-verif', action='store_true', help='run resource-aware verification tests')
+    a.add_argument('--res-infer', action='store_true', help='run resource inference tests')
     a.add_argument('--res-synth', action='store_true', help='run resource-aware synthesis tests')
     a.add_argument('--optimize', action='store_true', help='Check if ReSyn improved performance of Synquid-generated code' )
     return a.parse_args()
 
 def printerr(str):
-    print (Back.RED + Fore.RED + Style.BRIGHT + str + Style.RESET_ALL, end = ' ')
+    print (Back.RED + Fore.BLACK + Style.BRIGHT + str + Style.RESET_ALL, end = ' ')
 
 def printok(str):
-    print (Back.GREEN + Fore.GREEN + Style.BRIGHT + str + Style.RESET_ALL, end = ' ')
+    print (Back.GREEN + Fore.BLACK + Style.BRIGHT + str + Style.RESET_ALL, end = ' ')
 
 def printwarn(str):
     print (Back.YELLOW + Fore.YELLOW + Style.BRIGHT + str + Style.RESET_ALL, end = ' ')
@@ -353,7 +373,7 @@ if __name__ == '__main__':
         synquid_path = SYNQUID_PATH_WINDOWS
 
     # By default enable all tests:
-    if not (a.unit or a.check or a.synt or a.demo or a.res_verif or a.res_synth):
+    if not (a.unit or a.check or a.synt or a.demo or a.res_verif or a.res_infer or a.res_synth):
       a.unit = True
       a.check = True
       a.synt = True
@@ -404,6 +424,18 @@ if __name__ == '__main__':
         clear_log()
         for (name, args) in RESOURCE_VERIFICATION_BENCHMARKS:
             run_benchmark(name, args, 'pos')
+            run_benchmark(name, args, 'neg', True)
+        fail = check_diff()
+
+        os.chdir('../..')
+
+    if not fail and a.res_infer:
+        # Run resource inference tests
+        os.chdir('resources/inference')
+        clear_log()
+        for (name, args) in RESOURCE_INFERENCE_POS_BENCHMARKS:
+            run_benchmark(name, args, 'pos')
+        for (name, args) in RESOURCE_INFERENCE_NEG_BENCHMARKS:
             run_benchmark(name, args, 'neg', True)
         fail = check_diff()
 

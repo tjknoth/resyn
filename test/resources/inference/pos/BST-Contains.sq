@@ -1,0 +1,29 @@
+--------------------------------------------------------------------------------
+-- Query whether a binary tree contains an element
+--------------------------------------------------------------------------------
+
+data BST a where
+  Empty :: BST a
+  Node :: x: a -> l: BST {a | _v < x} -> r: BST {a | x < _v} -> BST a
+
+-- Measure the number of nodes in the tree
+termination measure size :: BST a -> {Int | _v >= 0} where
+  Empty -> 0
+  Node _ l r -> 1 + size l + size r
+
+-- A set of all elements in the tree
+measure elems :: BST a -> Set a where
+  Empty -> []
+  Node x l r -> [x] + elems l + elems r
+
+-- A function to check whether an element is inside a BST. Since we do not
+-- modify the tree, the only cost is that of traversal.
+contains :: x: a -> t: BST {a| |1} -> {Bool | _v == (x in elems t)}
+contains = \x. \t.
+  match t with
+    Empty -> False
+    Node y l r -> if x < y
+                  then tick 1 (contains x l)
+                  else if y < x
+                       then tick 1 (contains x r)
+                       else True
