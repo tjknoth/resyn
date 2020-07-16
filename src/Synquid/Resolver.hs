@@ -44,7 +44,7 @@ data ResolverState = ResolverState {
   _idCount :: Int,
   _potentialVars :: Set Id,
   _infer :: Bool, -- ^ whether we should attempt to infer fn arg pot'ls
-  _inferredPotlVars :: Map Id [Id]  -- ^ maps fn name to associated inferred pot'ls
+  _inferredPotlVars :: Map Id [Id]  -- ^ maps fn name to associated inferred pot'ls, in order of priority
 }
 
 makeLenses ''ResolverState
@@ -89,7 +89,9 @@ resolveDecls tryInfer declarations =
         toRemove = drop (fromJust $ elemIndex name allNames) allNames \\ myMutuals -- All goals after and including @name@, except mutuals
         flagMap = fmap _resourcePreds (env ^. datatypes)
         env' = (foldr removeVariable env toRemove) { _resourceMeasures = rMeasuresFromSch flagMap spec }
-        pVars = Set.fromList $ Map.findWithDefault [] name inferredPVars
+        -- This partition business is so that all abs potl vars (i.e. vars that start with an F) will
+        -- be at the front of the list, and will be prioritized by Z3
+        pVars = uncurry (++) $ partition (\(x:_) -> x == 'F') $ Map.findWithDefault [] name inferredPVars
       in Goal name env' spec impl 0 pos pVars synth
     extractPos pass (Pos pos decl) = do
       currentPosition .= pos
@@ -137,8 +139,6 @@ resolveDeclaration (FuncDecl funcName typeSchema) = do
     go (Monotype b) = gt b >>= return . Monotype
 
     -- TODO: Maybe if the potential != 0, don't change it to an inferred?
-    -- TODO: Right now we do nothing for datatypes with abstract potentials,
-    --       we just pass them through as-is (the absps arg). Try to fix this?
     gt :: RType -> Resolver RType
     gt (ScalarT (DatatypeT di tyargs absps) ref _) = do
       tyargs' <- mapM gt tyargs
@@ -264,7 +264,7 @@ resolveSignatures (FuncDecl name _)  = do
     go AnyT = return AnyT
 
     maybeFreshPotl tryInfer arg isPred
-      | isPred && tryInfer = fmap (Var IntS) $ freshInferredPotl name "A"
+      | isPred && tryInfer = fmap (Var IntS) $ freshInferredPotl name "F"
       | otherwise          = return arg
       
 resolveSignatures (DataDecl dtName tParams pParams ctors) = mapM_ resolveConstructorSignature ctors
@@ -781,7 +781,7 @@ freshInferredPotl fname prefix = do
   if Map.member x syms -- to avoid name collisions with existing vars
     then freshInferredPotl fname prefix
     else do
-      inferredPotlVars %= Map.insertWith (++) fname [x]
+      inferredPotlVars %= Map.insertWith (flip (++)) fname [x]
       return x
 
 -- | 'instantiate' @sorts@: replace all sort variables in @sorts@ with fresh sort variables

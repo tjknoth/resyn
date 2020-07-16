@@ -44,6 +44,8 @@ import qualified Data.Set as Set
 import           Data.Set (Set)
 import qualified Data.Map as Map
 import           Data.Map (Map)
+import qualified Data.Map.Ordered as OMap
+import           Data.Map.Ordered (OMap)
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Trans.Except (throwE)
@@ -57,7 +59,7 @@ initTypingState goal = do
   initCand <- initHornSolver env
   -- If we're doing inference, our initial typing state has to contain
   -- the resource vars that we'll later use for inference.
-  let rvars = Set.toList $ gInferredPotlVars goal
+  let rvars = gInferredPotlVars goal
   return TypingState {
     _typingConstraints = [],
     _typeAssignment = Map.empty,
@@ -70,7 +72,7 @@ initTypingState goal = do
     _isFinal = False,
     _resourceConstraints = [],
     _resourceVars = Map.fromList [(p, []) | p <- rvars],
-    _inferredRVars = Map.fromList [(p, Nothing) | p <- rvars],
+    _inferredRVars = OMap.fromList [(p, Nothing) | p <- rvars],
     _matchCases = Set.empty,
     _cegisState = initCEGISState,
     _simpleConstraints = [],

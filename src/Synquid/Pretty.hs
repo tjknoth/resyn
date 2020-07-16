@@ -73,7 +73,9 @@ import Text.PrettyPrint.ANSI.Leijen hiding ((<+>), (<$>), hsep, vsep)
 import qualified Text.PrettyPrint.ANSI.Leijen as L
 import qualified Data.Set as Set
 import qualified Data.Map as Map
+import qualified Data.Map.Ordered as OMap
 import Data.Map (Map)
+import Data.Map.Ordered (OMap)
 import Data.Set (Set)
 import Data.List
 import Data.Maybe (fromMaybe)
@@ -325,7 +327,7 @@ instance Pretty RSchema where
   pretty = prettySchema
 
 -- | 'prettyWithInferred' @ts sch@ : pretty print an RSchema with inferred potential values replaced
-prettyWithInferred :: Map Id (Maybe Formula) -> Goal -> Doc
+prettyWithInferred :: OMap Id (Maybe Formula) -> Goal -> Doc
 prettyWithInferred ts g@(Goal name _ _ _ _ _ _ _) = text name <+> operator "::" <+> pretty (go sch)
   where
     sch = unresolvedSpec g
@@ -348,9 +350,9 @@ prettyWithInferred ts g@(Goal name _ _ _ _ _ _ _) = text name <+> operator "::" 
     -- TODO: This only works if the formula is only an inference var and nothing else
     --       If the formula isn't only an inference var but contains one, this
     --       doesn't replace it
-    f v@(Var IntS pVar) = case Map.findWithDefault Nothing pVar ts of
-      Just x  -> x
-      Nothing -> v
+    f v@(Var IntS pVar) = case OMap.lookup pVar ts of
+      Just (Just x)  -> x
+      _              -> v
     f x = x
 
 {- Programs -}

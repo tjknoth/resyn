@@ -55,6 +55,7 @@ Library
 
   build-depends:      base >= 4.6
                     , containers >= 0.5
+                    , ordered-containers >= 0.2
                     , mtl >= 2.2
                     , transformers >= 0.3
                     , transformers-compat >= 0.4

@@ -337,7 +337,7 @@ reconstructE' env typ p@(PApp iFun iArg) = do
                       impl <- etaExpand tArg f
                       _ <- enqueueGoal env tArg impl d
                       return ()
-          Just (env', def) -> auxGoals %= (Goal f env' (Monotype tArg) def d noPos Set.empty True :) -- This is a locally defined function: add an aux goal with its body
+          Just (env', def) -> auxGoals %= (Goal f env' (Monotype tArg) def d noPos [] True :) -- This is a locally defined function: add an aux goal with its body
         return iArg
       _ -> enqueueGoal env tArg iArg d -- HO argument is an abstraction: enqueue a fresh goal
 

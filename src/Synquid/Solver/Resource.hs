@@ -27,6 +27,8 @@ import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Map (Map)
 import qualified Data.Map as Map
+import           Data.Map.Ordered (OMap)
+import qualified Data.Map.Ordered as OMap
 import           Control.Monad.Logic
 import           Control.Monad.Reader
 import           Control.Lens
@@ -231,21 +233,20 @@ satisfyResources oldfmls newfmls = do
   let runInSolver = lift . lift . lift
   domain <- view (resourceArgs . rSolverDomain)
   infdRVars <- use inferredRVars
-  let tryInfer = not $ Map.null infdRVars
+  let tryInfer = not $ OMap.null infdRVars
   case domain of
     Constant -> do
       if tryInfer
         then do
           let fml = conjunction $ map bodyFml rfmls
-          vs <- use inferredRVars
-          -- TODO: order we optimize in is arbitrary rn
-          model <- runInSolver $ optimizeAndGetModel fml (Map.toList vs)
+          let rvl = OMap.assocs infdRVars
+          model <- runInSolver $ optimizeAndGetModel fml rvl
           case model of
             Nothing -> return False
             Just m' -> do
               writeLog 6 $ nest 2 (text "Solved + inferred with model") </> nest 6 (text (modelStr m'))
-              vs' <- runInSolver $ modelGetAssignment (Map.keys vs) m'
-              inferredRVars %= Map.union (fmap Just . unRSolution $ vs')
+              vs' <- runInSolver $ modelGetAssignment (fmap fst rvl) m'
+              inferredRVars %= OMap.unionWithR (\_ l _ -> l) (OMap.fromList . Map.toList . fmap Just . unRSolution $ vs')
               return True
         else do
           let fml = conjunction $ map bodyFml rfmls
