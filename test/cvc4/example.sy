@@ -1,0 +1,33 @@
+(set-logic LIA)
+
+(synth-fun p1 () Int)
+(synth-fun p2 () Int)
+(synth-fun p3 () Int)
+(synth-fun p4 () Int)
+(synth-fun q ((x Int)) Int)
+(synth-fun r ((x Int)) Int)
+
+(declare-var y Int)
+
+(constraint (= 0 p1))
+(constraint (= p1 (+ p2 p3)))
+(constraint (= (+ 1 p3) (+ p4 (q y) (r y))))
+(constraint (>= (q y) 1))
+(constraint (>= p1 0))
+(constraint (>= p2 0))
+(constraint (>= p3 0))
+(constraint (>= p4 0))
+(constraint (>= (q y) 0))
+(constraint (>= (r y) 0))
+
+(check-synth)
+
+; exists p1,p2,p3,p4 :: Int
+; exists q :: Int -> Int
+; exists r :: Int -> Int
+; forall y :: Int
+; p1 = 0
+; p1 = p2 + p3
+; p3 + 1  = p4 + q(y) + r(y)
+; q(y) >= 1
+; p1 >= 0 & p2 >= 0 & ...

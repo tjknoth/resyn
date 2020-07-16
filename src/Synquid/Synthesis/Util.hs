@@ -329,7 +329,6 @@ freshResAnnotation env vtype prefix = do
   resourceVars %= insertRVar rvar
   return $ Var IntS x
 
-
 -- | 'schFreshPotentials' @env sch r@ : Replace potentials in schema @sch@ by unwrapping the foralls.
 --    If @r@, recursively replace potential annotations in the entire type. Otherwise, just replace top-level annotations.
 schFreshPotentials :: MonadHorn s
@@ -350,13 +349,12 @@ freshPotentialsType :: MonadHorn s
                     => Environment
                     -> RType
                     -> TCSolver s RType
-freshPotentialsType env (ScalarT base fml p) = do
+freshPotentialsType env t = do
   pass <- use predAssignment
-  -- traceM $ "freshening: " ++ show (plain (pretty p)) ++ " where " ++ show pass
-  base' <- freshMultiplicities env base
-  p' <- freshPotentialsType' env base (substitutePredicate pass p)
+  let (ScalarT base fml p) = typeSubstitutePred pass t
+  base' <- freshPotentialsBase env base
+  p' <- freshPotentialsType' env base p -- (substitutePredicate pass p)
   return $ ScalarT base' fml p'
--- freshPotentials _ t = return t
 
 freshPotentialsType' :: MonadHorn s => Environment -> RBase -> Formula -> TCSolver s Formula
 freshPotentialsType' env base pot = 
@@ -367,50 +365,39 @@ freshPotentialsType' env base pot =
 
 -- Retain conditional structure of formula when freshening
 freshPotentials :: MonadHorn s => Environment -> Maybe RBase -> Formula -> TCSolver s Formula
--- freshPotentials env rb (Ite g t f) = Ite g <$> safeFreshPot env rb t <*> safeFreshPot env rb f
--- freshPotentials env rb f = safeFreshPot env rb f
 freshPotentials env rb (Ite g t f) = Ite g <$> freshPot env rb <*> freshPot env rb
 freshPotentials env rb f = freshPot env rb
 
-
-{-
-freshPotentials env (ScalarT base fml (Ite g t f)) = do
-    t' <- safeFreshPot env (Just base) t
-    f' <- safeFreshPot env (Just base) f
-    base' <- freshMultiplicities env base 
-    return $ ScalarT base' fml $ Ite g t' f'
-freshPotentials env (ScalarT base fml pot) = do
-  pot' <- safeFreshPot env (Just base) pot
-  base' <- freshMultiplicities env base
-  return $ ScalarT base' fml pot'
-freshPotentials _ t = return t
--}
-
-{-
-freshPotentials' env base (Ite g t f) = do
-  t' <- safeFreshPot env (Just base) t
-  f' <- safeFreshPot env (Just base) f
-  return $ Ite g t' f'
-freshPotentials' env base (Unary op p) = 
-  Unary op <$> freshPotentials' env base p
-freshPotentials' env base (Binary op f g) = 
-  Binary op <$> freshPotentials' env base f <*> freshPotentials' env base g
-freshPotentials' env base pot = safeFreshPot env (Just base) pot
--}
-
-
 -- Replace potentials in a BaseType
-freshMultiplicities :: MonadHorn s
+freshPotentialsBase :: MonadHorn s
                     => Environment
                     -> RBase
                     -> TCSolver s RBase
-freshMultiplicities env b@(TypeVarT s x m) = do
+freshPotentialsBase env b@(TypeVarT s x m) = do
   m' <- freshMul env Nothing
   return $ TypeVarT s x m'
-freshMultiplicities env (DatatypeT x ts ps) = do
+freshPotentialsBase env (DatatypeT name ts ps) = do
   ts' <- mapM (freshPotentialsType env) ts
-  return $ DatatypeT x ts' ps
-freshMultiplicities _ t = return t
+  ps' <- freshAPs env name ps
+  return $ DatatypeT name ts' ps'
+freshPotentialsBase _ t = return t
+
+freshPred :: MonadHorn s => Environment -> [Sort] -> Sort -> TCSolver s Formula
+freshPred env argSorts resSort = do
+  p' <- freshId "P"
+  modify $ addTypingConstraint (WellFormedPredicate env argSorts resSort p')
+  let args = zipWith Var argSorts deBrujns
+  return $ Pred resSort p' [] -- args
+
+freshAPs :: MonadHorn s => Environment -> String -> [Formula] -> TCSolver s [Formula]
+freshAPs env dt ps = 
+  let (DatatypeDef _ pParams _ _ _ _) = (env ^. datatypes) Map.! dt
+      adjust p sig = if predSigResSort sig == IntS then freshAP env p (predSigArgSorts sig) else return p
+   in zipWithM adjust ps pParams
+
+freshAP :: MonadHorn s => Environment -> Formula -> [Sort] -> TCSolver s Formula
+freshAP env (Ite g t f) args = Ite g <$> freshPred env args IntS <*> freshPred env args IntS 
+freshAP env p args = freshPred env args IntS
 
 addScrutineeToEnv :: (MonadHorn s, MonadSMT s)
                   => Environment
