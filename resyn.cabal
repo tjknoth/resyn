@@ -1,5 +1,5 @@
 name:                 resyn  
-version:              0.1
+version:              1.0.0
 synopsis:             Program Synthesis from Refinement Types
 description:          Resyn is a simple functional programming language with refinement types.
                       In Resyn the programmer must provide the type signature for each top-level function,
