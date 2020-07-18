@@ -340,7 +340,7 @@ Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was
 treeInsert :: <a> . x:{1**a||I0} -> t:{Tree {1**a||I1} <x < _0> <F5>||I2} -> {Tree {1**a||I3} <x < _0> <F6>||I4}
 resyn: Can't infer dependent resources
 CallStack (from HasCallStack):
-  error, called at src/Synquid/Solver/Resource.hs:263:14 in resyn-0.1-4MhUEoTXxhG3lBXQ6fCuOn:Synquid.Solver.Resource
+  error, called at src/Synquid/Solver/Resource.hs:263:14 in resyn-1.1.0-8QeZfrsHXnc2fqq2WRk651:Synquid.Solver.Resource
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
 resyn: neg/List-Quick-Sort-Quadratic.sq: openFile: does not exist (No such file or directory)

@@ -66,7 +66,7 @@ Details on the language and syntax can also be found in the wiki.
 ## Try Resyn ##
 * [Resyn demo](http://comcom.csail.mit.edu/comcom/#ReSyn)
 * [Liquid resource type checker demo](http://comcom.csail.mit.edu/comcom/#LRT)
-* **Build from source:** You will need [stack](https://docs.haskellstack.org/en/stable/README/) and [z3](https://github.com/Z3Prover/z3) version 4.7.1. Clone this repository and then run ```stack setup && stack build``` from its top-level directory.  You can then run Resyn using ```stack exec -- resyn [args]```.
+* **Build from source:** You will need [stack](https://docs.haskellstack.org/en/stable/README/) and [z3](https://github.com/Z3Prover/z3) version 4.8.8. Clone this repository and then run ```stack setup && stack build``` from its top-level directory.  You can then run Resyn using ```stack exec -- resyn [args]```.
 
 ## Usage notes ##
 * Resource analysis makes termination checking unnecessary (as long some
@@ -83,6 +83,16 @@ Details on the language and syntax can also be found in the wiki.
   some bugs with constraints involving abstract potentials.
   One can also use [CVC4](https://cvc4.github.io/) as a (currently slow) backend. To do so, install a
   version of CVC4 released after 4/20/20, and set `--res-solver=cvc4`.
+* Resyn now supports resource bound inference, via the technique pioneered
+  by [RAML](www.raml.co). This approach only admits the inference of _constant_ 
+  resource bounds. To infer an upper bound, simply use the `--infer` flag.
+  Note that the order in which abstract potential parameters are declared
+  specifies their relative importance. That is, if one wants to declare a list
+  type admitting third-degree polynomial bounds, the abstract potential
+  parameter corresponding to the coefficient of the highest-degree term should
+  be declared last (rightmost). Inference has only been tested with z3 version
+  4.8.8 -- use an earlier version at your own risk (we had soundness issues when
+  using v4.7.1, for example, but have not tested all versions).
 
 ## Papers ## 
 Technical details on the language and type system can be found in the research
