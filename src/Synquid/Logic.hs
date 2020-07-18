@@ -309,12 +309,14 @@ hasMeasureITE predParams f =
     (All _ e)        -> go e
     _                -> False
 
+-- | 'isDBorVV' @s@ : checks if a var is a de brujin var or not
+isDBorVV :: Id -> Bool
+isDBorVV ('_':_) = True
+isDBorVV _       = False -- heuristic for checking if something is a de bruijn
+
 hasVar :: Set Id -> Formula -> Bool
 hasVar vars f = 
-  let isDBorVV []      = False -- heuristic for checking if something is a de bruijn
-      isDBorVV (_:[])  = False --   or if it's _v -- does it start with "_"?
-      isDBorVV ('_':_) = True
-      go = hasVar vars in
+  let go = hasVar vars in
   case f of
     (Var _ x)        -> x `Set.member` vars || isDBorVV x
     Pred{}           -> False
@@ -328,10 +330,7 @@ hasVar vars f =
 
 hasVarITE :: Set Id -> Formula -> Bool
 hasVarITE vars f = 
-  let isDBorVV []      = False -- heuristic for checking if something is a de bruijn
-      isDBorVV (_:[])  = False --   or if it's _v -- does it start with "_"?
-      isDBorVV ('_':_) = True
-      go = hasVarITE vars in
+  let go = hasVarITE vars in
   case f of
     (Var _ x)        -> x `Set.member` vars || isDBorVV x
     Pred{}           -> False

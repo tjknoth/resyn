@@ -1,0 +1,41 @@
+data Pair a where
+  Pair :: a -> a -> Pair a
+
+data List a <q :: Int> where
+  Nil  :: List a <q>
+  Cons :: a -> List {a | | q} <q> -> List a <q>
+
+split :: List a <{1}> -> Pair (List a <{1}>)
+split = \l. 
+  match l with
+    Nil       -> Pair Nil Nil
+    Cons x xs ->
+      match xs with 
+        Nil -> Pair (Cons x Nil) Nil
+        Cons y ys ->
+          match tick 1 (split ys) with
+            Pair u v -> Pair (Cons x u) (Cons y v)
+
+merge :: List a <{0}> -> List a <{0}> -> List a <{0}> 
+merge = \ps. \qs.
+  match ps with
+    Nil       -> qs
+    Cons x xs ->
+      match qs with
+        Nil       -> ps
+        Cons y ys -> 
+          if x <= y
+            then Cons x (Cons y (merge xs ys))
+            else Cons y (Cons x (merge xs ys))
+
+
+mergeSort :: List a <{1}> -> List a <{0}>
+mergeSort = \xs.
+  match xs with
+    Nil       -> Nil
+    Cons y ys ->   
+      match ys with
+        Nil       -> xs
+        Cons z zs ->
+          match split xs with
+            Pair u v -> merge (mergeSort u) (mergeSort v)

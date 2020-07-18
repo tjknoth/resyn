@@ -7,6 +7,7 @@ import Synquid.Program
 import Synquid.Error
 import Synquid.Pretty
 import Synquid.Parser
+import Synquid.Logic (Formula(..))
 import Synquid.Resolver (resolveDecls)
 import Synquid.Solver.Monad hiding (name)
 import Synquid.Solver.HornClause
@@ -15,18 +16,22 @@ import Synquid.Synthesis.Util
 import Synquid.HtmlOutput
 import Synquid.Solver.Types
 
+import           Control.Applicative ((<|>))
 import           Control.Monad
+import           Control.Monad.State hiding (fix)
 import           System.Exit
 import           System.Console.CmdArgs
 import           Data.Time.Calendar
 import qualified Data.Map as Map
-import           Control.Lens ((.~), (^.), (%~))
+import           Data.Map.Ordered (OMap)
+import qualified Data.Map.Ordered as OMap
+import           Control.Lens ((.~), (^.), (%~), (&))
 
 import Data.List.Split
 
 programName = "resyn"
 versionName = "0.1"
-releaseDate = fromGregorian 2016 8 11
+releaseDate = fromGregorian 2020 7 15
 
 -- | Type-check and synthesize a program, according to command-line arguments
 main = do
@@ -37,7 +42,7 @@ main = do
                lfp bfs
                out_file out_module outFormat resolve
                print_spec print_stats log_ 
-               resources mult forall cut nump constTime cegis_max ec res_solver logfile cvc4cmd) -> do
+               resources mult forall cut nump constTime cegis_max ec infer res_solver logfile cvc4cmd) -> do
                   let 
                     resArgs = defaultResourceArgs {
                     _shouldCheckResources = resources,
@@ -45,6 +50,7 @@ main = do
                     _constantTime = constTime,
                     _cegisBound = cegis_max,
                     _enumerate = ec,
+                    _inferResources = infer,
                     _rsolver = res_solver,
                     _sygusLog = logfile,
                     _cvc4 = cvc4cmd
@@ -135,6 +141,7 @@ data CommandLineArgs
         ct :: Bool,
         cegis_max :: Int,
         eac :: Bool,
+        infer :: Bool,
         res_solver :: ResourceSolver,
         logfile :: Maybe String,
         solve_sygus :: String
@@ -174,6 +181,7 @@ synt = Synthesis {
   ct                  = False           &= help ("Require that all branching expressions consume a constant amount of resources (default: False)"),
   cegis_max           = 100             &= help ("Maximum number of iterations through the CEGIS loop (default: 100)"),
   eac                 = False           &= help ("Enumerate-and-check instead of round-trip resource analysis (default: False)"),
+  infer               = False           &= help ("Infer all resource bounds (default: False)"),
   res_solver          = CEGIS           &= help (unwords ["Which solver should be used for resource constraints?", show SYGUS, show CEGIS, show Incremental, "(default: ", show CEGIS, ")"]),
   logfile             = Nothing         &= help ("File for logging SYGUS constraints (default: no logging)"),
   solve_sygus         = "cvc4"          &= help ("Command to run SYGUS solver (default: \"cvc4\")")
@@ -217,6 +225,7 @@ defaultResourceArgs = ResourceParams {
   _constantTime = False,
   _cegisBound = 100,
   _enumerate = False,
+  _inferResources = False,
   _rsolver = CEGIS,
   _sygusLog = Nothing,
   _cvc4 = "cvc4",
@@ -281,10 +290,11 @@ runOnFile :: SynquidParams -> ExplorerParams -> HornSolverParams
 runOnFile synquidParams explorerParams solverParams file libs = do
   declsByFile <- parseFromFiles (libs ++ [file])
   let decls = concat $ map snd declsByFile
-  case resolveDecls decls of
+  let infer = explorerParams ^. (explorerResourceArgs . inferResources)
+  case resolveDecls infer decls of
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure
     Right (goals, cquals, tquals) -> when (not $ resolveOnly synquidParams) $ do
-      results <- mapM (synthesizeGoal cquals tquals) (requested goals)
+      (results, _) <- runStateT (mapM (synthesizeGoal cquals tquals) (requested goals)) OMap.empty
       when (not (null results) && showStats synquidParams) $ printStats results declsByFile
       return ()
 
@@ -301,20 +311,51 @@ runOnFile synquidParams explorerParams solverParams file libs = do
       Just filt -> filter (\goal -> gName goal `elem` filt) goals
       _ -> goals
     pdoc = printDoc (outputFormat synquidParams)
+
+    synthesizeGoal :: [Formula] -> [Formula] -> Goal -> StateT PotlSubstitution IO SynthesisResult
     synthesizeGoal cquals tquals goal = do
-      when ((gSynthesize goal) && (showSpec synquidParams)) $ pdoc (prettySpec goal)
+      liftIO $ when ((gSynthesize goal) && (showSpec synquidParams)) $ pdoc (prettySpec goal)
       -- print empty
       -- print $ vMapDoc pretty pretty (allSymbols $ gEnvironment goal)
       -- print $ pretty (gSpec goal)
       -- print $ vMapDoc pretty pretty (_measures $ gEnvironment goal)
-      mProg <- synthesize (updateExplorerParams explorerParams goal) (updateSolverParams solverParams goal) goal cquals tquals
+
+      -- Update this goal with the inferred potential variables we know so far
+      pvars <- get
+      let env' = gEnvironment goal
+               & unresolvedConstants %~ fmap (schemaSubstitutePotl pvars)
+               & symbols %~ fmap (fmap (schemaSubstitutePotl pvars))
+      let goal' = goal { gEnvironment = env' }
+      
+      mProg <- liftIO $ synthesize (updateExplorerParams explorerParams goal') (updateSolverParams solverParams goal') goal' cquals tquals
       case mProg of
-        Left typeErr -> pdoc (pretty typeErr) >> pdoc empty >> exitFailure
+        Left typeErr -> liftIO $ pdoc (pretty typeErr) >> pdoc empty >> exitFailure
         Right progs  -> do
+          -- Print inferred type
+          let tryInfer = explorerParams ^. (explorerResourceArgs . inferResources)
+          liftIO $ when tryInfer $ mapM_ (\p -> pdoc ((prettyWithInferred ((snd p) ^. inferredRVars) goal') <+> text "(inferred)")) progs
+
+          -- Update our state with our inferred potl vars
+          -- TODO: We can't just add the new inferred potl vars as-is because they're Z3Lits
+          -- which might have references to freed Z3 AST nodes. To avoid having freed AST literals in our Map,
+          -- we're just manually assuming that we get ints back and convert it this way.
+          -- This is hideously unsafe and janky since:
+          --
+          -- a) We always assume we're gonna get back a Z3Lit, but also
+          -- b) We always assume we're gonna get back just a number as the string
+          --
+          -- This is fine for now, but will have to be fixed once we have dependent potentials.
+          mapM_ (\p -> modify $ OMap.unionWithR (\_ -> (<|>)) (fmap (fmap z3litToInt) $ (snd p) ^. inferredRVars)) progs 
+          
           -- Print synthesized program
-          when (gSynthesize goal) $ mapM_ (\p -> pdoc (prettySolution goal (fst p)) >> pdoc empty) progs
-          let result = assembleResult goal progs
+          liftIO $ when (gSynthesize goal') $ mapM_ (\p -> pdoc (prettySolution goal' (fst p)) >> pdoc empty) progs
+          let result = assembleResult goal' progs
+          
           return result
+
+    z3litToInt (Z3Lit _ _ s) = IntLit (read s :: Int)
+    z3litToInt x = x
+  
     assembleResult goal ps = SynthesisResult (fst (head ps)) (snd (head ps)) (tail ps) goal
     updateLogLevel goal orig = if gSynthesize goal then orig else 0 -- prevent logging while type checking measures
 

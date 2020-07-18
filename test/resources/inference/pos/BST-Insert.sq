@@ -1,0 +1,16 @@
+data Tree a <p :: a -> Bool> <q :: Int> where
+  Leaf :: Tree a <p> <q>
+  Node :: x: {a | | q}
+       -> l: Tree a <p> <{if (p x) then q else 0}>
+       -> r: Tree a <p> <{if (p x) then 0 else q}>
+       -> Tree a <p> <q>
+
+--inserts an element into a binary search tree
+treeInsert :: x:a -> t: Tree a <{x < _0}> <{1}> -> Tree a <{x < _0}> <{0}>
+treeInsert = \x. \t.
+  match t with
+    Leaf       -> Node x Leaf Leaf
+    Node n l r -> 
+      if x < n 
+        then tick 1 (treeInsert x l)
+        else tick 1 (treeInsert x r)
