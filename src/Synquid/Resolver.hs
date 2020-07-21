@@ -29,6 +29,7 @@ import           Data.List
 import qualified Data.Foldable as Foldable
 import           Control.Arrow (first)
 
+import Debug.Pretty.Simple
 
 {- Interface -}
 
@@ -43,12 +44,16 @@ data ResolverState = ResolverState {
   _sortConstraints :: [SortConstraint],
   _currentPosition :: SourcePos,
   _idCount :: Int,
-  _potentialVars :: Set String 
+  _pvarCount :: Int,
+  _potentialVars :: Set Id,
+  _infer :: Bool, -- ^ whether we should attempt to infer fn arg pot'ls
+  _inferredPotlVars :: Map Id [Id]  -- ^ maps fn name to associated inferred pot'ls, in order of priority
 }
 
 makeLenses ''ResolverState
 
-initResolverState = ResolverState {
+initResolverState :: Bool -> ResolverState
+initResolverState infer = ResolverState {
   _environment = emptyEnv,
   _goals = [],
   _checkingGoals = [],
@@ -59,13 +64,17 @@ initResolverState = ResolverState {
   _sortConstraints = [],
   _currentPosition = noPos,
   _idCount = 0,
-  _potentialVars = Set.empty
+  _pvarCount = 0,
+  _potentialVars = Set.empty,
+  _infer = infer,
+  _inferredPotlVars = Map.empty
 }
 
 -- | Convert a parsed program AST into a list of synthesis goals and qualifier maps
-resolveDecls :: [Declaration] -> Either ErrorMessage ([Goal], [Formula], [Formula])
-resolveDecls declarations =
-  case runExcept (execStateT go initResolverState) of
+-- | The first argument determines if we should infer potentials for all fn args
+resolveDecls :: Bool -> [Declaration] -> Either ErrorMessage ([Goal], [Formula], [Formula])
+resolveDecls tryInfer declarations =
+  case runExcept (execStateT go (initResolverState tryInfer)) of
     Left msg -> Left msg
     Right st ->
       Right (typecheckingGoals st ++ synthesisGoals st, st ^. condQualifiers, st ^. typeQualifiers)
@@ -77,28 +86,32 @@ resolveDecls declarations =
       mapM_ (extractPos resolveSignatures) declarations'
     declarations' = setDecl : declarations
     setDecl = Pos noPos defaultSetType
-    makeGoal synth env allNames allMutuals (name, (impl, pos)) =
+    makeGoal synth env allNames allMutuals inferredPVars (name, (impl, pos)) =
       let
         spec = allSymbols env Map.! name
         myMutuals = Map.findWithDefault [] name allMutuals
         toRemove = drop (fromJust $ elemIndex name allNames) allNames \\ myMutuals -- All goals after and including @name@, except mutuals
         flagMap = fmap _resourcePreds (env ^. datatypes)
         env' = (foldr removeVariable env toRemove) { _resourceMeasures = rMeasuresFromSch flagMap spec }
-      in Goal name env' spec impl 0 pos synth
+        -- This partition business is so that all abs potl vars (i.e. vars that start with an F) will
+        -- be at the end of the list and won't be prioritized by Z3 (this is to avoid unintuitive inferred
+        -- potls)
+        pVars = uncurry (++) $ partition (\(x:_) -> x /= 'F') $ Map.findWithDefault [] name inferredPVars
+      in Goal name env' spec impl 0 pos pVars synth
     extractPos pass (Pos pos decl) = do
       currentPosition .= pos
       pass decl
-    synthesisGoals st = fmap (makeGoal True (st ^. environment) (map fst ((st ^. goals) ++ (st ^. checkingGoals))) (st ^. mutuals)) (st ^. goals)
-    typecheckingGoals st = fmap (makeGoal False (st ^. environment) (map fst ((st ^. goals) ++ (st ^. checkingGoals))) (st ^. mutuals)) (st ^. checkingGoals)
+    synthesisGoals st = fmap (makeGoal True (st ^. environment) (map fst ((st ^. goals) ++ (st ^. checkingGoals))) (st ^. mutuals) (st ^. inferredPotlVars)) (st ^. goals)
+    typecheckingGoals st = fmap (makeGoal False (st ^. environment) (map fst ((st ^. goals) ++ (st ^. checkingGoals))) (st ^. mutuals) (st ^. inferredPotlVars)) (st ^. checkingGoals)
 
 resolveRefinement :: Environment -> Formula -> Either ErrorMessage Formula
-resolveRefinement env fml = runExcept (evalStateT (resolveTypeRefinement AnyS fml) (initResolverState {_environment = env}))
+resolveRefinement env fml = runExcept (evalStateT (resolveTypeRefinement AnyS fml) ((initResolverState False) {_environment = env}))
 
 resolveRefinedType :: Environment -> RType -> Set String -> Either ErrorMessage RType
-resolveRefinedType env t extraSyms = runExcept (evalStateT (resolveType t) (initResolverState {_environment = env, _potentialVars = extraSyms }))
+resolveRefinedType env t extraSyms = runExcept (evalStateT (resolveType t) ((initResolverState False) {_environment = env, _potentialVars = extraSyms }))
 
 instantiateSorts :: [Sort] -> [Sort]
-instantiateSorts sorts = fromRight $ runExcept (evalStateT (instantiate sorts) (initResolverState))
+instantiateSorts sorts = fromRight $ runExcept (evalStateT (instantiate sorts) (initResolverState False))
 
 addAllVariables :: [Formula] -> Environment -> Environment
 addAllVariables = flip (foldr (\(Var s x) -> addVariable x (fromSort s)))
@@ -120,7 +133,35 @@ resolveDeclaration (TypeDecl typeName typeVars typeBody) = do
     else throwResError (text "Type variable(s)" <+> hsep (map text $ Set.toList extraTypeVars) <+>
               text "in the definition of type synonym" <+> text typeName <+> text "are undefined")
 resolveDeclaration (FuncDecl funcName typeSchema) = do 
-  addNewSignature funcName typeSchema
+  tryInfer <- use infer
+  if tryInfer
+    then go typeSchema >>= addNewSignature funcName
+    else addNewSignature funcName typeSchema
+  where
+    go :: RSchema -> Resolver RSchema
+    go (ForallT i s) = go s >>= return . ForallT i
+    go (ForallP i s) = go s >>= return . ForallP i
+    go (Monotype b) = gt b >>= return . Monotype
+
+    -- TODO: Maybe if the potential != 0, don't change it to an inferred?
+    gt :: RType -> Resolver RType
+    gt (ScalarT (DatatypeT di tyargs absps) ref _) = do
+      tyargs' <- mapM gt tyargs
+      pVar <- freshInferredPotl funcName "I"
+      return $ ScalarT (DatatypeT di tyargs' absps) ref (Var IntS pVar)
+    gt (ScalarT dt ref _) = do
+      pVar <- freshInferredPotl funcName "I"
+      return $ ScalarT dt ref (Var IntS pVar)
+    gt (FunctionT i d c cs) = do
+      dom <- gt d
+      cod <- gt c
+      return $ FunctionT i dom cod cs
+    gt (LetT i def body) = do
+      def' <- gt def
+      body' <- gt body
+      return $ LetT i def' body'
+    gt AnyT = return AnyT
+    
 resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
   let
     (pParams, pVariances) = unzip pVarParams
@@ -200,8 +241,42 @@ resolveDeclaration (InlineDecl name args body) =
 resolveSignatures :: BareDeclaration -> Resolver ()
 resolveSignatures (FuncDecl name _)  = do
   sch <- uses environment ((Map.! name) . allSymbols)
-  sch' <- resolveSchema sch
+  sch' <- inferAbstractPotls >=> resolveSchema $ sch
   environment %= addPolyConstant name sch'
+  environment %= addUnresolvedConstant name sch'
+  where
+    inferAbstractPotls (ForallT name ss) = inferAbstractPotls ss >>= return . ForallT name
+    inferAbstractPotls (ForallP name ss) = inferAbstractPotls ss >>= return . ForallP name
+    inferAbstractPotls (Monotype t) = go t >>= return . Monotype
+
+    go og@(ScalarT (DatatypeT dtName tArgs pArgs) ref pred) = do
+      ds <- use $ environment . datatypes
+      case Map.lookup dtName ds of
+        Just (DatatypeDef _ preds _ _ _ _) -> do
+          tryInfer <- use infer
+          pArgs' <- zipWithM (maybeFreshPotl tryInfer) pArgs (fmap isResParam preds)
+          return (ScalarT (DatatypeT dtName tArgs pArgs') ref pred)
+        Nothing -> return og
+    go og@(ScalarT _ _ _) = return og
+    go (FunctionT name dom cod cost) = do
+      dom' <- go dom
+      cod' <- go cod
+      return $ FunctionT name dom' cod' cost
+    go (LetT name def body) = do
+      def' <- go def
+      body' <- go body
+      return $ LetT name def' body'
+    go AnyT = return AnyT
+
+    maybeFreshPotl tryInfer arg isPred
+      | isPred && tryInfer = fmap (Var IntS) $ freshInferredPotl name "F"
+      | otherwise          = return arg
+
+    -- Checks if an abstract arg is a predicate or a resource
+    -- This is different than what extractResourceParams generates because we only
+    -- check whether the return type of the abstract argument is an Int or not
+    isResParam p = predSigResSort p == IntS
+      
 resolveSignatures (DataDecl dtName tParams pParams ctors) = mapM_ resolveConstructorSignature ctors
   where
     resolveConstructorSignature (ConstructorSig name _) = do
@@ -481,7 +556,8 @@ resolveFormula :: Formula -> Resolver Formula
 resolveFormula (Var _ x) = do
   env <- use environment
   pSyms <- use potentialVars
-  if Set.member x pSyms
+  ipSyms <- use inferredPotlVars
+  if Set.member x pSyms || Set.member x (Set.fromList (concat (foldr (:) [] ipSyms)))
     then return $ Var IntS x
     else case Map.lookup x (symbolsOfArity 0 env) of
       Just sch ->
@@ -703,6 +779,20 @@ freshId p s = do
   i <- use idCount 
   idCount %= (+ 1)
   return $ Var s (p ++ show i) 
+
+-- | 'freshInferredPotl' @prefix@ : create a name for a fresh potential variable name
+-- | corresponding to the pot'l of a fn argument which will be inferred
+freshInferredPotl :: Id -> String -> Resolver Id
+freshInferredPotl fname prefix = do
+  i <- use pvarCount 
+  pvarCount %= (+ 1)
+  let x = prefix ++ show i
+  syms <- uses environment allSymbols
+  if Map.member x syms -- to avoid name collisions with existing vars
+    then freshInferredPotl fname prefix
+    else do
+      inferredPotlVars %= Map.insertWith (flip (++)) fname [x]
+      return x
 
 -- | 'instantiate' @sorts@: replace all sort variables in @sorts@ with fresh sort variables
 instantiate :: [Sort] -> Resolver [Sort]

@@ -1,0 +1,12 @@
+-- Simple model of list memory semantics:
+--   Constructing an element of a list requires enough heap space 
+--   for the polymorphic type and a pointer to the next one.
+--   We assume Nil requires no memory
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+ 
+-- Requires enough heap cells for 2 list nodes, given 1
+--  Should fail
+cons2 :: x: {2 ** a| |2} -> List a
+cons2 = \x. tick 1 (Cons x (tick 1 (Cons x Nil)))

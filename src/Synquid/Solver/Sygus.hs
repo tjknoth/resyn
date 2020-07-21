@@ -69,8 +69,9 @@ getResult mode solver problem =
       (exitCode, res, err) <- sourceCmdWithStreams cmd send -- stdin 
                                                        (decodeUtf8C .| sinkList) -- stdout 
                                                        (decodeUtf8C .| sinkList) -- stderr
+      let r = parseSat $ unwords $ map T.unpack res
       case exitCode of 
-        ExitSuccess -> error "yeehaw"
+        ExitSuccess -> return r
         ExitFailure e -> error $ "CVC4 exited with error " ++ show e ++ "\n" ++ show (head err)
     Debug logfile -> liftIO $ do 
       runResourceT $ runConduit $ yieldMany (printSygus problem) 

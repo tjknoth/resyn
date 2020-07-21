@@ -1,0 +1,31 @@
+data Pair a where
+  Pair :: a -> a -> Pair a
+
+data List a <q :: Int> where
+  Nil  :: List a <q>
+  Cons :: x:a -> xs: List {a | | q} <q> -> List a <q>
+
+data Tree a <q :: Int> where
+  Leaf :: x:a -> Tree a <q>
+  Node :: l: { Tree {a | | q} <q> | | q}
+       -> r: Tree {a | | q} <q> 
+       -> Tree a <q>
+
+split :: List {a | | 1} <{0}> -[1]-> Pair (List a <{0}>)
+split = \xs. 
+  match xs with
+    Nil       -> Pair xs xs
+    Cons y ys -> match split ys with
+                   Pair ls rs -> Pair rs (Cons y ls)
+
+--assembles the contents of a list into a balanced tree
+build :: xs: List {a | | 4} <{0}> -[1]-> Tree {a | | 1} <{ -1}>
+build = \xs. 
+  match xs with
+    Nil       -> error
+    Cons y ys -> 
+      match ys with
+        Nil       -> Leaf y
+        Cons z zs -> 
+          match split (Cons y (Cons z zs)) with
+            Pair l r -> Node (build l) (build r)

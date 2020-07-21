@@ -30,14 +30,16 @@ import Control.Monad.Extra (mapMaybeM)
 import Control.Monad.Trans.State
 import Control.Lens hiding (both)
 import Control.Monad.State.Class (MonadState)
+import Control.Monad.IO.Class ( liftIO )
 import Z3.Monad hiding (Z3Env, newEnv, Sort)
 import qualified Z3.Base as Z3
 
-
+import Debug.Pretty.Simple
 
 data Z3Env = Z3Env {
-  envSolver  :: Z3.Solver,
-  envContext :: Z3.Context
+  envSolver   :: Z3.Solver,
+  envContext  :: Z3.Context,
+  envOptimize :: Z3.Optimize
 }
 
 -- | Z3 state while building constraints
@@ -110,6 +112,42 @@ instance RMonad Z3State where
         mdStr <- modelToString md 
         return $ Just $ SMTModel md mdStr
 
+  optimizeAndGetModel fml vs = do
+    -- Because Z3 can't backtrack and retract assertions, we have to infer all of our variables
+    -- each time, and we can never make assertions about the inferred values of these variables
+    -- (i.e. we can't reuse an inferred value of a variable with something like
+    --
+    --   (assert (= (I2 2)))
+    --
+    -- because if giving I2 this value later on makes this unsat, we have no way of undoing this
+    -- assignment/assertion.
+    --
+    -- If we were to instead give I2 a value like:
+    --
+    --   (define-fun I2 () Int 5)
+    --
+    -- we'd still be stuck with the same problem, since we can't redefine funs.
+    --
+    -- And "inlining" the inferred vars by just replacing them in the formula would allow
+    -- for the inferred potls to have different values for different assertions, which
+    -- is also bad.
+    --
+    -- So we just infer everything every time
+
+    fmlAst <- fmlToAST fml
+
+    (_, m) <- local $ (optimizeAssert fmlAst) >> (mapM_ inferOnly vs) >> optimizeCheckAndGetModel
+   
+    setASTPrintMode Z3_PRINT_SMTLIB_FULL
+    case m of  
+      Just md -> do 
+        mdStr <- modelToString md 
+        return $ Just $ SMTModel md mdStr
+      Nothing -> return Nothing
+    where
+      -- TODO: this fns assumes scalar values for inferred potentials; is this ok??
+      inferOnly (name, _) = fmlToAST (Var IntS name) >>= optimizeMinimize
+
   modelGetAssignment vals (SMTModel m _) = 
     RSolution . Map.fromList . catMaybes <$> mapM (getAssignmentForVar m . Var astS) vals
     where 
@@ -139,6 +177,7 @@ instance RMonad Z3State where
     str <- astToString f' 
     return $ Z3Lit AnyS f' str
 
+-- TODO: Use "getConstInterp" in implementation instead?
 getAssignmentForVar :: Z3.Model -> Formula -> Z3State (Maybe (String, Formula))
 getAssignmentForVar model v@(Var s x) = do 
   var <- fmlToAST v
@@ -226,6 +265,9 @@ instance MonadZ3 Z3State where
   getSolver = gets (envSolver . _mainEnv)
   getContext = gets (envContext . _mainEnv)
 
+instance MonadOptimize Z3State where
+  getOptimize = gets (envOptimize . _mainEnv)
+
 -- | Create a new Z3 environment.
 newEnv :: Maybe Logic -> Opts -> IO Z3Env
 newEnv mbLogic opts =
@@ -233,7 +275,8 @@ newEnv mbLogic opts =
     setOpts cfg opts
     ctx <- Z3.mkContext cfg
     solver <- maybe (Z3.mkSolver ctx) (Z3.mkSolverForLogic ctx) mbLogic
-    return $ Z3Env solver ctx
+    opt <- Z3.mkOptimize ctx
+    return $ Z3Env solver ctx opt
 
 -- | Use auxiliary solver to execute a Z3 computation
 withAuxSolver :: Z3State a -> Z3State a
@@ -529,3 +572,12 @@ getAllMUSs' controlLitsAux mustHave cores = do
           maximize' (checked ++ setRest) unsetRest
 
     debugOutput label fmls = debug 2 (text label <+> pretty fmls) $ return ()
+
+optimizeCheckAndGetModel :: MonadOptimize z3 => z3 (Result, Maybe Z3.Model)
+optimizeCheckAndGetModel = do
+  res <- optimizeCheck []
+  mbModel <- case res of
+               Sat -> Just <$> optimizeGetModel
+               _   -> return Nothing
+  return (res, mbModel)
+

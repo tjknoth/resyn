@@ -1,0 +1,15 @@
+data Tree a <p :: a -> Bool> <q :: Int> where
+  Leaf :: Tree a <p> <q>
+  Node :: x: {a | | q}
+       -> l: Tree a <p> <{if p x then q else 0}>
+       -> r: Tree a <p> <{if p x then 0 else q}>
+       -> Tree a <p> <q>
+
+--checks for membership of an element in a binary search tree
+member :: x:a -> t: Tree a <{x < _0}> <{1}> -> Bool
+member = \x. \t.
+  match t with
+    Leaf       -> False
+    Node n l r -> if x < n 
+                    then tick 1 (member x l)
+                    else tick 1 (member x r)

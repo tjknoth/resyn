@@ -1,0 +1,9 @@
+data QList a <q :: Int> where
+  Nil  :: QList a <q>
+  Cons :: x: a -> xs: QList {a | | q} <q> -> QList a <q>
+
+subsetSum :: QList {Int | | 2} <{2}> -> Int -> Bool
+subsetSum = \xs. \target.
+  match xs with
+    Nil        -> target == 0  
+    Cons hd tl -> (tick 1 (subsetSum tl (target - hd))) || (tick 1 (subsetSum tl target))

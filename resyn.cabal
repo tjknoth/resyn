@@ -1,5 +1,5 @@
 name:                 resyn  
-version:              1.0.0
+version:              1.1.0
 synopsis:             Program Synthesis from Refinement Types
 description:          Resyn is a simple functional programming language with refinement types.
                       In Resyn the programmer must provide the type signature for each top-level function,
@@ -55,6 +55,7 @@ Library
 
   build-depends:      base >= 4.6
                     , containers >= 0.5
+                    , ordered-containers >= 0.2
                     , mtl >= 2.2
                     , transformers >= 0.3
                     , transformers-compat >= 0.4
@@ -80,6 +81,7 @@ Library
                     , conduit
                     , conduit-extra
                     , text
+                    , pretty-simple
 --                    , limp >= 0.3
 --                    , limp-cbc >= 0.3
   
@@ -91,6 +93,8 @@ executable resyn
   build-depends:      resyn
                     , base
                     , containers >= 0.5 
+                    , ordered-containers >= 0.2
+                    , mtl >= 2.2
                     , time
                     , lens >= 3.7 
                     , filepath

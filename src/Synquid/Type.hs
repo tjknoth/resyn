@@ -9,6 +9,8 @@ import Synquid.Util
 import qualified Data.Set as Set
 import           Data.Set (Set)
 import qualified Data.Map as Map
+import           Data.Map.Ordered (OMap)
+import qualified Data.Map.Ordered as OMap
 import           Data.Map (Map)
 import           Data.Bifunctor
 import           Data.Bifoldable
@@ -247,6 +249,9 @@ setAll n = set n ftrue
 -- | Mapping from type variables to types
 type TypeSubstitution = Map Id RType
 
+-- | Mapping from (inferred) potential variables to (possible) formulas
+type PotlSubstitution = OMap Id (Maybe Formula)
+
 asSortSubst :: TypeSubstitution -> SortSubstitution
 asSortSubst = Map.map (toSort . baseTypeOf)
 
@@ -291,6 +296,31 @@ typeSubstitutePred pSubst t =
     LetT x tDef tBody 
       -> LetT x (tsp tDef) (tsp tBody)
     AnyT -> AnyT
+
+schemaSubstitutePotl :: PotlSubstitution -> RSchema -> RSchema
+schemaSubstitutePotl ts (ForallT i s) = ForallT i $ schemaSubstitutePotl ts s
+schemaSubstitutePotl ts (ForallP i s) = ForallP i $ schemaSubstitutePotl ts s
+schemaSubstitutePotl ts (Monotype b) = Monotype $ substitutePotl ts b
+
+-- TODO: this assumes inferred potls can only be vars
+substitutePotl :: PotlSubstitution -> RType -> RType
+substitutePotl ts (ScalarT (DatatypeT di ta abs) ref v) =
+  ScalarT (DatatypeT di (fmap (substitutePotl ts) ta) (fmap (lookupIPotl ts) abs)) ref (lookupIPotl ts v)
+substitutePotl ts (ScalarT dt ref v) =
+  ScalarT dt ref (lookupIPotl ts v)
+substitutePotl ts (FunctionT i d c cs) = FunctionT i (substitutePotl ts d) (substitutePotl ts c) cs
+substitutePotl ts (LetT i def body) = LetT i (substitutePotl ts def) (substitutePotl ts body)
+substitutePotl _ AnyT = AnyT
+
+-- TODO: This only works if the formula is only an inference var and nothing else
+--       If the formula isn't only an inference var but contains one, this
+--       doesn't replace it
+lookupIPotl :: PotlSubstitution -> Formula -> Formula
+lookupIPotl ts v@(Var IntS pVar) = case OMap.lookup pVar ts of
+    Just (Just x)  -> x
+    _              -> v
+lookupIPotl _ x = x
+
 
 -- | 'typeVarsOf' @t@ : all type variables in @t@
 typeVarsOf :: TypeSkeleton r p -> Set Id

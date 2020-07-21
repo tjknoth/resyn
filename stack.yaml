@@ -5,7 +5,8 @@ packages:
   - '.'
 resolver: lts-15.3
 extra-deps:
-  - z3-408.1
+  - git: https://github.com/dcao/haskell-z3
+    commit: a0661c19e33180931dfd2111477931792a5ef2dc
 #  - limp-0.3.2.3
 #  - limp-cbc-0.3.2.3
 nix:

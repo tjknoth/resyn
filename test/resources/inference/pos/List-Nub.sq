@@ -1,0 +1,21 @@
+data List a <q :: Int> where
+  Nil :: List a <q>
+  Cons :: a -> List {a | | q} <q>-> List a <q>
+
+elem :: a -> List {a | | 1} <{0}> -> Bool
+elem = \x. \xs. 
+  match xs with
+    Nil       -> False
+    Cons y ys -> 
+      if x == y 
+        then True 
+        else tick 1 (elem x ys)
+
+nub :: List {a | | 2} <{1}> -> List a <{0}>
+nub = \xs. 
+  match xs with
+    Nil       -> Nil
+    Cons y ys -> 
+      if tick 1 (elem y ys)
+        then tick 1 (nub ys)
+        else Cons y (tick 1 (nub ys))

@@ -78,11 +78,11 @@ instance (Monad s, Applicative s, MonadSMT s) => MonadSMT (FixPointSolver s) whe
 
 instance (Monad s, Applicative s, RMonad s) => RMonad (FixPointSolver s) where
   solveAndGetModel = lift . solveAndGetModel
+  optimizeAndGetModel f vs = lift $ optimizeAndGetModel f vs
   modelGetAssignment s m = lift $ modelGetAssignment s m
   checkPredWithModel f m = lift $ checkPredWithModel f m
   filterPreds fs m  = lift $ filterPreds fs m
   translate = lift . translate
-
  
 {- Implementation -}
 

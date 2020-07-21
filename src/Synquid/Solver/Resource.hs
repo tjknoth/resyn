@@ -27,6 +27,8 @@ import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Map (Map)
 import qualified Data.Map as Map
+import           Data.Map.Ordered (OMap)
+import qualified Data.Map.Ordered as OMap
 import           Control.Monad.Logic
 import           Control.Monad.Reader
 import           Control.Lens
@@ -34,7 +36,6 @@ import           Debug.Trace
 import           Data.List.NonEmpty (NonEmpty(..))
 import           Data.Semigroup (sconcat)
 import           Data.Maybe
-
 
 -- | Process, but do not solve, a set of resource constraints
 simplifyRCs :: (MonadHorn s, MonadSMT s, RMonad s)
@@ -231,19 +232,38 @@ satisfyResources :: RMonad s
 satisfyResources oldfmls newfmls = do
   let rfmls = oldfmls ++ newfmls
   let runInSolver = lift . lift . lift
-  domain <- view (resourceArgs . rSolverDomain) 
+  domain <- view (resourceArgs . rSolverDomain)
+  infdRVars <- use inferredRVars
+  let tryInfer = not $ OMap.null infdRVars
   case domain of
     Constant -> do
-      let fml = conjunction $ map bodyFml rfmls
-      model <- runInSolver $ solveAndGetModel fml
-      case model of
-        Nothing -> return False
-        Just m' -> do
-          writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (modelStr m'))
-          return True
+      if tryInfer
+        then do
+          let fml = conjunction $ map bodyFml rfmls
+          let rvl = OMap.assocs infdRVars
+          model <- runInSolver $ optimizeAndGetModel fml rvl
+          case model of
+            Nothing -> return False
+            Just m' -> do
+              writeLog 6 $ nest 2 (text "Solved + inferred with model") </> nest 6 (text (modelStr m'))
+              vs' <- runInSolver $ modelGetAssignment (fmap fst rvl) m'
+              inferredRVars %= OMap.unionWithR (\_ l _ -> l) (OMap.fromList . Map.toList . fmap Just . unRSolution $ vs')
+              return True
+        else do
+          let fml = conjunction $ map bodyFml rfmls
+          model <- runInSolver $ solveAndGetModel fml
+          case model of
+            Nothing -> return False
+            Just m' -> do
+              writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (modelStr m'))
+              return True
     Dependent -> do
-      solver <- view (resourceArgs . rsolver)
-      deployHigherOrderSolver solver oldfmls newfmls 
+      if tryInfer
+        -- TODO: infer dependent resources
+        then error "Can't infer dependent resources"
+        else do
+          solver <- view (resourceArgs . rsolver)
+          deployHigherOrderSolver solver oldfmls newfmls 
 
 deployHigherOrderSolver :: RMonad s
                         => ResourceSolver
