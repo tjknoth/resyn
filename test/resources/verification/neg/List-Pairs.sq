@@ -11,13 +11,13 @@ append = \xs. \ys.
     Nil       -> ys
     Cons z zs -> Cons z (tick 1 (append zs ys))
 
-attach :: <q :: Int>. x:a -> xs: List {a | | 1 + q} <{0}> -> List {Pair a | | q} <{0}>
+attach :: <q :: Int>. x:Int -> xs: List {Int | | 1 + q} <{0}> -> List {Pair Int | | q} <{0}>
 attach = \x. \xs.
   match xs with
     Nil       -> Nil
     Cons y ys -> Cons (Pair x y) (tick 1 (attach x ys))
 
-pairs :: xs: List {a | | 1} <{2}> -> List (Pair a) <{0}>
+pairs :: xs: List {Int | | 3} <{1}> -> List (Pair Int) <{0}>
 pairs = \xs.
   match xs with
     Nil       -> Nil

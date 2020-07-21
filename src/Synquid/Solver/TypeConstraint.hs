@@ -219,9 +219,10 @@ simplifyConstraint' _ _ (Subtype _ (ScalarT (DatatypeT _ _ _) _ _) t _) | t == a
 -- simplifyConstraint' _ pass c@(WellFormedPredicate _ _ p) | p `Map.member` pass = return () -- APs: Just adjusted signature
 simplifyConstraint' _ pass c@(WellFormedPredicate _ _ _ p) | p `Map.member` pass = return () 
 
-simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@(TypeVarT _ a _) rl pl) tr@(ScalarT br@(TypeVarT _ b _) rr pr) False)
+simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@(TypeVarT _ a ml) rl pl) tr@(ScalarT br@(TypeVarT _ b mr) rr pr) False)
   | isBound env a && isBound env b && pr /= fzero
     = do 
+        simpleConstraints %= (RSubtype env ml mr :)
         addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT bl rl fzero) (ScalarT br rr fzero) False)
 -- Data types: can compare potentials

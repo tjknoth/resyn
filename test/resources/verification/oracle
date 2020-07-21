@@ -132,14 +132,14 @@ append = \xs . \ys .
       Cons z zs -> Cons z
                      (tick 1 (append zs ys))
 
-attach :: <q :: Int> . x:{1**a||0} -> xs:{List {1**a||1 + q} <0>||0} -> {List {Pair {1**a||0}||q} <0>||0}
+attach :: <q :: Int> . x:{Int||0} -> xs:{List {Int||1 + q} <0>||0} -> {List {Pair {Int||0}||q} <0>||0}
 attach = \x . \xs . 
     match xs with
       Nil -> Nil
       Cons y ys -> Cons (Pair x y)
                      (tick 1 (attach x ys))
 
-pairs :: xs:{List {1**a||3} <2>||0} -> {List {Pair {1**a||0}||0} <0>||0}
+pairs :: xs:{List {Int||3} <2>||0} -> {List {Pair {Int||0}||0} <0>||0}
 pairs = \xs . 
   match xs with
     Nil -> Nil
@@ -156,18 +156,18 @@ append = \xs . \ys .
       Cons z zs -> Cons z
                      (tick 1 (append zs ys))
 
-attach :: <q :: Int> . x:{1**a||0} -> xs:{List {1**a||1 + q} <0>||0} -> {List {Pair {1**a||0}||q} <0>||0}
+attach :: <q :: Int> . x:{Int||0} -> xs:{List {Int||1 + q} <0>||0} -> {List {Pair {Int||0}||q} <0>||0}
 attach = \x . \xs . 
     match xs with
       Nil -> Nil
       Cons y ys -> Cons (Pair x y)
                      (tick 1 (attach x ys))
 
-pairs :: xs:{List {1**a||1} <2>||0} -> {List {Pair {1**a||0}||0} <0>||0}
+pairs :: xs:{List {Int||3} <1>||0} -> {List {Pair {Int||0}||0} <0>||0}
 neg/List-Pairs.sq:21: Error:
   Insufficient resources
-  when checking attach ::
-  x6:_ -> x5:_ -> {List {Pair {1**a||p13}||p14 + 1} <0>||-(fr10 + 0)}
+  when checking ys ::
+  {List {Int||3} <1>||-(fr22 + 0)}
   in
   \xs . 
     match xs with
@@ -210,7 +210,7 @@ neg/List-Reverse.sq:12: Error:
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-replicate :: n:{Nat||0} -> x:{1**a||n} -> {List {1**a||0}|len _v == n|0}
+replicate :: n:{Nat||0} -> x:{n**a||n} -> {List {1**a||0}|len _v == n|0}
 replicate = \n . \x . 
     if n <= 0
       then Nil
@@ -219,16 +219,16 @@ replicate = \n . \x .
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
-replicate :: n:{Nat||0} -> x:{1**a||n} -> {List {1**a||0}|len _v == n|0}
+replicate :: n:{Nat||0} -> x:{n**a||n} -> {List {1**a||0}|len _v == n|0}
 neg/List-Replicate.sq:12: Error:
   Insufficient resources
-  when checking replicate ::
-  x9:_ -> x8:_ -> {List {1**a||p4}||-(fr14 + 0)}
+  when checking x ::
+  {n**a||n * p5 + (n + -(fr22 + 0))}
   in
   \n . \x . 
       if n <= 0
         then Nil
-        else Cons x (tick 2 (??))
+        else Cons x (tick 1 (??))
 
 Stack has not been tested with GHC versions above 8.6, and using 8.8.2, this may fail
 Stack has not been tested with Cabal versions above 2.4, but version 3.0.1.0 was found, this may fail
