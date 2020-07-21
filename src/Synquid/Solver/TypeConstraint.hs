@@ -222,7 +222,7 @@ simplifyConstraint' _ pass c@(WellFormedPredicate _ _ _ p) | p `Map.member` pass
 simplifyConstraint' _ _ (Subtype env tl@(ScalarT bl@(TypeVarT _ a ml) rl pl) tr@(ScalarT br@(TypeVarT _ b mr) rr pr) False)
   | isBound env a && isBound env b && pr /= fzero
     = do 
-        simpleConstraints %= (RSubtype env ml mr :)
+        simpleConstraints %= (RSubtype (addVariable valueVarName tl env) ml mr :)
         addRSubConstraint env tl tr
         simplifyConstraint (Subtype env (ScalarT bl rl fzero) (ScalarT br rr fzero) False)
 -- Data types: can compare potentials
