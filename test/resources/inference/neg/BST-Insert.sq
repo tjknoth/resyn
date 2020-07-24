@@ -10,4 +10,7 @@ treeInsert :: x:a -> t: Tree a <{x < _0}> <{1}> -> Tree a <{x < _0}> <{0}>
 treeInsert = \x. \t.
   match t with
     Leaf       -> Node x Leaf Leaf
-    Node n l r -> if x < n then tick 1 (treeInsert x l) else tick 1 (treeInsert x r)
+    Node n l r -> 
+      if x < n 
+        then tick 1 (treeInsert x l)
+        else tick 1 (treeInsert x r)

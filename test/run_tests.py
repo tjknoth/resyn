@@ -188,23 +188,29 @@ RESOURCE_INFERENCE_POS_BENCHMARKS = [
     # ICFP '20 benches
     # Quadratic
     ('List-Nub', ['--eac', '--infer', '-f=NONTERMINATING']),
-    ('List-SelectionSort', ['--eac', '--infer', '-f=NONTERMINATING']),
-    ('List-Merge-Sort-Quadratic', ['--eac', '--infer', '-f=NONTERMINATING']),
 
     # Non-Polynomial
-    ('List-Subset-Sum', ['--eac', '--infer', '-f=NONTERMINATING']),
-    # ('List-Merge-Build', ['--eac', '--infer', '-f=NONTERMINATING']),
-    ('List-Merge-Flatten', ['--eac', '--infer', '-f=NONTERMINATING']),
     # ('List-Quick-Build', ['--eac', '--infer', '-f=NONTERMINATING']),
     ('List-Quick-Flatten', ['--eac', '--infer', '-f=NONTERMINATING']),
 ]
 
 RESOURCE_INFERENCE_NEG_BENCHMARKS = [
-    ('List-Pairs',                   ['--eac', '--infer', '-f=Nonterminating']),
-    ('List-Replicate',               ['--eac', '--infer', '-f=Nonterminating', '--res-solver=CEGIS']),
     ('BST-Insert',                   ['--eac', '--infer', '-f=Nonterminating', '--res-solver=CEGIS']),
+    ('BST-Member',                   ['--eac', '--infer', '-f=Nonterminating']),
+    ('List-Pairs',                   ['--eac', '--infer', '-f=Nonterminating']),
+    ('List-Exp-Contrived',           ['--eac', '--infer', '-f=Nonterminating']),
+    ('List-Replicate',               ['--eac', '--infer', '-f=Nonterminating', '--res-solver=CEGIS']),
 
+    # ICFP '20 benches
+    # Quadratic
     ('List-Quick-Sort-Quadratic',    ['--eac', '--infer', '-f=NONTERMINATING']),
+    ('List-SelectionSort',        ['--eac', '--infer', '-f=NONTERMINATING']),
+    ('List-Merge-Sort-Quadratic', ['--eac', '--infer', '-f=NONTERMINATING']),
+
+    # Non-Polynomial
+    ('List-Merge-Sort', ['--eac', '--infer', '-f=NONTERMINATING']),
+    ('List-Merge-Build', ['--eac', '--infer', '-f=NONTERMINATING']),
+    ('List-Merge-Flatten', ['--eac', '--infer', '-f=NONTERMINATING']),
 ]
 
 RESOURCE_SYNTHESIS_BENCHMARKS = [
