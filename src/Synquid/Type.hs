@@ -306,6 +306,8 @@ schemaSubstitutePotl ts (Monotype b) = Monotype $ substitutePotl ts b
 substitutePotl :: PotlSubstitution -> RType -> RType
 substitutePotl ts (ScalarT (DatatypeT di ta abs) ref v) =
   ScalarT (DatatypeT di (fmap (substitutePotl ts) ta) (fmap (lookupIPotl ts) abs)) ref (lookupIPotl ts v)
+substitutePotl ts (ScalarT (TypeVarT subst ident mult) ref v) =
+  ScalarT (TypeVarT subst ident (lookupIPotl ts mult)) ref (lookupIPotl ts v)
 substitutePotl ts (ScalarT dt ref v) =
   ScalarT dt ref (lookupIPotl ts v)
 substitutePotl ts (FunctionT i d c cs) = FunctionT i (substitutePotl ts d) (substitutePotl ts c) cs
