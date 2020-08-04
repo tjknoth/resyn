@@ -93,10 +93,17 @@ resolveDecls tryInfer declarations =
         toRemove = drop (fromJust $ elemIndex name allNames) allNames \\ myMutuals -- All goals after and including @name@, except mutuals
         flagMap = fmap _resourcePreds (env ^. datatypes)
         env' = (foldr removeVariable env toRemove) { _resourceMeasures = rMeasuresFromSch flagMap spec }
-        -- This partition business is so that all abs potl vars (i.e. vars that start with an F) will
-        -- be at the end of the list and won't be prioritized by Z3 (this is to avoid unintuitive inferred
-        -- potls)
-        pVars = uncurry (++) $ partition (\(x:_) -> x /= 'F') $ Map.findWithDefault [] name inferredPVars
+
+        -- We have to order our potential vars in order of which ones we want minimized first,
+        -- since Z3 will minimize in this order
+        --
+        -- Counter-intuitively, we minimize the variables at the end first. This is because
+        -- we don't want potential values on our return results and we prefer having our
+        -- potentials on our first arguments
+        pVars = uncurry (++)
+              $ over each reverse
+              $ partition (\(x:_) -> x /= 'F')
+              $ Map.findWithDefault [] name inferredPVars
       in Goal name env' spec impl 0 pos pVars synth
     extractPos pass (Pos pos decl) = do
       currentPosition .= pos

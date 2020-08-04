@@ -58,7 +58,7 @@ cons2 = \x . tick 1 (Cons x
                        (tick 1 (Cons x Nil)))
 
 snoc :: <a> . x:{1**a||I0} -> xs:{List {1**a||I1} <F9>||I2} -> {List {1**a||I3} <F10>||I4}
-snoc :: <a> . x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0} (inferred)
+snoc :: <a> . x:{1**a||0} -> xs:{List {1**a||2} <0>||0} -> {List {1**a||0} <0>||(- 1)} (inferred)
 snoc = \x . \xs . 
     match xs with
       Nil -> Cons x Nil
@@ -66,7 +66,7 @@ snoc = \x . \xs .
                      (tick 1 (snoc x ys))
 
 reverse :: <a> . xs:{List {1**a||I5} <F11>||I6} -> {List {1**a||I7} <F12>||I8}
-reverse :: <a> . xs:{List {1**a||2} <1>||0} -> {List {1**a||0} <0>||0} (inferred)
+reverse :: <a> . xs:{List {1**a||3} <2>||0} -> {List {1**a||0} <0>||(- 1)} (inferred)
 reverse = \xs . 
   match xs with
     Nil -> Nil
@@ -74,7 +74,7 @@ reverse = \xs .
                            (tick 1 (reverse ys)))
 
 insert :: <a> . x:{1**a||I0} -> xs:{List {1**a||I1} <F9>||I2} -> {List {1**a||I3} <F10>||I4}
-insert :: <a> . x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0} (inferred)
+insert :: <a> . x:{1**a||0} -> xs:{List {1**a||2} <0>||0} -> {List {1**a||0} <0>||(- 1)} (inferred)
 insert = \x . \xs . 
     match xs with
       Nil -> Cons x Nil
@@ -85,7 +85,7 @@ insert = \x . \xs .
           else Cons x (Cons y ys)
 
 insertionSort :: <a> . xs:{List {1**a||I5} <F11>||I6} -> {List {1**a||I7} <F12>||I8}
-insertionSort :: <a> . xs:{List {1**a||2} <1>||0} -> {List {1**a||0} <0>||0} (inferred)
+insertionSort :: <a> . xs:{List {1**a||3} <2>||0} -> {List {1**a||0} <0>||(- 1)} (inferred)
 insertionSort = \xs . 
   match xs with
     Nil -> Nil
@@ -102,7 +102,7 @@ subsetSum = \xs . \target .
                       (tick 1 (subsetSum tl target))
 
 insert :: <a> . x:{1**a||I0} -> xs:{List {1**a||I1} <F9>||I2} -> {List {1**a||I3} <F10>||I4}
-insert :: <a> . x:{1**a||0} -> xs:{List {1**a||1} <1>||0} -> {List {1**a||0} <1>||0} (inferred)
+insert :: <a> . x:{1**a||1} -> xs:{List {1**a||2} <1>||1} -> {List {1**a||1} <1>||0} (inferred)
 insert = \x . \xs . 
     match xs with
       Nil -> Cons x Nil
@@ -113,7 +113,7 @@ insert = \x . \xs .
           else Cons x (Cons y ys)
 
 insertionSort :: <a> . xs:{List {1**a||I5} <F11>||I6} -> {List {1**a||I7} <F12>||I8}
-insertionSort :: <a> . xs:{List {1**a||2} <1>||0} -> {List {1**a||0} <1>||0} (inferred)
+insertionSort :: <a> . xs:{List {1**a||4} <1>||0} -> {List {1**a||1} <1>||0} (inferred)
 insertionSort = \xs . 
   match xs with
     Nil -> Nil
@@ -121,7 +121,7 @@ insertionSort = \xs .
                            (tick 1 (insertionSort ys)))
 
 insert :: <a> . x:{1**a||I0} -> xs:{List {1**a||I1} <F9>||I2} -> {List {1**a||I3} <F10>||I4}
-insert :: <a> . x:{1**a||0} -> xs:{List {1**a||1} <1>||0} -> {List {1**a||0} <1>||0} (inferred)
+insert :: <a> . x:{1**a||1} -> xs:{List {1**a||2} <1>||1} -> {List {1**a||1} <1>||0} (inferred)
 insert = \x . \xs . 
     match xs with
       Nil -> Cons x Nil
@@ -131,12 +131,130 @@ insert = \x . \xs .
           else Cons x (Cons y ys)
 
 insertionSort :: <a> . xs:{List {1**a||I5} <F11>||I6} -> {List {1**a||I7} <F12>||I8}
-insertionSort :: <a> . xs:{List {1**a||2} <1>||0} -> {List {1**a||0} <1>||0} (inferred)
+insertionSort :: <a> . xs:{List {1**a||4} <1>||0} -> {List {1**a||1} <1>||0} (inferred)
 insertionSort = \xs . 
   match xs with
     Nil -> Nil
     Cons y ys -> tick 1 (insert y
                            (tick 1 (insertionSort ys)))
+
+bitToInt :: arg1:{List {Int||I0} <F61>||I1} -> arg0:{Int||I2} -> {Int||I3}
+bitToInt :: arg1:{List {Int||1} <0>||0} -> arg0:{Int||0} -> {Int||0} (inferred)
+bitToInt = \xs . \n . 
+    match xs with
+      Nil -> 0
+      Cons x ys -> tick 1 ((x * n) +
+                             (bitToInt ys (n * n)))
+
+bitToInt' :: arg0:{List {Int||I4} <F62>||I5} -> {Int||I6}
+bitToInt' :: arg0:{List {Int||1} <0>||0} -> {Int||0} (inferred)
+bitToInt' = \xs . bitToInt xs 1
+
+sum :: arg2:{Int||I7} -> arg1:{Int||I8} -> arg0:{Int||I9} -> {Pair {Int||I10}||I11}
+sum :: arg2:{Int||0} -> arg1:{Int||0} -> arg0:{Int||0} -> {Pair {Int||0}||0} (inferred)
+sum = \x . \y . \r . 
+      let s = (x + y) + r in
+      
+      if s == 0
+        then Pair 0 0
+        else 
+          if s == 1
+            then Pair 1 0
+            else 
+              if s == 2
+                then Pair 0 1
+                else Pair 1 1
+
+add' :: arg2:{List {Int||I12} <F63>||I13} -> arg1:{List {Int||I14} <F64>||I15} -> arg0:{Int||I16} -> {List {Int||I17} <F65>||I18}
+add' :: arg2:{List {Int||2} <0>||0} -> arg1:{List {Int||0} <0>||0} -> arg0:{Int||0} -> {List {Int||0} <0>||(- 1)} (inferred)
+add' = \b1 . \b2 . \r . 
+      match b1 with
+        Nil -> Nil
+        Cons x xs -> 
+          match b2 with
+            Nil -> Nil
+            Cons y ys -> 
+              match sum x y r with
+                Pair z r' -> tick 1 (Cons z
+                                       (add' xs ys r'))
+
+add :: arg1:{List {Int||I19} <F66>||I20} -> arg0:{List {Int||I21} <F67>||I22} -> {List {Int||I23} <F68>||I24}
+add :: arg1:{List {Int||2} <0>||0} -> arg0:{List {Int||0} <0>||0} -> {List {Int||0} <0>||(- 1)} (inferred)
+add = \b1 . \b2 . add' b1 b2 0
+
+mult :: arg1:{List {Int||I25} <F69>||I26} -> arg0:{List {Int||I27} <F70>||I28} -> {List {Int||I29} <F71>||I30}
+mult :: arg1:{List {Int||0} <0>||0} -> arg0:{List {Int||2} <0>||1} -> {List {Int||0} <0>||(- 1)} (inferred)
+mult = \b1 . \b2 . 
+    match b1 with
+      Nil -> Nil
+      Cons x xs -> 
+        match b2 with
+          Nil -> 
+            let nm = mult xs b2 in
+            add b2 (Cons 0 Nil)
+          Cons y ys -> 
+            let nm = mult xs b2 in
+            add b2 (Cons 0 (Cons y ys))
+
+diff :: arg2:{Int||I31} -> arg1:{Int||I32} -> arg0:{Int||I33} -> {Pair {Int||I34}||I35}
+diff :: arg2:{Int||0} -> arg1:{Int||0} -> arg0:{Int||1} -> {Pair {Int||0}||0} (inferred)
+diff = \x . \y . \r . 
+      if ((x - y) - r) < 0
+        then tick 1 (Pair ((x + y) + r)
+                       1)
+        else tick 1 (Pair ((x + y) + r)
+                       0)
+
+sub' :: arg2:{List {Int||I36} <F72>||I37} -> arg1:{List {Int||I38} <F73>||I39} -> arg0:{Int||I40} -> {Tuple {List {Int||I41} <0>||I42} {Int||I43}||I44}
+sub' :: arg2:{List {Int||2} <0>||0} -> arg1:{List {Int||0} <0>||0} -> arg0:{Int||0} -> {Tuple {List {Int||0} <0>||0} {Int||0}||0} (inferred)
+sub' = \b1 . \b2 . \r . 
+      match b1 with
+        Nil -> Tuple Nil r
+        Cons x xs -> 
+          match b2 with
+            Nil -> Tuple Nil r
+            Cons y ys -> 
+              match diff x y r with
+                Pair z r' -> 
+                  match sub' xs ys r' with
+                    Tuple zs s -> 
+                      if s == 1
+                        then tick 1 (Tuple (Cons 0 zs)
+                                       s)
+                        else tick 1 (Tuple (Cons z zs)
+                                       s)
+
+sub :: arg1:{List {Int||I45} <F74>||I46} -> arg0:{List {Int||I47} <F75>||I48} -> {List {Int||I49} <F76>||I50}
+sub :: arg1:{List {Int||2} <0>||0} -> arg0:{List {Int||0} <0>||0} -> {List {Int||0} <0>||0} (inferred)
+sub = \b1 . \b2 . 
+    match sub' b1 b2 0 with
+      Tuple b r -> b
+
+compare :: arg1:{List {Int||I51} <F77>||I52} -> arg0:{List {Int||I53} <F78>||I54} -> {Int||I55}
+compare :: arg1:{List {Int||1} <0>||0} -> arg0:{List {Int||0} <0>||0} -> {Int||0} (inferred)
+compare = \b1 . \b2 . 
+    match b1 with
+      Nil -> 0
+      Cons x xs -> 
+        match b2 with
+          Nil -> 0
+          Cons y ys -> 
+            let r = compare xs ys in
+            
+            if r == 0
+              then 
+                if x < y
+                  then tick 1 (- 1)
+                  else 
+                    if y < x
+                      then tick 1 (- 1)
+                      else tick 1 (0)
+              else tick 1 (r)
+
+leq :: arg1:{List {Int||I56} <F79>||I57} -> arg0:{List {Int||I58} <F80>||I59} -> {Bool||I60}
+leq :: arg1:{List {Int||1} <0>||1} -> arg0:{List {Int||0} <0>||0} -> {Bool||0} (inferred)
+leq = \b1 . \b2 .
+    tick 1 ((compare b1 b2) < 1)
 
 elem :: <a> . arg1:{1**a||I0} -> arg0:{List {1**a||I1} <F8>||I2} -> {Bool||I3}
 elem :: <a> . arg1:{1**a||0} -> arg0:{List {1**a||1} <0>||0} -> {Bool||0} (inferred)
@@ -149,7 +267,7 @@ elem = \x . \xs .
           else tick 1 (elem x ys)
 
 nub :: <a> . arg0:{List {1**a||I4} <F9>||I5} -> {List {1**a||I6} <F10>||I7}
-nub :: <a> . arg0:{List {1**a||2} <1>||0} -> {List {1**a||0} <0>||0} (inferred)
+nub :: <a> . arg0:{List {1**a||3} <1>||0} -> {List {1**a||0} <0>||(- 1)} (inferred)
 nub = \xs . 
   match xs with
     Nil -> Nil
@@ -197,7 +315,7 @@ replicate :: <a> . n:{Int|_v >= 0|0} -> x:{1**a||I1} -> {List {1**a||I2}|len _v 
   Insufficient resources
 
 partition :: <a> . <q :: Int> . <r :: Int> . x:{1**a||I0} -> xs:{List {1**a||I1} <F16>||I2} -> {Pair {List {1**a||I3} <q>||I4}||I5}
-partition :: <a> . <q :: Int> . <r :: Int> . x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -> {Pair {List {1**a||0} <q>||0}||0} (inferred)
+partition :: <a> . <q :: Int> . <r :: Int> . x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -> {Pair {List {1**a||0} <q>||0}||(- 1)} (inferred)
 partition = \p . \xs . 
     match xs with
       Nil -> Pair Nil Nil
@@ -232,7 +350,7 @@ min = \x . \xs .
           else tick 1 (min x ys)
 
 remove :: <a> . x:{1**a||I4} -> xs:{List {1**a||I5} <F14>||I6} -> {List {1**a||I7} <F15>||I8}
-remove :: <a> . x:{1**a||0} -> xs:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0} (inferred)
+remove :: <a> . x:{1**a||0} -> xs:{List {1**a||2} <0>||0} -> {List {1**a||0} <0>||(- 1)} (inferred)
 remove = \x . \xs . 
     match xs with
       Nil -> Nil
@@ -247,7 +365,7 @@ selectionSort :: <a> . arg0:{List {1**a||I9} <F16>||I10} -> {List {1**a||I11} <F
   Insufficient resources
 
 split :: <a> . arg0:{List {1**a||I0} <F15>||I1} -> {Pair {List {1**a||I2} <1>||I3}||I4}
-split :: <a> . arg0:{List {1**a||0} <1>||0} -> {Pair {List {1**a||0} <1>||0}||0} (inferred)
+split :: <a> . arg0:{List {1**a||0} <1>||0} -> {Pair {List {1**a||0} <1>||0}||(- 1)} (inferred)
 split = \l . 
   match l with
     Nil -> Pair Nil Nil
@@ -272,6 +390,21 @@ split :: <a> . arg0:{List {1**a||I0} <F9>||I1} -[1]-> {Pair {List {1**a||I2} <0>
   Insufficient resources
 
 merge :: <a> . arg1:{List {1**a||I0} <F10>||I1} -> arg0:{List {1**a||I2} <F11>||I3} -> {List {1**a||I4} <F12>||I5}
+<no file name>:1: Error:
+  Insufficient resources
+
+empty :: <a> . {Tuple {List {1**a||I0} <0>||I1} {List {1**a||I2} <0>||I3}||I4}
+empty :: <a> . {Tuple {List {1**a||0} <0>||0} {List {1**a||0} <0>||0}||0} (inferred)
+empty = Tuple Nil Nil
+
+enqueue :: <a> . arg1:{1**a||I5} -> arg0:{Tuple {List {1**a||I6} <0>||I7} {List {1**a||I8} <0>||I9}||I10} -> {Tuple {List {1**a||I11} <0>||I12} {List {1**a||I13} <0>||I14}||I15}
+enqueue :: <a> . arg1:{1**a||0} -> arg0:{Tuple {List {1**a||0} <0>||1} {List {1**a||0} <0>||0}||0} -> {Tuple {List {1**a||0} <0>||0} {List {1**a||0} <0>||0}||0} (inferred)
+enqueue = \x . \q . 
+    match q with
+      Tuple inq outq -> tick 1 (Tuple
+                                  (Cons x inq) outq)
+
+enqueues :: <a> . arg1:{List {1**a||I16} <F28>||I17} -> arg0:{Tuple {List {1**a||I18} <0>||I19} {List {1**a||I20} <0>||I21}||I22} -> {Tuple {List {1**a||I23} <0>||I24} {List {1**a||I25} <0>||I26}||I27}
 <no file name>:1: Error:
   Insufficient resources
 

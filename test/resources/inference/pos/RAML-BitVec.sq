@@ -1,0 +1,106 @@
+-- This test implements the RAML bit vectors example.
+
+data Pair a where
+  Pair :: a -> a -> Pair a
+
+data Tuple a b where
+  Tuple :: a -> b -> Tuple a b
+
+-- A bit vector is simply a list of ints.
+data List a <q :: Int> where
+  Nil :: List a <q>
+  Cons :: x: a -> xs: List {a | | q} <q> -> List {a | | q} <q>
+
+bitToInt :: List {Int | | 1} <{0}> -> Int -> Int
+bitToInt = \xs. \n.
+  match xs with
+    Nil -> 0
+    Cons x ys -> tick 1 (x * n + (bitToInt ys (n * n)))
+
+bitToInt' :: List {Int | | 1} <{0}> -> Int
+bitToInt' = \xs. bitToInt xs 1
+
+sum :: Int -> Int -> Int -> Pair Int
+sum = \x. \y. \r.
+  let s = x + y + r in
+  if (s == 0) then (Pair 0 0)
+  else if (s == 1) then (Pair 1 0)
+  else if (s == 2) then (Pair 0 1)
+  else (Pair 1 1)
+
+add' :: List {Int | | 1} <{0}> -> List Int <{0}> -> Int -> List Int <{0}>
+add' = \b1. \b2. \r.
+  match b1 with
+    Nil -> Nil
+    Cons x xs ->
+      match b2 with
+        Nil -> Nil
+        Cons y ys ->
+          match sum x y r with
+            Pair z r' -> tick 1 (Cons z (add' xs ys r'))
+
+add :: List {Int | | 1} <{0}> -> List Int <{0}> -> List Int <{0}>
+add = \b1. \b2. add' b1 b2 0
+
+mult :: List {Int | | 1} <{0}> -> List {Int | | 1} <{0}> -> List Int <{0}>
+mult = \b1. \b2.
+  match b1 with
+    Nil -> Nil
+    Cons x xs ->
+      match b2 with
+        Nil ->
+          let nm = mult xs b2 in
+            add b2 (Cons 0 Nil)
+        Cons y ys ->
+          let nm = mult xs b2 in
+            add b2 (Cons 0 (Cons y ys))
+
+-- TODO: Incorrect impl: no mod
+diff :: Int -> Int -> {Int | | 1} -> Pair Int
+diff = \x. \y. \r.
+  if x - y - r < 0
+    then tick 1 (Pair (x + y + r) 1)
+    else tick 1 (Pair (x + y + r) 0)
+
+sub' :: List {Int | | 0} <{0}> -> List {Int | | 2} <{0}> -> Int -> Tuple (List Int <{0}>) Int
+sub' = \b1. \b2. \r.
+  match b1 with
+    Nil -> Tuple Nil r
+    Cons x xs ->
+      match b2 with
+        Nil -> Tuple Nil r
+        Cons y ys ->
+          match diff x y r with
+            Pair z r' ->
+              match sub' xs ys r' with
+                Tuple zs s ->
+                  if s == 1
+                    then tick 1 (Tuple (Cons 0 zs) s)
+                    else tick 1 (Tuple (Cons z zs) s)
+
+sub :: List Int <{0}> -> List {Int | | 2} <{0}> -> List Int <{0}>
+sub = \b1. \b2.
+  match sub' b1 b2 0 with
+    Tuple b r -> b
+
+compare :: List Int <{0}> -> List {Int | | 1} <{0}> -> Int
+compare = \b1. \b2.
+  match b1 with
+    Nil -> 0
+    Cons x xs ->
+      match b2 with
+        Nil -> 0
+        Cons y ys ->
+          let r = compare xs ys in
+            if r == 0 then
+              if x < y
+                then tick 1 -1
+                else
+                  if y < x
+                    then tick 1 -1
+                    else tick 1 0
+              else tick 1 r
+
+leq :: {List {Int | | 1} <{0}> | | 1} -> List {Int | | 1} <{0}> -> Bool
+leq = \b1. \b2.
+  tick 1 (compare b1 b2 < 1)

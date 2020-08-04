@@ -184,6 +184,7 @@ RESOURCE_INFERENCE_POS_BENCHMARKS = [
     ('List-Subset-Sum',              ['--eac', '--infer', '-f=Nonterminating']),
     ('List-InsertSort',              ['--eac', '--infer', '-f=Nonterminating', '--res-solver=CEGIS']),
     ('List-InsertSort-Compares',     ['--eac', '--infer', '-f=Nonterminating']),
+    ('RAML-BitVec',                  ['--eac', '--infer', '-f=Nonterminating']),
 
     # ICFP '20 benches
     # Quadratic
@@ -211,6 +212,9 @@ RESOURCE_INFERENCE_NEG_BENCHMARKS = [
     ('List-Merge-Sort', ['--eac', '--infer', '-f=NONTERMINATING']),
     ('List-Merge-Build', ['--eac', '--infer', '-f=NONTERMINATING']),
     ('List-Merge-Flatten', ['--eac', '--infer', '-f=NONTERMINATING']),
+
+    # RAML
+    ('RAML-Queue',                   ['--eac', '--infer', '-f=Nonterminating']),
 ]
 
 RESOURCE_SYNTHESIS_BENCHMARKS = [

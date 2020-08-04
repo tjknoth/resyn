@@ -1,0 +1,101 @@
+data List a <q :: Int> where
+  Nil :: List a <q>
+  Cons :: x: a -> xs: List {a | | q} <q> -> List {a | | q} <q>
+
+data Tuple a b where
+  Tuple :: a -> b -> Tuple a b
+
+empty :: Tuple (List a <{0}>) (List a <{0}>)
+empty = Tuple Nil Nil
+
+enqueue :: a -> {Tuple (List a <{0}>) (List a <{0}>) | | 1} -> Tuple (List a <{0}>) (List a <{0}>)
+enqueue = \x. \q.
+  match q with
+    Tuple inq outq -> tick 1 (Tuple (Cons x inq) outq)
+
+-- This doesn't work:
+enqueues :: List a <{0}> -> Tuple (List a <{0}>) (List a <{0}>) -> Tuple (List a <{0}>) (List a <{0}>)
+enqueues = \l. \q.
+  match l with
+    Nil -> q
+    Cons x xs ->
+      (enqueues xs (enqueue x q))
+
+-- let rec enqueues l queue =
+--     match l with
+--     | [] -> queue
+--     | x::xs -> (Raml.tick(1.0); enqueues xs (enqueue x queue));;
+-- 
+-- let rec copyover queue =
+--     let (inq, outq) = queue in
+--     match inq with
+--     | [] -> ([], outq)
+--     | x::xs -> (Raml.tick(1.0); copyover (xs, (x::outq)));;
+-- 
+-- let rec dequeue queue =
+--     let (inq, outq) = queue in
+--     match outq with
+--     | [] ->
+--         begin
+--         match inq with
+--         | [] -> (([], []), [])
+--         | x::xs -> (Raml.tick(1.0); dequeue (copyover ((x::xs), [])))
+--         end
+--     | y::ys -> (Raml.tick(1.0); ((inq, ys), [y]));;
+-- 
+-- let children c =
+--     let (a, b, l1, l2) = c in
+--     ((a, b),
+--     match l1 with
+--     | [] ->
+--         begin
+--         match l2 with
+--         | [] -> []
+--         | y::ys -> (Raml.tick(1.0); [(y, b, [], ys)])
+--         end
+--     | x::xs ->
+--         begin
+--         match l2 with
+--         | [] -> []
+--         | y::ys -> (Raml.tick(1.0); [(x, b, [], xs); (x, y, xs, ys)])
+--         end
+--     );;
+-- 
+-- let rec breadth queue =
+--     let (queue', elem) = dequeue queue in
+--     match elem with
+--     | [] -> []
+--     | z::_ ->
+--         let (x, ys) = children z in
+--         (Raml.tick(1.0); x::(breadth (enqueues ys queue')));;
+-- 
+-- let startBreadth xs =
+--     match xs with
+--     | [] -> []
+--     | x::xs -> (Raml.tick(1.0); breadth (enqueue (x, x, xs, xs) (empty ())));;
+-- 
+-- let rec appendD xs ys =
+--     match xs with
+--     | [] -> ys
+--     | x::xs -> (Raml.tick(1.0); x::appendD xs ys);;
+-- 
+-- let rec depth d =
+--     let (a, b, l1, l2) = d in
+--     let (x, zs) = children (a, b, l1, l2) in
+--     x::
+--     (
+--         match zs with
+--         | [] -> []
+--         | z1::zs ->
+--             (Raml.tick(1.0);
+--             match zs with
+--             | [] -> depth z1
+--             | z2::_ -> appendD (depth z1) (depth z2))
+--     );;
+-- 
+-- let startDepth xs =
+--     match xs with
+--     | [] -> []
+--     | x::xs -> (Raml.tick(1.0); depth (x, x, xs, xs));;
+-- 
+-- startBreadth [1;2;3;4;5;6;7]
