@@ -215,6 +215,8 @@ RESOURCE_INFERENCE_NEG_BENCHMARKS = [
 
     # RAML
     ('RAML-Queue',                   ['--eac', '--infer', '-f=Nonterminating']),
+    ('RAML-BinaryCounter',           ['--eac', '--infer', '-f=Nonterminating']),
+    ('RAML-SplitAndSort',            ['--eac', '--infer', '-f=Nonterminating']),
 ]
 
 RESOURCE_SYNTHESIS_BENCHMARKS = [

@@ -1,0 +1,44 @@
+data List a <q :: Int> where
+  Nil :: List a <q>
+  Cons :: x: a -> xs: List {a | | q} <q> -> List {a | | q} <q>
+
+type Nat = {Int | _v >= 0}    
+
+data Bin where
+  Zero :: Bin
+  One :: Bin
+
+addOne :: List {Bin | | 1} <{0}> -> List Bin <{0}>
+addOne = \l.
+  match l with
+    Nil -> Cons One Nil
+    Cons b bs ->
+      match b with
+        Zero -> Cons One bs
+        One  -> tick 1 (Cons Zero (addOne bs))
+
+addMany :: List Bin <{0}> -> Nat -> List Bin <{0}>
+addMany = \l. \n.
+  if (n == 0)
+    then l
+    else addMany (addOne l) (n - 1)
+
+-- let rec add_many l n =
+--   Rnat.ifz n
+--     (fun () -> l
+--     )
+--     (fun n' -> 
+--       let l' = add_one l in
+--       add_many l' n'
+--     )
+-- 
+-- let rec add_list counter l =
+--   match l with
+--     | [] -> (fun () -> counter) ()
+--     | x::xs -> let f xs counter = (add_list (add_one counter) xs) in f xs counter
+-- 
+-- (*let _ =
+--   add_one (add_one (add_one [One;Zero])) (*Rnat.zero*)*)
+-- 
+-- let _ =
+--   add_list [Zero] [1;2;3;4]

@@ -1,0 +1,92 @@
+data Tuple a b where
+  Tuple :: a -> b -> Tuple a b
+
+data List a <q :: Int> where
+  Nil :: List a <q>
+  Cons :: x: a -> xs: List {a | | q} <q> -> List {a | | q} <q>
+
+-- RAML bound: 
+insert :: Tuple a Int -> List {Tuple (List a <{0}>) Int | | 2} <{0}> -> List (Tuple (List a <{0}>) Int) <{0}>
+insert = \x. \l.
+  match x with
+    Tuple valX keyX ->
+      match l with
+        Nil -> Cons (Tuple (Cons valX Nil) keyX) Nil
+        Cons l1 ls ->
+          match l1 with
+            Tuple vals1 key1 ->
+              if (key1 == keyX)
+                then tick 1 (Cons (Tuple (Cons valX vals1) key1) ls)
+                else tick 1 (Cons (Tuple vals1 key1) (insert x ls))
+
+-- let rec insert x l =
+-- 	let (valX, keyX) = x in
+-- 	match l with
+-- 	| [] -> [([valX], keyX)]
+-- 	| l1::ls ->
+-- 		(Raml.tick(1.0);
+-- 		let (vals1, key1) = l1 in
+-- 		if ((key1:int) = (keyX:int))
+-- 		then
+-- 			(valX::vals1, key1)::ls
+-- 		else
+-- 			(vals1, key1)::insert x ls);;
+-- 
+-- let rec split l =
+-- 	match l with
+-- 	| [] -> []
+-- 	| x::xs -> (Raml.tick(1.0); insert x (split xs));;
+-- 
+-- let rec splitqs q =
+-- 	let (pivot, l) = q in
+-- 	match l with
+-- 	| [] -> ([], [])
+-- 	| x::xs ->
+-- 		(Raml.tick(1.0);
+-- 		let (ls, rs) = splitqs (pivot, xs) in
+-- 		if ((x:int) > (pivot:int))
+-- 		then
+-- 			(ls, x::rs)
+-- 		else
+-- 			(x::ls, rs));;
+-- 
+-- let rec append l ys =
+-- 	match l with
+-- 	| [] -> ys
+-- 	| x::xs -> (Raml.tick(1.0); x::append xs ys);;
+-- 
+-- let rec quicksort l =
+-- 	match l with
+-- 	| [] -> []
+-- 	| z::zs ->
+-- 		(Raml.tick(1.0);
+-- 		let (xs, ys) = splitqs (z, zs) in
+-- 		append (quicksort xs) (z::(quicksort ys)));;
+-- 
+-- let rec sortAll l =
+-- 	match l with
+-- 	| [] -> []
+-- 	| x::xs ->
+-- 		(Raml.tick(1.0);
+-- 		let (vals, key) = x in
+-- 		(quicksort vals, key)::sortAll xs);;
+-- 
+-- let splitAndSort l =
+-- 	sortAll (split l);;
+-- 
+-- let l =
+--   [ 1,2
+--   ; 3,50
+--   ; 1,5
+--   ; 1,0
+--   ; 3,40
+--   ; 2,200
+--   ; 2,100
+--   ; 3,80
+--   ; 1,9
+--   ; 2,500
+--   ; 2,400
+--   ; 1,8
+--   ]
+-- in
+-- splitAndSort l
