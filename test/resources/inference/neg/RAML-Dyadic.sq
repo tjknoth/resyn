@@ -1,0 +1,15 @@
+data List a <q :: Int> where
+    Nil :: List a <q>
+    Cons :: x: {a | | q} -> xs: List a <{2 * q}> -> List a <q>
+
+mult :: Int -> List Int <{0}> -> List Int <{0}>
+mult = \n. \l.
+  match l with
+    Nil -> Nil
+    Cons x xs -> tick 1 (Cons (n * x) (mult n xs))
+
+dyade :: List Int <{0}> -> List Int <{0}> -> List (List Int <{0}>) <{0}>
+dyade = \l1. \l2.
+  match l1 with
+    Nil -> Nil
+    Cons x xs -> tick 0 (Cons (mult x l2) (dyade xs l2))

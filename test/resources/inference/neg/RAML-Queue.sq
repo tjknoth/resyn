@@ -19,7 +19,7 @@ enqueues = \l. \q.
   match l with
     Nil -> q
     Cons x xs ->
-      (enqueues xs (enqueue x q))
+      tick 1 (enqueues xs (enqueue x q))
 
 -- let rec enqueues l queue =
 --     match l with

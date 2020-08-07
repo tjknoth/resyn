@@ -256,6 +256,34 @@ leq :: arg1:{List {Int||1} <0>||1} -> arg0:{List {Int||0} <0>||0} -> {Bool||0} (
 leq = \b1 . \b2 .
     tick 1 ((compare b1 b2) < 1)
 
+r1 :: <a> . arg1:{List {1**a||I0} <F22>||I1} -> arg0:{List {1**a||I2} <F23>||I3} -> {List {1**a||I4} <F24>||I5}
+r1 :: <a> . arg1:{List {1**a||1} <0>||0} -> arg0:{List {1**a||0} <0>||0} -> {List {1**a||0} <0>||0} (inferred)
+r1 = \ls . \a . 
+    match ls with
+      Nil -> a
+      Cons x xs -> tick 1 (r1 xs (Cons
+                                    x a))
+
+rev :: <a> . arg0:{List {1**a||I6} <F25>||I7} -> {List {1**a||I8} <F26>||I9}
+rev :: <a> . arg0:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0} (inferred)
+rev = \ls . r1 ls Nil
+
+g3 :: <a> . arg1:{List {1**a||I10} <F27>||I11} -> arg0:{List {1**a||I12} <F28>||I13} -> {List {1**a||I14} <F29>||I15}
+g3 :: <a> . arg1:{List {1**a||1} <0>||0} -> arg0:{List {1**a||0} <0>||0} -> {List {1**a||0} <0>||0} (inferred)
+g3 = \c . \d . 
+    match c with
+      Nil -> d
+      Cons x xs -> tick 1 (g3 xs (Cons
+                                    x d))
+
+f3 :: <a> . arg1:{List {1**a||I16} <F30>||I17} -> arg0:{List {1**a||I18} <F31>||I19} -> {List {1**a||I20} <F32>||I21}
+f3 :: <a> . arg1:{List {1**a||1} <0>||0} -> arg0:{List {1**a||2} <0>||1} -> {List {1**a||0} <0>||0} (inferred)
+f3 = \a . \b . 
+    match b with
+      Nil -> tick 1 (g3 a Nil)
+      Cons x xs -> tick 1 (f3 (Cons x
+                                 a) xs)
+
 elem :: <a> . arg1:{1**a||I0} -> arg0:{List {1**a||I1} <F8>||I2} -> {Bool||I3}
 elem :: <a> . arg1:{1**a||0} -> arg0:{List {1**a||1} <0>||0} -> {Bool||0} (inferred)
 elem = \x . \xs . 
@@ -405,6 +433,37 @@ enqueue = \x . \q .
                                   (Cons x inq) outq)
 
 enqueues :: <a> . arg1:{List {1**a||I16} <F28>||I17} -> arg0:{Tuple {List {1**a||I18} <0>||I19} {List {1**a||I20} <0>||I21}||I22} -> {Tuple {List {1**a||I23} <0>||I24} {List {1**a||I25} <0>||I26}||I27}
+<no file name>:1: Error:
+  Insufficient resources
+
+addOne :: arg0:{List {Bin||I0} <F9>||I1} -> {List {Bin||I2} <F10>||I3}
+addOne :: arg0:{List {Bin||2} <0>||0} -> {List {Bin||0} <0>||(- 1)} (inferred)
+addOne = \l . 
+  match l with
+    Nil -> Cons One Nil
+    Cons b bs -> 
+      match b with
+        Zero -> Cons One bs
+        One -> tick 1 (Cons Zero (addOne
+                                    bs))
+
+addMany :: arg1:{List {Bin||I4} <F11>||I5} -> arg0:{Int|_v >= 0|0} -> {List {Bin||I7} <F12>||I8}
+<no file name>:1: Error:
+  Insufficient resources
+
+insert :: <a> . arg1:{Tuple {1**a||I0} {Int||I1}||I2} -> arg0:{List {Tuple {List {1**a||I3} <0>||I4} {Int||I5}||I6} <F13>||I7} -> {List {Tuple {List {1**a||I8} <0>||I9} {Int||I10}||I11} <F14>||I12}
+<no file name>:1: Error:
+  Insufficient resources
+
+mult :: arg1:{Int||I0} -> arg0:{List {Int||I1} <F12>||I2} -> {List {Int||I3} <F13>||I4}
+mult :: arg1:{Int||0} -> arg0:{List {Int||0} <2>||0} -> {List {Int||0} <0>||(- 1)} (inferred)
+mult = \n . \l . 
+    match l with
+      Nil -> Nil
+      Cons x xs -> tick 1 (Cons (n *
+                                   x) (mult n xs))
+
+dyade :: arg1:{List {Int||I5} <F14>||I6} -> arg0:{List {Int||I7} <F15>||I8} -> {List {List {Int||I9} <0>||I10} <F16>||I11}
 <no file name>:1: Error:
   Insufficient resources
 

@@ -184,7 +184,10 @@ RESOURCE_INFERENCE_POS_BENCHMARKS = [
     ('List-Subset-Sum',              ['--eac', '--infer', '-f=Nonterminating']),
     ('List-InsertSort',              ['--eac', '--infer', '-f=Nonterminating', '--res-solver=CEGIS']),
     ('List-InsertSort-Compares',     ['--eac', '--infer', '-f=Nonterminating']),
+
+    # RAML
     ('RAML-BitVec',                  ['--eac', '--infer', '-f=Nonterminating']),
+    ('RAML-SizeChange',              ['--eac', '--infer', '-f=Nonterminating']),
 
     # ICFP '20 benches
     # Quadratic
@@ -217,6 +220,7 @@ RESOURCE_INFERENCE_NEG_BENCHMARKS = [
     ('RAML-Queue',                   ['--eac', '--infer', '-f=Nonterminating']),
     ('RAML-BinaryCounter',           ['--eac', '--infer', '-f=Nonterminating']),
     ('RAML-SplitAndSort',            ['--eac', '--infer', '-f=Nonterminating']),
+    ('RAML-Dyadic',                  ['--eac', '--infer', '-f=Nonterminating']),
 ]
 
 RESOURCE_SYNTHESIS_BENCHMARKS = [

@@ -1,0 +1,56 @@
+data List a <q :: Int> where
+    Nil :: List a <q>
+    Cons :: x: a -> xs: List {a | | q} <q> -> List a <q>
+
+-- Example 1: Accumulation
+
+r1 :: List {a | | 1} <{0}> -> List a <{0}> -> List a <{0}>
+r1 = \ls. \a.
+  match ls with
+    Nil -> a
+    Cons x xs -> tick 1 (r1 xs (Cons x a))
+
+rev :: List a <{0}> -> List a <{0}>
+rev = \ls. r1 ls Nil
+
+-- Example 2: Mutual Recursion; skipped ("The linear program is infeasible")
+
+-- Example 3: Ackermann function; skipped in original example (non-polynomial)
+
+-- Example 4: Permuted Parameters; skipped b/c no ticks
+
+-- Example 5: Permuted and Discarded Parameters; doesn't work in original example
+-- f2 :: List a <{0}> -> List a <{0}> -> List a <{0}>
+-- f2 = \x. \y.
+--   match y with
+--     Nil -> x
+--     Cons p ps ->
+--       match x with
+--         Nil -> tick 1 (f2 y ps)
+--         Cons q qs -> tick 1 (f2 y qs)
+
+-- Example 6: Late-Starting Descending Parameters
+
+g3 :: List {a | | 1} <{0}> -> List a <{0}> -> List a <{0}>
+g3 = \c. \d.
+  match c with
+    Nil -> d
+    Cons x xs -> tick 1 (g3 xs (Cons x d))
+
+f3 :: List {a | | 1} <{0}> -> List a <{0}> -> List a <{0}>
+f3 = \a. \b.
+  match b with
+    Nil -> tick 1 (g3 a Nil)
+    Cons x xs -> tick 1 (f3 (Cons x a) xs)
+
+-- let rec g3 c d =
+--     match c with
+--     | [] -> d
+--     | x::xs -> (Raml.tick(1.0); g3 xs (x::d));;
+-- 
+-- let rec f3 a b =
+--     match b with
+--     | [] -> (Raml.tick(1.0); g3 a [])
+--     | x::xs -> (Raml.tick(1.0); f3 (x::a) xs);;
+-- 
+-- ()
