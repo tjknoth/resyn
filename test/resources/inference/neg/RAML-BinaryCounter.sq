@@ -17,6 +17,19 @@ addOne = \l.
         Zero -> Cons One bs
         One  -> tick 1 (Cons Zero (addOne bs))
 
+-- also fails:
+-- addManyInline :: List Bin <{0}> -> Nat -> List Bin <{0}>
+-- addManyInline = \l. \n.
+--   if (n == 0)
+--     then l
+--     else
+--       match l with
+--         Nil -> addManyInline (Cons One Nil) (n - 1)
+--         Cons b bs ->
+--           match b with
+--             Zero -> addManyInline (Cons One bs) (n - 1)
+--             One  -> tick 1 (addManyInline (Cons Zero (addOne bs)) (n - 1))
+
 addMany :: List Bin <{0}> -> Nat -> List Bin <{0}>
 addMany = \l. \n.
   if (n == 0)

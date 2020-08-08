@@ -13,8 +13,17 @@ enqueue = \x. \q.
   match q with
     Tuple inq outq -> tick 1 (Tuple (Cons x inq) outq)
 
--- This doesn't work:
-enqueues :: List a <{0}> -> Tuple (List a <{0}>) (List a <{0}>) -> Tuple (List a <{0}>) (List a <{0}>)
+-- When the defn of enqueue is inlined into enqueues, resources are inferred perfectly fine:
+enqueuesInline :: List {a | | 2} <{0}> -> Tuple (List a <{0}>) (List a <{0}>) -> Tuple (List a <{0}>) (List a <{0}>)
+enqueuesInline = \l. \q.
+  match l with
+    Nil -> q
+    Cons x xs ->
+      match q with
+        Tuple inq outq -> tick 1 (enqueuesInline xs (tick 1 (Tuple (Cons x inq) outq)))
+
+-- However, if we try to call enqueue from enqueues, it breaks:
+enqueues :: List {a | | 2} <{0}> -> Tuple (List a <{0}>) (List a <{0}>) -> Tuple (List a <{0}>) (List a <{0}>)
 enqueues = \l. \q.
   match l with
     Nil -> q

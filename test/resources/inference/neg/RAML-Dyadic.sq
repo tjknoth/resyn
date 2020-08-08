@@ -12,4 +12,4 @@ dyade :: List Int <{0}> -> List Int <{0}> -> List (List Int <{0}>) <{0}>
 dyade = \l1. \l2.
   match l1 with
     Nil -> Nil
-    Cons x xs -> tick 0 (Cons (mult x l2) (dyade xs l2))
+    Cons x xs -> tick 1 (Cons (mult x l2) (dyade xs l2))

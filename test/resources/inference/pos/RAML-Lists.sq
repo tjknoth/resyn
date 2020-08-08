@@ -1,0 +1,360 @@
+-- These examples is extracted out of the 99 Problems in OCaml - Lists RAML example.
+
+data List a <q :: Int> where
+  Nil :: List a <q>
+  Cons :: x: a -> xs: List {a | | q} <q> -> List a <q>
+
+data Maybe a where
+  Just :: a -> Maybe a
+  Nothing :: Maybe a
+
+data Tuple a b where
+  Tuple :: a -> b -> Tuple a b
+
+type Nat = {Int | _v >= 0}
+
+last :: List {a | | 1} <{0}> -> Maybe a
+last = \l.
+  match l with
+    Nil -> Nothing
+    Cons x xs ->
+      match xs with
+        Nil -> Just x
+        Cons y ys -> tick 1 (last xs)
+
+lastTwo :: List {a | | 1} <{0}> -> Maybe (Tuple a a)
+lastTwo = \l.
+  match l with
+    Nil -> Nothing
+    Cons x xs ->
+      match xs with
+        Nil -> Nothing
+        Cons y ys ->
+          match ys with
+            Cons z zs -> tick 1 (lastTwo xs)
+
+at :: {Int | _v >= 0} -> List {a | | 1} <{0}> -> Maybe a
+at = \k. \l.
+  match l with
+    Nil -> Nothing
+    Cons h t ->
+      if k == 0
+        then tick 1 (Just h)
+        else tick 1 (at (k - 1) t)
+
+-- natAt omitted: redundant
+
+lengthGo :: Nat -> List {a | | 1} <{0}> -> Nat
+lengthGo = \acc. \ls.
+  match ls with
+    Nil -> acc
+    Cons h t -> tick 1 (lengthGo (acc + 1) t)
+
+length :: List {a | | 1} <{0}> -> Nat
+length = \l.
+  lengthGo 0 l
+
+revGo :: List a <{0}> -> List {a | | 1} <{0}> -> List a <{0}>
+revGo = \acc. \ls.
+  match ls with
+    Nil -> acc
+    Cons h t -> tick 1 (revGo (Cons h acc) t)
+
+rev :: List {a | | 1} <{0}> -> List a <{0}>
+rev = \l.
+  revGo Nil l
+
+eq :: List {Int | | 1} <{0}> -> List Int <{0}> -> Bool
+eq = \l1. \l2.
+  match l1 with
+    Nil ->
+      match l2 with
+        Nil -> True
+        Cons x2 x2s -> False
+    Cons x1 x1s ->
+      match l2 with
+        Nil -> False
+        Cons x2 x2s -> tick 1 (x1 == x2 && eq x1s x2s)
+
+-- palindrome skipped: no ticks
+
+data Node a <q :: Int> where
+  One :: a -> Node a <q>
+  Many :: List (Node a <q>) <q> -> Node a <q>
+
+-- flatten skipped: no ticks
+
+-- compress skipped: see neg/RAML-Compress.sq
+
+-- let pack list = 
+-- 
+--   let rec aux current acc l =
+-- 		match l with
+--     | [] -> [] (* Can only be reached if original list is empty *)
+--     | a::t ->
+-- 			match t with
+-- 			| [] -> (a::current)::acc
+-- 			| b::_ ->
+-- 				(Raml.tick(1.0);
+-- 				if ((a:int) = (b:int)) then aux (a :: current) acc t 
+-- 				else aux [] ((a :: current) :: acc) t)
+--   in
+-- 
+--   rev (aux [] [] list) 
+-- ;;
+-- 
+-- let encode list = 
+-- 
+--   let rec aux count acc l =
+-- 		match l with
+--     | [] -> [] (* Can only be reached if original list is empty *)
+-- 		| a::t ->
+-- 			match t with
+--     	| [] -> (count+1,a) :: acc
+--     	| b::_ ->
+-- 				(Raml.tick(1.0);
+-- 				if ((a:int) = (b:int)) then aux (count + 1) acc t
+-- 				else aux 0 ((count+1,a) :: acc) t)
+--   in
+-- 
+--   rev (aux 0 [] list) 
+-- ;;
+-- (*
+-- type 'a rle = 
+--   | One of 'a 
+--   | Many of (int * 'a)
+-- ;;
+-- 
+-- let decode list = 
+-- 
+--   let rec many acc n x = 
+--     if n = 0 then acc else many (x :: acc) (n-1) x
+--   in
+-- 
+--   let rec aux acc l =
+-- 		match l with
+--     | [] -> acc
+-- 		| a::t ->
+-- 			match a with
+--     	| One(x) -> aux (x :: acc) t
+--     	| Many(n,x) -> aux (many acc n x) t
+--   in
+-- 
+--   aux [] (rev list)
+-- ;;
+-- *)
+-- 
+-- let rec duplicate = function
+--   | [] -> []
+--   | h :: t -> (Raml.tick(1.0); h :: h :: duplicate t);;
+-- 
+-- doesn't work
+-- let replicate list n = 
+--   
+--   let rec prepend n acc x =
+--     if n = 0 then acc else (Raml.tick(1.0); prepend (n-1) (x :: acc) x) 
+--   in
+-- 
+--   let rec aux acc = function
+--     | [] -> acc
+--     | h :: t -> (Raml.tick(1.0); aux (prepend n acc h) t)
+--   in
+-- 
+--   (* This could also be written as: List.fold_left (prepend n) [] (List.rev list) *)
+--   aux [] (rev list) 
+-- 
+-- ;;
+-- 
+-- let drop list n =
+-- 
+--   let rec aux i = function
+--     | [] -> []
+--     | h :: t -> (Raml.tick(1.0); if i = n then aux 1 t else h :: aux (i+1) t)
+--   in
+-- 
+--   aux 1 list
+-- ;;
+-- 
+-- let split list n = 
+-- 
+--   let rec aux i acc l =
+-- 		match l with
+--     | [] -> rev acc, []
+--     | h :: t -> (Raml.tick(1.0); if i = 0 then rev acc, l else aux (i-1) (h :: acc) t)
+--   in
+-- 
+--   aux n [] list
+-- ;;
+-- 
+-- let slice list b e = 
+-- 
+--   let rec take n = function
+--     | [] -> []
+--     | h :: t -> (Raml.tick(1.0); if n = 0 then [] else h :: take (n-1) t)
+--   in
+-- 
+--   let rec drop n l =
+-- 		match l with
+--     | [] -> []
+--     | h :: t -> (Raml.tick(1.0); if n = 0 then l else drop (n-1) t)
+--   in
+-- 
+--   take (e - b + 1) (drop (b - 1) list) 
+-- ;;
+-- 
+-- let rec concat l1 l2 =
+-- 	match l1 with
+-- 	| [] -> l2
+-- 	| x::xs -> (Raml.tick(1.0); x::concat xs l2);;
+-- 
+-- let rotate list n = 
+--   
+--   let len = length list in 
+--   let n = if len = 0 then 0 else (n mod len + len) mod len in (* Compute a rotation value between 0 and len-1 *)
+--   if n = 0 then list else
+--     let a, b = split list n in (concat b a) 
+-- 
+-- ;;
+-- 
+-- let rec removeAt n = function
+--   | [] -> []
+--   | h :: t -> (Raml.tick(1.0); if n = 1 then t else h :: removeAt (n-1) t)
+-- ;;
+-- 
+-- let rec insertAt x n = function
+--   | [] -> []
+--   | h :: t -> (Raml.tick(1.0); if n = 1 then x :: h :: t else h :: insertAt x (n-1) t)
+-- ;;
+-- 
+-- doesn't work
+-- let (--) a b = 
+--   let rec aux a b = 
+--     if a > b then [] else a :: aux (a+1) b
+--   in
+-- 
+--   if a > b then rev (aux b a) else aux a b
+-- ;;
+-- 
+-- let random n = 1337 mod n ;;
+-- 
+-- let min m n =
+-- 	(Raml.tick(1.0);
+-- 	if ((m:int) < (n:int)) then m
+-- 	else n);;
+-- 
+-- let rec rand_select list n = 
+-- 
+--   let rec extract acc n = function
+--     | [] -> raise Not_found
+--     | h :: t -> (Raml.tick(1.0); if n = 0 then h, (concat acc t) else extract (h::acc) (n-1) t)
+--   in
+-- 
+--   let extract_rand list len = 
+--     extract [] (random len) list 
+--   in
+-- 
+--   let rec aux n acc list len = 
+--     if n = 0 then acc else
+--       let picked, rest = extract_rand list len in 
+--       (Raml.tick(1.0); aux (n-1) (picked :: acc) rest (len-1))
+--   in
+-- 
+--   let len = length list in
+-- 
+--   aux (min n len) [] list len 
+-- ;;
+-- 
+-- doesn't work
+-- let lotto_select n m = rand_select (1 -- m) n ;;
+-- (*
+-- let extract k list = 
+-- 
+--   let rec aux k acc emit = function
+--     | [] -> acc
+--     | h :: t -> 
+--       if k = 1 then aux k (emit [h] acc) emit t else 
+-- 	let new_emit x = emit (h :: x) in
+-- 	aux k (aux (k-1) acc new_emit t) emit t
+--   in
+-- 
+--   let emit x acc = x :: acc in
+-- 
+--   aux k [] emit list 
+-- ;;
+-- *)
+-- 
+-- let snd x =
+-- 	(Raml.tick(1.0);
+-- 	let (a, b) = x in
+-- 	b);;
+-- 
+-- let fst x =
+-- 	(Raml.tick(1.0);
+-- 	let (a, b) = x in
+-- 	a);;
+-- 
+-- let rec map f l =
+-- 	match l with
+-- 	| [] -> []
+-- 	| x::xs -> (Raml.tick(1.0); (f x)::map f xs);;
+-- (*
+-- let group list sizes = 
+-- 
+--   let initial = map (fun size -> size, []) sizes in
+-- 
+--   (* The core of the function. Prepend accepts a list of groups, each with 
+--      the number of items that should be added, and prepends the item to every
+--      group that can support it, thus turning [1,a ; 2,b ; 0,c] into 
+--      [ [0,x::a ; 2,b ; 0,c ] ; [1,a ; 1,x::b ; 0,c] ; [ 1,a ; 2,b ; 0,c ]]
+--      Again, in the prolog language (for which these questions are intended),
+--      this function is a whole lot simpler.
+--   *) 
+--   let prepend p list = 
+--     let emit l acc = l :: acc in
+--     let rec aux emit acc = function
+--       | [] -> emit [] acc
+--       | (n,l) as h :: t -> 
+-- 	let acc = if n > 0 then emit ((n-1, p::l) :: t) acc else acc in 
+-- 	aux (fun l acc -> emit (h :: l) acc) acc t 
+--     in    
+--     aux emit [] list
+--   in
+-- 
+--   let rec aux = function
+--     | [] -> [ initial ]
+--     | h :: t -> concat (map (prepend h) (aux t))
+--   in
+-- 
+--   let all = aux list in 
+-- 
+--   (* Don't forget to eliminate all group sets that have non-full groups *)
+--   let complete = List.filter (List.for_all (fun (x,_) -> x = 0)) all in
+-- 
+--   map (map snd) complete
+-- ;;
+-- *)
+-- 
+-- let rec insert cmp e = function
+--   | [] -> [e]
+--   | h :: t -> (Raml.tick(1.0); if cmp e h <= 0 then e :: h :: t else h :: insert cmp e t)
+-- ;;
+-- 
+-- let rec sort cmp = function
+--   | [] -> []
+--   | h :: t -> (Raml.tick(1.0); insert cmp h (sort cmp t))
+-- ;;	     
+-- 
+-- (* Sorting according to length : prepend length, sort, remove length *)
+-- 
+-- let compare x y =
+-- 	(Raml.tick(1.0);
+-- 	if (x = y) then 0
+-- 	else if ((x:int) < (y:int)) then -1
+-- 	else 1);;
+-- 
+-- let length_sort lists = 
+--   let lists = map (fun list -> length list, list) lists in
+--   let lists = sort (fun a b -> compare (fst a) (fst b)) lists in
+--   map snd lists
+-- ;;
+-- ()

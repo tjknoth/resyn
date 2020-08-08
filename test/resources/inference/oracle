@@ -284,6 +284,76 @@ f3 = \a . \b .
       Cons x xs -> tick 1 (f3 (Cons x
                                  a) xs)
 
+last :: <a> . arg0:{List {1**a||I0} <F37>||I1} -> {Maybe {1**a||I2}||I3}
+last :: <a> . arg0:{List {1**a||1} <0>||0} -> {Maybe {1**a||0}||0} (inferred)
+last = \l . 
+  match l with
+    Nil -> Nothing
+    Cons x xs -> 
+      match xs with
+        Nil -> Just x
+        Cons y ys -> tick 1 (last xs)
+
+lastTwo :: <a> . arg0:{List {1**a||I4} <F38>||I5} -> {Maybe {Tuple {1**a||I6} {1**a||I7}||I8}||I9}
+lastTwo :: <a> . arg0:{List {1**a||1} <0>||0} -> {Maybe {Tuple {1**a||0} {1**a||0}||0}||0} (inferred)
+lastTwo = \l . 
+  match l with
+    Nil -> Nothing
+    Cons x xs -> 
+      match xs with
+        Nil -> Nothing
+        Cons y ys -> 
+          match ys with
+            Cons z zs -> tick 1 (lastTwo xs)
+
+at :: <a> . arg1:{Int|_v >= 0|I10} -> arg0:{List {1**a||I11} <F39>||I12} -> {Maybe {1**a||I13}||I14}
+at :: <a> . arg1:{Int|_v >= 0|0} -> arg0:{List {1**a||1} <0>||0} -> {Maybe {1**a||0}||0} (inferred)
+at = \k . \l . 
+    match l with
+      Nil -> Nothing
+      Cons h t -> 
+        if k == 0
+          then tick 1 (Just h)
+          else tick 1 (at (k - 1) t)
+
+lengthGo :: <a> . arg1:{Int|_v >= 0|0} -> arg0:{List {1**a||I16} <F40>||I17} -> {Int|_v >= 0|0}
+lengthGo :: <a> . arg1:{Int|_v >= 0|0} -> arg0:{List {1**a||1} <0>||0} -> {Int|_v >= 0|0} (inferred)
+lengthGo = \acc . \ls . 
+    match ls with
+      Nil -> acc
+      Cons h t -> tick 1 (lengthGo
+                            (acc + 1) t)
+
+length :: <a> . arg0:{List {1**a||I19} <F41>||I20} -> {Int|_v >= 0|0}
+length :: <a> . arg0:{List {1**a||1} <0>||0} -> {Int|_v >= 0|0} (inferred)
+length = \l . lengthGo 0 l
+
+revGo :: <a> . arg1:{List {1**a||I22} <F42>||I23} -> arg0:{List {1**a||I24} <F43>||I25} -> {List {1**a||I26} <F44>||I27}
+revGo :: <a> . arg1:{List {1**a||0} <0>||0} -> arg0:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0} (inferred)
+revGo = \acc . \ls . 
+    match ls with
+      Nil -> acc
+      Cons h t -> tick 1 (revGo (Cons
+                                   h acc) t)
+
+rev :: <a> . arg0:{List {1**a||I28} <F45>||I29} -> {List {1**a||I30} <F46>||I31}
+rev :: <a> . arg0:{List {1**a||1} <0>||0} -> {List {1**a||0} <0>||0} (inferred)
+rev = \l . revGo Nil l
+
+eq :: arg1:{List {Int||I32} <F47>||I33} -> arg0:{List {Int||I34} <F48>||I35} -> {Bool||I36}
+eq :: arg1:{List {Int||0} <0>||0} -> arg0:{List {Int||1} <0>||0} -> {Bool||0} (inferred)
+eq = \l1 . \l2 . 
+    match l1 with
+      Nil -> 
+        match l2 with
+          Nil -> True
+          Cons x2 x2s -> False
+      Cons x1 x1s -> 
+        match l2 with
+          Nil -> False
+          Cons x2 x2s -> tick 1 ((x1 ==
+                                    x2) && (eq x1s x2s))
+
 elem :: <a> . arg1:{1**a||I0} -> arg0:{List {1**a||I1} <F8>||I2} -> {Bool||I3}
 elem :: <a> . arg1:{1**a||0} -> arg0:{List {1**a||1} <0>||0} -> {Bool||0} (inferred)
 elem = \x . \xs . 
@@ -432,7 +502,19 @@ enqueue = \x . \q .
       Tuple inq outq -> tick 1 (Tuple
                                   (Cons x inq) outq)
 
-enqueues :: <a> . arg1:{List {1**a||I16} <F28>||I17} -> arg0:{Tuple {List {1**a||I18} <0>||I19} {List {1**a||I20} <0>||I21}||I22} -> {Tuple {List {1**a||I23} <0>||I24} {List {1**a||I25} <0>||I26}||I27}
+enqueuesInline :: <a> . arg1:{List {1**a||I16} <F40>||I17} -> arg0:{Tuple {List {1**a||I18} <0>||I19} {List {1**a||I20} <0>||I21}||I22} -> {Tuple {List {1**a||I23} <0>||I24} {List {1**a||I25} <0>||I26}||I27}
+enqueuesInline :: <a> . arg1:{List {1**a||2} <0>||0} -> arg0:{Tuple {List {1**a||0} <0>||0} {List {1**a||0} <0>||0}||0} -> {Tuple {List {1**a||0} <0>||0} {List {1**a||0} <0>||0}||0} (inferred)
+enqueuesInline = \l . \q . 
+    match l with
+      Nil -> q
+      Cons x xs -> 
+        match q with
+          Tuple inq outq ->
+            tick 1 (enqueuesInline xs
+                      (tick 1 (Tuple (Cons x inq)
+                                 outq)))
+
+enqueues :: <a> . arg1:{List {1**a||I28} <F41>||I29} -> arg0:{Tuple {List {1**a||I30} <0>||I31} {List {1**a||I32} <0>||I33}||I34} -> {Tuple {List {1**a||I35} <0>||I36} {List {1**a||I37} <0>||I38}||I39}
 <no file name>:1: Error:
   Insufficient resources
 
@@ -464,6 +546,19 @@ mult = \n . \l .
                                    x) (mult n xs))
 
 dyade :: arg1:{List {Int||I5} <F14>||I6} -> arg0:{List {Int||I7} <F15>||I8} -> {List {List {Int||I9} <0>||I10} <F16>||I11}
+<no file name>:1: Error:
+  Insufficient resources
+
+example :: {List {Node {Int||I0} <0>||I1} <F7>||I2}
+example :: {List {Node {Int||0} <0>||0} <0>||(- 1)} (inferred)
+example = Cons (One 1) (Cons
+                          (Many (Cons (One 2) (Cons (Many
+                                                       (Cons (One 3) (Cons (One
+                                                                              4)
+                                                                        Nil)))
+                                                 (Cons (One 5) Nil)))) Nil)
+
+compress :: arg0:{List {Int||I3} <F8>||I4} -> {List {Int||I5} <F9>||I6}
 <no file name>:1: Error:
   Insufficient resources
 

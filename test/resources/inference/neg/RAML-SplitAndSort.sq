@@ -5,7 +5,7 @@ data List a <q :: Int> where
   Nil :: List a <q>
   Cons :: x: a -> xs: List {a | | q} <q> -> List {a | | q} <q>
 
--- RAML bound: 
+-- RAML bound: 1*M, where M is the number of ::-nodes of the 2nd component of the argument
 insert :: Tuple a Int -> List {Tuple (List a <{0}>) Int | | 2} <{0}> -> List (Tuple (List a <{0}>) Int) <{0}>
 insert = \x. \l.
   match x with
