@@ -141,7 +141,7 @@ instance RMonad Z3State where
     -- debugging
     s <- astToString fmlAst
 
-    (_, m) <- local $ (optimizeAssert (pTraceShow "FUCK" fmlAst)) >> (mapM_ inferOnly vs) >> optimizeCheckAndGetModel
+    (_, m) <- local $ (optimizeAssert fmlAst) >> (mapM_ inferOnly vs) >> optimizeCheckAndGetModel
    
     case m of  
       Just md -> do 
