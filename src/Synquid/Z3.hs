@@ -35,6 +35,7 @@ import Z3.Monad hiding (Z3Env, newEnv, Sort)
 import qualified Z3.Base as Z3
 
 import Debug.Pretty.Simple
+import Debug.Trace
 
 data Z3Env = Z3Env {
   envSolver   :: Z3.Solver,
@@ -137,9 +138,6 @@ instance RMonad Z3State where
 
     setASTPrintMode Z3_PRINT_SMTLIB_FULL
     fmlAst <- fmlToAST fml
-
-    -- debugging
-    s <- astToString fmlAst
 
     (_, m) <- local $ (optimizeAssert fmlAst) >> (mapM_ inferOnly vs) >> optimizeCheckAndGetModel
    

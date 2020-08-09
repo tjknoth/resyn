@@ -137,8 +137,8 @@ translateAndFinalize rfml = do
   z3lit <- lift . lift . lift $ translate $ bodyFml rfml
   return $ rfml {
     _knownAssumptions = ftrue,
-    _unknownAssumptions = (),
-    _rconstraints = z3lit
+    _unknownAssumptions = ()
+    -- _rconstraints = z3lit
   }
 
 

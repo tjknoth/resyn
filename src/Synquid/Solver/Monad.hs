@@ -77,6 +77,7 @@ makeLenses ''TypingParams
 -- | Typing state that could potentially persist across checking multiple functions
 data PersistentTState = PersistentTState
   { _idCount :: Map String Int                   -- ^ Number of unique identifiers issued so far
+  , _versionCount :: Map String Int              -- ^ Number of unique identifiers issued so far
   , _resourceConstraints :: [ProcessedRFormula]  -- ^ Constraints relevant to resource analysis
   , _resourceVars :: Map Id [Formula]            -- ^ Set of variables created to replace potential/multiplicity annotations; maps from name of potl var to arguments the potl var depends on
   , _inferredRVars :: PotlSubstitution           -- ^ A map from the id of an inferred variable to the formula we think it has, if it's already been inferred
@@ -93,7 +94,6 @@ data TypingState = TypingState {
   _qualifierMap :: QMap,                        -- ^ Current state space for predicate unknowns
   _candidates :: [Candidate],                   -- ^ Current set of candidate liquid assignments to unknowns
   _initEnv :: Environment,                      -- ^ Initial environment
-  _versionCount :: Map String Int,              -- ^ Number of unique identifiers issued so far
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
   _matchCases :: Set Formula,                   -- ^ Set of all generated match cases
   _cegisState :: CEGISState,                    -- ^ Current state of CEGIS solver

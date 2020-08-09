@@ -692,8 +692,8 @@ freshId prefix = do
 --    to differentiate from normal freshIds -- only used for resource constraints.
 freshVersion :: Monad s => String -> TCSolver s Id
 freshVersion prefix = do
-  i <- uses versionCount (Map.findWithDefault 0 prefix)
-  versionCount %= Map.insert prefix (i + 1)
+  i <- uses (persistentState . versionCount) (Map.findWithDefault 0 prefix)
+  persistentState . versionCount %= Map.insert prefix (i + 1)
   return $ prefix ++ "_" ++ show i
 
 

@@ -72,6 +72,7 @@ initTypingState goal mpts = do
 
   let dpts = PersistentTState {
     _idCount = Map.empty,
+    _versionCount = Map.empty,
     _resourceConstraints = [],
     _resourceVars = Map.fromList [(p, []) | p <- rvars],
     _inferredRVars = OMap.fromList [(p, Nothing) | p <- rvars]
@@ -85,7 +86,6 @@ initTypingState goal mpts = do
     _qualifierMap = Map.empty,
     _candidates = [initCand],
     _initEnv = env,
-    _versionCount = Map.empty,
     _isFinal = False,
     _matchCases = Set.empty,
     _cegisState = initCEGISState,
@@ -749,7 +749,8 @@ checkResources :: (MonadHorn s, MonadSMT s, RMonad s)
                -> TCSolver s ()
 checkResources [] = return ()
 checkResources constraints = do
-  accConstraints <- use $ persistentState . resourceConstraints
+  ps <- use persistentState
+  let accConstraints = ps ^. resourceConstraints
   newC <- solveResourceConstraints accConstraints (filter isResourceConstraint constraints)
   case newC of
     Nothing -> throwError $ text "Insufficient resources"
