@@ -37,6 +37,7 @@ import Synquid.Resolver (addAllVariables)
 import Synquid.Synthesis.Util hiding (throwError, writeLog)
 import Synquid.Solver.Monad
 import Synquid.Solver.Resource
+import Synquid.Solver.Types
 import Synquid.Solver.CEGIS (initCEGISState)
 
 import           Data.Maybe
@@ -52,27 +53,40 @@ import           Control.Monad.Trans.Except (throwE)
 import           Control.Lens hiding (both)
 import           Debug.Trace
 
--- | Initial typing state in the initial environment @env@
-initTypingState :: MonadHorn s => Goal -> s TypingState
-initTypingState goal = do
+import Debug.Pretty.Simple
+
+-- | Initial typing state in the initial environment @env@ given @goal@
+initTypingState :: MonadHorn s => Goal -> Maybe PersistentTState -> s TypingState
+initTypingState goal mpts = do
   let env = gEnvironment goal
   initCand <- initHornSolver env
   -- If we're doing inference, our initial typing state has to contain
   -- the resource vars that we'll later use for inference.
   let rvars = gInferredPotlVars goal
+  -- let dpts = PersistentTState {
+  --   _idCount = Map.empty,
+  --   _resourceConstraints = [],
+  --   _resourceVars = Map.fromList [(p, []) | p <- rvars],
+  --   _inferredRVars = OMap.fromList [(p, Nothing) | p <- rvars],
+  --   }
+
+  let dpts = PersistentTState {
+    _idCount = Map.empty,
+    _resourceConstraints = [],
+    _resourceVars = Map.fromList [(p, []) | p <- rvars],
+    _inferredRVars = OMap.fromList [(p, Nothing) | p <- rvars]
+  }
+
   return TypingState {
+    _persistentState = maybe dpts id mpts,
     _typingConstraints = [],
     _typeAssignment = Map.empty,
     _predAssignment = Map.empty,
     _qualifierMap = Map.empty,
     _candidates = [initCand],
     _initEnv = env,
-    _idCount = Map.empty,
     _versionCount = Map.empty,
     _isFinal = False,
-    _resourceConstraints = [],
-    _resourceVars = Map.fromList [(p, []) | p <- rvars],
-    _inferredRVars = OMap.fromList [(p, Nothing) | p <- rvars],
     _matchCases = Set.empty,
     _cegisState = initCEGISState,
     _simpleConstraints = [],
@@ -120,8 +134,9 @@ solveTypeConstraints = do
 finalSolveRCs :: (MonadSMT s, MonadHorn s, RMonad s) => TCSolver s ()
 finalSolveRCs = do
   res <- view (resourceArgs . shouldCheckResources) 
-  -- Ensures EAC actually verifies the bounds
-  when res $ checkResources [SharedForm emptyEnv fzero fzero fzero]
+  -- If inferring, don't solve our resource constraints; we'll collect these and solve them later.
+  when res $
+    checkResources [SharedForm emptyEnv fzero fzero fzero]
 
 {- Implementation -}
 
@@ -415,7 +430,7 @@ processPredicate c@(WellFormedPredicate env argSorts BoolS p) = do
   where
     isFreeVariable tass a = not (isBound env a) && not (Map.member a tass)
 processPredicate (WellFormedPredicate env _ IntS p) = do
-  resourceVars %= insertRVar (p, [])
+  persistentState . resourceVars %= insertRVar (p, [])
   return ()
 processPredicate c = modify $ addTypingConstraint c
 
@@ -734,8 +749,8 @@ checkResources :: (MonadHorn s, MonadSMT s, RMonad s)
                -> TCSolver s ()
 checkResources [] = return ()
 checkResources constraints = do
-  accConstraints <- use resourceConstraints
+  accConstraints <- use $ persistentState . resourceConstraints
   newC <- solveResourceConstraints accConstraints (filter isResourceConstraint constraints)
   case newC of
     Nothing -> throwError $ text "Insufficient resources"
-    Just f  -> resourceConstraints %= (++ f)
+    Just f  -> persistentState . resourceConstraints %= (++ f)

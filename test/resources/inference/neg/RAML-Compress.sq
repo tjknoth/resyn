@@ -8,12 +8,7 @@ data Node a <q :: Int> where
   One :: a -> Node a <q>
   Many :: List (Node a <q>) <q> -> Node a <q>
 
--- For some reason, including this definition breaks inference of compress.
--- I have no idea why.
--- let example = 
---   [ One `a ; Many [ One `b ; Many [ One `c ; One `d ] ; One `e ] ]
--- ;;
-example :: List (Node Int <{0}>) <{0}>
+example :: List (Node {Int | | -1} <{0}>) <{0}>
 example = Cons (One 1) (Cons (Many (Cons (One 2) (Cons (Many (Cons (One 3) (Cons (One 4) Nil))) (Cons (One 5) Nil)))) Nil)
 
 -- RAML bound: 1*M, where M is the number of ::-nodes in the argument

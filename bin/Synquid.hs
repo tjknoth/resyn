@@ -7,7 +7,7 @@ import Synquid.Program
 import Synquid.Error
 import Synquid.Pretty
 import Synquid.Parser
-import Synquid.Logic (Formula(..))
+import Synquid.Logic (Formula(..), QSpace)
 import Synquid.Resolver (resolveDecls)
 import Synquid.Solver.Monad hiding (name)
 import Synquid.Solver.HornClause
@@ -15,6 +15,7 @@ import Synquid.Synthesis.Synthesizer
 import Synquid.Synthesis.Util
 import Synquid.HtmlOutput
 import Synquid.Solver.Types
+import Synquid.Solver.CEGIS (initCEGISState)
 
 import           Control.Applicative ((<|>))
 import           Control.Monad
@@ -25,9 +26,13 @@ import           Data.Time.Calendar
 import qualified Data.Map as Map
 import           Data.Map.Ordered (OMap)
 import qualified Data.Map.Ordered as OMap
+import           Data.Set (Set)
+import qualified Data.Set as Set
 import           Control.Lens ((.~), (^.), (%~), (&))
 
 import Data.List.Split
+
+import Debug.Pretty.Simple
 
 programName = "resyn"
 versionName = "0.1"
@@ -294,7 +299,18 @@ runOnFile synquidParams explorerParams solverParams file libs = do
   case resolveDecls infer decls of
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure
     Right (goals, cquals, tquals) -> when (not $ resolveOnly synquidParams) $ do
-      (results, _) <- runStateT (mapM (synthesizeGoal cquals tquals) (requested goals)) OMap.empty
+      -- Synthesize everything
+      (results, _) <- runStateT (mapM (synthesizeGoal cquals tquals) (requested goals)) Nothing
+
+      -- In the final typing state, our inferredRVars map will have all of our inferred
+      -- potentials and their values
+      when ((not (null results)) && infer) $ do
+        -- We first replace all our Z3 lits where we can to avoid derefencing freed ptrs
+        let potls = fmap (fmap z3litToInt) $ (finalTState (last results)) ^. persistentState . inferredRVars
+
+        liftIO $ mapM_ (\g -> pdoc ((prettyWithInferred potls g) <+> text "(inferred)"))
+               $ fmap goal results
+
       when (not (null results) && showStats synquidParams) $ printStats results declsByFile
       return ()
 
@@ -312,7 +328,7 @@ runOnFile synquidParams explorerParams solverParams file libs = do
       _ -> goals
     pdoc = printDoc (outputFormat synquidParams)
 
-    synthesizeGoal :: [Formula] -> [Formula] -> Goal -> StateT PotlSubstitution IO SynthesisResult
+    synthesizeGoal :: [Formula] -> [Formula] -> Goal -> StateT (Maybe PersistentTState) IO SynthesisResult
     synthesizeGoal cquals tquals goal = do
       liftIO $ when ((gSynthesize goal) && (showSpec synquidParams)) $ pdoc (prettySpec goal)
       -- print empty
@@ -320,36 +336,26 @@ runOnFile synquidParams explorerParams solverParams file libs = do
       -- print $ pretty (gSpec goal)
       -- print $ vMapDoc pretty pretty (_measures $ gEnvironment goal)
 
-      -- Update this goal with the inferred potential variables we know so far
-      pvars <- get
-      let env' = gEnvironment goal
-               & unresolvedConstants %~ fmap (schemaSubstitutePotl pvars)
-               & symbols %~ fmap (fmap (schemaSubstitutePotl pvars))
-      let goal' = goal { gEnvironment = env' }
-      
-      mProg <- liftIO $ synthesize (updateExplorerParams explorerParams goal') (updateSolverParams solverParams goal') goal' cquals tquals
+      -- In order to make potential inference more reliable, during inference,
+      -- we collect all res constraints into our state and solve these constraints
+      -- at the very end.
+
+      -- TODO: This is awful for performance. Right now we check all created resource constraints
+      -- for each function as type-check it. This is good for errors, bad for performance.
+      -- We should try to not do resource checking until the very end.
+
+      -- We first get our accumulated resource constraints and pass them through
+      mpts <- get
+
+      mProg <- liftIO $ synthesize (updateExplorerParams explorerParams goal) (updateSolverParams solverParams goal) goal cquals tquals mpts
       case mProg of
         Left typeErr -> liftIO $ pdoc (pretty typeErr) >> pdoc empty >> exitFailure
         Right progs  -> do
-          -- Print inferred type
-          let tryInfer = explorerParams ^. (explorerResourceArgs . inferResources)
-          liftIO $ when tryInfer $ mapM_ (\p -> pdoc ((prettyWithInferred ((snd p) ^. inferredRVars) goal') <+> text "(inferred)")) progs
-
-          -- Update our state with our inferred potl vars
-          -- TODO: We can't just add the new inferred potl vars as-is because they're Z3Lits
-          -- which might have references to freed Z3 AST nodes. To avoid having freed AST literals in our Map,
-          -- we're just manually assuming that we get ints back and convert it this way.
-          -- This is hideously unsafe and janky since:
-          --
-          -- a) We always assume we're gonna get back a Z3Lit, but also
-          -- b) We always assume we're gonna get back just a number as the string
-          --
-          -- This is fine for now, but will have to be fixed once we have dependent potentials.
-          mapM_ (\p -> modify $ OMap.unionWithR (\_ -> (<|>)) (fmap (fmap z3litToInt) $ (snd p) ^. inferredRVars)) progs 
           
           -- Print synthesized program
-          liftIO $ when (gSynthesize goal') $ mapM_ (\p -> pdoc (prettySolution goal' (fst p)) >> pdoc empty) progs
-          let result = assembleResult goal' progs
+          liftIO $ when (gSynthesize goal) $ mapM_ (\p -> pdoc (prettySolution goal (fst p)) >> pdoc empty) progs
+          let result = assembleResult goal progs
+          put $ Just $ (finalTState result) ^. persistentState
           
           return result
 
@@ -368,7 +374,7 @@ runOnFile synquidParams explorerParams solverParams file libs = do
     printStats results declsByFile = do
       let env = gEnvironment $ goal (head results)
       let measureCount = Map.size $ env^.measureDefs
-      let numC = sum $ map (length . _resourceConstraints . finalTState) results
+      let numC = sum $ map (length . _resourceConstraints . _persistentState . finalTState) results
       let specSize = sum $ map (typeNodeCount . toMonotype . unresolvedSpec . goal) results
       let solutionSize = sum $ map (programNodeCount . prog) results
       pdoc $ vsep $ [

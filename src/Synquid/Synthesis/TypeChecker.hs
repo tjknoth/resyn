@@ -14,6 +14,7 @@ import Synquid.Util
 import Synquid.Pretty
 import Synquid.Resolver
 import Synquid.Solver.Monad
+import Synquid.Solver.Types
 import Synquid.Solver.TypeConstraint hiding (freshId, freshVar)
 
 import qualified Data.Map as Map
@@ -25,16 +26,17 @@ import qualified Data.Set as Set
 
 import Debug.Pretty.Simple
 
--- | 'reconstruct' @eParams tParams goal@ : reconstruct missing types and terms in the body of @goal@ so that it represents a valid type judgment;
+-- | 'reconstruct' @eParams tParams pts goal@ : reconstruct missing types and terms in the body of @goal@ so that it represents a valid type judgment;
 -- return a type error if that is impossible
 reconstruct :: (MonadSMT s, MonadHorn s, RMonad s) 
             => ExplorerParams 
             -> TypingParams 
+            -> Maybe PersistentTState
             -> Goal 
             -> s (Either ErrorMessage [(RProgram, TypingState)])
-reconstruct eParams tParams goal = do
+reconstruct eParams tParams mpts goal = do
     let goal' = adjustGoalEnv goal
-    initTS <- initTypingState goal'
+    initTS <- initTypingState goal' mpts
     runExplorer (eParams { _sourcePos = gSourcePos goal' }) tParams (Reconstructor reconstruct') initTS (go goal')
   where
     reconstruct' = if tParams^.(resourceArgs . enumerate) then reconstructAndCheck else reconstructTopLevel
@@ -62,7 +64,7 @@ reconstructTopLevel (Goal funName env (ForallT a sch) impl depth pos infers s) =
 reconstructTopLevel (Goal funName env (ForallP sig sch) impl depth pos infers s) = do
   -- check if pred is resource var
   when (predSigResSort sig == IntS) $ -- add int-valued pred param as resource var 
-    runInSolver $ resourceVars %= insertRVar (predSigName sig, [])
+    runInSolver $ persistentState . resourceVars %= insertRVar (predSigName sig, [])
   reconstructTopLevel (Goal funName (addBoundPredicate sig env) sch impl depth pos infers s)
 reconstructTopLevel (Goal funName env (Monotype typ@FunctionT{}) impl depth _ infers synth) = local (set (_1 . auxDepth) depth) reconstructFix
   where
@@ -355,7 +357,7 @@ checkAnnotation :: (MonadSMT s, MonadHorn s, RMonad s)
                 -> Explorer s RType
 checkAnnotation env t t' p = do
   tass <- use (typingState . typeAssignment)
-  potentialSyms <- use (typingState . resourceVars)
+  potentialSyms <- use (typingState . persistentState . resourceVars)
   case resolveRefinedType (typeSubstituteEnv tass env) t' (Set.fromList (Map.keys potentialSyms)) of
     Left err -> throwError err
     Right t'' -> do

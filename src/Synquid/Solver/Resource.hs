@@ -37,6 +37,8 @@ import           Data.List.NonEmpty (NonEmpty(..))
 import           Data.Semigroup (sconcat)
 import           Data.Maybe
 
+import Debug.Pretty.Simple
+
 -- | Process, but do not solve, a set of resource constraints
 simplifyRCs :: (MonadHorn s, MonadSMT s, RMonad s)
             => [Constraint]
@@ -44,7 +46,7 @@ simplifyRCs :: (MonadHorn s, MonadSMT s, RMonad s)
 simplifyRCs [] = return ()
 simplifyRCs constraints = do
   rcs <- mapM generateFormula (filter isResourceConstraint constraints)
-  resourceConstraints %= (++ rcs)
+  persistentState . resourceConstraints %= (++ rcs)
 
 -- | 'solveResourceConstraints' @accConstraints constraints@ : Transform @constraints@ into logical constraints and attempt to solve the complete system by conjoining with @accConstraints@
 solveResourceConstraints :: (MonadHorn s, RMonad s)
@@ -161,7 +163,7 @@ embedConstraint env rfml = do
 -- Replace predicate applications with variables
 replaceAbstractPotentials :: MonadHorn s => RawRFormula -> TCSolver s RawRFormula
 replaceAbstractPotentials rfml = do
-  rvs <- use resourceVars 
+  rvs <- use $ persistentState . resourceVars 
   let fml' = replaceAbsPreds rvs $ _rconstraints rfml
   return $ set rconstraints fml' rfml
 
@@ -233,7 +235,7 @@ satisfyResources oldfmls newfmls = do
   let rfmls = oldfmls ++ newfmls
   let runInSolver = lift . lift . lift
   domain <- view (resourceArgs . rSolverDomain)
-  infdRVars <- use inferredRVars
+  infdRVars <- use $ persistentState . inferredRVars
   let tryInfer = not $ OMap.null infdRVars
   case domain of
     Constant -> do
@@ -247,7 +249,7 @@ satisfyResources oldfmls newfmls = do
             Just m' -> do
               writeLog 6 $ nest 2 (text "Solved + inferred with model") </> nest 6 (text (modelStr m'))
               vs' <- runInSolver $ modelGetAssignment (fmap fst rvl) m'
-              inferredRVars %= OMap.unionWithR (\_ l _ -> l) (OMap.fromList . Map.toList . fmap Just . unRSolution $ vs')
+              persistentState . inferredRVars %= OMap.unionWithR (\_ l _ -> l) (OMap.fromList . Map.toList . fmap Just . unRSolution $ vs')
               return True
         else do
           let fml = conjunction $ map bodyFml rfmls
@@ -277,7 +279,7 @@ deployHigherOrderSolver SYGUS oldfmls newfmls = do
   logfile <- view (resourceArgs . sygusLog)
   ufmls <- map (Var IntS) . Set.toList <$> use universalVars
   universals <- collectUniversals rfmls ufmls
-  rvars <- use resourceVars
+  rvars <- use $ persistentState . resourceVars
   env <- use initEnv 
   solverCmd <- view (resourceArgs . cvc4)
   runInSolver $ solveWithSygus logfile solverCmd env rvars universals oldfmls newfmls
@@ -311,7 +313,7 @@ storeCEGISState st = do
   incremental <- isIncremental <$> view (resourceArgs . rsolver) 
   -- For non-incremental solving, don't reset resourceVars
   when incremental $
-    resourceVars .= Map.empty
+    persistentState . resourceVars .= Map.empty
 
 -- Given a list of resource constraints, assemble the relevant universally quantified 
 --   expressions for the CEGIS solver: renamed variables and constructor apps

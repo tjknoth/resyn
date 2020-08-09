@@ -101,7 +101,6 @@ resolveDecls tryInfer declarations =
         -- we don't want potential values on our return results and we prefer having our
         -- potentials on our first arguments
         pVars = uncurry (++)
-              $ over each reverse
               $ partition (\(x:_) -> x /= 'F')
               $ Map.findWithDefault [] name inferredPVars
       in Goal name env' spec impl 0 pos pVars synth

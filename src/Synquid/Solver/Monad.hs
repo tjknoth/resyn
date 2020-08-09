@@ -12,7 +12,9 @@ import Synquid.Error
 import Synquid.Solver.Types
 
 import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Map.Ordered (OMap)
+import qualified Data.Map.Ordered as OMap
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Control.Lens
@@ -72,21 +74,27 @@ data TypingParams = TypingParams {
 
 makeLenses ''TypingParams
 
+-- | Typing state that could potentially persist across checking multiple functions
+data PersistentTState = PersistentTState
+  { _idCount :: Map String Int                   -- ^ Number of unique identifiers issued so far
+  , _resourceConstraints :: [ProcessedRFormula]  -- ^ Constraints relevant to resource analysis
+  , _resourceVars :: Map Id [Formula]            -- ^ Set of variables created to replace potential/multiplicity annotations; maps from name of potl var to arguments the potl var depends on
+  , _inferredRVars :: PotlSubstitution           -- ^ A map from the id of an inferred variable to the formula we think it has, if it's already been inferred
+  } deriving (Show)
+
+makeLenses ''PersistentTState
+
 -- | State of type constraint solving
 data TypingState = TypingState {
-  -- Persistent state:
+  _persistentState :: PersistentTState,          -- ^ Persistent state which is preserved across fn
   _typingConstraints :: [Constraint],           -- ^ Typing constraints yet to be converted to horn clauses
   _typeAssignment :: TypeSubstitution,          -- ^ Current assignment to free type variables
   _predAssignment :: Substitution,              -- ^ Current assignment to free predicate variables  _qualifierMap :: QMap,
   _qualifierMap :: QMap,                        -- ^ Current state space for predicate unknowns
   _candidates :: [Candidate],                   -- ^ Current set of candidate liquid assignments to unknowns
   _initEnv :: Environment,                      -- ^ Initial environment
-  _idCount :: Map String Int,                   -- ^ Number of unique identifiers issued so far
   _versionCount :: Map String Int,              -- ^ Number of unique identifiers issued so far
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
-  _resourceConstraints :: [ProcessedRFormula],  -- ^ Constraints relevant to resource analysis
-  _resourceVars :: Map Id [Formula],            -- ^ Set of variables created to replace potential/multiplicity annotations; maps from name of potl var to arguments the potl var depends on
-  _inferredRVars :: PotlSubstitution,           -- ^ A map from the id of an inferred variable to the formula we think it has, if it's already been inferred
   _matchCases :: Set Formula,                   -- ^ Set of all generated match cases
   _cegisState :: CEGISState,                    -- ^ Current state of CEGIS solver
   -- Temporary state:
@@ -100,6 +108,7 @@ data TypingState = TypingState {
 
 makeLenses ''TypingState
 
+
 -- | Computations that solve type constraints, parametrized by the the horn solver @s@
 type TCSolver s = StateT TypingState (ReaderT TypingParams (ExceptT ErrorMessage s))
 
@@ -109,11 +118,11 @@ runTCSolver params st go = runExceptT $ runReaderT (runStateT go st) params
 
 
 instance Eq TypingState where
-  (==) st1 st2 = (restrictDomain (Set.fromList ["a", "u"]) (_idCount st1) == restrictDomain (Set.fromList ["a", "u"]) (_idCount st2)) &&
+  (==) st1 st2 = (restrictDomain (Set.fromList ["a", "u"]) (st1 ^. (persistentState . idCount)) == restrictDomain (Set.fromList ["a", "u"]) (st2 ^. (persistentState . idCount))) &&
                   _typeAssignment st1 == _typeAssignment st2 &&
                   _candidates st1 == _candidates st2
 
 instance Ord TypingState where
-  (<=) st1 st2 = (restrictDomain (Set.fromList ["a", "u"]) (_idCount st1) <= restrictDomain (Set.fromList ["a", "u"]) (_idCount st2)) &&
+  (<=) st1 st2 = (restrictDomain (Set.fromList ["a", "u"]) (st1 ^. (persistentState . idCount)) <= restrictDomain (Set.fromList ["a", "u"]) (st2 ^. (persistentState . idCount))) &&
                 _typeAssignment st1 <= _typeAssignment st2 &&
                 _candidates st1 <= _candidates st2

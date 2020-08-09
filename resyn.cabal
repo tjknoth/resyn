@@ -100,6 +100,7 @@ executable resyn
                     , filepath
                     , split
                     , cmdargs >= 0.10
+                    , pretty-simple
 
   other-extensions:   TemplateHaskell
                     , Rank2Types

@@ -300,7 +300,7 @@ updateCEGISState :: Monad s => TCSolver s CEGISState
 updateCEGISState = do  
   pDomain <- view (resourceArgs . polynomialDomain)
   ll <- view tcSolverLogLevel
-  newRVs <- use resourceVars
+  newRVs <- use $ persistentState . resourceVars
   st <- use cegisState
   env <- use initEnv 
   let init name info = initializePolynomial env pDomain (name, info)
