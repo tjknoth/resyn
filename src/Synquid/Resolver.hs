@@ -256,12 +256,13 @@ resolveSignatures (FuncDecl name _)  = do
     inferAbstractPotls (Monotype t) = go t >>= return . Monotype
 
     go og@(ScalarT (DatatypeT dtName tArgs pArgs) ref pred) = do
+      tArgs' <- mapM go tArgs
       ds <- use $ environment . datatypes
       case Map.lookup dtName ds of
         Just (DatatypeDef _ preds _ _ _ _) -> do
           tryInfer <- use infer
           pArgs' <- zipWithM (maybeFreshPotl tryInfer) pArgs (fmap isResParam preds)
-          return (ScalarT (DatatypeT dtName tArgs pArgs') ref pred)
+          return (ScalarT (DatatypeT dtName tArgs' pArgs') ref pred)
         Nothing -> return og
     go og@(ScalarT _ _ _) = return og
     go (FunctionT name dom cod cost) = do
