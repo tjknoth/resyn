@@ -134,7 +134,7 @@ embedAndProcessConstraint env rfml = do
 translateAndFinalize :: (MonadHorn s, RMonad s) => RawRFormula -> TCSolver s ProcessedRFormula 
 translateAndFinalize rfml = do 
   writeLog 3 $ indent 4 $ pretty (bodyFml rfml)
-  z3lit <- lift . lift . lift $ translate $ bodyFml rfml
+  -- z3lit <- lift . lift . lift $ translate $ bodyFml rfml
   return $ rfml {
     _knownAssumptions = ftrue,
     _unknownAssumptions = ()

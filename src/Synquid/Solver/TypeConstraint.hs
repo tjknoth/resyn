@@ -78,8 +78,10 @@ initTypingState goal mpts = do
     _inferredRVars = OMap.fromList [(p, Nothing) | p <- rvars]
   }
 
+  let pts = maybe dpts id mpts
+
   return TypingState {
-    _persistentState = maybe dpts id mpts,
+    _persistentState = pts,
     _typingConstraints = [],
     _typeAssignment = Map.empty,
     _predAssignment = Map.empty,
@@ -89,6 +91,7 @@ initTypingState goal mpts = do
     _isFinal = False,
     _matchCases = Set.empty,
     _cegisState = initCEGISState,
+    _solveResConstraints = OMap.null (_inferredRVars pts) || gInferSolve goal,
     _simpleConstraints = [],
     _hornClauses = [],
     _consistencyChecks = [],
@@ -122,8 +125,9 @@ solveTypeConstraints = do
 
   res <- view (resourceArgs . shouldCheckResources) 
   eac <- view (resourceArgs . enumerate) 
+  solve <- use solveResConstraints
   when res $
-    if eac
+    if (eac || not solve)
       then simplifyRCs scs
       else checkResources scs 
 
@@ -134,8 +138,8 @@ solveTypeConstraints = do
 finalSolveRCs :: (MonadSMT s, MonadHorn s, RMonad s) => TCSolver s ()
 finalSolveRCs = do
   res <- view (resourceArgs . shouldCheckResources) 
-  -- If inferring, don't solve our resource constraints; we'll collect these and solve them later.
-  when res $
+  solve <- use solveResConstraints
+  when (res && solve) $
     checkResources [SharedForm emptyEnv fzero fzero fzero]
 
 {- Implementation -}

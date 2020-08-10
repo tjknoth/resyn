@@ -28,7 +28,7 @@ import           Data.Map.Ordered (OMap)
 import qualified Data.Map.Ordered as OMap
 import           Data.Set (Set)
 import qualified Data.Set as Set
-import           Control.Lens ((.~), (^.), (%~), (&))
+import           Control.Lens ((.~), (^.), (%~), (&), (%=), _last, _Just)
 
 import Data.List.Split
 
@@ -299,8 +299,12 @@ runOnFile synquidParams explorerParams solverParams file libs = do
   case resolveDecls infer decls of
     Left resolutionError -> (pdoc $ pretty resolutionError) >> pdoc empty >> exitFailure
     Right (goals, cquals, tquals) -> when (not $ resolveOnly synquidParams) $ do
+      -- Ensure that if doing inference, we actually solve all of our constraints for
+      -- the last goal
+      let goals' = _last . _gInferSolve %~ const True $ goals
+      
       -- Synthesize everything
-      (results, _) <- runStateT (mapM (synthesizeGoal cquals tquals) (requested goals)) Nothing
+      (results, _) <- runStateT (mapM (synthesizeGoal cquals tquals) (requested goals')) Nothing
 
       -- In the final typing state, our inferredRVars map will have all of our inferred
       -- potentials and their values
@@ -342,9 +346,12 @@ runOnFile synquidParams explorerParams solverParams file libs = do
 
       -- TODO: This is awful for performance. Right now we check all created resource constraints
       -- for each function as type-check it. This is good for errors, bad for performance.
-      -- We should try to not do resource checking until the very end.
+      -- We should try to not do resource checking until the very end
 
-      -- We first get our accumulated resource constraints and pass them through
+      -- We first modify our persistent typing state to add the inferred potl vars of this goal
+      _Just . inferredRVars %= \x -> OMap.unionWithL (\_ -> const) x (OMap.fromList [(p, Nothing) | p <- gInferredPotlVars goal])
+
+      -- We first get our persistent typing state and pass it through
       mpts <- get
 
       mProg <- liftIO $ synthesize (updateExplorerParams explorerParams goal) (updateSolverParams solverParams goal) goal cquals tquals mpts

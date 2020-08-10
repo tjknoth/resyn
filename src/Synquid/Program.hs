@@ -657,9 +657,12 @@ data Goal = Goal {
   gDepth :: Int,                -- ^ Maximum level of auxiliary goal nesting allowed inside this goal
   gSourcePos :: SourcePos,      -- ^ Source Position,
   gInferredPotlVars :: [Id],    -- ^ Set of potential vars to infer for this fn
+  gInferSolve :: Bool,          -- ^ If gInferredPotlVars isn't empty, indicates if we should actually solve inference constraints or just collect them without solving
   gSynthesize :: Bool           -- ^ Synthesis flag (false implies typechecking only)
 } deriving (Show, Eq, Ord)
 
+_gInferSolve :: Setter' Goal Bool
+_gInferSolve = sets (\f g -> g { gInferSolve = f (gInferSolve g) })
 
 unresolvedType env ident = (env ^. unresolvedConstants) Map.! ident
 unresolvedSpec goal = unresolvedType (gEnvironment goal) (gName goal)

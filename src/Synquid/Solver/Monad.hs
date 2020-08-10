@@ -87,7 +87,7 @@ makeLenses ''PersistentTState
 
 -- | State of type constraint solving
 data TypingState = TypingState {
-  _persistentState :: PersistentTState,          -- ^ Persistent state which is preserved across fn
+  _persistentState :: PersistentTState,          -- ^ Persistent state which is preserved across fns
   _typingConstraints :: [Constraint],           -- ^ Typing constraints yet to be converted to horn clauses
   _typeAssignment :: TypeSubstitution,          -- ^ Current assignment to free type variables
   _predAssignment :: Substitution,              -- ^ Current assignment to free predicate variables  _qualifierMap :: QMap,
@@ -97,6 +97,7 @@ data TypingState = TypingState {
   _isFinal :: Bool,                             -- ^ Has the entire program been seen?
   _matchCases :: Set Formula,                   -- ^ Set of all generated match cases
   _cegisState :: CEGISState,                    -- ^ Current state of CEGIS solver
+  _solveResConstraints :: Bool,                 -- ^ Whether to actually solve resource constraints or just collect them
   -- Temporary state:
   _simpleConstraints :: [Constraint],           -- ^ Typing constraints that cannot be simplified anymore and can be converted to horn clauses or qualifier maps
   _hornClauses :: [Formula],                    -- ^ Horn clauses generated from subtyping constraints
