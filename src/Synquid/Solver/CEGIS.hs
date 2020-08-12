@@ -24,6 +24,7 @@ import Synquid.Program
 import Synquid.Solver.Monad
 import Synquid.Solver.Types
 
+import           Control.Applicative ((<|>))
 import           Data.Maybe
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -45,38 +46,57 @@ runCEGIS = runStateT
 -- | Optimize for potential variables with initial upper bounds given certain
 -- | formulas as constraints using counterexample-guided inductive synthesis.
 optimizeWithCEGIS :: RMonad s
-                  => Int
-                  -> Universals
-                  -> [ProcessedRFormula]
-                  -> [(String, Maybe Formula)]
-                  -> CEGISSolver s (Maybe [(String, Maybe Formula)])
+                   => Int
+                   -> Universals
+                   -> [ProcessedRFormula]
+                   -> [(String, Maybe Formula)]
+                   -> CEGISSolver s (Maybe [(String, Maybe Formula)])
 optimizeWithCEGIS n univs rfmls pvars = do
-  -- TODO: The "Maybe Formula" for each input pvar is an upper-bound on the
+  -- The "Maybe Formula" for each input pvar is an upper-bound on the
   -- inferred pvar; this is done so that we can do optimization (i.e. we'll
   -- recursively call optimizeWithCEGIS with tighter and tighter upper bounds
-  -- until we get UNSAT). We add upper-bound constraints for each pvar that has
-  -- a specified upper bound formula.
+  -- until we get UNSAT or the same result as before). We add upper-bound
+  -- constraints for each pvar that has a specified upper bound formula.
 
-  -- let nfmls = filter isJust $ fmap upperBoundToConstraint pvars
-  -- let rfmls' = rfmls ++ nfmls
+  -- We need to create two new constraints:
+  -- 1. A constraint which ensures no polynomial gets worse
+  -- 2. A constraint which ensures at least one polynomial gets better
 
-  -- TODO: use z3 to give an estimate for an upper bound?
+  let noWorse = RFormula ftrue () Set.empty Set.empty
+              $ conjunction
+              $ catMaybes
+              $ fmap (upperBoundToConstraint (|<=|)) pvars
+
+  let ltcs = catMaybes
+           $ fmap (upperBoundToConstraint (|<|)) pvars
+  let oneBetter = RFormula ftrue () Set.empty Set.empty
+                $ if null ltcs then ftrue else disjunction ltcs
+
+  -- TODO: for some reason there aren't any constraints which
+  -- limit us from using negative values for polynomials.
+  -- We manually add well-formedness constraints here.
+  let wellFormed = RFormula ftrue () Set.empty Set.empty
+                 $ conjunction
+                 $ catMaybes
+                 $ fmap (upperBoundToConstraint (|>=|))
+                 $ [(x, Just fzero) | (x, _) <- pvars]
+
+  let rfmls' = rfmls ++ [noWorse, oneBetter, wellFormed]
   
-  sat <- solveWithCEGIS n univs rfmls
+  sat <- solveWithCEGIS n univs rfmls'
   if sat
     then do
-      -- We first get formulas for our polynomials
+      -- We get formulas for our polynomials after solving
       fs <- mapM (getPolyForm . fst) pvars
 
-      -- TODO: Start optimization loop
       -- Recursively call optimizeWithCEGIS with our new upper bounds
-      -- If we get unsat, we break; otherwise
+      new <- optimizeWithCEGIS n univs rfmls' fs
 
-      return $ Just fs
-    else return Nothing
+      return $ new <|> Just fs
+      else return Nothing
   where
-    upperBoundToConstraint (_, Nothing) = Nothing
-    upperBoundToConstraint (s, Just f) = Just $ RFormula fzero () Set.empty Set.empty (Var IntS s)
+    upperBoundToConstraint _ (_, Nothing) = Nothing
+    upperBoundToConstraint c (s, Just f) = Just $ c (Var IntS s) f
 
     getPolyForm s = do
       (Skeletons polys) <- use polynomials
@@ -111,7 +131,7 @@ solveWithCEGIS n universals rfmls = do
   --case res of 
     Nothing -> do
       pstr <- printParams 
-      writeLog 5 $ text "Solution wth" <+> pretty n <+> text "iterations left:" <+> pstr
+      writeLog 3 $ text "Solution wth" <+> pretty n <+> text "iterations left:" <+> pstr
       return True -- No counterexamples exist, polynomials hold on all inputs
     Just cx ->
     --Just (rfmls', cx) ->

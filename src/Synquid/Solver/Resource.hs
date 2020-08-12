@@ -304,7 +304,9 @@ deployHigherOrderSolver _ oldfmls newfmls = do
 
   if tryInfer
     then do
-      let rvl = OMap.assocs infdRVars
+      -- We get our inferred variables from our inferred map, but we set snd to
+      -- Nothing to reset our upper bounds for optimizeWithCEGIS
+      let rvl = [(x, Nothing) | (x, _) <- OMap.assocs infdRVars]
       let go = optimizeWithCEGIS cMax universals rfmls rvl
       (opt, cstate') <- runInSolver $ runCEGIS go cstate
       sat <- case opt of
@@ -320,7 +322,6 @@ deployHigherOrderSolver _ oldfmls newfmls = do
       (sat, cstate') <- runInSolver $ runCEGIS go cstate
       storeCEGISState cstate'
       return sat
-
 
 
 storeCEGISState :: Monad s => CEGISState -> TCSolver s ()
