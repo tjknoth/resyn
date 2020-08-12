@@ -59,6 +59,8 @@ optimizeWithCEGIS n univs rfmls pvars = do
 
   -- let nfmls = filter isJust $ fmap upperBoundToConstraint pvars
   -- let rfmls' = rfmls ++ nfmls
+
+  -- TODO: use z3 to give an estimate for an upper bound?
   
   sat <- solveWithCEGIS n univs rfmls
   if sat
@@ -74,7 +76,7 @@ optimizeWithCEGIS n univs rfmls pvars = do
     else return Nothing
   where
     upperBoundToConstraint (_, Nothing) = Nothing
-    upperBoundToConstraint (s, Just f) = undefined
+    upperBoundToConstraint (s, Just f) = Just $ RFormula fzero () Set.empty Set.empty (Var IntS s)
 
     getPolyForm s = do
       (Skeletons polys) <- use polynomials
