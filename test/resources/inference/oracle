@@ -459,10 +459,25 @@ flatten = \t . flatten' t Nil
 flatten' :: <a> . arg1:{Tree {1**a||2} <0>||0} -> arg0:{List {1**a||0} <0>||0} -[1]-> {List {1**a||0} <0>||0} (inferred)
 flatten :: <a> . arg0:{Tree {1**a||2} <0>||1} -[1]-> {List {1**a||0} <0>||0} (inferred)
 treeInsert :: <a> . x:{1**a||I0} -> t:{Tree {1**a||I1} <x < _0> <F5>||I2} -> {Tree {1**a||I3} <x < _0> <F6>||I4}
-resyn: Can't infer dependent resources
-CallStack (from HasCallStack):
-  error, called at src/Synquid/Solver/Resource.hs:265:14 in resyn-1.1.0-8QeZfrsHXnc2fqq2WRk651:Synquid.Solver.Resource
-resyn: neg/BST-Member.sq: openFile: does not exist (No such file or directory)
+treeInsert = \x . \t . 
+    match t with
+      Leaf -> Node x Leaf Leaf
+      Node n l r -> 
+        if x < n
+          then tick 1 (treeInsert x l)
+          else tick 1 (treeInsert x r)
+
+treeInsert :: <a> . x:{1**a||0} -> t:{Tree {1**a||0} <x < _0> <1>||0} -> {Tree {1**a||0} <x < _0> <0>||0} (inferred)
+member :: <a> . x:{1**a||I0} -> t:{Tree {1**a||I1} <x < _0> <F4>||I2} -> {Bool||I3}
+member = \x . \t . 
+    match t with
+      Leaf -> False
+      Node n l r -> 
+        if x < n
+          then tick 1 (member x l)
+          else tick 1 (member x r)
+
+member :: <a> . x:{1**a||0} -> t:{Tree {1**a||0} <x < _0> <1>||0} -> {Bool||0} (inferred)
 append :: <a> . xs:{List {1**a||I0} <F17>||I1} -> ys:{List {1**a||I2} <F18>||I3} -> {List {1**a||I4} <F19>||I5}
 append = \xs . \ys . 
     match xs with
@@ -485,7 +500,7 @@ subsetSum :: arg1:{QList {Int||I0} <F4>||I1} -> arg0:{Int||I2} -> {Bool||I3}
 <no file name>:1: Error:
   Insufficient resources
 
-replicate :: <a> . n:{Int|_v >= 0|0} -> x:{1**a||I1} -> {List {1**a||I2}|len _v == n|I3}
+replicate :: <a> . n:{Int|_v >= 0|0} -> x:{n**a||I1} -> {List {1**a||I2}|len _v == n|I3}
 <no file name>:1: Error:
   Insufficient resources
 

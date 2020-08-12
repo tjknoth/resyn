@@ -200,11 +200,13 @@ RESOURCE_INFERENCE_POS_BENCHMARKS = [
     # Non-Polynomial
     # ('List-Quick-Build', ['--eac', '--infer', '-f=NONTERMINATING']),
     ('List-Quick-Flatten', ['--eac', '--infer', '-f=NONTERMINATING']),
+
+    # Dependent benches
+    ('BST-Insert',                   ['--eac', '--infer', '-f=Nonterminating', '--res-solver=CEGIS']),
+    ('BST-Member',                   ['--eac', '--infer', '-f=Nonterminating']),
 ]
 
 RESOURCE_INFERENCE_NEG_BENCHMARKS = [
-    ('BST-Insert',                   ['--eac', '--infer', '-f=Nonterminating', '--res-solver=CEGIS']),
-    ('BST-Member',                   ['--eac', '--infer', '-f=Nonterminating']),
     ('List-Pairs',                   ['--eac', '--infer', '-f=Nonterminating']),
     ('List-Exp-Contrived',           ['--eac', '--infer', '-f=Nonterminating']),
     ('List-Replicate',               ['--eac', '--infer', '-f=Nonterminating', '--res-solver=CEGIS']),
