@@ -147,7 +147,6 @@ instance RMonad Z3State where
         return $ Just $ SMTModel md mdStr
       Nothing -> return Nothing
     where
-      -- TODO: this fns assumes scalar values for inferred potentials; is this ok??
       inferOnly (name, _) = fmlToAST (Var IntS name) >>= optimizeMinimize
 
   modelGetAssignment vals (SMTModel m _) = 

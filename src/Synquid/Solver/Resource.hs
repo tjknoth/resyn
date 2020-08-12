@@ -55,18 +55,18 @@ solveResourceConstraints :: (MonadHorn s, RMonad s)
                          -> TCSolver s (Maybe [ProcessedRFormula])
 solveResourceConstraints _ [] = return $ Just []
 solveResourceConstraints oldConstraints constraints = do
-    writeLog 3 $ linebreak <> text "Generating resource constraints:"
-    -- Check satisfiability
-    constraintList <- mapM generateFormula constraints
-    b <- satisfyResources oldConstraints constraintList
-    let result = if b then "SAT" else "UNSAT"
-    writeLog 7 $ nest 4 $ text "Accumulated resource constraints:"
-      $+$ pretty (map bodyFml oldConstraints)
-    writeLog 8 $ nest 4 $ text "Solved resource constraint after conjoining formulas:"
-      <+> text result $+$ prettyConjuncts (map bodyFml constraintList)
-    return $ if b
-      then Just constraintList -- $ Just $ if hasUniversals
-      else Nothing
+  writeLog 3 $ linebreak <> text "Generating resource constraints:"
+  -- Check satisfiability
+  constraintList <- mapM generateFormula (filter isResourceConstraint constraints)
+  b <- satisfyResources oldConstraints constraintList
+  let result = if b then "SAT" else "UNSAT"
+  writeLog 7 $ nest 4 $ text "Accumulated resource constraints:"
+    $+$ pretty (map bodyFml oldConstraints)
+  writeLog 8 $ nest 4 $ text "Solved resource constraint after conjoining formulas:"
+    <+> text result $+$ prettyConjuncts (map bodyFml constraintList)
+  return $ if b
+    then Just constraintList -- $ Just $ if hasUniversals
+    else Nothing
 
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 --    If there are no universal quantifiers, we can cache the generated formulas
@@ -260,12 +260,8 @@ satisfyResources oldfmls newfmls = do
               writeLog 6 $ nest 2 (text "Solved with model") </> nest 6 (text (modelStr m'))
               return True
     Dependent -> do
-      if tryInfer
-        -- TODO: infer dependent resources
-        then error "Can't infer dependent resources"
-        else do
-          solver <- view (resourceArgs . rsolver)
-          deployHigherOrderSolver solver oldfmls newfmls 
+      solver <- view (resourceArgs . rsolver)
+      deployHigherOrderSolver solver oldfmls newfmls 
 
 deployHigherOrderSolver :: RMonad s
                         => ResourceSolver
@@ -274,15 +270,21 @@ deployHigherOrderSolver :: RMonad s
                         -> TCSolver s Bool
 -- Solve with synthesizer
 deployHigherOrderSolver SYGUS oldfmls newfmls = do
-  let rfmls = oldfmls ++ newfmls
-  let runInSolver = lift . lift . lift
-  logfile <- view (resourceArgs . sygusLog)
-  ufmls <- map (Var IntS) . Set.toList <$> use universalVars
-  universals <- collectUniversals rfmls ufmls
-  rvars <- use $ persistentState . resourceVars
-  env <- use initEnv 
-  solverCmd <- view (resourceArgs . cvc4)
-  runInSolver $ solveWithSygus logfile solverCmd env rvars universals oldfmls newfmls
+  infdRVars <- use $ persistentState . inferredRVars
+  let tryInfer = not $ OMap.null infdRVars
+
+  if tryInfer
+    then error "Can't infer dependent resources with sygus solver"
+    else do
+      let rfmls = oldfmls ++ newfmls
+      let runInSolver = lift . lift . lift
+      logfile <- view (resourceArgs . sygusLog)
+      ufmls <- map (Var IntS) . Set.toList <$> use universalVars
+      universals <- collectUniversals rfmls ufmls
+      rvars <- use $ persistentState . resourceVars
+      env <- use initEnv 
+      solverCmd <- view (resourceArgs . cvc4)
+      runInSolver $ solveWithSygus logfile solverCmd env rvars universals oldfmls newfmls
 
 -- Solve with CEGIS (incremental or not)
 deployHigherOrderSolver _ oldfmls newfmls = do
@@ -297,10 +299,28 @@ deployHigherOrderSolver _ oldfmls newfmls = do
   writeLog 5 $ pretty $ conjunction $ map completeFml rfmls
   logUniversals
   
-  let go = solveWithCEGIS cMax universals rfmls
-  (sat, cstate') <- runInSolver $ runCEGIS go cstate
-  storeCEGISState cstate'
-  return sat
+  infdRVars <- use $ persistentState . inferredRVars
+  let tryInfer = not $ OMap.null infdRVars
+
+  if tryInfer
+    then do
+      let rvl = OMap.assocs infdRVars
+      let go = optimizeWithCEGIS cMax universals rfmls rvl
+      (opt, cstate') <- runInSolver $ runCEGIS go cstate
+      sat <- case opt of
+                  Just m -> do
+                    persistentState . inferredRVars %= OMap.unionWithR (\_ l _ -> l) (OMap.fromList m)
+                    return True
+                  Nothing -> return False
+
+      storeCEGISState cstate'
+      return sat
+    else do
+      let go = solveWithCEGIS cMax universals rfmls
+      (sat, cstate') <- runInSolver $ runCEGIS go cstate
+      storeCEGISState cstate'
+      return sat
+
 
 
 storeCEGISState :: Monad s => CEGISState -> TCSolver s ()

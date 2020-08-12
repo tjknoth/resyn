@@ -3,6 +3,7 @@
 module Synquid.Solver.CEGIS (
   Universals(..),
   coefficient,
+  optimizeWithCEGIS,
   solveWithCEGIS,
   coefficientsOf,
   formatUniversals,
@@ -30,12 +31,59 @@ import           Control.Lens
 import           Control.Monad.State
 import           Debug.Trace
 
+import Debug.Pretty.Simple
+
 type CEGISSolver s = StateT CEGISState s
 
 runCEGIS :: CEGISSolver s a -> CEGISState -> s (a, CEGISState)
 runCEGIS = runStateT
 
 {- Top-level interface -}
+
+
+-- TODO: pvar optimization priority
+-- | Optimize for potential variables with initial upper bounds given certain
+-- | formulas as constraints using counterexample-guided inductive synthesis.
+optimizeWithCEGIS :: RMonad s
+                  => Int
+                  -> Universals
+                  -> [ProcessedRFormula]
+                  -> [(String, Maybe Formula)]
+                  -> CEGISSolver s (Maybe [(String, Maybe Formula)])
+optimizeWithCEGIS n univs rfmls pvars = do
+  -- TODO: The "Maybe Formula" for each input pvar is an upper-bound on the
+  -- inferred pvar; this is done so that we can do optimization (i.e. we'll
+  -- recursively call optimizeWithCEGIS with tighter and tighter upper bounds
+  -- until we get UNSAT). We add upper-bound constraints for each pvar that has
+  -- a specified upper bound formula.
+
+  -- let nfmls = filter isJust $ fmap upperBoundToConstraint pvars
+  -- let rfmls' = rfmls ++ nfmls
+  
+  sat <- solveWithCEGIS n univs rfmls
+  if sat
+    then do
+      -- We first get formulas for our polynomials
+      fs <- mapM (getPolyForm . fst) pvars
+
+      -- TODO: Start optimization loop
+      -- Recursively call optimizeWithCEGIS with our new upper bounds
+      -- If we get unsat, we break; otherwise
+
+      return $ Just fs
+    else return Nothing
+  where
+    upperBoundToConstraint (_, Nothing) = Nothing
+    upperBoundToConstraint (s, Just f) = undefined
+
+    getPolyForm s = do
+      (Skeletons polys) <- use polynomials
+      prog <- use rprogram
+      case Map.lookup s polys of
+        Just p -> do
+          fm <- mkSimplePolynomial prog p
+          return (s, Just fm)
+        Nothing -> return (s, Nothing)
 
 -- | Solve formula containing universally quantified expressions with counterexample-guided inductive synthesis
 solveWithCEGIS :: RMonad s
