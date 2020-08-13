@@ -27,6 +27,8 @@ import           Control.Lens
 import           Control.Monad.Extra (mapMaybeM)
 import           Debug.Trace
 
+import Debug.Pretty.Simple
+
 {- Types -}
 
 -- | Choices for the type of terminating fixpoint operator

@@ -656,7 +656,7 @@ data Goal = Goal {
   gImpl :: UProgram,            -- ^ Implementation template
   gDepth :: Int,                -- ^ Maximum level of auxiliary goal nesting allowed inside this goal
   gSourcePos :: SourcePos,      -- ^ Source Position,
-  gInferredPotlVars :: [Id],    -- ^ Set of potential vars to infer for this fn
+  gInferredPotlVars :: [(Id, [Formula])],    -- ^ Set of potential vars to infer for this fn
   gInferSolve :: Bool,          -- ^ If gInferredPotlVars isn't empty, indicates if we should actually solve inference constraints or just collect them without solving
   gSynthesize :: Bool           -- ^ Synthesis flag (false implies typechecking only)
 } deriving (Show, Eq, Ord)

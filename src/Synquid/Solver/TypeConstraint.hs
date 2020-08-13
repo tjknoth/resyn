@@ -74,8 +74,9 @@ initTypingState goal mpts = do
     _idCount = Map.empty,
     _versionCount = Map.empty,
     _resourceConstraints = [],
-    _resourceVars = Map.fromList [(p, []) | p <- rvars],
-    _inferredRVars = OMap.fromList [(p, Nothing) | p <- rvars]
+    -- TODO: we assume all args are ints here; is that okay?
+    _resourceVars = Map.fromList rvars,
+    _inferredRVars = OMap.fromList [(p, Nothing) | (p, _) <- rvars]
   }
 
   let pts = maybe dpts id mpts

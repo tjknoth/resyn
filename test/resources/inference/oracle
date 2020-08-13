@@ -500,6 +500,7 @@ subsetSum :: arg1:{QList {Int||I0} <F4>||I1} -> arg0:{Int||I2} -> {Bool||I3}
 <no file name>:1: Error:
   Insufficient resources
 
+warning: CEGIS failed on last iteration
 replicate :: <a> . n:{Int|_v >= 0|0} -> x:{n**a||I1} -> {List {1**a||I2}|len _v == n|I3}
 <no file name>:1: Error:
   Insufficient resources

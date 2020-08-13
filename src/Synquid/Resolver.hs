@@ -47,7 +47,8 @@ data ResolverState = ResolverState {
   _pvarCount :: Int,
   _potentialVars :: Set Id,
   _infer :: Bool, -- ^ whether we should attempt to infer fn arg pot'ls
-  _inferredPotlVars :: Map Id [Id]  -- ^ maps fn name to associated inferred pot'ls, in order of priority
+  _fnArgs :: [Formula], -- ^ used when inserting potl vars for a fn, to record which fn args this potl variable has access to
+  _inferredPotlVars :: Map Id [(Id, [Formula])]  -- ^ maps fn name to associated inferred pot'ls (and the arguments those pot'ls can reference), in order of priority
 }
 
 makeLenses ''ResolverState
@@ -67,6 +68,7 @@ initResolverState infer = ResolverState {
   _pvarCount = 0,
   _potentialVars = Set.empty,
   _infer = infer,
+  _fnArgs = [],
   _inferredPotlVars = Map.empty
 }
 
@@ -96,12 +98,8 @@ resolveDecls tryInfer declarations =
 
         -- We have to order our potential vars in order of which ones we want minimized first,
         -- since Z3 will minimize in this order
-        --
-        -- Counter-intuitively, we minimize the variables at the end first. This is because
-        -- we don't want potential values on our return results and we prefer having our
-        -- potentials on our first arguments
         pVars = uncurry (++)
-              $ partition (\(x:_) -> x /= 'F')
+              $ partition (\((x:_), _) -> x /= 'F')
               $ Map.findWithDefault [] name inferredPVars
       in Goal name env' spec impl 0 pos pVars inferSolve synth
     extractPos pass (Pos pos decl) = do
@@ -153,14 +151,18 @@ resolveDeclaration (FuncDecl funcName typeSchema) = do
     gt :: RType -> Resolver RType
     gt (ScalarT (DatatypeT di tyargs absps) ref _) = do
       tyargs' <- mapM gt tyargs
-      pVar <- freshInferredPotl funcName "I"
+      fargs <- use fnArgs
+      pVar <- freshInferredPotl funcName "I" fargs
       return $ ScalarT (DatatypeT di tyargs' absps) ref (Var IntS pVar)
     gt (ScalarT dt ref _) = do
-      pVar <- freshInferredPotl funcName "I"
+      fargs <- use fnArgs
+      pVar <- freshInferredPotl funcName "I" fargs
       return $ ScalarT dt ref (Var IntS pVar)
     gt (FunctionT i d c cs) = do
       dom <- gt d
+      fnArgs %= (:) (Var (getArgSort d) i)
       cod <- gt c
+      fnArgs %= tail
       return $ FunctionT i dom cod cs
     gt (LetT i def body) = do
       def' <- gt def
@@ -261,13 +263,16 @@ resolveSignatures (FuncDecl name _)  = do
       case Map.lookup dtName ds of
         Just (DatatypeDef _ preds _ _ _ _) -> do
           tryInfer <- use infer
-          pArgs' <- zipWithM (maybeFreshPotl tryInfer) pArgs (fmap isResParam preds)
+          fargs <- use fnArgs
+          pArgs' <- zipWithM (maybeFreshPotl tryInfer fargs) pArgs (fmap isResParam preds)
           return (ScalarT (DatatypeT dtName tArgs' pArgs') ref pred)
         Nothing -> return og
     go og@(ScalarT _ _ _) = return og
     go (FunctionT name dom cod cost) = do
       dom' <- go dom
+      fnArgs %= (:) (Var (getArgSort dom) name)
       cod' <- go cod
+      fnArgs %= tail
       return $ FunctionT name dom' cod' cost
     go (LetT name def body) = do
       def' <- go def
@@ -275,8 +280,8 @@ resolveSignatures (FuncDecl name _)  = do
       return $ LetT name def' body'
     go AnyT = return AnyT
 
-    maybeFreshPotl tryInfer arg isPred
-      | isPred && tryInfer = fmap (Var IntS) $ freshInferredPotl name "F"
+    maybeFreshPotl tryInfer fargs arg isPred
+      | isPred && tryInfer = fmap (Var IntS) $ freshInferredPotl name "F" fargs
       | otherwise          = return arg
 
     -- Checks if an abstract arg is a predicate or a resource
@@ -564,7 +569,7 @@ resolveFormula (Var _ x) = do
   env <- use environment
   pSyms <- use potentialVars
   ipSyms <- use inferredPotlVars
-  if Set.member x pSyms || Set.member x (Set.fromList (concat (foldr (:) [] ipSyms)))
+  if Set.member x pSyms || Set.member x (Set.fromList (fmap fst (concat (foldr (:) [] ipSyms))))
     then return $ Var IntS x
     else case Map.lookup x (symbolsOfArity 0 env) of
       Just sch ->
@@ -789,17 +794,19 @@ freshId p s = do
 
 -- | 'freshInferredPotl' @prefix@ : create a name for a fresh potential variable name
 -- | corresponding to the pot'l of a fn argument which will be inferred
-freshInferredPotl :: Id -> String -> Resolver Id
-freshInferredPotl fname prefix = do
+freshInferredPotl :: Id -> String -> [Formula] -> Resolver Id
+freshInferredPotl fname prefix args = do
   i <- use pvarCount 
   pvarCount %= (+ 1)
   let x = prefix ++ show i
   syms <- uses environment allSymbols
   if Map.member x syms -- to avoid name collisions with existing vars
-    then freshInferredPotl fname prefix
+    then freshInferredPotl fname prefix args
     else do
-      inferredPotlVars %= Map.insertWith (flip (++)) fname [x]
+      inferredPotlVars %= Map.insertWith (flip (++)) fname [(x, args)]
       return x
+
+getArgSort = toSort . baseTypeOf
 
 -- | 'instantiate' @sorts@: replace all sort variables in @sorts@ with fresh sort variables
 instantiate :: [Sort] -> Resolver [Sort]
