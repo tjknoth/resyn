@@ -153,8 +153,8 @@ instance RMonad Z3State where
       forM_ fmls $ \fml -> do
         fmlAst <- fmlToAST fml
         -- For some reason this results in wonky inferred values:
-        -- -- symb <- mkStringSymbol $ "form" ++ show i
-        -- -- v <- mkBoolVar symb
+        -- symb <- mkStringSymbol $ "form" ++ show i
+        -- v <- mkBoolVar symb
         -- optimizeAssertAndTrack fmlAst fmlAst
         optimizeAssert fmlAst
 
