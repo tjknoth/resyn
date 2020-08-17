@@ -46,11 +46,11 @@ runCEGIS = runStateT
 -- | Optimize for potential variables with initial upper bounds given certain
 -- | formulas as constraints using counterexample-guided inductive synthesis.
 optimizeWithCEGIS :: RMonad s
-                   => Int
-                   -> Universals
-                   -> [ProcessedRFormula]
-                   -> [(String, Maybe Formula)]
-                   -> CEGISSolver s (Maybe [(String, Maybe Formula)])
+                  => Int
+                  -> Universals
+                  -> [ProcessedRFormula]
+                  -> [(String, Maybe Formula)]
+                  -> CEGISSolver s (Maybe [(String, Maybe Formula)])
 optimizeWithCEGIS n univs rfmls pvars = do
   -- The "Maybe Formula" for each input pvar is an upper-bound on the
   -- inferred pvar; this is done so that we can do optimization (i.e. we'll
@@ -59,9 +59,10 @@ optimizeWithCEGIS n univs rfmls pvars = do
   -- constraints for each pvar that has a specified upper bound formula.
 
   -- We need to create two new constraints:
-  -- 1. A constraint which ensures no polynomial gets worse
-  -- 2. A constraint which ensures at least one polynomial gets better
+  -- 1. A constraint which ensures no inferred polynomial gets worse
+  -- 2. A constraint which ensures at least one inferred polynomial gets better
 
+  -- TODO: move the two opt constraints after solveWithCEGIS, before the recursive call
   let noWorse = RFormula ftrue () Set.empty Set.empty
               $ conjunction
               $ catMaybes
@@ -75,13 +76,15 @@ optimizeWithCEGIS n univs rfmls pvars = do
   -- TODO: for some reason there aren't any constraints which
   -- limit us from using negative values for polynomials.
   -- We manually add well-formedness constraints here.
+  --
+  -- TODO: this breaks non-eac inference
   let wellFormed = RFormula ftrue () Set.empty Set.empty
                  $ conjunction
                  $ catMaybes
                  $ fmap (upperBoundToConstraint (|>=|))
                  $ [(x, Just fzero) | (x, _) <- pvars]
 
-  let rfmls' = rfmls ++ [noWorse, oneBetter, wellFormed]
+  let rfmls' = rfmls ++ []
   
   sat <- solveWithCEGIS n univs rfmls'
   if sat
@@ -90,9 +93,9 @@ optimizeWithCEGIS n univs rfmls pvars = do
       fs <- mapM (getPolyForm . fst) pvars
 
       -- Recursively call optimizeWithCEGIS with our new upper bounds
-      new <- optimizeWithCEGIS n univs rfmls' fs
+      -- new <- optimizeWithCEGIS n univs rfmls' fs
 
-      return $ new <|> Just fs
+      return $ Just fs
       else return Nothing
   where
     upperBoundToConstraint _ (_, Nothing) = Nothing
@@ -170,7 +173,7 @@ verify rfmls universals = do
   let cxQuery = fnot $ substitute prog fml
   writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
   -- Query solver for a counterexample
-  model <- lift $ solveAndGetModel cxQuery
+  model <- lift $ solveAndGetModel [cxQuery]
   writeLog 4 $ text "CX model:" <+> text (maybe "" modelStr model)
   vars <- lift . sequence
     $ (modelGetAssignment (map nameOfUVar (uvars universals)) <$> model)
@@ -231,7 +234,7 @@ synthesize rfmls counterexample = do
   -- Collect all parameters
   allCoefficients <- use coefficients
   writeLog 7 $ text "CEGIS param query:" </> pretty paramQuery 
-  model <- lift $ solveAndGetModel (conjunction paramQuery)
+  model <- lift $ solveAndGetModel paramQuery
   writeLog 8 $ text "Param model:" <+> text (maybe "" modelStr model)
   lift . sequence $ (modelGetAssignment allCoefficients <$> model)
 

@@ -30,8 +30,8 @@ class (Monad s, Applicative s, MonadFail s) => MonadSMT s where
   allUnsatCores :: Formula -> Formula -> [Formula] -> s [[Formula]]                  -- ^ 'allUnsatCores' @assumption@ @mustHave@ @fmls@: all minimal unsatisfiable subsets of @fmls@ with @mustHave@, which contain @mustHave@, assuming @assumption@
 
 class (Monad s, Applicative s, MonadIO s) => RMonad s where
-  solveAndGetModel :: Formula -> s (Maybe SMTModel)                                  -- ^ 'solveAndGetModel' @fml@: Evaluate @fml@ and, if satisfiable, return the model object
-  optimizeAndGetModel :: Formula -> [(String, Maybe Formula)] -> s (Maybe SMTModel)  -- ^ 'optimizeAndGetModel' @fml vs@: Evaluate @fml@ and optimize for inferred potl vars @vs@ in decreasing order of importance; if satisfiable, return the model object. @vs@ is a listified map from the name of the var to its previous value as a formula, if it has one.
+  solveAndGetModel :: [Formula] -> s (Maybe SMTModel)                                  -- ^ 'solveAndGetModel' @fml@: Evaluate @fml@ and, if satisfiable, return the model object
+  optimizeAndGetModel :: [Formula] -> [(String, Maybe Formula)] -> s (Maybe SMTModel)  -- ^ 'optimizeAndGetModel' @fml vs@: Evaluate @fml@ and optimize for inferred potl vars @vs@ in decreasing order of importance; if satisfiable, return the model object. @vs@ is a listified map from the name of the var to its previous value as a formula, if it has one.
   modelGetAssignment :: [String] -> SMTModel -> s RSolution                          -- ^ 'modelGetAssignment' @vals@ @m@: Get assignments of all variables @vals@ in model @m@
   checkPredWithModel :: Formula -> SMTModel -> s Bool                                -- ^ 'checkWithModel' @fml model@: check if boolean-sorted formula holds under a given model
   filterPreds :: [ProcessedRFormula] -> SMTModel -> s [ProcessedRFormula]

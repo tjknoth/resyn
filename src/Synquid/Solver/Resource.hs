@@ -36,6 +36,7 @@ import           Debug.Trace
 import           Data.List.NonEmpty (NonEmpty(..))
 import           Data.Semigroup (sconcat)
 import           Data.Maybe
+import qualified Z3.Monad as Z3
 
 import Debug.Pretty.Simple
 
@@ -241,19 +242,20 @@ satisfyResources oldfmls newfmls = do
     Constant -> do
       if tryInfer
         then do
-          let fml = conjunction $ map bodyFml rfmls
+          let fmls = map bodyFml rfmls
           let rvl = OMap.assocs infdRVars
-          model <- runInSolver $ optimizeAndGetModel fml rvl
+          model <- runInSolver $ optimizeAndGetModel fmls rvl
           case model of
-            Nothing -> return False
+            Nothing -> do
+              return False
             Just m' -> do
               writeLog 6 $ nest 2 (text "Solved + inferred with model") </> nest 6 (text (modelStr m'))
               vs' <- runInSolver $ modelGetAssignment (fmap fst rvl) m'
               persistentState . inferredRVars %= OMap.unionWithR (\_ l _ -> l) (OMap.fromList . Map.toList . fmap Just . unRSolution $ vs')
               return True
         else do
-          let fml = conjunction $ map bodyFml rfmls
-          model <- runInSolver $ solveAndGetModel fml
+          let fmls = map bodyFml rfmls
+          model <- runInSolver $ solveAndGetModel fmls
           case model of
             Nothing -> return False
             Just m' -> do

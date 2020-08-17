@@ -96,25 +96,37 @@ instance MonadSMT Z3State where
   allUnsatCores = getAllMUSs
 
 instance RMonad Z3State where
-  solveAndGetModel fml = do
-    fmlAst <- fmlToAST fml
+  solveAndGetModel fmls = do
 
-    (r, m) <- local $ (assert fmlAst) >> solverCheckAndGetModel
+    (r, m) <- local $ do
+      forM_ fmls $ \fml -> do
+        fmlAst <- fmlToAST fml
+        -- astS <- astToString fmlAst
+        -- symb <- mkStringSymbol $ "form" ++ show i ++ ": " ++ astS
+        -- v <- mkBoolVar symb
+        solverAssertAndTrack fmlAst fmlAst
+
+      solverCheckAndGetModel
    
     setASTPrintMode Z3_PRINT_SMTLIB_FULL
-    astStr <- astToString fmlAst
     -- Throw error if unknown result: could probably do this a better way since r' is now unused
     let _ = case r of 
               Unsat -> False 
               Sat   -> True
-              _     -> error $ "solveWithModel: Z3 returned Unknown for AST " ++ astStr 
+              _     -> error $ "solveWithModel: Z3 returned Unknown for AST"
     case m of  
-      Nothing -> return Nothing
+      Nothing -> do
+        debug 2 (text "SMT COULDN'T FIND MODEL; CORE:") $ return ()
+        ucore <- solverGetUnsatCore
+        asts <- mapM astToString ucore
+        forM_ asts $ \s -> do
+          debug 2 (text s) $ return s
+        return Nothing
       Just md -> do 
         mdStr <- modelToString md 
         return $ Just $ SMTModel md mdStr
 
-  optimizeAndGetModel fml vs = do
+  optimizeAndGetModel fmls vs = do
     -- Because Z3 can't backtrack and retract assertions, we have to infer all of our variables
     -- each time, and we can never make assertions about the inferred values of these variables
     -- (i.e. we can't reuse an inferred value of a variable with something like
@@ -136,11 +148,20 @@ instance RMonad Z3State where
     --
     -- So we just infer everything every time
 
-    setASTPrintMode Z3_PRINT_SMTLIB_FULL
-    fmlAst <- fmlToAST fml
+    -- This gives wonky optimized values:
+    (_, m) <- local $ do
+      forM_ fmls $ \fml -> do
+        fmlAst <- fmlToAST fml
+        -- For some reason this results in wonky inferred values:
+        -- -- symb <- mkStringSymbol $ "form" ++ show i
+        -- -- v <- mkBoolVar symb
+        -- optimizeAssertAndTrack fmlAst fmlAst
+        optimizeAssert fmlAst
 
-    (_, m) <- local $ (optimizeAssert fmlAst) >> (mapM_ inferOnly vs) >> optimizeCheckAndGetModel
+      mapM_ inferOnly vs
+      optimizeCheckAndGetModel
    
+    setASTPrintMode Z3_PRINT_SMTLIB_FULL
     case m of  
       Just md -> do 
         mdStr <- modelToString md 
