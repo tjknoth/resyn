@@ -26,6 +26,7 @@ import           Data.Time.Calendar
 import qualified Data.Map as Map
 import           Data.Map.Ordered (OMap)
 import qualified Data.Map.Ordered as OMap
+import           Data.Maybe (isJust)
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Control.Lens ((.~), (^.), (%~), (&), (%=), _last, _Just)
@@ -55,8 +56,9 @@ main = do
                     _constantTime = constTime,
                     _cegisBound = cegis_max,
                     _enumerate = ec,
-                    _inferResources = infer,
+                    _inferResources = isJust infer,
                     _rsolver = res_solver,
+                    _rSolverDomain = maybe Constant id infer,
                     _sygusLog = logfile,
                     _cvc4 = cvc4cmd
                   }
@@ -146,7 +148,7 @@ data CommandLineArgs
         ct :: Bool,
         cegis_max :: Int,
         eac :: Bool,
-        infer :: Bool,
+        infer :: Maybe RDomain,
         res_solver :: ResourceSolver,
         logfile :: Maybe String,
         solve_sygus :: String
@@ -186,7 +188,7 @@ synt = Synthesis {
   ct                  = False           &= help ("Require that all branching expressions consume a constant amount of resources (default: False)"),
   cegis_max           = 100             &= help ("Maximum number of iterations through the CEGIS loop (default: 100)"),
   eac                 = False           &= help ("Enumerate-and-check instead of round-trip resource analysis (default: False)"),
-  infer               = False           &= help ("Infer all resource bounds (default: False)"),
+  infer               = Nothing         &= help ("Infer all resource bounds (default: False)"),
   res_solver          = CEGIS           &= help (unwords ["Which solver should be used for resource constraints?", show SYGUS, show CEGIS, show Incremental, "(default: ", show CEGIS, ")"]),
   logfile             = Nothing         &= help ("File for logging SYGUS constraints (default: no logging)"),
   solve_sygus         = "cvc4"          &= help ("Command to run SYGUS solver (default: \"cvc4\")")

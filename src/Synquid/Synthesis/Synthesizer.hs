@@ -37,7 +37,8 @@ synthesize explorerParams solverParams goal cquals tquals mpts =
     reconstruction :: HornSolver (Either ErrorMessage [(RProgram, TypingState)])
     reconstruction = let
         allSchema = gSpec goal : Map.elems (allSymbols (gEnvironment goal))
-        rdom = getAnnotationStyle (fmap _resourcePreds (gEnvironment goal ^. datatypes)) allSchema
+        infer = explorerParams ^. (explorerResourceArgs . inferResources)
+        rdom = if infer then explorerParams ^. (explorerResourceArgs . rSolverDomain) else getAnnotationStyle (fmap _resourcePreds (gEnvironment goal ^. datatypes)) allSchema
         pdom = getPolynomialDomain (fmap _resourcePreds (gEnvironment goal ^. datatypes)) (gSpec goal)
         adj = set rSolverDomain rdom . set polynomialDomain pdom
         typingParams = TypingParams {

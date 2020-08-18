@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, DeriveFunctor #-}
+{-# LANGUAGE DeriveDataTypeable, TemplateHaskell, DeriveFunctor #-}
 
 -- | Different types used to interface between the different solvers
 module Synquid.Solver.Types where
@@ -6,6 +6,7 @@ module Synquid.Solver.Types where
 import Synquid.Logic
 import Synquid.Pretty
 
+import Data.Data
 import Data.Set (Set)
 import Data.Map (Map)
 import qualified Z3.Monad as Z3
@@ -63,7 +64,7 @@ substituteUVar sub (UVar s x) =
     f           -> error $ unwords ["substituteUVar: returned non-variable term", show (pretty f)]
 
 data RDomain = Constant | Dependent
-  deriving (Show, Eq)
+  deriving (Data, Typeable, Show, Eq)
 
 instance Semigroup RDomain where
   Dependent <> _ = Dependent
