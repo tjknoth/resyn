@@ -99,12 +99,12 @@ instance RMonad Z3State where
   solveAndGetModel fmls = do
 
     (r, m) <- local $ do
-      forM_ fmls $ \fml -> do
+      forM_ (zip [(1 :: Int)..] fmls) $ \(i, fml) -> do
         fmlAst <- fmlToAST fml
-        -- astS <- astToString fmlAst
-        -- symb <- mkStringSymbol $ "form" ++ show i ++ ": " ++ astS
-        -- v <- mkBoolVar symb
-        solverAssertAndTrack fmlAst fmlAst
+        astS <- astToString fmlAst
+        symb <- mkStringSymbol $ "form" ++ show i ++ ": " ++ astS
+        v <- mkBoolVar symb
+        solverAssertAndTrack fmlAst v
 
       solverCheckAndGetModel
    
