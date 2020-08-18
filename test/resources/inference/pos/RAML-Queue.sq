@@ -13,7 +13,7 @@ enqueue = \x. \q.
   match q with
     Tuple inq outq -> tick 1 (Tuple (Cons x inq) outq)
 
--- When the defn of enqueue is inlined into enqueues, resources are inferred perfectly fine:
+-- When the defn of enqueue is inlined into enqueues and we're using RTL variable order, resources are inferred perfectly fine:
 enqueuesInline :: List {a | | 2} <{0}> -> Tuple (List a <{0}>) (List a <{0}>) -> Tuple (List a <{0}>) (List a <{0}>)
 enqueuesInline = \l. \q.
   match l with

@@ -326,7 +326,7 @@ freshResAnnotation :: MonadHorn s
 freshResAnnotation env vtype prefix = do
   x <- freshId prefix
   rvar <- mkResourceVar env vtype x
-  resourceVars %= insertRVar rvar
+  persistentState . resourceVars %= insertRVar rvar
   let fresh = Var IntS x
   let env' = 
         case vtype of
@@ -692,16 +692,16 @@ potentialVars qmap fml = Set.map varName $ varsOf $ bottomValuation qmap fml
 -- | 'freshId' @prefix@ : fresh identifier starting with @prefix@
 freshId :: Monad s => String -> TCSolver s Id
 freshId prefix = do
-  i <- uses idCount (Map.findWithDefault 0 prefix)
-  idCount %= Map.insert prefix (i + 1)
+  i <- uses (persistentState . idCount) (Map.findWithDefault 0 prefix)
+  persistentState . idCount %= Map.insert prefix (i + 1)
   return $ prefix ++ show i
 
 -- | 'freshVersion' @prefix@ : fresh identifier starting with @prefix@, using an underscore
 --    to differentiate from normal freshIds -- only used for resource constraints.
 freshVersion :: Monad s => String -> TCSolver s Id
 freshVersion prefix = do
-  i <- uses versionCount (Map.findWithDefault 0 prefix)
-  versionCount %= Map.insert prefix (i + 1)
+  i <- uses (persistentState . versionCount) (Map.findWithDefault 0 prefix)
+  persistentState . versionCount %= Map.insert prefix (i + 1)
   return $ prefix ++ "_" ++ show i
 
 

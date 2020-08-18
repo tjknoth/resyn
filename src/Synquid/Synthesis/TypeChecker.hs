@@ -14,6 +14,7 @@ import Synquid.Util
 import Synquid.Pretty
 import Synquid.Resolver
 import Synquid.Solver.Monad
+import Synquid.Solver.Types
 import Synquid.Solver.TypeConstraint hiding (freshId, freshVar)
 
 import qualified Data.Map as Map
@@ -25,16 +26,17 @@ import qualified Data.Set as Set
 
 import Debug.Pretty.Simple
 
--- | 'reconstruct' @eParams tParams goal@ : reconstruct missing types and terms in the body of @goal@ so that it represents a valid type judgment;
+-- | 'reconstruct' @eParams tParams pts goal@ : reconstruct missing types and terms in the body of @goal@ so that it represents a valid type judgment;
 -- return a type error if that is impossible
 reconstruct :: (MonadSMT s, MonadHorn s, RMonad s) 
             => ExplorerParams 
             -> TypingParams 
+            -> Maybe PersistentTState
             -> Goal 
             -> s (Either ErrorMessage [(RProgram, TypingState)])
-reconstruct eParams tParams goal = do
+reconstruct eParams tParams mpts goal = do
     let goal' = adjustGoalEnv goal
-    initTS <- initTypingState goal'
+    initTS <- initTypingState goal' mpts
     runExplorer (eParams { _sourcePos = gSourcePos goal' }) tParams (Reconstructor reconstruct') initTS (go goal')
   where
     reconstruct' = if tParams^.(resourceArgs . enumerate) then reconstructAndCheck else reconstructTopLevel
@@ -58,13 +60,13 @@ reconstructAndCheck g = do
 reconstructTopLevel :: (MonadSMT s, MonadHorn s, RMonad s) 
                     => Goal 
                     -> Explorer s RProgram
-reconstructTopLevel (Goal funName env (ForallT a sch) impl depth pos infers s) = reconstructTopLevel (Goal funName (addTypeVar a env) sch impl depth pos infers s)
-reconstructTopLevel (Goal funName env (ForallP sig sch) impl depth pos infers s) = do
+reconstructTopLevel (Goal funName env (ForallT a sch) impl depth pos infers isolve s) = reconstructTopLevel (Goal funName (addTypeVar a env) sch impl depth pos infers isolve s)
+reconstructTopLevel (Goal funName env (ForallP sig sch) impl depth pos infers isolve s) = do
   -- check if pred is resource var
   when (predSigResSort sig == IntS) $ -- add int-valued pred param as resource var 
-    runInSolver $ resourceVars %= insertRVar (predSigName sig, [])
-  reconstructTopLevel (Goal funName (addBoundPredicate sig env) sch impl depth pos infers s)
-reconstructTopLevel (Goal funName env (Monotype typ@FunctionT{}) impl depth _ infers synth) = local (set (_1 . auxDepth) depth) reconstructFix
+    runInSolver $ persistentState . resourceVars %= insertRVar (predSigName sig, [])
+  reconstructTopLevel (Goal funName (addBoundPredicate sig env) sch impl depth pos infers isolve s)
+reconstructTopLevel (Goal funName env (Monotype typ@FunctionT{}) impl depth _ infers _ synth) = local (set (_1 . auxDepth) depth) reconstructFix
   where
     reconstructFix = do
       let typ' = renameAsImpl (isBound env) impl typ
@@ -131,7 +133,7 @@ reconstructTopLevel (Goal funName env (Monotype typ@FunctionT{}) impl depth _ in
                               metric (Var argSort valueVarName) |>=| IntLit 0  |&| metric (Var argSort valueVarName) |<=| metric (Var argSort argName))
     terminationRefinement _ _ = Nothing
 
-reconstructTopLevel (Goal _ env (Monotype t) impl depth _ _ _) = 
+reconstructTopLevel (Goal _ env (Monotype t) impl depth _ _ _ _) = 
   local (set (_1 . auxDepth) depth) $ reconstructI env t impl
 
 -- | 'reconstructI' @env t impl@ :: reconstruct unknown types and terms in a judgment @env@ |- @impl@ :: @t@ where @impl@ is a (possibly) introduction term
@@ -337,7 +339,7 @@ reconstructE' env typ p@(PApp iFun iArg) = do
                       impl <- etaExpand tArg f
                       _ <- enqueueGoal env tArg impl d
                       return ()
-          Just (env', def) -> auxGoals %= (Goal f env' (Monotype tArg) def d noPos [] True :) -- This is a locally defined function: add an aux goal with its body
+          Just (env', def) -> auxGoals %= (Goal f env' (Monotype tArg) def d noPos [] False True :) -- This is a locally defined function: add an aux goal with its body
         return iArg
       _ -> enqueueGoal env tArg iArg d -- HO argument is an abstraction: enqueue a fresh goal
 
@@ -355,7 +357,7 @@ checkAnnotation :: (MonadSMT s, MonadHorn s, RMonad s)
                 -> Explorer s RType
 checkAnnotation env t t' p = do
   tass <- use (typingState . typeAssignment)
-  potentialSyms <- use (typingState . resourceVars)
+  potentialSyms <- use (typingState . persistentState . resourceVars)
   case resolveRefinedType (typeSubstituteEnv tass env) t' (Set.fromList (Map.keys potentialSyms)) of
     Left err -> throwError err
     Right t'' -> do

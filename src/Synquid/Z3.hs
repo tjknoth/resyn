@@ -35,6 +35,7 @@ import Z3.Monad hiding (Z3Env, newEnv, Sort)
 import qualified Z3.Base as Z3
 
 import Debug.Pretty.Simple
+import Debug.Trace
 
 data Z3Env = Z3Env {
   envSolver   :: Z3.Solver,
@@ -96,10 +97,11 @@ instance MonadSMT Z3State where
 
 instance RMonad Z3State where
   solveAndGetModel fml = do
-    (r, m) <- local $ (fmlToAST >=> assert) fml >> solverCheckAndGetModel
+    fmlAst <- fmlToAST fml
+
+    (r, m) <- local $ (assert fmlAst) >> solverCheckAndGetModel
    
     setASTPrintMode Z3_PRINT_SMTLIB_FULL
-    fmlAst <- fmlToAST fml
     astStr <- astToString fmlAst
     -- Throw error if unknown result: could probably do this a better way since r' is now unused
     let _ = case r of 
@@ -134,11 +136,11 @@ instance RMonad Z3State where
     --
     -- So we just infer everything every time
 
+    setASTPrintMode Z3_PRINT_SMTLIB_FULL
     fmlAst <- fmlToAST fml
 
     (_, m) <- local $ (optimizeAssert fmlAst) >> (mapM_ inferOnly vs) >> optimizeCheckAndGetModel
    
-    setASTPrintMode Z3_PRINT_SMTLIB_FULL
     case m of  
       Just md -> do 
         mdStr <- modelToString md 

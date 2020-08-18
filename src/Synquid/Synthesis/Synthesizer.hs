@@ -14,6 +14,7 @@ import Synquid.Synthesis.Util
 import Synquid.Solver.Monad
 import Synquid.Solver.HornClause
 import Synquid.Solver.TypeConstraint
+import Synquid.Solver.Types
 import Synquid.Solver.Resource (getAnnotationStyle, getPolynomialDomain)
 
 import           Data.List
@@ -28,8 +29,9 @@ type HornSolver = FixPointSolver Z3State
 -- in the typing environment @env@ and follows template @templ@,
 -- using conditional qualifiers @cquals@ and type qualifiers @tquals@,
 -- with parameters for template generation, constraint generation, and constraint solving @templGenParam@ @consGenParams@ @solverParams@ respectively
-synthesize :: ExplorerParams -> HornSolverParams -> Goal -> [Formula] -> [Formula] -> IO (Either ErrorMessage [(RProgram, TypingState)])
-synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFixPointSolver reconstruction solverParams
+synthesize :: ExplorerParams -> HornSolverParams -> Goal -> [Formula] -> [Formula] -> Maybe PersistentTState -> IO (Either ErrorMessage [(RProgram, TypingState)])
+synthesize explorerParams solverParams goal cquals tquals mpts =
+  evalZ3State $ evalFixPointSolver reconstruction solverParams
   where
     -- | Stream of programs that satisfy the specification or type error
     reconstruction :: HornSolver (Either ErrorMessage [(RProgram, TypingState)])
@@ -47,7 +49,7 @@ synthesize explorerParams solverParams goal cquals tquals = evalZ3State $ evalFi
                         _tcSolverLogLevel = _explorerLogLevel explorerParams,
                         _resourceArgs = adj (_explorerResourceArgs explorerParams)
                       }
-      in reconstruct explorerParams typingParams goal
+      in reconstruct explorerParams typingParams mpts goal
 
     -- | Qualifier generator for conditionals
     condQuals :: Environment -> [Formula] -> QSpace

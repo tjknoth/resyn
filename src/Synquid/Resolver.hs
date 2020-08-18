@@ -86,7 +86,7 @@ resolveDecls tryInfer declarations =
       mapM_ (extractPos resolveSignatures) declarations'
     declarations' = setDecl : declarations
     setDecl = Pos noPos defaultSetType
-    makeGoal synth env allNames allMutuals inferredPVars (name, (impl, pos)) =
+    makeGoal inferSolve synth env allNames allMutuals inferredPVars (name, (impl, pos)) =
       let
         spec = allSymbols env Map.! name
         myMutuals = Map.findWithDefault [] name allMutuals
@@ -101,15 +101,14 @@ resolveDecls tryInfer declarations =
         -- we don't want potential values on our return results and we prefer having our
         -- potentials on our first arguments
         pVars = uncurry (++)
-              $ over each reverse
               $ partition (\(x:_) -> x /= 'F')
               $ Map.findWithDefault [] name inferredPVars
-      in Goal name env' spec impl 0 pos pVars synth
+      in Goal name env' spec impl 0 pos pVars inferSolve synth
     extractPos pass (Pos pos decl) = do
       currentPosition .= pos
       pass decl
-    synthesisGoals st = fmap (makeGoal True (st ^. environment) (map fst ((st ^. goals) ++ (st ^. checkingGoals))) (st ^. mutuals) (st ^. inferredPotlVars)) (st ^. goals)
-    typecheckingGoals st = fmap (makeGoal False (st ^. environment) (map fst ((st ^. goals) ++ (st ^. checkingGoals))) (st ^. mutuals) (st ^. inferredPotlVars)) (st ^. checkingGoals)
+    synthesisGoals st = fmap (makeGoal False True (st ^. environment) (map fst ((st ^. goals) ++ (st ^. checkingGoals))) (st ^. mutuals) (st ^. inferredPotlVars)) (st ^. goals)
+    typecheckingGoals st = fmap (makeGoal False False (st ^. environment) (map fst ((st ^. goals) ++ (st ^. checkingGoals))) (st ^. mutuals) (st ^. inferredPotlVars)) (st ^. checkingGoals)
 
 resolveRefinement :: Environment -> Formula -> Either ErrorMessage Formula
 resolveRefinement env fml = runExcept (evalStateT (resolveTypeRefinement AnyS fml) ((initResolverState False) {_environment = env}))
@@ -257,12 +256,13 @@ resolveSignatures (FuncDecl name _)  = do
     inferAbstractPotls (Monotype t) = go t >>= return . Monotype
 
     go og@(ScalarT (DatatypeT dtName tArgs pArgs) ref pred) = do
+      tArgs' <- mapM go tArgs
       ds <- use $ environment . datatypes
       case Map.lookup dtName ds of
         Just (DatatypeDef _ preds _ _ _ _) -> do
           tryInfer <- use infer
           pArgs' <- zipWithM (maybeFreshPotl tryInfer) pArgs (fmap isResParam preds)
-          return (ScalarT (DatatypeT dtName tArgs pArgs') ref pred)
+          return (ScalarT (DatatypeT dtName tArgs' pArgs') ref pred)
         Nothing -> return og
     go og@(ScalarT _ _ _) = return og
     go (FunctionT name dom cod cost) = do
