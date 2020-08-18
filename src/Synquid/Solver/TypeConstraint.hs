@@ -214,6 +214,7 @@ simplifyConstraint c = do
   pass <- use predAssignment
   simplifyConstraint' tass pass c
 
+simplifyConstraint' _ _ c@WellFormedPotential{} = simpleConstraints %= (c :)
 simplifyConstraint' _ _ c@RSubtype{} = simpleConstraints %= (c :)
 -- Any type: drop
 simplifyConstraint' _ _ (Subtype _ _ AnyT _) = return ()
@@ -483,7 +484,7 @@ processConstraint c@(Subtype env (ScalarT baseTL l potl) (ScalarT baseTR r potr)
 
 processConstraint c@(WellFormed env t@(ScalarT baseT fml pot))
   = do
-      simpleConstraints %= (RSubtype (addVariable valueVarName t env) pot fzero :)
+      -- simpleConstraints %= (RSubtype (addVariable valueVarName t env) pot fzero :)
       simpleConstraints %= (c :)
       case fml of
         Unknown _ u -> do
@@ -537,8 +538,12 @@ processConstraint (SharedEnv env envl envr)
 processConstraint (ConstantRes env) = do
   tass <- use typeAssignment
   let env' = over symbols (scalarSubstituteEnv tass) env
+  -- TODO: use  pred assignment to work w APs
   simpleConstraints %= (ConstantRes env' :)
 -- processConstraint c@SharedForm{} = simpleConstraints %= (c :)
+processConstraint c@(WellFormedPotential env p) = do
+  pass <- use predAssignment
+  simpleConstraints%= (WellFormedPotential env (substitutePredicate pass p) :)
 processConstraint c@(SharedForm env f g h) = do
   pass <- use predAssignment
   -- traceM $ "Substituting in " ++ show (plain (pretty c))
@@ -574,6 +579,8 @@ generateHornClauses SharedEnv{}
 generateHornClauses SharedForm{}
   = return ()
 generateHornClauses ConstantRes{}
+  = return ()
+generateHornClauses WellFormedPotential{}
   = return ()
 generateHornClauses Transfer{}
   = return ()

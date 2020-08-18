@@ -327,7 +327,13 @@ freshResAnnotation env vtype prefix = do
   x <- freshId prefix
   rvar <- mkResourceVar env vtype x
   resourceVars %= insertRVar rvar
-  return $ Var IntS x
+  let fresh = Var IntS x
+  let env' = 
+        case vtype of
+          Nothing -> env
+          Just b  -> addVariable valueVarName (ScalarT b ftrue defPotential) env
+  modify $ addTypingConstraint $ WellFormedPotential env' fresh
+  return fresh
 
 -- | 'schFreshPotentials' @env sch r@ : Replace potentials in schema @sch@ by unwrapping the foralls.
 --    If @r@, recursively replace potential annotations in the entire type. Otherwise, just replace top-level annotations.
@@ -386,8 +392,10 @@ freshPred :: MonadHorn s => Environment -> [Sort] -> Sort -> TCSolver s Formula
 freshPred env argSorts resSort = do
   p' <- freshId "P"
   modify $ addTypingConstraint (WellFormedPredicate env argSorts resSort p')
-  let args = zipWith Var argSorts deBrujns
-  return $ Pred resSort p' [] -- args
+  let args = [] -- zipWith Var argSorts deBrujns -- TODO: why not?
+  when (resSort == IntS) $
+    modify $ addTypingConstraint (WellFormedPotential env (Pred resSort p' args))
+  return $ Pred resSort p' args
 
 freshAPs :: MonadHorn s => Environment -> String -> [Formula] -> TCSolver s [Formula]
 freshAPs env dt ps = 

@@ -423,6 +423,7 @@ prettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator "|-" <
 prettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 --prettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS -- APs: changed to better reflect pred constraints
 prettyConstraint (WellFormedPredicate _ argSorts resSort p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") argSorts) <+> pretty resSort
+prettyConstraint (WellFormedPotential _ p) = pretty p <+> operator ">=" <+> text "0"
 prettyConstraint (SharedEnv e e' e'') = prettyScalars e <+> pretty (_freePotential e)
   <+> operator "\\/" </> nest 4 (prettyScalars e' <+> pretty (_freePotential e') 
   <+> operator "||" <+> prettyScalars e'' <+> pretty (_freePotential e'')) 
@@ -441,6 +442,7 @@ simplePrettyConstraint (WellFormedCond env c) = prettyBindings env <+> operator 
 simplePrettyConstraint (WellFormedMatchCond env c) = prettyBindings env <+> operator "|- (match)" <+> pretty c
 --simplePrettyConstraint (WellFormedPredicate _ sorts p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") sorts) <+> pretty BoolS -- APs: changed to better reflect pred constraints
 simplePrettyConstraint (WellFormedPredicate _ argSorts resSort p) = operator "|-" <+> pretty p <+> operator "::" <+> hsep (map (\s -> pretty s <+> operator "->") argSorts) <+> pretty resSort
+simplePrettyConstraint (WellFormedPotential _ p) = pretty p <+> operator ">=" <+> text "0"
 simplePrettyConstraint (SharedEnv e e' e'') = prettyScalars e <+> operator "\\/" </> prettyScalars e' <+> operator "||" <+> prettyScalars e''
 simplePrettyConstraint (SharedForm env f fl fr) = pretty f <+> operator "\\/" <+> pretty fl <+> operator "||" <+> pretty fr 
 simplePrettyConstraint (ConstantRes env) = text "CT from scalars:" <+> prettyScalars env 

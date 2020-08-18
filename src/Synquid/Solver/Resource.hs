@@ -87,6 +87,10 @@ generateFormula' checkMults c = do
   case c of
     Subtype{} -> error $ show $ text "generateFormula: subtype constraint present:" <+> pretty c
     WellFormed{} -> error $ show $ text "generateFormula: well-formedness constraint present:" <+> pretty c
+    WellFormedPotential env p -> do
+      let vs = getValueVar env
+      let fml = mkRForm vs (p |>=| fzero)
+      embedAndProcessConstraint env fml
     RSubtype env pl pr -> do
       op <- subtypeOp 
       vs1 <- getLocals env freeParams pl
@@ -329,18 +333,17 @@ collectUniversals rfmls existing = do
 redistribute :: Monad s
              => Environment
              -> Environment
-             -- -> TCSolver s (PendingRSubst, [Formula])
              -> TCSolver s [Formula]
 redistribute envIn envOut = do
   let fpIn  = envIn ^. freePotential
   let fpOut = envOut ^. freePotential
   let cfpIn  = totalConditionalFP envIn
   let cfpOut = totalConditionalFP envOut
-  let wellFormedFP = fmap (|>=| fzero) [fpIn, fpOut, cfpIn, cfpOut]
+  let wellFormedFP = [] -- fmap (|>=| fzero) [fpIn, fpOut, cfpIn, cfpOut]
   -- Sum of top-level potential annotations
   let envSum = sumFormulas . allPotentials
   -- Assert that all potentials are well-formed
-  let wellFormed env = map (|>=| fzero) (Map.elems (allPotentials env))
+  let wellFormed env = [] -- map (|>=| fzero) (Map.elems (allPotentials env))
   -- Assert (fresh) potentials in output context are well-formed
   let wellFormedAssertions = wellFormedFP ++ wellFormed envOut
   --Assert that top-level potentials are re-partitioned
@@ -434,6 +437,7 @@ isResourceConstraint :: Constraint -> Bool
 isResourceConstraint (Subtype _ ScalarT{} ScalarT{} _) = False
 isResourceConstraint RSubtype{}    = True
 isResourceConstraint WellFormed{}  = False
+isResourceConstraint WellFormedPotential{} = True
 isResourceConstraint SharedEnv{}   = False -- should never be present by now
 isResourceConstraint SharedForm{}  = True
 isResourceConstraint ConstantRes{} = True

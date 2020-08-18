@@ -626,6 +626,7 @@ data Constraint =
   | WellFormedCond !Environment !Formula
   | WellFormedMatchCond !Environment !Formula
   | WellFormedPredicate !Environment ![Sort] !Sort !Id
+  | WellFormedPotential !Environment !Formula
   | SharedEnv !Environment !Environment !Environment 
   | SharedForm !Environment !Formula !Formula !Formula 
   | Transfer !Environment !Environment
@@ -634,16 +635,17 @@ data Constraint =
 
 
 
-envFrom (Subtype e _ _ _)           = e
-envFrom (RSubtype e _ _)            = e
-envFrom (WellFormed e _)            = e
-envFrom (WellFormedCond e _)        = e
+envFrom (Subtype e _ _ _)             = e
+envFrom (RSubtype e _ _)              = e
+envFrom (WellFormed e _)              = e
+envFrom (WellFormedCond e _)          = e
 -- envFrom (WellFormedPredicate e _ _) = e -- APs: adjusted to reflect new signature
 envFrom (WellFormedPredicate e _ _ _) = e
-envFrom (SharedEnv e _ _)           = e
-envFrom (SharedForm e _ _ _)        = e
-envFrom (ConstantRes e)             = e
-envFrom (Transfer e _)              = e
+envFrom (WellFormedPotential e _)     = e
+envFrom (SharedEnv e _ _)             = e
+envFrom (SharedForm e _ _ _)          = e
+envFrom (ConstantRes e)               = e
+envFrom (Transfer e _)                = e
 
 isCTConstraint ConstantRes{} = True
 isCTConstraint _             = False
