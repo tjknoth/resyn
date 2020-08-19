@@ -161,7 +161,6 @@ instance RMonad Z3State where
       mapM_ inferOnly vs
       optimizeCheckAndGetModel
    
-    setASTPrintMode Z3_PRINT_SMTLIB_FULL
     case m of  
       Just md -> do 
         mdStr <- modelToString md 

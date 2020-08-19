@@ -174,57 +174,57 @@ RESOURCE_VERIFICATION_BENCHMARKS = [
 
 RESOURCE_INFERENCE_POS_BENCHMARKS = [
     # res verif benches
-    ('BST-Contains',                 ['--eac', '--infer', '-f=Nonterminating']),
-    ('List-Append2',                 ['--eac', '--infer', '-f=Nonterminating']),
-    ('List-Append',                  ['--eac', '--infer', '-f=Nonterminating']),
-    ('List-Compress',                ['--eac', '--infer', '-f=Nonterminating']),
-    ('List-Cons2',                   ['--eac', '--infer', '-f=Nonterminating']),
-    ('List-Reverse',                 ['--eac', '--infer', '-f=Nonterminating']),
-    ('List-InsertSort-Coarse',       ['--eac', '--infer', '-f=Nonterminating']),
-    ('List-Subset-Sum',              ['--eac', '--infer', '-f=Nonterminating']),
-    ('List-InsertSort',              ['--eac', '--infer', '-f=Nonterminating', '--res-solver=CEGIS']),
-    ('List-InsertSort-Compares',     ['--eac', '--infer', '-f=Nonterminating']),
+    ('BST-Contains',                 ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('List-Append2',                 ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('List-Append',                  ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('List-Compress',                ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('List-Cons2',                   ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('List-Reverse',                 ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('List-InsertSort-Coarse',       ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('List-Subset-Sum',              ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('List-InsertSort',              ['--eac', '--infer=Constant', '-f=Nonterminating', '--res-solver=CEGIS']),
+    ('List-InsertSort-Compares',     ['--eac', '--infer=Constant', '-f=Nonterminating']),
 
     # RAML
-    ('RAML-BitVec',                  ['--eac', '--infer', '-f=Nonterminating']),
-    ('RAML-SizeChange',              ['--eac', '--infer', '-f=Nonterminating']),
-    ('RAML-Lists',                   ['--eac', '--infer', '-f=Nonterminating']),
-    ('RAML-Queue',                   ['--eac', '--infer', '-f=Nonterminating']),
-    ('RAML-BinaryCounter',           ['--eac', '--infer', '-f=Nonterminating']),
-    ('RAML-Compress',                ['--eac', '--infer', '-f=Nonterminating']),
+    ('RAML-BitVec',                  ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('RAML-SizeChange',              ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('RAML-Lists',                   ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('RAML-Queue',                   ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('RAML-BinaryCounter',           ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('RAML-Compress',                ['--eac', '--infer=Constant', '-f=Nonterminating']),
 
     # ICFP '20 benches
     # Quadratic
-    ('List-Nub', ['--eac', '--infer', '-f=NONTERMINATING']),
+    ('List-Nub', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
 
     # Non-Polynomial
-    # ('List-Quick-Build', ['--eac', '--infer', '-f=NONTERMINATING']),
-    ('List-Quick-Flatten', ['--eac', '--infer', '-f=NONTERMINATING']),
+    # ('List-Quick-Build', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
+    ('List-Quick-Flatten', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
 
     # Dependent benches
-    ('BST-Insert',                   ['--eac', '--infer', '-f=Nonterminating', '--res-solver=CEGIS']),
-    ('BST-Member',                   ['--eac', '--infer', '-f=Nonterminating']),
+    ('BST-Insert',                   ['--eac', '--infer=Dependent', '-f=Nonterminating', '--res-solver=CEGIS']),
+    ('BST-Member',                   ['--eac', '--infer=Dependent', '-f=Nonterminating']),
 ]
 
 RESOURCE_INFERENCE_NEG_BENCHMARKS = [
-    ('List-Pairs',                   ['--eac', '--infer', '-f=Nonterminating']),
-    ('List-Exp-Contrived',           ['--eac', '--infer', '-f=Nonterminating']),
-    ('List-Replicate',               ['--eac', '--infer', '-f=Nonterminating', '--res-solver=CEGIS']),
+    ('List-Pairs',                   ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('List-Exp-Contrived',           ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('List-Replicate',               ['--eac', '--infer=Constant', '-f=Nonterminating', '--res-solver=CEGIS']),
 
     # ICFP '20 benches
     # Quadratic
-    ('List-Quick-Sort-Quadratic',    ['--eac', '--infer', '-f=NONTERMINATING']),
-    ('List-SelectionSort',        ['--eac', '--infer', '-f=NONTERMINATING']),
-    ('List-Merge-Sort-Quadratic', ['--eac', '--infer', '-f=NONTERMINATING']),
+    ('List-Quick-Sort-Quadratic',    ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
+    ('List-SelectionSort',           ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
+    ('List-Merge-Sort-Quadratic',    ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
 
     # Non-Polynomial
-    ('List-Merge-Sort', ['--eac', '--infer', '-f=NONTERMINATING']),
-    ('List-Merge-Build', ['--eac', '--infer', '-f=NONTERMINATING']),
-    ('List-Merge-Flatten', ['--eac', '--infer', '-f=NONTERMINATING']),
+    ('List-Merge-Sort', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
+    ('List-Merge-Build', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
+    ('List-Merge-Flatten', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
 
     # RAML
-    ('RAML-SplitAndSort',            ['--eac', '--infer', '-f=Nonterminating']),
-    ('RAML-Dyadic',                  ['--eac', '--infer', '-f=Nonterminating']),
+    ('RAML-SplitAndSort',            ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('RAML-Dyadic',                  ['--eac', '--infer=Constant', '-f=Nonterminating']),
 ]
 
 RESOURCE_SYNTHESIS_BENCHMARKS = [

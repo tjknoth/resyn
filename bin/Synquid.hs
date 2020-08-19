@@ -346,10 +346,6 @@ runOnFile synquidParams explorerParams solverParams file libs = do
       -- we collect all res constraints into our state and solve these constraints
       -- at the very end.
 
-      -- TODO: This is awful for performance. Right now we check all created resource constraints
-      -- for each function as type-check it. This is good for errors, bad for performance.
-      -- We should try to not do resource checking until the very end
-
       -- We first modify our persistent typing state to add the inferred potl vars of this goal
       _Just . inferredRVars %= \x -> OMap.unionWithL (\_ -> const) x (OMap.fromList [(p, Nothing) | (p, _) <- gInferredPotlVars goal])
 
