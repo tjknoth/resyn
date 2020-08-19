@@ -111,8 +111,8 @@ generateFormula' checkMults c = do
       let fml = mkRForm Set.empty f
       embedAndProcessConstraint env fml
     Transfer env env' -> do
-      fmls <- redistribute env env' 
-      let fml = mkRForm Set.empty $ conjunction fmls
+      f <- redistribute env env' 
+      let fml = mkRForm Set.empty f
       embedAndProcessConstraint env fml
     _ -> error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
 
@@ -335,22 +335,17 @@ collectUniversals rfmls existing = do
 redistribute :: Monad s
              => Environment
              -> Environment
-             -> TCSolver s [Formula]
-redistribute envIn envOut = do
+             -> TCSolver s Formula
+redistribute envIn envOut =
   let fpIn  = envIn ^. freePotential
-  let fpOut = envOut ^. freePotential
-  let cfpIn  = totalConditionalFP envIn
-  let cfpOut = totalConditionalFP envOut
-  let wellFormedFP = [] -- fmap (|>=| fzero) [fpIn, fpOut, cfpIn, cfpOut]
-  -- Sum of top-level potential annotations
-  let envSum = sumFormulas . allPotentials
-  -- Assert that all potentials are well-formed
-  let wellFormed env = [] -- map (|>=| fzero) (Map.elems (allPotentials env))
-  -- Assert (fresh) potentials in output context are well-formed
-  let wellFormedAssertions = wellFormedFP ++ wellFormed envOut
-  --Assert that top-level potentials are re-partitioned
-  let transferAssertions = (envSum envIn |+| fpIn |+| cfpIn) |=| (envSum envOut |+| fpOut |+| cfpOut)
-  return $ transferAssertions : wellFormedAssertions
+      fpOut = envOut ^. freePotential
+      cfpIn  = totalConditionalFP envIn
+      cfpOut = totalConditionalFP envOut
+      -- Sum of top-level potential annotations
+      envSum = sumFormulas . allPotentials
+      -- Assert that top-level potentials are re-partitioned
+      transferAssertions = (envSum envIn |+| fpIn |+| cfpIn) |=| (envSum envOut |+| fpOut |+| cfpOut)
+   in return transferAssertions
 
 -- Assert that a context contains zero "free" potential
 assertZeroPotential :: Monad s
