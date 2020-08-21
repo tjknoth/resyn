@@ -197,7 +197,7 @@ fmlDocAt n fml = condHlParens (n' <= n) (
     SetLit s elems -> hlBrackets $ commaSep $ map fmlDoc elems
     Var s name -> if name == valueVarName then special name else text name
     Unknown s name -> if Map.null s then text name else hMapDoc pretty pretty s <> text name
-    WithSubst _ e -> fmlDocAt n' e
+    WithSubst s e -> if Map.null s then fmlDocAt n' e else hMapDoc pretty pretty s <> fmlDocAt n' e
     Unary op e -> pretty op <> fmlDocAt n' e
     Binary op e1 e2 -> fmlDocAt n' e1 <+> pretty op <+> fmlDocAt n' e2
     Ite e0 e1 e2 -> keyword "if" <+> fmlDoc e0 <+> keyword "then" <+> fmlDoc e1 <+> keyword "else" <+> fmlDoc e2

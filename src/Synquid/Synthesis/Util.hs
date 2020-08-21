@@ -720,10 +720,9 @@ safeAddGhostVar name t@AnyT{} env = return $ addGhostVariable name t env
 safeAddGhostVar name t env = do 
   tstate <- get 
   domain <- view (resourceArgs . rSolverDomain)
-  --return $ addGhostVariable name t env
   if isResourceVariable env tstate domain name t
     then do 
-      universalVars %= Set.insert name -- (Var (toSort (baseTypeOf t)) name)
+      universalVars %= Set.insert name
       return $ addGhostVariable name t env
     else return $ addGhostVariable name t env
 

@@ -243,14 +243,14 @@ satisfyResources oldfmls newfmls = do
   infdRVars <- use $ persistentState . inferredRVars
   let tryInfer = not $ OMap.null infdRVars
   case domain of
-    Constant -> do
+    Constant ->
       if tryInfer
         then do
           let fmls = map bodyFml rfmls
           let rvl = OMap.assocs infdRVars
           model <- runInSolver $ optimizeAndGetModel fmls rvl
           case model of
-            Nothing -> do
+            Nothing ->
               return False
             Just m' -> do
               writeLog 6 $ nest 2 (text "Solved + inferred with model") </> nest 6 (text (modelStr m'))
@@ -404,30 +404,29 @@ getValueVar env =
 -- generate fresh value var if it's present
 -- then traverse formula, generating de bruijns as needed (and passing upwards)
 getLocals :: Monad s => Environment -> [String] -> Formula -> TCSolver s (Set Formula)
-getLocals env fList f = do
-  -- subst <- renameValueVar env
-  let vs = getValueVar env
-  getLocals' fList vs f
+getLocals env univs = getLocals' univs (getValueVar env)
 
 getLocals' :: Monad s => [String] -> Set Formula -> Formula -> TCSolver s (Set Formula) -- APs
-getLocals' fList subst (Var sort id) 
-  | id `elem` fList = -- do
-      return $ Set.insert (Var sort id) subst
+getLocals' univs locals (Var sort id) 
+  | id `elem` univs = -- do
+      return $ Set.insert (Var sort id) locals
       -- let var' = Var sort id -- <$> freshVersion id
-      -- return $ Map.insertWith (\_ x -> x) id var' subst
-  | otherwise = return subst
-getLocals' fList subst (Unary _ fml) =
-  getLocals' fList subst fml
-getLocals' fList subst (Binary _ fml1 fml2) =
-  Set.union <$> getLocals' fList subst fml1 <*> getLocals' fList subst fml2
-getLocals' fList subst (Ite i t e) =
-  Set.union <$> (Set.union <$> getLocals' fList subst i <*> 
-    getLocals' fList subst t) <*> getLocals' fList subst e
-getLocals' fList subst (Pred _ _ fmls) = 
-  Set.unions <$> mapM (getLocals' fList subst) fmls
-getLocals' fList subst (Cons _ _ fmls) = 
-  Set.unions <$> mapM (getLocals' fList subst) fmls
-getLocals' _ subst x = return subst
+      -- return $ Map.insertWith (\_ x -> x) id var' locals
+  | otherwise = return locals
+getLocals' univs locals (WithSubst s fml) =
+  Set.union (Set.fromList (filter isVar (Map.elems s))) <$> getLocals' univs locals fml -- TODO: in general it might be necessary to reason about the universals. However, univs should always just be some de bruijn indices.
+getLocals' univs locals (Unary _ fml) =
+  getLocals' univs locals fml
+getLocals' univs locals (Binary _ fml1 fml2) =
+  Set.union <$> getLocals' univs locals fml1 <*> getLocals' univs locals fml2
+getLocals' univs locals (Ite i t e) =
+  Set.union <$> (Set.union <$> getLocals' univs locals i <*> 
+    getLocals' univs locals t) <*> getLocals' univs locals e
+getLocals' univs locals (Pred _ _ fmls) = 
+  Set.unions <$> mapM (getLocals' univs locals) fmls
+getLocals' univs locals (Cons _ _ fmls) = 
+  Set.unions <$> mapM (getLocals' univs locals) fmls
+getLocals' _ locals x = return locals
 
 
 -- Generate sharing constraints, given a type and the two types

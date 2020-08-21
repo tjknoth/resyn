@@ -407,8 +407,10 @@ addRefinementToLastSch fml = fmap (addRefinementToLast fml)
 
 -- | Apply variable substitution in all formulas inside a type
 substituteInType :: (Id -> Bool) -> Substitution -> RType -> RType
-substituteInType isBound subst (ScalarT baseT fml pot) = ScalarT (substituteBase subst baseT) (substitute subst fml) (WithSubst subst pot)
+substituteInType isBound subst (ScalarT baseT fml pot) = ScalarT (substituteBase subst baseT) (substitute subst fml) (substitutePotential subst pot)
   where
+    substitutePotential s (WithSubst s' f) = WithSubst (s' `composeSubstitutions` s) (substitute s f)
+    substitutePotential s f                = WithSubst s f
     -- TODO: does this make sense?
     substituteBase subst (TypeVarT oldSubst a m) = TypeVarT oldSubst a (substitute subst m)
       -- Looks like pending substitutions on types are not actually needed, since renamed variables are always out of scope

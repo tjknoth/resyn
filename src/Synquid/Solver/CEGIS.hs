@@ -267,7 +267,7 @@ applyPolynomial' mkPolynomial subs f =
         Just p  -> 
           let p' = substPolynomial subs p
            in mkPolynomial p' 
-    WithSubst p e -> WithSubst p <$> sub (subs `composeSubstitutions` p) e
+    WithSubst p e -> sub (p `composeSubstitutions` subs) e
     SetLit s fs   -> SetLit s <$> mapM (sub subs) fs
     Unary op f    -> Unary op <$> sub subs f
     Binary op f g -> Binary op <$> sub subs f <*> sub subs g 
