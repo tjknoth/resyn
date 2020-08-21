@@ -407,7 +407,7 @@ addRefinementToLastSch fml = fmap (addRefinementToLast fml)
 
 -- | Apply variable substitution in all formulas inside a type
 substituteInType :: (Id -> Bool) -> Substitution -> RType -> RType
-substituteInType isBound subst (ScalarT baseT fml pot) = ScalarT (substituteBase subst baseT) (substitute subst fml) (substitute subst pot)
+substituteInType isBound subst (ScalarT baseT fml pot) = ScalarT (substituteBase subst baseT) (substitute subst fml) (WithSubst subst pot)
   where
     -- TODO: does this make sense?
     substituteBase subst (TypeVarT oldSubst a m) = TypeVarT oldSubst a (substitute subst m)

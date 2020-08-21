@@ -265,7 +265,7 @@ applyPolynomial' mkPolynomial subs f =
       case Map.lookup x polys of 
         Nothing -> return v 
         Just p  -> 
-          let p'      = substPolynomial subs p
+          let p' = substPolynomial subs p
            in mkPolynomial p' 
     WithSubst p e -> WithSubst p <$> sub (subs `composeSubstitutions` p) e
     SetLit s fs   -> SetLit s <$> mapM (sub subs) fs
