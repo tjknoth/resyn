@@ -160,7 +160,7 @@ resolveDeclaration (FuncDecl funcName typeSchema) = do
       return $ ScalarT dt ref (Var IntS pVar)
     gt (FunctionT i d c cs) = do
       dom <- gt d
-      fnArgs %= (:) (Var IntS i)
+      fnArgs %= (:) (Var (getArgSort dom) i)
       cod <- gt c
       fnArgs %= tail
       return $ FunctionT i dom cod cs
@@ -270,7 +270,7 @@ resolveSignatures (FuncDecl name _)  = do
     go og@(ScalarT _ _ _) = return og
     go (FunctionT name dom cod cost) = do
       dom' <- go dom
-      fnArgs %= (:) (Var IntS name)
+      fnArgs %= (:) (Var (getArgSort dom) name)
       cod' <- go cod
       fnArgs %= tail
       return $ FunctionT name dom' cod' cost

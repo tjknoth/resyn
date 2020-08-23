@@ -58,7 +58,7 @@ import Debug.Pretty.Simple
 -- | Initial typing state in the initial environment @env@ given @goal@
 initTypingState :: MonadHorn s => Goal -> Maybe PersistentTState -> s TypingState
 initTypingState goal mpts = do
-  let env = gEnvironment goal
+  let env = pTraceShow goal $ gEnvironment goal
   initCand <- initHornSolver env
   -- If we're doing inference, our initial typing state has to contain
   -- the resource vars that we'll later use for inference.
@@ -80,6 +80,13 @@ initTypingState goal mpts = do
   }
 
   let pts = maybe dpts id mpts
+  -- We have to create this auxiliary env for our well formed potential
+  -- constraints on our inferred potl vars, so that the proper preconditions
+  -- on our fn args will be in our environment.
+  -- TODO: should we have a different env for each rvar depending on what
+  -- variables it uses?
+  let env' = foldl (\acc (ident, ty) -> addPolyConstant ident (Monotype ty) acc) env
+           $ collectArgs $ toMonotype $ gSpec goal
 
   return TypingState {
     _persistentState = pts,
@@ -93,16 +100,17 @@ initTypingState goal mpts = do
     _matchCases = Set.empty,
     _cegisState = initCEGISState,
     _solveResConstraints = OMap.null (_inferredRVars pts) || gInferSolve goal,
-    -- We don't add these constraints since well-formedness constraints
-    -- break List-Replicate
-    -- _simpleConstraints = [WellFormedPotential env (Var IntS p) | (p, _) <- rvars],
-    _simpleConstraints = [],
+    _simpleConstraints = [WellFormedPotential env' (Var IntS p) | (p, _) <- rvars],
     _hornClauses = [],
     _consistencyChecks = [],
     _errorContext = (noPos, empty),
     _universalVars = initialFormulas env, 
     _universalMeasures = Set.empty
   }
+
+  where
+    collectArgs (FunctionT ident ty rest _) = (ident, ty):collectArgs rest
+    collectArgs _ = []
 
 -- Sorta hacky to make sure we look at _v as well as other relevant universally quantified
 --   expressions

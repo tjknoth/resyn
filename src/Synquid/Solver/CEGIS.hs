@@ -73,17 +73,6 @@ optimizeWithCEGIS n univs rfmls pvars = do
   let oneBetter = RFormula ftrue () Set.empty Set.empty
                 $ if null ltcs then ftrue else disjunction ltcs
 
-  -- TODO: for some reason there aren't any constraints which
-  -- limit us from using negative values for polynomials.
-  -- We manually add well-formedness constraints here.
-  --
-  -- TODO: this breaks non-eac inference
-  let wellFormed = RFormula ftrue () Set.empty Set.empty
-                 $ conjunction
-                 $ catMaybes
-                 $ fmap (upperBoundToConstraint (|>=|))
-                 $ [(x, Just fzero) | (x, _) <- pvars]
-
   let rfmls' = rfmls ++ []
   
   sat <- solveWithCEGIS n univs rfmls'
