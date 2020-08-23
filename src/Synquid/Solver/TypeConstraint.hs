@@ -93,6 +93,9 @@ initTypingState goal mpts = do
     _matchCases = Set.empty,
     _cegisState = initCEGISState,
     _solveResConstraints = OMap.null (_inferredRVars pts) || gInferSolve goal,
+    -- We don't add these constraints since well-formedness constraints
+    -- break List-Replicate
+    -- _simpleConstraints = [WellFormedPotential env (Var IntS p) | (p, _) <- rvars],
     _simpleConstraints = [],
     _hornClauses = [],
     _consistencyChecks = [],

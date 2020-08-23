@@ -150,12 +150,13 @@ instance RMonad Z3State where
 
     -- This gives wonky optimized values:
     (_, m) <- local $ do
-      forM_ fmls $ \fml -> do
+      forM_ (zip [1..] fmls) $ \(i, fml) -> do
         fmlAst <- fmlToAST fml
         -- For some reason this results in wonky inferred values:
-        -- symb <- mkStringSymbol $ "form" ++ show i
+        -- astS <- astToString fmlAst
+        -- symb <- mkStringSymbol $ "form" ++ show i ++ ": " ++ astS
         -- v <- mkBoolVar symb
-        -- optimizeAssertAndTrack fmlAst fmlAst
+        -- optimizeAssertAndTrack fmlAst v
         optimizeAssert fmlAst
 
       mapM_ inferOnly vs
@@ -165,7 +166,13 @@ instance RMonad Z3State where
       Just md -> do 
         mdStr <- modelToString md 
         return $ Just $ SMTModel md mdStr
-      Nothing -> return Nothing
+      Nothing -> do
+        -- debug 2 (text "SMT COULDN'T FIND MODEL; CORE:") $ return ()
+        -- ucore <- optimizeGetUnsatCore
+        -- asts <- mapM astToString ucore
+        -- forM_ asts $ \s -> do
+        --   debug 2 (text s) $ return s
+        return Nothing
     where
       inferOnly (name, _) = fmlToAST (Var IntS name) >>= optimizeMinimize
 

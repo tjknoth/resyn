@@ -204,12 +204,12 @@ RESOURCE_INFERENCE_POS_BENCHMARKS = [
     # Dependent benches
     ('BST-Insert',                   ['--eac', '--infer=Dependent', '-f=Nonterminating', '--res-solver=CEGIS']),
     ('BST-Member',                   ['--eac', '--infer=Dependent', '-f=Nonterminating']),
+    ('List-Replicate',               ['--eac', '--infer=Dependent', '-f=Nonterminating', '--res-solver=CEGIS']),
 ]
 
 RESOURCE_INFERENCE_NEG_BENCHMARKS = [
     ('List-Pairs',                   ['--eac', '--infer=Constant', '-f=Nonterminating']),
     ('List-Exp-Contrived',           ['--eac', '--infer=Constant', '-f=Nonterminating']),
-    ('List-Replicate',               ['--eac', '--infer=Constant', '-f=Nonterminating', '--res-solver=CEGIS']),
 
     # ICFP '20 benches
     # Quadratic

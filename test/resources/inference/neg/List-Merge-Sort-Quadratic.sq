@@ -28,7 +28,6 @@ merge = \ps. \qs.
             then Cons x (Cons y (merge xs ys))
             else Cons y (Cons x (merge xs ys))
 
-
 mergeSort :: List a <{1}> -> List a <{0}>
 mergeSort = \xs.
   match xs with
