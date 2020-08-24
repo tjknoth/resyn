@@ -217,7 +217,7 @@ cut e = do
 safeAddVariable :: Monad s => String -> RType -> Environment -> Explorer s Environment
 safeAddVariable x t@FunctionT{} env = return $ addVariable x t env
 safeAddVariable x typ env = do
-  (typingState . universalVars) %= Set.insert x -- (Var (toSort (baseTypeOf typ)) x)
+  (typingState . persistentState . universalVars) %= Set.insert x -- (Var (toSort (baseTypeOf typ)) x)
   return $ addVariable x typ env
 
 -- | Synthesize auxiliary goals accumulated in @auxGoals@ and store the result in @solvedAuxGoals@
@@ -722,7 +722,7 @@ safeAddGhostVar name t env = do
   domain <- view (resourceArgs . rSolverDomain)
   if isResourceVariable env tstate domain name t
     then do 
-      universalVars %= Set.insert name
+      persistentState . universalVars %= Set.insert name -- (Var (toSort (baseTypeOf t)) name)
       return $ addGhostVariable name t env
     else return $ addGhostVariable name t env
 

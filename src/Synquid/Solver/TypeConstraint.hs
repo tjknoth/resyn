@@ -74,9 +74,10 @@ initTypingState goal mpts = do
     _idCount = Map.empty,
     _versionCount = Map.empty,
     _resourceConstraints = [],
-    -- TODO: we assume all args are ints here; is that okay?
     _resourceVars = Map.fromList rvars,
-    _inferredRVars = OMap.fromList [(p, Nothing) | (p, _) <- rvars]
+    _inferredRVars = OMap.fromList [(p, Nothing) | (p, _) <- rvars],
+    _universalVars = Set.empty,
+    _universalMeasures = Set.empty
   }
 
   let pts = maybe dpts id mpts
@@ -89,7 +90,7 @@ initTypingState goal mpts = do
            $ collectArgs $ toMonotype $ gSpec goal
 
   return TypingState {
-    _persistentState = pts,
+    _persistentState = over universalVars (Set.union (initialFormulas env)) pts,
     _typingConstraints = [],
     _typeAssignment = Map.empty,
     _predAssignment = Map.empty,
@@ -103,9 +104,7 @@ initTypingState goal mpts = do
     _simpleConstraints = [WellFormedPotential env' (Var IntS p) | (p, _) <- rvars],
     _hornClauses = [],
     _consistencyChecks = [],
-    _errorContext = (noPos, empty),
-    _universalVars = initialFormulas env, 
-    _universalMeasures = Set.empty
+    _errorContext = (noPos, empty)
   }
 
   where
