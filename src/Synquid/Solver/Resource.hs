@@ -153,7 +153,7 @@ embedConstraint :: (MonadHorn s, RMonad s)
                 -> TCSolver s RawRFormula
 embedConstraint env rfml = do 
   -- Get assumptions related to all non-ghost scalar variables in context
-  vars <- use universalVars
+  vars <- use (persistentState . universalVars)
   -- Small hack -- need to ensure we grab the assumptions related to _v
   -- Note that sorts DO NOT matter here -- the embedder will ignore them.
   let vars' = Set.insert (Var AnyS valueVarName) $ Set.map (Var AnyS) vars
@@ -197,13 +197,16 @@ replaceCons f@Cons{} = mkFuncVar f
 replaceCons f = f
 
 filterAssumptions :: MonadHorn s => KnownRFormula -> TCSolver s KnownRFormula
-filterAssumptions rfml = do
+filterAssumptions rfml = -- do
+  return $ over knownAssumptions (Set.filter (not . hasCtor)) rfml
+  {-
   shouldFilter <- usesSygus
   let rfml' = 
         if shouldFilter
           then over knownAssumptions (Set.filter (not . hasCtor)) rfml
           else rfml
   return rfml'
+  -}
 
 -- apply variable substitutions
 getConstructors :: MonadHorn s => KnownRFormula -> TCSolver s KnownRFormula
@@ -281,7 +284,7 @@ deployHigherOrderSolver SYGUS oldfmls newfmls = do
   let rfmls = oldfmls ++ newfmls
   let runInSolver = lift . lift . lift
   logfile <- view (resourceArgs . sygusLog)
-  ufmls <- map (Var IntS) . Set.toList <$> use universalVars
+  ufmls <- map (Var IntS) . Set.toList <$> use (persistentState . universalVars)
   universals <- collectUniversals rfmls ufmls
   rvars <- use $ persistentState . resourceVars
   env <- use initEnv 
@@ -292,7 +295,7 @@ deployHigherOrderSolver SYGUS oldfmls newfmls = do
 deployHigherOrderSolver _ oldfmls newfmls = do
   let rfmls = oldfmls ++ newfmls
   let runInSolver = lift . lift . lift
-  ufmls <- map (Var IntS) . Set.toList <$> use universalVars
+  ufmls <- map (Var IntS) . Set.toList <$> use (persistentState . universalVars)
   universals <- collectUniversals rfmls ufmls
   cMax <- view (resourceArgs . cegisBound) 
   cstate <- updateCEGISState
@@ -494,8 +497,8 @@ usesSygus = do
 
 logUniversals :: Monad s => TCSolver s ()
 logUniversals = do 
-  uvars <- Set.toList <$> use universalVars
-  ufuns <- Set.toList <$> use universalMeasures
+  uvars <- Set.toList <$> use (persistentState . universalVars)
+  ufuns <- Set.toList <$> use (persistentState . universalMeasures)
   capps <- Set.toList <$> use matchCases
   writeLog 3 $ indent 2 $ text "Over universally quantified variables:"
     <+> hsep (map pretty uvars) <+> text "and functions:"

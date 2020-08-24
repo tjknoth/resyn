@@ -75,7 +75,9 @@ initTypingState goal mpts = do
     _versionCount = Map.empty,
     _resourceConstraints = [],
     _resourceVars = Map.fromList [(p, []) | p <- rvars],
-    _inferredRVars = OMap.fromList [(p, Nothing) | p <- rvars]
+    _inferredRVars = OMap.fromList [(p, Nothing) | p <- rvars],
+    _universalVars = initialFormulas env, 
+    _universalMeasures = Set.empty
   }
 
   let pts = maybe dpts id mpts
@@ -95,9 +97,7 @@ initTypingState goal mpts = do
     _simpleConstraints = [],
     _hornClauses = [],
     _consistencyChecks = [],
-    _errorContext = (noPos, empty),
-    _universalVars = initialFormulas env, 
-    _universalMeasures = Set.empty
+    _errorContext = (noPos, empty)
   }
 
 -- Sorta hacky to make sure we look at _v as well as other relevant universally quantified
