@@ -58,7 +58,7 @@ import Debug.Pretty.Simple
 -- | Initial typing state in the initial environment @env@ given @goal@
 initTypingState :: MonadHorn s => Goal -> Maybe PersistentTState -> s TypingState
 initTypingState goal mpts = do
-  let env = pTraceShow goal $ gEnvironment goal
+  let env = gEnvironment goal
   initCand <- initHornSolver env
   -- If we're doing inference, our initial typing state has to contain
   -- the resource vars that we'll later use for inference.
