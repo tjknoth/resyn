@@ -348,6 +348,7 @@ runOnFile synquidParams explorerParams solverParams file libs = do
 
       -- We first modify our persistent typing state to add the inferred potl vars of this goal
       _Just . inferredRVars %= \x -> OMap.unionWithL (\_ -> const) x (OMap.fromList [(p, Nothing) | (p, _) <- gInferredPotlVars goal])
+      _Just . resourceVars %= (flip Map.union) (Map.fromList $ gInferredPotlVars goal)
 
       -- We first get our persistent typing state and pass it through
       mpts <- get
