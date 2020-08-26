@@ -197,6 +197,7 @@ RESOURCE_INFERENCE_POS_BENCHMARKS = [
     # Quadratic
     ('List-Nub', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
     ('List-Merge-Sort-Quadratic',    ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
+    ('List-Merge-Flatten', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
 
     # Non-Polynomial
     # ('List-Quick-Build', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
@@ -220,7 +221,6 @@ RESOURCE_INFERENCE_NEG_BENCHMARKS = [
     # Non-Polynomial
     ('List-Merge-Sort', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
     ('List-Merge-Build', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
-    ('List-Merge-Flatten', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
 
     # RAML
     ('RAML-SplitAndSort',            ['--eac', '--infer=Constant', '-f=Nonterminating']),

@@ -17,7 +17,7 @@ insert = \x. \l.
             Tuple vals1 key1 ->
               if (key1 == keyX)
                 then tick 1 (Cons (Tuple (Cons valX vals1) key1) ls)
-                else tick 1 (Cons (Tuple vals1 key1) (insert x ls))
+                else tick 1 (Cons (Tuple vals1 key1) (insert (Tuple valX keyX) ls))
 
 -- let rec insert x l =
 -- 	let (valX, keyX) = x in
