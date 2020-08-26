@@ -5,7 +5,7 @@ module Synquid.Solver.Resource (
   -- checkResources,
   solveResourceConstraints,
   isResourceConstraint,
-  simplifyRCs,
+  processRCs,
   allRMeasures,
   partitionType,
   getAnnotationStyle,
@@ -41,11 +41,11 @@ import qualified Z3.Monad as Z3
 import Debug.Pretty.Simple
 
 -- | Process, but do not solve, a set of resource constraints
-simplifyRCs :: (MonadHorn s, MonadSMT s, RMonad s)
-            => [Constraint]
-            -> TCSolver s ()
-simplifyRCs [] = return ()
-simplifyRCs constraints = do
+processRCs :: (MonadHorn s, MonadSMT s, RMonad s)
+           => [Constraint]
+           -> TCSolver s ()
+processRCs [] = return ()
+processRCs constraints = do
   rcs <- mapM generateFormula (filter isResourceConstraint constraints)
   persistentState . resourceConstraints %= (++ rcs)
 
@@ -68,6 +68,7 @@ solveResourceConstraints oldConstraints constraints = do
   return $ if b
     then Just constraintList -- $ Just $ if hasUniversals
     else Nothing
+
 
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 --    If there are no universal quantifiers, we can cache the generated formulas

@@ -19,10 +19,10 @@ split = \l.
 merge :: List a <{0}> -> List a <{0}> -> List a <{0}> 
 merge = \ps. \qs.
   match ps with
-    Nil       -> qs
+    Nil       -> qs 
     Cons x xs ->
       match qs with
-        Nil       -> ps
+        Nil       -> Cons x xs 
         Cons y ys -> 
           if x <= y
             then Cons x (Cons y (merge xs ys))
