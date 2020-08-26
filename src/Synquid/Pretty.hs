@@ -59,7 +59,8 @@ module Synquid.Pretty (
   -- * Miscellaneous
   prettyConjuncts,
   prettyScalarTypes,
-  simplePrettyConstraint
+  simplePrettyConstraint,
+  printable
 ) where
 
 import Synquid.Logic
@@ -459,6 +460,9 @@ instance Pretty Goal where
 
 prettySpec g@(Goal name _ _ _ _ _ _ _ _) = text name <+> operator "::" <+> pretty (unresolvedSpec g)
 prettySolution (Goal name _ _ _ _ _ _ _ _) prog = text name <+> operator "=" </> pretty prog
+
+printable WellFormedPotential{} = False
+printable _ = True
 
 {- Input language -}
 
