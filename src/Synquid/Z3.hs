@@ -6,7 +6,8 @@ module Synquid.Z3 (
   evalZ3State,
   modelGetAssignment,
   function,
-  typeConstructor
+  typeConstructor,
+  z3LitToInt
 ) where
 
 import Synquid.Logic
@@ -149,7 +150,7 @@ instance RMonad Z3State where
     -- So we just infer everything every time
 
     -- This gives wonky optimized values:
-    (_, m) <- local $ do
+    (_, m) <- optimizeLocal $ do
       forM_ (zip [1..] fmls) $ \(i, fml) -> do
         fmlAst <- fmlToAST fml
         -- For some reason this results in wonky inferred values:
@@ -609,3 +610,18 @@ optimizeCheckAndGetModel = do
                _   -> return Nothing
   return (res, mbModel)
 
+-- | Run a query and restore the initial logical optimizing context.
+--
+-- This is a shorthand for 'optimizePush', run the query, and 'optimizePop'.
+optimizeLocal :: MonadOptimize z3 => z3 a -> z3 a
+optimizeLocal q = do
+  optimizePush
+  r <- q
+  optimizePop
+  return r
+
+-- | Converts a Z3 literal to an int.
+z3LitToInt :: Formula -> Formula
+z3LitToInt (Z3Lit _ _ s) = IntLit (read s :: Int)
+z3LitToInt x = x
+  

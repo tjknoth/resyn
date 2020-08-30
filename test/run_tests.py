@@ -192,6 +192,7 @@ RESOURCE_INFERENCE_POS_BENCHMARKS = [
     ('RAML-Queue',                   ['--eac', '--infer=Constant', '-f=Nonterminating']),
     ('RAML-BinaryCounter',           ['--eac', '--infer=Constant', '-f=Nonterminating']),
     ('RAML-Compress',                ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('RAML-SplitAndSort',            ['--eac', '--infer=Constant', '-f=Nonterminating']),
 
     # ICFP '20 benches
     # Quadratic
@@ -223,7 +224,6 @@ RESOURCE_INFERENCE_NEG_BENCHMARKS = [
     ('List-Merge-Build', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
 
     # RAML
-    ('RAML-SplitAndSort',            ['--eac', '--infer=Constant', '-f=Nonterminating']),
     ('RAML-Dyadic',                  ['--eac', '--infer=Constant', '-f=Nonterminating']),
 ]
 

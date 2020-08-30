@@ -138,7 +138,7 @@ solveTypeConstraints = do
   eac <- view (resourceArgs . enumerate) 
   solve <- use solveResConstraints
   when res $
-    if eac || not solve
+    if eac
       then processRCs scs
       else checkResources scs 
 
