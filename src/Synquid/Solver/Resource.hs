@@ -22,6 +22,7 @@ import Synquid.Solver.CEGIS
 import Synquid.Solver.Types
 import Synquid.Synthesis.Util hiding (writeLog)
 import Synquid.Solver.Sygus
+import Synquid.Z3 (z3LitToInt)
 
 import           Data.Set (Set)
 import qualified Data.Set as Set
@@ -252,15 +253,47 @@ satisfyResources oldfmls newfmls = do
         then do
           let fmls = map bodyFml rfmls
           let rvl = OMap.assocs infdRVars
-          model <- runInSolver $ optimizeAndGetModel fmls rvl
-          case model of
+
+          ticks <- use $ persistentState . tickValues
+
+          let isMult ('Y':_) = True
+              isMult _       = False
+
+          let tickZeros = [Var IntS t |=| fzero | (t, _) <- Map.toList ticks]
+          let potlZeros = [Var IntS p |=| fzero | (p, _) <- rvl, not $ isMult p]
+
+          let mults = filter (isMult . fst) rvl
+          -- let fmls1 = fmls
+          -- let fmls1 = fmap (substitute subst1) fmls
+          let fmls1 = fmls ++ tickZeros ++ potlZeros
+          
+          model1 <- runInSolver $ optimizeAndGetModel fmls1 mults
+          case model1 of
             Nothing ->
               return False
-            Just m' -> do
-              writeLog 6 $ nest 2 (text "Solved + inferred with model") </> nest 6 (text (modelStr m'))
-              vs' <- runInSolver $ modelGetAssignment (fmap fst rvl) m'
-              persistentState . inferredRVars %= OMap.unionWithR (\_ l _ -> l) (OMap.fromList . Map.toList . fmap Just . unRSolution $ vs')
-              return True
+            Just m1 -> do
+              -- We insert our inferred multiplicities
+              writeLog 1 $ nest 2 (text "Inferred multiplicities with model") </> nest 6 (text (modelStr m1))
+              vs1 <- runInSolver $ modelGetAssignment (fmap fst mults) m1
+              persistentState . inferredRVars %= OMap.unionWithR (\_ l _ -> l) (OMap.fromList . Map.toList . fmap Just . unRSolution $ vs1)
+
+              -- Then we solve with our new multiplicity values.
+              let multVals = [Var IntS m |=| IntLit 1 | (m, v) <- Map.toList $ unRSolution vs1, isMult m]
+              let tickVals = [Var IntS t |=| v | (t, v) <- Map.toList ticks]
+
+              let potls = filter (not . isMult . fst) rvl
+              let fmls2 = fmls ++ multVals ++ tickVals
+
+              model2 <- runInSolver $ optimizeAndGetModel fmls2 potls
+              case model2 of
+                Nothing -> return False
+                Just m2 -> do
+                  -- Insert our potentials
+                  writeLog 1 $ nest 2 (text "Inferred multiplicities with model") </> nest 6 (text (modelStr m2))
+                  vs2 <- runInSolver $ modelGetAssignment (fmap fst potls) m2
+                  persistentState . inferredRVars %= OMap.unionWithR (\_ l _ -> l) (OMap.fromList . Map.toList . fmap Just . unRSolution $ vs2)
+                  
+                  return True
         else do
           let fmls = map bodyFml rfmls
           model <- runInSolver $ solveAndGetModel fmls
@@ -317,7 +350,14 @@ deployHigherOrderSolver _ oldfmls newfmls = do
       -- We get our inferred variables from our inferred map, but we set snd to
       -- Nothing to reset our upper bounds for optimizeWithCEGIS
       let rvl = [(x, Nothing) | (x, _) <- OMap.assocs infdRVars]
-      let go = optimizeWithCEGIS cMax universals rfmls rvl
+      ticks <- use $ persistentState . tickValues
+
+      let isMult ('Y':_) = True
+          isMult _       = False
+
+      let subst1 = Map.fromList
+                 $ [(t, v) | (t, v) <- Map.toList ticks]
+      let go = optimizeWithCEGIS cMax universals (fmap (over rconstraints $ substitute subst1) rfmls) rvl
       (opt, cstate') <- runInSolver $ runCEGIS go cstate
       sat <- case opt of
                   Just m -> do
@@ -397,7 +437,7 @@ getValueVar :: Environment -> Set Formula
 getValueVar env = 
   let sortFrom = toSort . baseTypeOf . toMonotype in
   case Map.lookup valueVarName (symbolsOfArity 0 env) of
-    Nothing -> Set.empty
+    Nothing -> Set.empty
     Just sch -> Set.singleton $ Var (sortFrom sch) valueVarName
 
 -- generate fresh value var if it's present

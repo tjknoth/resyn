@@ -327,6 +327,13 @@ freshResAnnotation env vtype prefix = do
   modify $ addTypingConstraint $ WellFormedPotential env' fresh
   return fresh
 
+-- | Add a symbolic tick variable and record its value.
+freshTick :: Monad s => Int -> TCSolver s Formula
+freshTick v = do
+  x <- freshId "k"
+  persistentState . tickValues %= Map.insert x (IntLit v)
+  return $ Var IntS x
+
 -- | 'schFreshPotentials' @env sch r@ : Replace potentials in schema @sch@ by unwrapping the foralls.
 --    If @r@, recursively replace potential annotations in the entire type. Otherwise, just replace top-level annotations.
 schFreshPotentials :: MonadHorn s

@@ -154,6 +154,11 @@ resolveDeclaration (FuncDecl funcName typeSchema) = do
       fargs <- use fnArgs
       pVar <- freshInferredPotl funcName "I" fargs
       return $ ScalarT (DatatypeT di tyargs' absps) ref (Var IntS pVar)
+    gt (ScalarT (TypeVarT subst varn _) ref _) = do
+      fargs <- use fnArgs
+      mVar <- freshInferredPotl funcName "Y" fargs
+      pVar <- freshInferredPotl funcName "I" fargs
+      return $ ScalarT (TypeVarT subst varn (Var IntS mVar)) ref (Var IntS pVar)
     gt (ScalarT dt ref _) = do
       fargs <- use fnArgs
       pVar <- freshInferredPotl funcName "I" fargs

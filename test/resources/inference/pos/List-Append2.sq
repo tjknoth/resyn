@@ -15,13 +15,13 @@ measure elems :: List a -> Set a where
   Cons x xs -> [x] + elems xs  
 
 -- append xs ys requires memory proportional to the length of xs
-append :: xs: List {a| |1} -> ys: List a -> {List a | len _v == len xs + len ys && elems _v == elems xs + elems ys}
+append :: xs: List {1**a| |1} -> ys: List {1**a} -> {List 1**a | len _v == len xs + len ys && elems _v == elems xs + elems ys}
 append = \xs. \ys.
   match xs with
     Nil -> ys
     Cons z zs -> Cons z (tick 1 (append zs ys))
 
 -- append xs ys requires memory proportional to the length of xs
-append2 :: xs: List {a| |0} -> ys: List {a| |2} -> zs: List {a| |1} -> {List a | len _v == len xs + len ys + len zs && elems _v == elems xs + elems ys + elems zs}
+append2 :: xs: List {0**a| |0} -> ys: List {0**a| |2} -> zs: List {0**a| |1} -> {List 0**a | len _v == len xs + len ys + len zs && elems _v == elems xs + elems ys + elems zs}
 append2 = \xs. \ys. \zs. 
   append (append ys zs) xs

@@ -81,6 +81,7 @@ data PersistentTState = PersistentTState
   , _resourceConstraints :: [ProcessedRFormula]  -- ^ Constraints relevant to resource analysis
   , _resourceVars :: Map Id [Formula]            -- ^ Set of variables created to replace potential/multiplicity annotations; maps from name of potl var to arguments the potl var depends on
   , _inferredRVars :: PotlSubstitution           -- ^ A map from the id of an inferred variable to the formula we think it has, if it's already been inferred
+  , _tickValues :: Map Id Formula                -- ^ A map from a symbolic tick variable to its value, as specified in the source file
   , _universalVars :: Set Id                     -- ^ Set of universally quantified resource expressions, if there are any
   , _universalMeasures :: Set Formula            -- ^ Set of universally quantified measure applications, in string form
   } deriving (Show)

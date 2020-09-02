@@ -301,11 +301,11 @@ reconstructE' env typ (PSymbol name) =
   case lookupSymbol name (arity typ) (hasSet typ) env of
     Nothing -> throwErrorWithDescription $ text "Not in scope:" </> text name
     Just sch -> retrieveAndCheckVarType name sch typ env 
-reconstructE' env typ (PTick c body) = 
-  let env' = over freePotential (`subtractFormulas` IntLit c) env in
-  do 
-    pBody' <- inContext (\p -> Program (PTick c uHole) typ) $ reconstructE env' typ body
-    return $ Program (PTick c pBody') (typeOf pBody') 
+reconstructE' env typ (PTick c body) = do
+  t <- runInSolver $ freshTick c
+  let env' = over freePotential (`subtractFormulas` t) env
+  pBody' <- inContext (\p -> Program (PTick c uHole) typ) $ reconstructE env' typ body
+  return $ Program (PTick c pBody') (typeOf pBody') 
 reconstructE' env typ p@(PApp iFun iArg) = do
   x <- runInSolver $ freshVar env "x"
   let fp = env ^. freePotential

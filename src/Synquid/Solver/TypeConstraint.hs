@@ -63,12 +63,6 @@ initTypingState goal mpts = do
   -- If we're doing inference, our initial typing state has to contain
   -- the resource vars that we'll later use for inference.
   let rvars = gInferredPotlVars goal
-  -- let dpts = PersistentTState {
-  --   _idCount = Map.empty,
-  --   _resourceConstraints = [],
-  --   _resourceVars = Map.fromList [(p, []) | p <- rvars],
-  --   _inferredRVars = OMap.fromList [(p, Nothing) | p <- rvars],
-  --   }
 
   let dpts = PersistentTState {
     _idCount = Map.empty,
@@ -76,6 +70,7 @@ initTypingState goal mpts = do
     _resourceConstraints = [],
     _resourceVars = Map.fromList rvars,
     _inferredRVars = OMap.fromList [(p, Nothing) | (p, _) <- rvars],
+    _tickValues = Map.empty,
     _universalVars = Set.empty,
     _universalMeasures = Set.empty
   }
@@ -770,6 +765,11 @@ writeLog level msg = do
 
 
 -- | Check resource bounds: attempt to find satisfying expressions for multiplicity and potential annotations
+-- | For inference, because multiplicities are independent from potentials, we can do this in two stages:
+-- | - We first solve assuming all ticks and top-level inferred potl vars are 0,
+-- |   and attempt to infer values for our multiplicity variables.
+-- | - Then afterwards, we take these multiplicity variable values, create new equality constraints to
+-- |   set their values to what we inferred, then solve for our top-level inferred potl vars.
 checkResources :: (MonadHorn s, MonadSMT s, RMonad s)
                => [Constraint]
                -> TCSolver s ()
@@ -777,7 +777,10 @@ checkResources [] = return ()
 checkResources constraints = do
   ps <- use persistentState
   let accConstraints = ps ^. resourceConstraints
-  newC <- solveResourceConstraints accConstraints (filter isResourceConstraint constraints)
+  let rcs = filter isResourceConstraint constraints
+
+  newC <- solveResourceConstraints accConstraints rcs
   case newC of
     Nothing -> throwError $ text "Insufficient resources"
     Just f  -> persistentState . resourceConstraints %= (++ f)
+
