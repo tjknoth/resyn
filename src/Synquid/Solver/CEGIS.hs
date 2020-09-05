@@ -73,7 +73,7 @@ optimizeWithCEGIS n univs rfmls pvars = do
   let oneBetter = RFormula ftrue () Set.empty Set.empty
                 $ if null ltcs then ftrue else disjunction ltcs
 
-  let rfmls' = rfmls ++ []
+  let rfmls' = rfmls ++ [noWorse, oneBetter]
   
   sat <- solveWithCEGIS n univs rfmls'
   if sat
@@ -82,9 +82,9 @@ optimizeWithCEGIS n univs rfmls pvars = do
       fs <- mapM (getPolyForm . fst) pvars
 
       -- Recursively call optimizeWithCEGIS with our new upper bounds
-      -- new <- optimizeWithCEGIS n univs rfmls' fs
+      new <- optimizeWithCEGIS n univs rfmls' fs
 
-      return $ Just fs
+      return $ new <|> Just fs
       else return Nothing
   where
     upperBoundToConstraint _ (_, Nothing) = Nothing
