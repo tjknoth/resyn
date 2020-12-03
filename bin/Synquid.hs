@@ -15,6 +15,8 @@ import Synquid.Synthesis.Synthesizer
 import Synquid.Synthesis.Util
 import Synquid.HtmlOutput
 import Synquid.Solver.Types
+import Synquid.Solver.CEGIS (initCEGISState)
+import Synquid.Z3 (z3LitToInt)
 
 import           Control.Monad
 import           Control.Monad.State hiding (fix)
@@ -305,7 +307,7 @@ runOnFile synquidParams explorerParams solverParams file libs = do
       -- potentials and their values
       when ((not (null results)) && infer) $ do
         -- We first replace all our Z3 lits where we can to avoid derefencing freed ptrs
-        let potls = fmap (fmap z3litToInt) $ (finalTState (last results)) ^. persistentState . inferredRVars
+        let potls = fmap (fmap z3LitToInt) $ (finalTState (last results)) ^. persistentState . inferredRVars
 
         liftIO $ mapM_ (\g -> pdoc ((prettyWithInferred potls g) <+> text "(inferred)"))
                $ fmap goal results
@@ -341,6 +343,7 @@ runOnFile synquidParams explorerParams solverParams file libs = do
 
       -- We first modify our persistent typing state to add the inferred potl vars of this goal
       _Just . inferredRVars %= \x -> OMap.unionWithL (\_ -> const) x (OMap.fromList [(p, Nothing) | (p, _) <- gInferredPotlVars goal])
+      _Just . resourceVars %= (flip Map.union) (Map.fromList $ gInferredPotlVars goal)
 
       -- We first get our persistent typing state and pass it through
       mpts <- get
@@ -357,9 +360,6 @@ runOnFile synquidParams explorerParams solverParams file libs = do
           
           return result
 
-    z3litToInt (Z3Lit _ _ s) = IntLit (read s :: Int)
-    z3litToInt x = x
-  
     assembleResult goal ps = SynthesisResult (fst (head ps)) (snd (head ps)) (tail ps) goal
     updateLogLevel goal orig = if gSynthesize goal then orig else 0 -- prevent logging while type checking measures
 

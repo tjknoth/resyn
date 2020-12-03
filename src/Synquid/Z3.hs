@@ -6,7 +6,8 @@ module Synquid.Z3 (
   evalZ3State,
   modelGetAssignment,
   function,
-  typeConstructor
+  typeConstructor,
+  z3LitToInt
 ) where
 
 import Synquid.Logic
@@ -150,13 +151,14 @@ instance RMonad Z3State where
     -- So we just infer everything every time
 
     -- This gives wonky optimized values:
-    (_, m) <- local $ do
-      forM_ fmls $ \fml -> do
+    (_, m) <- optimizeLocal $ do
+      forM_ (zip [1..] fmls) $ \(i, fml) -> do
         fmlAst <- fmlToAST fml
         -- For some reason this results in wonky inferred values:
-        -- symb <- mkStringSymbol $ "form" ++ show i
+        -- astS <- astToString fmlAst
+        -- symb <- mkStringSymbol $ "form" ++ show i ++ ": " ++ astS
         -- v <- mkBoolVar symb
-        -- optimizeAssertAndTrack fmlAst fmlAst
+        -- optimizeAssertAndTrack fmlAst v
         optimizeAssert fmlAst
 
       mapM_ inferOnly vs
@@ -166,7 +168,13 @@ instance RMonad Z3State where
       Just md -> do 
         mdStr <- modelToString md 
         return $ Just $ SMTModel md mdStr
-      Nothing -> return Nothing
+      Nothing -> do
+        -- debug 2 (text "SMT COULDN'T FIND MODEL; CORE:") $ return ()
+        -- ucore <- optimizeGetUnsatCore
+        -- asts <- mapM astToString ucore
+        -- forM_ asts $ \s -> do
+        --   debug 2 (text s) $ return s
+        return Nothing
     where
       inferOnly (name, e) = fmlToAST (Var IntS name) >>= optimizeMinimize
 
@@ -606,3 +614,18 @@ optimizeCheckAndGetModel = do
                _   -> return Nothing
   return (res, mbModel)
 
+-- | Run a query and restore the initial logical optimizing context.
+--
+-- This is a shorthand for 'optimizePush', run the query, and 'optimizePop'.
+optimizeLocal :: MonadOptimize z3 => z3 a -> z3 a
+optimizeLocal q = do
+  optimizePush
+  r <- q
+  optimizePop
+  return r
+
+-- | Converts a Z3 literal to an int.
+z3LitToInt :: Formula -> Formula
+z3LitToInt (Z3Lit _ _ s) = IntLit (read s :: Int)
+z3LitToInt x = x
+  

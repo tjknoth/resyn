@@ -192,10 +192,13 @@ RESOURCE_INFERENCE_POS_BENCHMARKS = [
     ('RAML-Queue',                   ['--eac', '--infer=Constant', '-f=Nonterminating']),
     ('RAML-BinaryCounter',           ['--eac', '--infer=Constant', '-f=Nonterminating']),
     ('RAML-Compress',                ['--eac', '--infer=Constant', '-f=Nonterminating']),
+    ('RAML-SplitAndSort',            ['--eac', '--infer=Constant', '-f=Nonterminating']),
 
     # ICFP '20 benches
     # Quadratic
     ('List-Nub', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
+    ('List-Merge-Sort-Quadratic',    ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
+    ('List-Merge-Flatten', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
 
     # Non-Polynomial
     # ('List-Quick-Build', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
@@ -204,26 +207,23 @@ RESOURCE_INFERENCE_POS_BENCHMARKS = [
     # Dependent benches
     ('BST-Insert',                   ['--eac', '--infer=Dependent', '-f=Nonterminating', '--res-solver=CEGIS']),
     ('BST-Member',                   ['--eac', '--infer=Dependent', '-f=Nonterminating']),
+    ('List-Replicate',               ['--eac', '--infer=Dependent', '-f=Nonterminating', '--res-solver=CEGIS']),
 ]
 
 RESOURCE_INFERENCE_NEG_BENCHMARKS = [
     ('List-Pairs',                   ['--eac', '--infer=Constant', '-f=Nonterminating']),
     ('List-Exp-Contrived',           ['--eac', '--infer=Constant', '-f=Nonterminating']),
-    ('List-Replicate',               ['--eac', '--infer=Constant', '-f=Nonterminating', '--res-solver=CEGIS']),
 
     # ICFP '20 benches
     # Quadratic
     ('List-Quick-Sort-Quadratic',    ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
     ('List-SelectionSort',           ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
-    ('List-Merge-Sort-Quadratic',    ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
 
     # Non-Polynomial
     ('List-Merge-Sort', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
     ('List-Merge-Build', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
-    ('List-Merge-Flatten', ['--eac', '--infer=Constant', '-f=NONTERMINATING']),
 
     # RAML
-    ('RAML-SplitAndSort',            ['--eac', '--infer=Constant', '-f=Nonterminating']),
     ('RAML-Dyadic',                  ['--eac', '--infer=Constant', '-f=Nonterminating']),
 ]
 

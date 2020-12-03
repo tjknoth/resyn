@@ -1,0 +1,19 @@
+data List a where
+	Nil :: List a
+	Cons :: x: a -> xs: List a -> List a
+  
+replicate :: n: {Int | _v >= 0} -> x: {n**a| |n} -> List a
+replicate = \n. \x.
+  if n <= 0
+    then Nil
+    else Cons x (tick 1 (replicate (n - 1) x))
+
+-- forall a. ...
+-- replicate :: x1: Nat -> x2: {A2 | [x1 / n]ref | [x1 / n]pot } -> List A2
+
+-- {A2 | | I1}
+-- [x / y]I1 = I1
+-- [x / y]I1 
+-- (I1 = [x / y](c + 2*n))
+
+-- [x / y](p1 + p2)

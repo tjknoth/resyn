@@ -111,9 +111,11 @@ data PolynomialTerm = PolynomialTerm {
 
 -- Polynomial represented as a list of coefficient-variable pairs 
 newtype Polynomial = Polynomial { unPolynomial :: [PolynomialTerm] } 
+  deriving (Show)
 
 -- Map from resource variable name to its corresponding polynomial
 newtype PolynomialSkeletons = Skeletons { unSkeletons :: Map String Polynomial }
+  deriving (Show)
 
 -- Map from universally quantified expression (in string form) to its valuation
 data Counterexample = CX {

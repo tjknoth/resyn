@@ -5,7 +5,7 @@ module Synquid.Solver.Resource (
   -- checkResources,
   solveResourceConstraints,
   isResourceConstraint,
-  simplifyRCs,
+  processRCs,
   allRMeasures,
   partitionType,
   getAnnotationStyle,
@@ -37,11 +37,11 @@ import           Data.Semigroup (sconcat)
 import           Data.Maybe
 
 -- | Process, but do not solve, a set of resource constraints
-simplifyRCs :: (MonadHorn s, MonadSMT s, RMonad s)
-            => [Constraint]
-            -> TCSolver s ()
-simplifyRCs [] = return ()
-simplifyRCs constraints = do
+processRCs :: (MonadHorn s, MonadSMT s, RMonad s)
+           => [Constraint]
+           -> TCSolver s ()
+processRCs [] = return ()
+processRCs constraints = do
   rcs <- mapM generateFormula (filter isResourceConstraint constraints)
   persistentState . resourceConstraints %= (++ rcs)
 
@@ -64,6 +64,7 @@ solveResourceConstraints oldConstraints constraints = do
   return $ if b
     then Just constraintList -- $ Just $ if hasUniversals
     else Nothing
+
 
 -- | 'generateFormula' @c@: convert constraint @c@ into a logical formula
 --    If there are no universal quantifiers, we can cache the generated formulas
@@ -108,8 +109,8 @@ generateFormula' checkMults c = do
       let fml = mkRForm Set.empty f
       embedAndProcessConstraint env fml
     Transfer env env' -> do
-      fmls <- redistribute env env' 
-      let fml = mkRForm Set.empty $ conjunction fmls
+      f <- redistribute env env' 
+      let fml = mkRForm Set.empty f
       embedAndProcessConstraint env fml
     _ -> error $ show $ text "Constraint not relevant for resource analysis:" <+> pretty c
 
@@ -150,7 +151,7 @@ embedConstraint :: (MonadHorn s, RMonad s)
                 -> TCSolver s RawRFormula
 embedConstraint env rfml = do 
   -- Get assumptions related to all non-ghost scalar variables in context
-  vars <- use universalVars
+  vars <- use (persistentState . universalVars)
   -- Small hack -- need to ensure we grab the assumptions related to _v
   -- Note that sorts DO NOT matter here -- the embedder will ignore them.
   let vars' = Set.insert (Var AnyS valueVarName) $ Set.map (Var AnyS) vars
@@ -194,13 +195,16 @@ replaceCons f@Cons{} = mkFuncVar f
 replaceCons f = f
 
 filterAssumptions :: MonadHorn s => KnownRFormula -> TCSolver s KnownRFormula
-filterAssumptions rfml = do
+filterAssumptions rfml = -- do
+  return $ over knownAssumptions (Set.filter (not . hasCtor)) rfml
+  {-
   shouldFilter <- usesSygus
   let rfml' = 
         if shouldFilter
           then over knownAssumptions (Set.filter (not . hasCtor)) rfml
           else rfml
   return rfml'
+  -}
 
 -- apply variable substitutions
 getConstructors :: MonadHorn s => KnownRFormula -> TCSolver s KnownRFormula
@@ -281,7 +285,7 @@ deployHigherOrderSolver SYGUS oldfmls newfmls = do
       let rfmls = oldfmls ++ newfmls
       let runInSolver = lift . lift . lift
       logfile <- view (resourceArgs . sygusLog)
-      ufmls <- map (Var IntS) . Set.toList <$> use universalVars
+      ufmls <- map (Var IntS) . Set.toList <$> use (persistentState . universalVars)
       universals <- collectUniversals rfmls ufmls
       rvars <- use $ persistentState . resourceVars
       env <- use initEnv 
@@ -292,7 +296,7 @@ deployHigherOrderSolver SYGUS oldfmls newfmls = do
 deployHigherOrderSolver _ oldfmls newfmls = do
   let rfmls = oldfmls ++ newfmls
   let runInSolver = lift . lift . lift
-  ufmls <- map (Var IntS) . Set.toList <$> use universalVars
+  ufmls <- map (Var IntS) . Set.toList <$> use (persistentState . universalVars)
   universals <- collectUniversals rfmls ufmls
   cMax <- view (resourceArgs . cegisBound) 
   cstate <- updateCEGISState
@@ -354,22 +358,17 @@ collectUniversals rfmls existing = do
 redistribute :: Monad s
              => Environment
              -> Environment
-             -> TCSolver s [Formula]
-redistribute envIn envOut = do
+             -> TCSolver s Formula
+redistribute envIn envOut =
   let fpIn  = envIn ^. freePotential
-  let fpOut = envOut ^. freePotential
-  let cfpIn  = totalConditionalFP envIn
-  let cfpOut = totalConditionalFP envOut
-  let wellFormedFP = [] -- fmap (|>=| fzero) [fpIn, fpOut, cfpIn, cfpOut]
-  -- Sum of top-level potential annotations
-  let envSum = sumFormulas . allPotentials
-  -- Assert that all potentials are well-formed
-  let wellFormed env = [] -- map (|>=| fzero) (Map.elems (allPotentials env))
-  -- Assert (fresh) potentials in output context are well-formed
-  let wellFormedAssertions = wellFormedFP ++ wellFormed envOut
-  --Assert that top-level potentials are re-partitioned
-  let transferAssertions = (envSum envIn |+| fpIn |+| cfpIn) |=| (envSum envOut |+| fpOut |+| cfpOut)
-  return $ transferAssertions : wellFormedAssertions
+      fpOut = envOut ^. freePotential
+      cfpIn  = totalConditionalFP envIn
+      cfpOut = totalConditionalFP envOut
+      -- Sum of top-level potential annotations
+      envSum = sumFormulas . allPotentials
+      -- Assert that top-level potentials are re-partitioned
+      transferAssertions = (envSum envIn |+| fpIn |+| cfpIn) |=| (envSum envOut |+| fpOut |+| cfpOut)
+   in return transferAssertions
 
 -- Assert that a context contains zero "free" potential
 assertZeroPotential :: Monad s
@@ -517,8 +516,8 @@ usesSygus = do
 
 logUniversals :: Monad s => TCSolver s ()
 logUniversals = do 
-  uvars <- Set.toList <$> use universalVars
-  ufuns <- Set.toList <$> use universalMeasures
+  uvars <- Set.toList <$> use (persistentState . universalVars)
+  ufuns <- Set.toList <$> use (persistentState . universalMeasures)
   capps <- Set.toList <$> use matchCases
   writeLog 3 $ indent 2 $ text "Over universally quantified variables:"
     <+> hsep (map pretty uvars) <+> text "and functions:"

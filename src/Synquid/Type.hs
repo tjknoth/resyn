@@ -412,7 +412,9 @@ substituteInType isBound subst (ScalarT baseT fml pot) = ScalarT (substituteBase
     substitutePotential s (WithSubst s' f) = WithSubst (s' `composeSubstitutions` s) (substitute s f)
     substitutePotential s f                = WithSubst s f
     -- TODO: does this make sense?
-    substituteBase subst (TypeVarT oldSubst a m) = TypeVarT oldSubst a (substitute subst m)
+    -- We add pending subtitutions to multiplicities for the same reason we add them
+    -- to regular scalar potls
+    substituteBase subst (TypeVarT oldSubst a m) = TypeVarT oldSubst a (substitutePotential subst m)
       -- Looks like pending substitutions on types are not actually needed, since renamed variables are always out of scope
        -- if isBound a
           -- then TypeVarT oldSubst a

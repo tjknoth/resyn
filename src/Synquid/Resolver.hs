@@ -164,7 +164,7 @@ resolveDeclaration (FuncDecl funcName typeSchema) = do
       return $ ScalarT dt ref (Var IntS pVar)
     go (FunctionT i d c cs) = do
       dom <- go d
-      fnArgs %= (:) (Var IntS i)
+      fnArgs %= (:) (Var (getArgSort dom) i)
       cod <- go c
       fnArgs %= tail
       return $ FunctionT i dom cod cs
@@ -274,7 +274,7 @@ resolveSignatures (FuncDecl name _)  = do
     go og@(ScalarT _ _ _) = return og
     go (FunctionT name dom cod cost) = do
       dom' <- go dom
-      fnArgs %= (:) (Var IntS name)
+      fnArgs %= (:) (Var (getArgSort dom) name)
       cod' <- go cod
       fnArgs %= tail
       return $ FunctionT name dom' cod' cost
@@ -809,6 +809,8 @@ freshInferredPotl fname prefix args = do
     else do
       inferredPotlVars %= Map.insertWith (flip (++)) fname [(x, args)]
       return x
+
+getArgSort = toSort . baseTypeOf
 
 -- | 'instantiate' @sorts@: replace all sort variables in @sorts@ with fresh sort variables
 instantiate :: [Sort] -> Resolver [Sort]
