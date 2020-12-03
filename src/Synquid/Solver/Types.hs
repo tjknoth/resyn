@@ -9,6 +9,7 @@ import Synquid.Pretty
 import Data.Data
 import Data.Set (Set)
 import Data.Map (Map)
+import qualified Data.Map as Map
 import qualified Z3.Monad as Z3
 import Control.Lens
 
@@ -94,7 +95,7 @@ instance Pretty (RFormula a b) where
 {- Types for CEGIS solver -}
 
 -- Coefficient valuations in a valid program
-newtype RSolution = RSolution { unRSolution :: Map String Formula }
+newtype RSolution = RSolution { unRSolution :: Substitution }
   deriving (Show, Eq)
 
 data Universals = Universals {
@@ -130,6 +131,20 @@ data CEGISState = CEGISState {
 } -- deriving (Show, Eq, Ord)
 
 makeLenses ''CEGISState
+
+-----------------------------------------------
+-----------------------------------------------
+-- Utilities 
+-----------------------------------------------
+-----------------------------------------------
+
+initRSolution = RSolution Map.empty
+
+combineRSolutions r1 r2 = RSolution $ unRSolution r1 `Map.union` unRSolution r2
+
+allValuations :: Counterexample -> RSolution
+allValuations cx = combineRSolutions (consInterps cx) (variables cx)
+
 
 -----------------------------------------------
 -----------------------------------------------

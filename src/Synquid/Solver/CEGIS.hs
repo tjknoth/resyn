@@ -24,15 +24,12 @@ import Synquid.Program
 import Synquid.Solver.Monad
 import Synquid.Solver.Types
 
-import           Control.Applicative ((<|>))
 import           Data.Maybe
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import           Control.Lens
 import           Control.Monad.State
 import           Debug.Trace
-
-import Debug.Pretty.Simple
 
 type CEGISSolver s = StateT CEGISState s
 
@@ -168,7 +165,7 @@ verify rfmls universals = do
   -- cxPolynomials <- mapM mkCXPolynomial polys
   -- Replace resource variables with appropriate polynomials (with pending substitutions applied)
   --   and negate the resource constraint
-  let substRFml = applyPolynomial mkCXPolynomial completeFml
+  let substRFml = applyPolynomial mkCXPolynomial completeFml Nothing
   fml <- conjunction <$> mapM substRFml rfmls
   let cxQuery = fnot $ substitute prog fml
   writeLog 7 $ linebreak <+> text "CEGIS counterexample query:" </> pretty cxQuery
@@ -214,7 +211,7 @@ getRelevantConstraints :: RMonad s
                       -> CEGISSolver s [ProcessedRFormula]
 getRelevantConstraints rfmls cx = do
   prog <- use rprogram
-  let substRFml = applyPolynomial (mkEvalPolynomial prog cx) completeFml
+  let substRFml = applyPolynomial (mkEvalPolynomial prog cx) completeFml (Just (allValuations cx))
   let check f = lift $ f `checkPredWithModel` cxmodel cx
   let isSatisfied rfml = check =<< substRFml rfml
   filterM (fmap not . isSatisfied) rfmls
@@ -244,7 +241,7 @@ applyCounterexample :: RMonad s
                     -> Counterexample
                     -> CEGISSolver s Formula 
 applyCounterexample rfmls cx = do 
-  let substRFml = applyPolynomial (mkParamPolynomial cx) bodyFml
+  let substRFml = applyPolynomial (mkParamPolynomial cx) bodyFml (Just (allValuations cx))
   fml <- conjunction <$> mapM substRFml rfmls
   let fml' = substitute (unRSolution (allVariables cx)) fml
   lift $ translate fml'
@@ -252,29 +249,36 @@ applyCounterexample rfmls cx = do
 applyPolynomial :: RMonad s 
                 => (Polynomial -> CEGISSolver s Formula)
                 -> (ProcessedRFormula -> Formula)
+                -> Maybe RSolution
                 -> ProcessedRFormula
                 -> CEGISSolver s Formula
-applyPolynomial mkPolynomial mkFormula rfml =
-  applyPolynomial' mkPolynomial Map.empty (mkFormula rfml)
+applyPolynomial mkPolynomial mkFormula mbSol rfml =
+  applyPolynomial' mkPolynomial mbSol Map.empty (mkFormula rfml)
 
-applyPolynomial' mkPolynomial subs f =
-  let sub = applyPolynomial' mkPolynomial in 
+applyPolynomial' mkPolynomial mbSol subs f =
+  let go = applyPolynomial' mkPolynomial mbSol in 
   case f of 
     v@(Var s x)   -> do 
       (Skeletons polys) <- use polynomials
       case Map.lookup x polys of 
-        Nothing -> return v 
-        Just p  -> 
+        Nothing -> do
+          let v' = 
+                case mbSol of
+                  Nothing  -> substitute subs v 
+                  Just sol -> substitute (subs `composeSubstitutions` unRSolution sol) v  
+          -- traceM $ show $ plain $ pretty v <+> text "|->" <+> pretty v'
+          return v'
+        Just p  ->
           let p' = substPolynomial subs p
            in mkPolynomial p' 
-    WithSubst p e -> sub (p `composeSubstitutions` subs) e
-    SetLit s fs   -> SetLit s <$> mapM (sub subs) fs
-    Unary op f    -> Unary op <$> sub subs f
-    Binary op f g -> Binary op <$> sub subs f <*> sub subs g 
-    Ite g t f     -> Ite <$> sub subs g <*> sub subs t <*> sub subs f
-    Pred s x fs   -> Pred s x <$> mapM (sub subs) fs
-    Cons s x fs   -> Cons s x <$> mapM (sub subs) fs 
-    All q f       -> All q <$> sub subs f -- there shouldn't be foralls by now anyway
+    WithSubst p e -> go (p `composeSubstitutions` subs) e
+    SetLit s fs   -> SetLit s <$> mapM (go subs) fs
+    Unary op f    -> Unary op <$> go subs f
+    Binary op f g -> Binary op <$> go subs f <*> go subs g 
+    Ite g t f     -> Ite <$> go subs g <*> go subs t <*> go subs f
+    Pred s x fs   -> Pred s x <$> mapM (go subs) fs
+    Cons s x fs   -> Cons s x <$> mapM (go subs) fs 
+    All q f       -> All q <$> go subs f -- there shouldn't be foralls by now anyway
     Unknown s x   -> error $ "applySynthesisPolynomial: condition unknown " ++ x ++ " present"
     lit           -> return lit
 

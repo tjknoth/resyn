@@ -30,11 +30,9 @@ import Control.Monad.Extra (mapMaybeM)
 import Control.Monad.Trans.State
 import Control.Lens hiding (both)
 import Control.Monad.State.Class (MonadState)
-import Control.Monad.IO.Class ( liftIO )
 import Z3.Monad hiding (Z3Env, newEnv, Sort)
 import qualified Z3.Base as Z3
 
-import Debug.Pretty.Simple
 import Debug.Trace
 
 data Z3Env = Z3Env {
@@ -97,7 +95,9 @@ instance MonadSMT Z3State where
 
 instance RMonad Z3State where
   solveAndGetModel fmls = do
-
+    f <- fmlToAST $ conjunction fmls 
+    (r, m) <- local $ assert f >> solverCheckAndGetModel
+    {-
     (r, m) <- local $ do
       forM_ (zip [(1 :: Int)..] fmls) $ \(i, fml) -> do
         fmlAst <- fmlToAST fml
@@ -107,6 +107,7 @@ instance RMonad Z3State where
         solverAssertAndTrack fmlAst v
 
       solverCheckAndGetModel
+    -}
    
     setASTPrintMode Z3_PRINT_SMTLIB_FULL
     -- Throw error if unknown result: could probably do this a better way since r' is now unused
@@ -167,7 +168,7 @@ instance RMonad Z3State where
         return $ Just $ SMTModel md mdStr
       Nothing -> return Nothing
     where
-      inferOnly (name, _) = fmlToAST (Var IntS name) >>= optimizeMinimize
+      inferOnly (name, e) = fmlToAST (Var IntS name) >>= optimizeMinimize
 
   modelGetAssignment vals (SMTModel m _) = 
     RSolution . Map.fromList . catMaybes <$> mapM (getAssignmentForVar m . Var astS) vals
@@ -427,13 +428,16 @@ toAST expr = case expr of
     -- | Lookup or create a variable with name `ident' and sort `s'
     var s ident = do
       let ident' = ident ++ show (asZ3Sort s)
+      -- traceM $ "Translating " ++ ident ++ ": " ++ show s ++ " -> " ++ ident'
       varMb <- uses vars (Map.lookup ident')
-
+      -- traceM $ "Found: " ++ show varMb
       case varMb of
         Just v -> return v
         Nothing -> do
           symb <- mkStringSymbol ident'
           z3s <- toZ3Sort s
+          sortstr <- sortToString z3s
+          -- traceM $ "z3 sort: " ++ sortstr
           v <- mkConst symb z3s
           vars %= Map.insert ident' v
           return v

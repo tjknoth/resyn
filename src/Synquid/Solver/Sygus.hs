@@ -109,7 +109,7 @@ assembleSygus env rvars rfmls univs = SygusProblem dts cs fs us
 transformFmls :: Map String [Formula] -- ^ We assume each list of formulas contains vars only, no datatypes
               -> [ProcessedRFormula]
               -> [ProcessedRFormula]
-transformFmls rvars = fmap (over rconstraints xf)
+transformFmls rvars = fmap (over rconstraints xf . over knownAssumptions xf)
   where
     -- We combine both transforms into the same function
     -- This is probably poor form, but it also probably helps

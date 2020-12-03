@@ -27,7 +27,6 @@ import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Map (Map)
 import qualified Data.Map as Map
-import           Data.Map.Ordered (OMap)
 import qualified Data.Map.Ordered as OMap
 import           Control.Monad.Logic
 import           Control.Monad.Reader
@@ -36,9 +35,6 @@ import           Debug.Trace
 import           Data.List.NonEmpty (NonEmpty(..))
 import           Data.Semigroup (sconcat)
 import           Data.Maybe
-import qualified Z3.Monad as Z3
-
-import Debug.Pretty.Simple
 
 -- | Process, but do not solve, a set of resource constraints
 simplifyRCs :: (MonadHorn s, MonadSMT s, RMonad s)
@@ -226,7 +222,7 @@ joinAssumptions :: MonadHorn s
                  -> TCSolver s ProcessedRFormula
 joinAssumptions (RFormula known _ preds substs fml) = do
   let ass = conjunction known
-  writeLog 3 $ indent 4 $ pretty (ass |=>| fml) -- conjunction (map lcToFml lcs))
+  writeLog 3 $ indent 4 $ pretty (ass |=>| fml)
   return $ RFormula ass () preds substs fml 
 
 

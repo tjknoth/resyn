@@ -14,7 +14,6 @@ import Synquid.Util
 import Synquid.Pretty
 import Synquid.Resolver
 import Synquid.Solver.Monad
-import Synquid.Solver.Types
 import Synquid.Solver.TypeConstraint hiding (freshId, freshVar)
 
 import qualified Data.Map as Map
@@ -23,8 +22,6 @@ import           Control.Monad.Logic
 import           Control.Monad.Reader
 import           Control.Lens
 import qualified Data.Set as Set
-
-import Debug.Pretty.Simple
 
 -- | 'reconstruct' @eParams tParams pts goal@ : reconstruct missing types and terms in the body of @goal@ so that it represents a valid type judgment;
 -- return a type error if that is impossible
@@ -304,7 +301,9 @@ reconstructE' env typ (PSymbol name) =
 reconstructE' env typ (PTick c body) = 
   let env' = over freePotential (`subtractFormulas` IntLit c) env in
   do 
-    pBody' <- inContext (\p -> Program (PTick c uHole) typ) $ reconstructE env' typ body
+    writeLog 3 $ text "Tick" <+> pretty c
+    writeLog 3 $ text "Leaving free potential:" <+> pretty (_freePotential env')
+    pBody' <- inContext (\p -> Program (PTick c p) typ) $ reconstructE env' typ body
     return $ Program (PTick c pBody') (typeOf pBody') 
 reconstructE' env typ p@(PApp iFun iArg) = do
   x <- runInSolver $ freshVar env "x"

@@ -73,9 +73,7 @@ import Text.PrettyPrint.ANSI.Leijen hiding ((<+>), (<$>), hsep, vsep)
 import qualified Text.PrettyPrint.ANSI.Leijen as L
 import qualified Data.Set as Set
 import qualified Data.Map as Map
-import qualified Data.Map.Ordered as OMap
 import Data.Map (Map)
-import Data.Map.Ordered (OMap)
 import Data.Set (Set)
 import Data.List
 import Data.Maybe (fromMaybe)

@@ -11,16 +11,13 @@ import Synquid.Util
 import Synquid.Error
 import Synquid.Solver.Types
 
-import Data.Map (Map)
-import qualified Data.Map as Map
-import Data.Map.Ordered (OMap)
-import qualified Data.Map.Ordered as OMap
-import Data.Set (Set)
+import           Data.Map (Map)
+import           Data.Set (Set)
 import qualified Data.Set as Set
-import Control.Lens
-import Control.Monad.Reader
-import Control.Monad.State
-import Control.Monad.Trans.Except
+import           Control.Lens
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Control.Monad.Trans.Except
 
 {- Monadic structure of solvers -}
 

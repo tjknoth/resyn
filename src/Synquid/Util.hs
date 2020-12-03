@@ -161,7 +161,7 @@ asInteger s = if all isDigit s then Just $ read s else Nothing
 {- Debug output -}
 
 -- | 'debugOutLevel' : Level above which debug output is ignored
-debugOutLevel = 2
+debugOutLevel = 0
 
 -- | 'debug' @level msg@ : output @msg@ at level @level@ 
 debug level msg = if level <= debugOutLevel then traceShow msg else id

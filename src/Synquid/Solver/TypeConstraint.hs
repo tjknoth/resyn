@@ -37,7 +37,6 @@ import Synquid.Resolver (addAllVariables)
 import Synquid.Synthesis.Util hiding (throwError, writeLog)
 import Synquid.Solver.Monad
 import Synquid.Solver.Resource
-import Synquid.Solver.Types
 import Synquid.Solver.CEGIS (initCEGISState)
 
 import           Data.Maybe
@@ -46,14 +45,11 @@ import           Data.Set (Set)
 import qualified Data.Map as Map
 import           Data.Map (Map)
 import qualified Data.Map.Ordered as OMap
-import           Data.Map.Ordered (OMap)
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Trans.Except (throwE)
 import           Control.Lens hiding (both)
 import           Debug.Trace
-
-import Debug.Pretty.Simple
 
 -- | Initial typing state in the initial environment @env@ given @goal@
 initTypingState :: MonadHorn s => Goal -> Maybe PersistentTState -> s TypingState

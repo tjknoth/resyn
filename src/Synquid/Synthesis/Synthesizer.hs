@@ -14,7 +14,6 @@ import Synquid.Synthesis.Util
 import Synquid.Solver.Monad
 import Synquid.Solver.HornClause
 import Synquid.Solver.TypeConstraint
-import Synquid.Solver.Types
 import Synquid.Solver.Resource (getAnnotationStyle, getPolynomialDomain)
 
 import           Data.List
@@ -39,7 +38,7 @@ synthesize explorerParams solverParams goal cquals tquals mpts =
         allSchema = gSpec goal : Map.elems (allSymbols (gEnvironment goal))
         infer = explorerParams ^. (explorerResourceArgs . inferResources)
         rdom = if infer then explorerParams ^. (explorerResourceArgs . rSolverDomain) else getAnnotationStyle (fmap _resourcePreds (gEnvironment goal ^. datatypes)) allSchema
-        pdom = getPolynomialDomain (fmap _resourcePreds (gEnvironment goal ^. datatypes)) (gSpec goal)
+        pdom = if infer then explorerParams ^. (explorerResourceArgs . rSolverDomain) else getPolynomialDomain (fmap _resourcePreds (gEnvironment goal ^. datatypes)) (gSpec goal)
         adj = set rSolverDomain rdom . set polynomialDomain pdom
         typingParams = TypingParams {
                         _condQualsGen = condQuals,

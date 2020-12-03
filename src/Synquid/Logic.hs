@@ -235,16 +235,6 @@ unknownsOf (Cons _ _ es) = Set.unions $ map unknownsOf es
 unknownsOf (All _ e) = unknownsOf e
 unknownsOf _ = Set.empty
 
--- collect guards of ITE expressions
---   careful, this should only be used on resource formulas!
-itesOf :: Formula -> [Formula]
-itesOf (Ite g t f) = [Ite g t f] -- Assumes no nested ITEs!
-itesOf (WithSubst _ f) = itesOf f
-itesOf (Unary _ f) = itesOf f
-itesOf (Binary _ f g) = itesOf f ++ itesOf g
-itesOf _ = [] 
-
-
 
 -- | 'posNegUnknowns' @fml@: sets of positive and negative predicate unknowns in @fml@
 posNegUnknowns :: Formula -> (Set Id, Set Id)

@@ -29,8 +29,6 @@ import           Data.List
 import qualified Data.Foldable as Foldable
 import           Control.Arrow (first)
 
-import Debug.Pretty.Simple
-
 {- Interface -}
 
 data ResolverState = ResolverState {
@@ -48,13 +46,14 @@ data ResolverState = ResolverState {
   _potentialVars :: Set Id,
   _infer :: Bool, -- ^ whether we should attempt to infer fn arg pot'ls
   _fnArgs :: [Formula], -- ^ used when inserting potl vars for a fn, to record which fn args this potl variable has access to
-  _inferredPotlVars :: Map Id [(Id, [Formula])]  -- ^ maps fn name to associated inferred pot'ls (and the arguments those pot'ls can reference), in order of priority
+  _inferredPotlVars :: Map Id [(Id, [Formula])], -- ^ maps fn name to associated inferred pot'ls (and the arguments those pot'ls can reference), in order of priority
+  _funcBodies :: Set Id
 }
 
 makeLenses ''ResolverState
 
-initResolverState :: Bool -> ResolverState
-initResolverState infer = ResolverState {
+initResolverState :: Bool -> [Declaration] -> ResolverState
+initResolverState infer decls = ResolverState {
   _environment = emptyEnv,
   _goals = [],
   _checkingGoals = [],
@@ -69,14 +68,18 @@ initResolverState infer = ResolverState {
   _potentialVars = Set.empty,
   _infer = infer,
   _fnArgs = [],
-  _inferredPotlVars = Map.empty
+  _inferredPotlVars = Map.empty,
+  _funcBodies = Set.fromList $ mapMaybe (\(Pos _ d) -> extractName d) decls
 }
+  where
+    extractName (SynthesisGoal f _) = Just f
+    extractName _ = Nothing
 
 -- | Convert a parsed program AST into a list of synthesis goals and qualifier maps
 -- | The first argument determines if we should infer potentials for all fn args
 resolveDecls :: Bool -> [Declaration] -> Either ErrorMessage ([Goal], [Formula], [Formula])
 resolveDecls tryInfer declarations =
-  case runExcept (execStateT go (initResolverState tryInfer)) of
+  case runExcept (execStateT go (initResolverState tryInfer declarations)) of
     Left msg -> Left msg
     Right st ->
       Right (typecheckingGoals st ++ synthesisGoals st, st ^. condQualifiers, st ^. typeQualifiers)
@@ -109,13 +112,13 @@ resolveDecls tryInfer declarations =
     typecheckingGoals st = fmap (makeGoal False False (st ^. environment) (map fst ((st ^. goals) ++ (st ^. checkingGoals))) (st ^. mutuals) (st ^. inferredPotlVars)) (st ^. checkingGoals)
 
 resolveRefinement :: Environment -> Formula -> Either ErrorMessage Formula
-resolveRefinement env fml = runExcept (evalStateT (resolveTypeRefinement AnyS fml) ((initResolverState False) {_environment = env}))
+resolveRefinement env fml = runExcept (evalStateT (resolveTypeRefinement AnyS fml) ((initResolverState False []) {_environment = env}))
 
 resolveRefinedType :: Environment -> RType -> Set String -> Either ErrorMessage RType
-resolveRefinedType env t extraSyms = runExcept (evalStateT (resolveType t) ((initResolverState False) {_environment = env, _potentialVars = extraSyms }))
+resolveRefinedType env t extraSyms = runExcept (evalStateT (resolveType t) ((initResolverState False []) {_environment = env, _potentialVars = extraSyms }))
 
 instantiateSorts :: [Sort] -> [Sort]
-instantiateSorts sorts = fromRight $ runExcept (evalStateT (instantiate sorts) (initResolverState False))
+instantiateSorts sorts = fromRight $ runExcept (evalStateT (instantiate sorts) (initResolverState False []))
 
 addAllVariables :: [Formula] -> Environment -> Environment
 addAllVariables = flip (foldr (\(Var s x) -> addVariable x (fromSort s)))
@@ -138,37 +141,38 @@ resolveDeclaration (TypeDecl typeName typeVars typeBody) = do
               text "in the definition of type synonym" <+> text typeName <+> text "are undefined")
 resolveDeclaration (FuncDecl funcName typeSchema) = do 
   tryInfer <- use infer
-  if tryInfer
-    then go typeSchema >>= addNewSignature funcName
+  defs <- use funcBodies
+  if tryInfer && (funcName `Set.member` defs) -- only infer usage of functions with implementations -- this will also fail if attempting synthesis
+    then updateAnnotations typeSchema >>= addNewSignature funcName
     else addNewSignature funcName typeSchema
   where
-    go :: RSchema -> Resolver RSchema
-    go (ForallT i s) = go s >>= return . ForallT i
-    go (ForallP i s) = go s >>= return . ForallP i
-    go (Monotype b) = gt b >>= return . Monotype
+    updateAnnotations :: RSchema -> Resolver RSchema
+    updateAnnotations (ForallT i s) = ForallT i <$> updateAnnotations s
+    updateAnnotations (ForallP i s) = ForallP i <$> updateAnnotations s
+    updateAnnotations (Monotype b) = Monotype <$> go b
 
     -- TODO: Maybe if the potential != 0, don't change it to an inferred?
-    gt :: RType -> Resolver RType
-    gt (ScalarT (DatatypeT di tyargs absps) ref _) = do
-      tyargs' <- mapM gt tyargs
+    go :: RType -> Resolver RType
+    go (ScalarT (DatatypeT di tyargs absps) ref _) = do
+      tyargs' <- mapM go tyargs
       fargs <- use fnArgs
       pVar <- freshInferredPotl funcName "I" fargs
       return $ ScalarT (DatatypeT di tyargs' absps) ref (Var IntS pVar)
-    gt (ScalarT dt ref _) = do
+    go (ScalarT dt ref _) = do
       fargs <- use fnArgs
-      pVar <- freshInferredPotl funcName "I" fargs
+      pVar <- freshInferredPotl funcName "I" (Var (toSort dt) valueVarName : fargs)
       return $ ScalarT dt ref (Var IntS pVar)
-    gt (FunctionT i d c cs) = do
-      dom <- gt d
+    go (FunctionT i d c cs) = do
+      dom <- go d
       fnArgs %= (:) (Var IntS i)
-      cod <- gt c
+      cod <- go c
       fnArgs %= tail
       return $ FunctionT i dom cod cs
-    gt (LetT i def body) = do
-      def' <- gt def
-      body' <- gt body
+    go (LetT i def body) = do
+      def' <- go def
+      body' <- go body
       return $ LetT i def' body'
-    gt AnyT = return AnyT
+    go AnyT = return AnyT
     
 resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
   let
@@ -805,8 +809,6 @@ freshInferredPotl fname prefix args = do
     else do
       inferredPotlVars %= Map.insertWith (flip (++)) fname [(x, args)]
       return x
-
-getArgSort = toSort . baseTypeOf
 
 -- | 'instantiate' @sorts@: replace all sort variables in @sorts@ with fresh sort variables
 instantiate :: [Sort] -> Resolver [Sort]

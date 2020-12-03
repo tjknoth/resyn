@@ -27,8 +27,6 @@ import           Control.Lens
 import           Control.Monad.Extra (mapMaybeM)
 import           Debug.Trace
 
-import Debug.Pretty.Simple
-
 {- Types -}
 
 -- | Choices for the type of terminating fixpoint operator
@@ -261,7 +259,7 @@ checkResourceVar env x t = do
 
 mkResourceVar :: MonadHorn s
               => Environment
-              -> Maybe (RBase)
+              -> Maybe RBase
               -> String
               -> TCSolver s (String, [Formula])
 mkResourceVar env vvtype name = do
@@ -351,20 +349,33 @@ freshPotentialsType env t = do
   pass <- use predAssignment
   let (ScalarT base fml p) = typeSubstitutePred pass t
   base' <- freshPotentialsBase env base
-  p' <- freshPotentialsType' env base p -- (substitutePredicate pass p)
+  p' <- freshPotentials env (Just base) p -- (substitutePredicate pass p)
   return $ ScalarT base' fml p'
 
-freshPotentialsType' :: MonadHorn s => Environment -> RBase -> Formula -> TCSolver s Formula
-freshPotentialsType' env base pot = 
+freshPotentials :: MonadHorn s => Environment -> Maybe RBase -> Formula -> TCSolver s Formula
+freshPotentials env mbBase pot = 
   case itesOf pot of
-    [] -> safeFreshPot env (Just base) pot
+    [] -> safeFreshPot env mbBase pot
     -- xs -> sumFormulas <$> mapM (\(Ite g t f) -> Ite g <$> safeFreshPot env (Just base) t <*> safeFreshPot env (Just base) f) xs
-    xs -> sumFormulas <$> mapM (\(Ite g t f) -> Ite g <$> freshPot env (Just base) <*> freshPot env (Just base)) xs
+    xs -> sumFormulas <$> mapM (freshenTerm env mbBase) xs
+
+-- collect guards of ITE expressions
+--   careful, this should only be used on resource formulas!
+itesOf :: Formula -> [Formula]
+itesOf f@Ite{} = [f] -- Assumes no nested ITEs!
+itesOf f@(WithSubst s Ite{}) = [f]
+itesOf (WithSubst _ f) = itesOf f
+itesOf (Unary _ f) = itesOf f
+itesOf (Binary _ f g) = itesOf f ++ itesOf g
+itesOf _ = [] 
+
 
 -- Retain conditional structure of formula when freshening
-freshPotentials :: MonadHorn s => Environment -> Maybe RBase -> Formula -> TCSolver s Formula
-freshPotentials env rb (Ite g t f) = Ite g <$> freshPot env rb <*> freshPot env rb
-freshPotentials env rb f = freshPot env rb
+freshenTerm :: MonadHorn s => Environment -> Maybe RBase -> Formula -> TCSolver s Formula
+freshenTerm env rb (WithSubst s p) = WithSubst s <$> freshenTerm env rb p
+freshenTerm env rb (Ite g t f) = Ite g <$> freshPot env rb <*> freshPot env rb
+freshenTerm env rb f = freshPot env rb
+
 
 -- Replace potentials in a BaseType
 freshPotentialsBase :: MonadHorn s
@@ -382,7 +393,7 @@ freshPotentialsBase _ t = return t
 
 freshPred :: MonadHorn s => Environment -> [Sort] -> Sort -> TCSolver s Formula
 freshPred env argSorts resSort = do
-  p' <- freshId "P"
+  p' <- freshId "B"
   modify $ addTypingConstraint (WellFormedPredicate env argSorts resSort p')
   let args = [] -- zipWith Var argSorts deBrujns -- TODO: why not?
   when (resSort == IntS) $
@@ -396,6 +407,7 @@ freshAPs env dt ps =
    in zipWithM adjust ps pParams
 
 freshAP :: MonadHorn s => Environment -> Formula -> [Sort] -> TCSolver s Formula
+freshAP env (WithSubst s p) args = WithSubst s <$> freshAP env p args
 freshAP env (Ite g t f) args = Ite g <$> freshPred env args IntS <*> freshPred env args IntS 
 freshAP env p args = freshPred env args IntS
 
@@ -524,6 +536,7 @@ freshCondFP env (Ite g f1 f2) = do
   f1' <- freshCondFP env f1
   f2' <- freshCondFP env f2
   return $ Ite g f1' f2'
+freshCondFP env (WithSubst s p) = WithSubst s <$> freshCondFP env p
 freshCondFP env _ = freshCondFreePotential env
 
 -- When sharing, share 0 \/ 0,0 to reduce number of constraints

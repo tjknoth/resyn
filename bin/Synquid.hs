@@ -7,7 +7,7 @@ import Synquid.Program
 import Synquid.Error
 import Synquid.Pretty
 import Synquid.Parser
-import Synquid.Logic (Formula(..), QSpace)
+import Synquid.Logic (Formula(..))
 import Synquid.Resolver (resolveDecls)
 import Synquid.Solver.Monad hiding (name)
 import Synquid.Solver.HornClause
@@ -15,25 +15,18 @@ import Synquid.Synthesis.Synthesizer
 import Synquid.Synthesis.Util
 import Synquid.HtmlOutput
 import Synquid.Solver.Types
-import Synquid.Solver.CEGIS (initCEGISState)
 
-import           Control.Applicative ((<|>))
 import           Control.Monad
 import           Control.Monad.State hiding (fix)
 import           System.Exit
 import           System.Console.CmdArgs
 import           Data.Time.Calendar
 import qualified Data.Map as Map
-import           Data.Map.Ordered (OMap)
 import qualified Data.Map.Ordered as OMap
 import           Data.Maybe (isJust)
-import           Data.Set (Set)
-import qualified Data.Set as Set
-import           Control.Lens ((.~), (^.), (%~), (&), (%=), _last, _Just)
+import           Control.Lens ((.~), (^.), (%~), (%=), _last, _Just)
 
 import Data.List.Split
-
-import Debug.Pretty.Simple
 
 programName = "resyn"
 versionName = "0.1"
