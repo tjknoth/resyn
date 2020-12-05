@@ -1,0 +1,11 @@
+data IList a where
+	INil :: IList a
+	ICons :: x: a -> xs: IList {a | x < _v} -> IList a
+  
+qualifier { x >= y }
+
+range :: lo: Int -> hi: {Int | _v >= lo | _v - lo} -> IList {Int | (lo <= _v) && (_v <= hi)}
+range = \lo. \hi.
+  if lo >= hi 
+    then INil 
+    else ICons lo (tick 1 (range (lo + 1) hi))
