@@ -45,8 +45,8 @@ data ResolverState = ResolverState {
   _pvarCount :: Int,
   _potentialVars :: Set Id,
   _infer :: Bool, -- ^ whether we should attempt to infer fn arg pot'ls
-  _fnArgs :: [Formula], -- ^ used when inserting potl vars for a fn, to record which fn args this potl variable has access to
-  _inferredPotlVars :: Map Id [(Id, [Formula])], -- ^ maps fn name to associated inferred pot'ls (and the arguments those pot'ls can reference), in order of priority
+  _fnArgs :: [(Formula, RType)], -- ^ used when inserting potl vars for a fn, to record which fn args this potl variable has access to, and their refinement types
+  _inferredPotlVars :: Map Id [(Id, [Formula], Environment)], -- ^ maps fn name to associated inferred pot'ls (and the arguments those pot'ls can reference), in order of priority
   _funcBodies :: Set Id
 }
 
@@ -102,7 +102,7 @@ resolveDecls tryInfer declarations =
         -- We have to order our potential vars in order of which ones we want minimized first,
         -- since Z3 will minimize in this order
         pVars = uncurry (++)
-              $ partition (\((x:_), _) -> x /= 'F')
+              $ partition (\((x:_), _, _) -> x /= 'F')
               $ Map.findWithDefault [] name inferredPVars
       in Goal name env' spec impl 0 pos pVars inferSolve synth
     extractPos pass (Pos pos decl) = do
@@ -122,6 +122,9 @@ instantiateSorts sorts = fromRight $ runExcept (evalStateT (instantiate sorts) (
 
 addAllVariables :: [Formula] -> Environment -> Environment
 addAllVariables = flip (foldr (\(Var s x) -> addVariable x (fromSort s)))
+
+addAllRefVars :: [(Formula, RType)] -> Environment -> Environment
+addAllRefVars = flip (foldr (\((Var _ x), t) -> addVariable x t))
 
 {- Implementation -}
 
@@ -149,30 +152,35 @@ resolveDeclaration (FuncDecl funcName typeSchema) = do
     updateAnnotations :: RSchema -> Resolver RSchema
     updateAnnotations (ForallT i s) = ForallT i <$> updateAnnotations s
     updateAnnotations (ForallP i s) = ForallP i <$> updateAnnotations s
-    updateAnnotations (Monotype b) = Monotype <$> go b
+    updateAnnotations (Monotype b) = Monotype <$> go Nothing b
 
-    -- TODO: Maybe if the potential != 0, don't change it to an inferred?
-    go :: RType -> Resolver RType
-    go (ScalarT (DatatypeT di tyargs absps) ref _) = do
-      tyargs' <- mapM go tyargs
+    go :: Maybe Formula -> RType -> Resolver RType
+    go topl (ScalarT dt@(DatatypeT di tyargs absps) ref _) = do
+      tyargs' <- mapM (go Nothing) tyargs
       fargs <- use fnArgs
-      pVar <- freshInferredPotl funcName "I" fargs
+      let fargs' = case topl of
+            Just i -> (Var (toSort dt) valueVarName, ScalarT dt (Var (toSort dt) valueVarName |=| i) defPotential) : fargs
+            Nothing -> (Var (toSort dt) valueVarName, ScalarT dt ftrue defPotential) : fargs
+      pVar <- freshInferredPotl funcName "I" fargs'
       return $ ScalarT (DatatypeT di tyargs' absps) ref (Var IntS pVar)
-    go (ScalarT dt ref _) = do
+    go topl (ScalarT dt ref _) = do
       fargs <- use fnArgs
-      pVar <- freshInferredPotl funcName "I" (Var (toSort dt) valueVarName : fargs)
+      let fargs' = case topl of
+            Just i -> (Var (toSort dt) valueVarName, ScalarT dt (Var (toSort dt) valueVarName |=| i) defPotential) : fargs
+            Nothing -> (Var (toSort dt) valueVarName, ScalarT dt ftrue defPotential) : fargs
+      pVar <- freshInferredPotl funcName "I" fargs'
       return $ ScalarT dt ref (Var IntS pVar)
-    go (FunctionT i d c cs) = do
-      dom <- go d
-      fnArgs %= (:) (Var (getArgSort dom) i)
-      cod <- go c
+    go topl (FunctionT i d c cs) = do
+      dom <- go (Just (Var (getArgSort d) i)) d
+      fnArgs %= (:) ((Var (getArgSort dom) i), dom)
+      cod <- go Nothing c
       fnArgs %= tail
       return $ FunctionT i dom cod cs
-    go (LetT i def body) = do
-      def' <- go def
-      body' <- go body
+    go topl (LetT i def body) = do
+      def' <- go Nothing def
+      body' <- go Nothing body
       return $ LetT i def' body'
-    go AnyT = return AnyT
+    go topl AnyT = return AnyT
     
 resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
   let
@@ -268,13 +276,14 @@ resolveSignatures (FuncDecl name _)  = do
         Just (DatatypeDef _ preds _ _ _ _) -> do
           tryInfer <- use infer
           fargs <- use fnArgs
-          pArgs' <- zipWithM (maybeFreshPotl tryInfer fargs) pArgs (fmap isResParam preds)
+          defs <- use funcBodies
+          pArgs' <- zipWithM (maybeFreshPotl (tryInfer && name `Set.member` defs) fargs) pArgs (fmap isResParam preds)
           return (ScalarT (DatatypeT dtName tArgs' pArgs') ref pred)
         Nothing -> return og
     go og@(ScalarT _ _ _) = return og
     go (FunctionT name dom cod cost) = do
       dom' <- go dom
-      fnArgs %= (:) (Var (getArgSort dom) name)
+      fnArgs %= (:) ((Var (getArgSort dom) name), dom')
       cod' <- go cod
       fnArgs %= tail
       return $ FunctionT name dom' cod' cost
@@ -573,7 +582,7 @@ resolveFormula (Var _ x) = do
   env <- use environment
   pSyms <- use potentialVars
   ipSyms <- use inferredPotlVars
-  if Set.member x pSyms || Set.member x (Set.fromList (fmap fst (concat (foldr (:) [] ipSyms))))
+  if Set.member x pSyms || Set.member x (Set.fromList (fmap (\(x, _, _) -> x) (concat (foldr (:) [] ipSyms))))
     then return $ Var IntS x
     else case Map.lookup x (symbolsOfArity 0 env) of
       Just sch ->
@@ -798,7 +807,7 @@ freshId p s = do
 
 -- | 'freshInferredPotl' @prefix@ : create a name for a fresh potential variable name
 -- | corresponding to the pot'l of a fn argument which will be inferred
-freshInferredPotl :: Id -> String -> [Formula] -> Resolver Id
+freshInferredPotl :: Id -> String -> [(Formula, RType)] -> Resolver Id
 freshInferredPotl fname prefix args = do
   i <- use pvarCount 
   pvarCount %= (+ 1)
@@ -807,7 +816,8 @@ freshInferredPotl fname prefix args = do
   if Map.member x syms -- to avoid name collisions with existing vars
     then freshInferredPotl fname prefix args
     else do
-      inferredPotlVars %= Map.insertWith (flip (++)) fname [(x, args)]
+      env <- use environment
+      inferredPotlVars %= Map.insertWith (flip (++)) fname [(x, fst <$> args, addAllRefVars args env)]
       return x
 
 getArgSort = toSort . baseTypeOf

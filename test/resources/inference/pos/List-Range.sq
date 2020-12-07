@@ -1,0 +1,22 @@
+data IList a where
+	INil :: IList a
+	ICons :: x: a -> xs: IList {a | x < _v} -> IList a
+  
+termination measure ilen :: IList a -> {Int | _v >= 0} where
+  INil -> 0
+  ICons x xs -> 1 + ilen xs  
+
+measure ielems :: IList a -> Set a where
+  INil -> []
+  ICons x xs -> [x] + ielems xs
+
+inc :: x: Int -> {Int | _v == x + 1}
+dec :: x: Int -> {Int | _v == x - 1}
+
+qualifier { x >= y }
+
+range :: lo: Int -> hi: {Int | _v >= lo | _v - lo} -[1]-> {IList {Int | (lo <= _v) && (_v <= hi)} | ilen _v == (hi - lo)}
+range = \lo. \hi.
+  if lo >= hi 
+    then INil 
+    else ICons lo (range (inc lo) hi)

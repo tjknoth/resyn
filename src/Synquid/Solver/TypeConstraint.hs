@@ -51,6 +51,9 @@ import           Control.Monad.Trans.Except (throwE)
 import           Control.Lens hiding (both)
 import           Debug.Trace
 
+import Debug.Pretty.Simple
+
+
 -- | Initial typing state in the initial environment @env@ given @goal@
 initTypingState :: MonadHorn s => Goal -> Maybe PersistentTState -> s TypingState
 initTypingState goal mpts = do
@@ -70,20 +73,13 @@ initTypingState goal mpts = do
     _idCount = Map.empty,
     _versionCount = Map.empty,
     _resourceConstraints = [],
-    _resourceVars = Map.fromList rvars,
-    _inferredRVars = OMap.fromList [(p, Nothing) | (p, _) <- rvars],
+    _resourceVars = Map.fromList [(a, b) | (a, b, _) <- rvars],
+    _inferredRVars = OMap.fromList [(p, Nothing) | (p, _, _) <- rvars],
     _universalVars = Set.empty,
     _universalMeasures = Set.empty
   }
 
   let pts = maybe dpts id mpts
-  -- We have to create this auxiliary env for our well formed potential
-  -- constraints on our inferred potl vars, so that the proper preconditions
-  -- on our fn args will be in our environment.
-  -- TODO: should we have a different env for each rvar depending on what
-  -- variables it uses?
-  let env' = foldl (\acc (ident, ty) -> addPolyConstant ident (Monotype ty) acc) env
-           $ collectArgs $ toMonotype $ gSpec goal
 
   return TypingState {
     _persistentState = over universalVars (Set.union (initialFormulas env)) pts,
@@ -97,7 +93,7 @@ initTypingState goal mpts = do
     _matchCases = Set.empty,
     _cegisState = initCEGISState,
     _solveResConstraints = OMap.null (_inferredRVars pts) || gInferSolve goal,
-    _simpleConstraints = [WellFormedPotential env' (Var IntS p) | (p, _) <- rvars],
+    _simpleConstraints = [WellFormedPotential env' (Var IntS p) | (p, _, env') <- rvars],
     _hornClauses = [],
     _consistencyChecks = [],
     _errorContext = (noPos, empty)
