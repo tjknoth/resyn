@@ -145,43 +145,8 @@ resolveDeclaration (TypeDecl typeName typeVars typeBody) = do
 resolveDeclaration (FuncDecl funcName typeSchema) = do 
   tryInfer <- use infer
   defs <- use funcBodies
-  if tryInfer && (funcName `Set.member` defs) -- only infer usage of functions with implementations -- this will also fail if attempting synthesis
-    then updateAnnotations typeSchema >>= addNewSignature funcName
-    else addNewSignature funcName typeSchema
-  where
-    updateAnnotations :: RSchema -> Resolver RSchema
-    updateAnnotations (ForallT i s) = ForallT i <$> updateAnnotations s
-    updateAnnotations (ForallP i s) = ForallP i <$> updateAnnotations s
-    updateAnnotations (Monotype b) = Monotype <$> go Nothing b
+  addNewSignature funcName typeSchema
 
-    go :: Maybe Formula -> RType -> Resolver RType
-    go topl (ScalarT dt@(DatatypeT di tyargs absps) ref _) = do
-      tyargs' <- mapM (go Nothing) tyargs
-      fargs <- use fnArgs
-      let fargs' = case topl of
-            Just i -> (Var (toSort dt) valueVarName, ScalarT dt (Var (toSort dt) valueVarName |=| i) defPotential) : fargs
-            Nothing -> (Var (toSort dt) valueVarName, ScalarT dt ftrue defPotential) : fargs
-      pVar <- freshInferredPotl funcName "I" fargs'
-      return $ ScalarT (DatatypeT di tyargs' absps) ref (Var IntS pVar)
-    go topl (ScalarT dt ref _) = do
-      fargs <- use fnArgs
-      let fargs' = case topl of
-            Just i -> (Var (toSort dt) valueVarName, ScalarT dt (Var (toSort dt) valueVarName |=| i) defPotential) : fargs
-            Nothing -> (Var (toSort dt) valueVarName, ScalarT dt ftrue defPotential) : fargs
-      pVar <- freshInferredPotl funcName "I" fargs'
-      return $ ScalarT dt ref (Var IntS pVar)
-    go topl (FunctionT i d c cs) = do
-      dom <- go (Just (Var (getArgSort d) i)) d
-      fnArgs %= (:) ((Var (getArgSort dom) i), dom)
-      cod <- go Nothing c
-      fnArgs %= tail
-      return $ FunctionT i dom cod cs
-    go topl (LetT i def body) = do
-      def' <- go Nothing def
-      body' <- go Nothing body
-      return $ LetT i def' body'
-    go topl AnyT = return AnyT
-    
 resolveDeclaration d@(DataDecl dtName tParams pVarParams ctors) = do
   let
     (pParams, pVariances) = unzip pVarParams
@@ -261,37 +226,45 @@ resolveDeclaration (InlineDecl name args body) =
 resolveSignatures :: BareDeclaration -> Resolver ()
 resolveSignatures (FuncDecl name _)  = do
   sch <- uses environment ((Map.! name) . allSymbols)
-  sch' <- inferAbstractPotls >=> resolveSchema $ sch
+  sch' <- resolveSchema >=> inferPotls $ sch
   environment %= addPolyConstant name sch'
   environment %= addUnresolvedConstant name sch'
   where
-    inferAbstractPotls (ForallT name ss) = inferAbstractPotls ss >>= return . ForallT name
-    inferAbstractPotls (ForallP name ss) = inferAbstractPotls ss >>= return . ForallP name
-    inferAbstractPotls (Monotype t) = go t >>= return . Monotype
+    inferPotls (ForallT name ss) = ForallT name <$> inferPotls ss
+    inferPotls (ForallP name ss) = ForallP name <$> inferPotls ss
+    inferPotls (Monotype t) = Monotype <$> annotate Nothing t
 
-    go og@(ScalarT (DatatypeT dtName tArgs pArgs) ref pred) = do
-      tArgs' <- mapM go tArgs
+    annotate :: Maybe Formula -> RType -> Resolver RType
+    annotate current (ScalarT dt@(DatatypeT dtName tArgs pArgs) ref _) = do
+      tArgs' <- mapM (annotate Nothing) tArgs
+      fargs <- use fnArgs
+      let fargs' = case current of
+            Just x -> (Var (toSort dt) valueVarName, ScalarT dt (ref |&| (Var (toSort dt) valueVarName |=| x)) defPotential) : fargs
+            Nothing -> (Var (toSort dt) valueVarName, ScalarT dt ftrue defPotential) : fargs
       ds <- use $ environment . datatypes
       case Map.lookup dtName ds of
         Just (DatatypeDef _ preds _ _ _ _) -> do
           tryInfer <- use infer
-          fargs <- use fnArgs
           defs <- use funcBodies
           pArgs' <- zipWithM (maybeFreshPotl (tryInfer && name `Set.member` defs) fargs) pArgs (fmap isResParam preds)
-          return (ScalarT (DatatypeT dtName tArgs' pArgs') ref pred)
-        Nothing -> return og
-    go og@(ScalarT _ _ _) = return og
-    go (FunctionT name dom cod cost) = do
-      dom' <- go dom
-      fnArgs %= (:) ((Var (getArgSort dom) name), dom')
-      cod' <- go cod
+          pVar <- freshInferredPotl name "I" fargs'
+          return (ScalarT (DatatypeT dtName tArgs' pArgs') ref (Var IntS pVar))
+        Nothing -> throwResError $ text "Datatype definition not found:" <+> text dtName
+    annotate current (ScalarT dt ref _) = do
+      fargs <- use fnArgs
+      let fargs' = case current of
+            Just x -> (Var (toSort dt) valueVarName, ScalarT dt (ref |&| (Var (toSort dt) valueVarName |=| x)) defPotential) : fargs
+            Nothing -> (Var (toSort dt) valueVarName, ScalarT dt ftrue defPotential) : fargs
+      pVar <- freshInferredPotl name "I" fargs'
+      return $ ScalarT dt ref (Var IntS pVar)
+    annotate current (FunctionT name argT resT cost) = do
+      argT' <- annotate (Just (Var (getArgSort argT) name)) argT
+      fnArgs %= (:) (Var (getArgSort argT) name, argT')
+      resT' <- annotate Nothing resT
       fnArgs %= tail
-      return $ FunctionT name dom' cod' cost
-    go (LetT name def body) = do
-      def' <- go def
-      body' <- go body
-      return $ LetT name def' body'
-    go AnyT = return AnyT
+      return $ FunctionT name argT' resT' cost
+    annotate current (LetT name def body) = throwResError $ text "Encountered contextual type"
+    annotate current AnyT = return AnyT
 
     maybeFreshPotl tryInfer fargs arg isPred
       | isPred && tryInfer = fmap (Var IntS) $ freshInferredPotl name "F" fargs
