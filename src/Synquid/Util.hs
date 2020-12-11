@@ -158,6 +158,11 @@ pairGetter g1 g2 = to (\x -> (view g1 x, view g2 x))
 asInteger :: String -> Maybe Int
 asInteger s = if all isDigit s then Just $ read s else Nothing
 
+asBool :: String -> Maybe Bool
+asBool "true" = Just True
+asBool "false" = Just False
+asBool _ = Nothing
+
 {- Debug output -}
 
 -- | 'debugOutLevel' : Level above which debug output is ignored

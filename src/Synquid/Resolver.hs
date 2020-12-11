@@ -7,7 +7,8 @@ module Synquid.Resolver (
   resolveRefinedType, 
   addAllVariables, 
   ResolverState (..), 
-  instantiateSorts
+  instantiateSorts,
+  normalizeProgram
 ) where
 
 import Synquid.Logic
@@ -726,7 +727,6 @@ normalizeProgram p@Program{content = (PLet var val body)} =
   Program (PLet var (normalizeProgram val) (normalizeProgram body)) AnyT
 normalizeProgram p = p
 
-
 nominalPredApp (PredSig pName argSorts resSort) = Pred resSort pName (zipWith Var argSorts deBrujns)
 
 solveSortConstraints :: Resolver SortSubstitution
@@ -814,3 +814,146 @@ withLocalEnv c = do
   res <- c
   environment .= oldEnv
   return res
+
+-- Conditional qualifier shit
+
+-- | A conditional qualifier, used as a template for building resource annotations
+-- | with conditional expressions.
+data Qualifier
+  = Cond Guard Qualifier Qualifier
+  | RVar
+  deriving (Ord, Eq, Show)
+
+-- | A guard qualifier, part of conditional qualifiers.
+-- | Guard qualifiers are just Formulas, except we use (Var AnyS "sym") to
+-- | represent variable holes.
+type Guard = Formula
+
+-- | Get all the conditional qualifiers of a normalized program
+extractCondFromProg :: UProgram -> [Qualifier]
+extractCondFromProg (Program (PFun _ body) _) = extractCondFromProg body
+extractCondFromProg (Program (PMatch _ cases) _) =
+  mconcat $ fmap extractFromCase cases
+  where
+    extractFromCase (Case _ _ e) = extractCondFromProg e
+extractCondFromProg (Program (PFix _ body) _) = extractCondFromProg body
+extractCondFromProg (Program (PLet _ val body) _) =
+  (++) (extractCondFromProg val) (extractCondFromProg body)
+extractCondFromProg (Program (PIf (Program (PLet var val body) _) p1 p2) _) =
+  undefined
+extractCondFromProg (Program (PIf (Program (PFun _ _) _) _ _) _) = mempty
+extractCondFromProg (Program (PIf (Program (PFix _ _) _) _ _) _) = mempty
+extractCondFromProg (Program (PIf (Program PErr _) _ _) _) = mempty
+extractCondFromProg (Program (PIf g p1 p2) _) = do
+  p1s <- extractCondFromProg p1
+  p2s <- extractCondFromProg p2
+  gs <- progToGuard g
+  return $ Cond gs p1s p2s
+extractCondFromProg _ = pure RVar
+
+psymToLit :: Id -> Guard
+psymToLit s = case asInteger s of
+  Just n -> IntLit n
+  Nothing -> case asBool s of
+    Just b -> BoolLit b
+    Nothing -> Var AnyS "sym"
+
+psymToOp :: Id -> Maybe BinOp
+psymToOp "*" = Just Times
+psymToOp "+" = Just Plus
+psymToOp "-" = Just Minus
+psymToOp "==" = Just Eq
+psymToOp "!=" = Just Neq
+psymToOp "<" = Just Lt
+psymToOp "<=" = Just Le
+psymToOp ">" = Just Gt
+psymToOp ">=" = Just Ge
+psymToOp "&&" = Just And
+psymToOp "||" = Just Or
+psymToOp _ = Nothing
+
+psymToUn :: Id -> Maybe UnOp
+psymToUn "!" = Just Not
+psymToUn "-" = Just Neg
+
+-- Convert a guard program to a list of guard templates.
+progToGuard :: UProgram -> [Guard]
+progToGuard (Program (PSymbol s) _) = pure $ psymToLit s
+progToGuard (Program (PTick _ p) _) = progToGuard p
+-- We need a bunch of special cases for bin ops
+progToGuard (Program (PApp (Program (PApp (Program (PSymbol id) _) as) _) bs) _) = do
+  op <- maybeToList $ psymToOp id
+  a <- progToGuard as
+  b <- progToGuard bs
+  return $ Binary op a b
+progToGuard (Program (PApp (Program (PSymbol id) _) as) _) = do
+  op <- maybeToList $ psymToUn id
+  a <- progToGuard as
+  return $ Unary op a
+-- progToGuard (Program (PApp (Program (PSymbol ident) _) a) _) = fmap (AppE (FnE ident)) (progToGuard a)
+-- progToGuard (Program (PApp f a) _) = AppE <$> progToGuard f <*> progToGuard a
+-- progToGuard (Program (PFun arg body) _) = pure $ LamE arg body
+progToGuard (Program (PIf i t e) _) = Ite <$> progToGuard i <*> progToGuard t <*> progToGuard e
+progToGuard (Program (PMatch _ cases) _) = mconcat $ fmap (\(Case _ _ p) -> progToGuard p) cases
+progToGuard (Program PHole _) = pure $ Var AnyS "sym"
+progToGuard _ = []
+
+-- | Synthesize a resource annotation from multiple possible qualifier structures.
+synthResAnnots :: Id -> String -> [(Formula, RType)] -> [Qualifier] -> Resolver Formula
+synthResAnnots fname prefix vars quals = do
+  let base = if RVar `elem` quals then return fzero else freshInferredPotl fname prefix vars >>= return . Var IntS
+  foldl' (\a b -> (|+|) <$> a <*> b) base $ fmap (synthResAnnot fname prefix vars) quals
+
+-- | Synthesize a resource annotation, which may include conditional expressions,
+-- | based on the available in-scope variables (with their types) and a given
+-- | conditional qualifier. Also takes the name of the function this resource annotation
+-- | will be inserted into and a prefix for the fresh resource variables
+synthResAnnot :: Id -> String -> [(Formula, RType)] -> Qualifier -> Resolver Formula
+synthResAnnot fname prefix vars qual = do
+  let forms = [evalStateT (subst qual) vs | vs <- cartProd (nvars qual) vars]
+  foldl' (\a b -> (|+|) <$> a <*> b) (return fzero) forms
+  
+  where
+    -- Get the number of vars we have to subst for here
+    nvars :: Qualifier -> Int
+    nvars (Cond fml q1 q2) = (nvarsG fml) + (nvars q1) + (nvars q2)
+    nvars RVar             = 0
+
+    nvarsG :: Guard -> Int
+    nvarsG (Var AnyS "sym") = 1
+    nvarsG (Binary _ f1 f2) = (nvarsG f1) + (nvarsG f2)
+    nvarsG (Unary _ f)      = nvarsG f
+    nvarsG (Ite i t e)      = (nvarsG i) + (nvarsG t) + (nvarsG e)
+    nvarsG _                = 0
+
+    cartProd :: Int -> [a] -> [[a]]
+    cartProd 0 _  = return []
+    cartProd n xs = do
+      x <- xs
+      prod <- cartProd (n - 1) xs
+      return $ x : prod
+
+    -- Substitute in a list of vars in order into a qualifier and substitute in
+    -- fresh resource variables for rvar holes
+    subst :: Qualifier -> StateT [(Formula, RType)] (StateT ResolverState (Except ErrorMessage)) Formula
+    subst (Cond fml q1 q2) = do
+      fml' <- substG fml
+      q1'  <- subst q1
+      q2'  <- subst q2
+      return $ Ite fml' q1' q2'
+    subst RVar = do
+      pVar <- lift $ freshInferredPotl fname prefix vars
+      return $ Var IntS pVar
+
+    substG :: Guard -> StateT [(Formula, RType)] (StateT ResolverState (Except ErrorMessage)) Formula
+    substG (Var AnyS "sym") = do
+      svars <- get
+      case svars of
+        (v, _):xs -> do
+          put xs
+          return v
+        [] -> error "no vars to subst in with"
+    substG (Binary op f1 f2) = Binary op <$> substG f1 <*> substG f2
+    substG (Unary op f)     = Unary op <$> substG f
+    substG (Ite i t e)      = Ite <$> substG i <*> substG t <*> substG e
+    substG q = return q
