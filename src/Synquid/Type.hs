@@ -302,7 +302,6 @@ schemaSubstitutePotl ts (ForallT i s) = ForallT i $ schemaSubstitutePotl ts s
 schemaSubstitutePotl ts (ForallP i s) = ForallP i $ schemaSubstitutePotl ts s
 schemaSubstitutePotl ts (Monotype b) = Monotype $ substitutePotl ts b
 
--- TODO: this assumes inferred potls can only be vars
 substitutePotl :: PotlSubstitution -> RType -> RType
 substitutePotl ts (ScalarT (DatatypeT di ta abs) ref v) =
   ScalarT (DatatypeT di (fmap (substitutePotl ts) ta) (fmap (lookupIPotl ts) abs)) ref (lookupIPotl ts v)
@@ -312,10 +311,10 @@ substitutePotl ts (FunctionT i d c cs) = FunctionT i (substitutePotl ts d) (subs
 substitutePotl ts (LetT i def body) = LetT i (substitutePotl ts def) (substitutePotl ts body)
 substitutePotl _ AnyT = AnyT
 
--- TODO: This only works if the formula is only an inference var and nothing else
---       If the formula isn't only an inference var but contains one, this
---       doesn't replace it
 lookupIPotl :: PotlSubstitution -> Formula -> Formula
+lookupIPotl ts (Ite g t e) = Ite (lookupIPotl ts g) (lookupIPotl ts t) (lookupIPotl ts e)
+lookupIPotl ts (Binary op a b) = Binary op (lookupIPotl ts a) (lookupIPotl ts b)
+lookupIPotl ts (Unary op arg) = Unary op (lookupIPotl ts arg)
 lookupIPotl ts v@(Var IntS pVar) = case OMap.lookup pVar ts of
     Just (Just x)  -> x
     _              -> v

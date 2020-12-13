@@ -30,7 +30,21 @@ import           Data.List
 import qualified Data.Foldable as Foldable
 import           Control.Arrow (first)
 
+import Debug.Pretty.Simple
+
 {- Interface -}
+
+-- | A conditional qualifier, used as a template for building resource annotations
+-- | with conditional expressions.
+data Qualifier
+  = Cond Guard Qualifier Qualifier
+  | RVar
+  deriving (Ord, Eq, Show)
+
+-- | A guard qualifier, part of conditional qualifiers.
+-- | Guard qualifiers are just Formulas, except we use (Var AnyS "sym") to
+-- | represent variable holes.
+type Guard = Formula
 
 data ResolverState = ResolverState {
   _environment :: Environment,
@@ -38,6 +52,7 @@ data ResolverState = ResolverState {
   _checkingGoals :: [(Id, (UProgram, SourcePos))],
   _condQualifiers :: [Formula],
   _typeQualifiers :: [Formula],
+  _inferCondQuals :: [Qualifier],
   _mutuals :: Map Id [Id],
   _inlines :: Map Id ([Id], Formula),
   _sortConstraints :: [SortConstraint],
@@ -60,6 +75,7 @@ initResolverState infer decls = ResolverState {
   _checkingGoals = [],
   _condQualifiers = [],
   _typeQualifiers = [],
+  _inferCondQuals = [],
   _mutuals = Map.empty,
   _inlines = Map.empty,
   _sortConstraints = [],
@@ -88,6 +104,8 @@ resolveDecls tryInfer declarations =
     go = do
       -- Pass 1: collect all declarations and resolve sorts, but do not resolve refinement types yet
       mapM_ (extractPos resolveDeclaration) declarations'
+      gs <- use goals
+      inferCondQuals .= concat (fmap (\(_, (x, _)) -> extractQuals x) gs)
       -- Pass 2: resolve refinement types in signatures
       mapM_ (extractPos resolveSignatures) declarations'
     declarations' = setDecl : declarations
@@ -248,16 +266,16 @@ resolveSignatures (FuncDecl name _)  = do
           tryInfer <- use infer
           defs <- use funcBodies
           pArgs' <- zipWithM (maybeFreshPotl (tryInfer && name `Set.member` defs) fargs) pArgs (fmap isResParam preds)
-          pVar <- freshInferredPotl name "I" fargs'
-          return (ScalarT (DatatypeT dtName tArgs' pArgs') ref (Var IntS pVar))
+          form <- synthResAnnots name "I" fargs'
+          return (ScalarT (DatatypeT dtName tArgs' pArgs') ref form)
         Nothing -> throwResError $ text "Datatype definition not found:" <+> text dtName
     annotate current (ScalarT dt ref _) = do
       fargs <- use fnArgs
       let fargs' = case current of
             Just x -> (Var (toSort dt) valueVarName, ScalarT dt (ref |&| (Var (toSort dt) valueVarName |=| x)) defPotential) : fargs
             Nothing -> (Var (toSort dt) valueVarName, ScalarT dt ftrue defPotential) : fargs
-      pVar <- freshInferredPotl name "I" fargs'
-      return $ ScalarT dt ref (Var IntS pVar)
+      form <- synthResAnnots name "I" fargs'
+      return $ ScalarT dt ref form
     annotate current (FunctionT name argT resT cost) = do
       argT' <- annotate (Just (Var (getArgSort argT) name)) argT
       fnArgs %= (:) (Var (getArgSort argT) name, argT')
@@ -268,7 +286,7 @@ resolveSignatures (FuncDecl name _)  = do
     annotate current AnyT = return AnyT
 
     maybeFreshPotl tryInfer fargs arg isPred
-      | isPred && tryInfer = fmap (Var IntS) $ freshInferredPotl name "F" fargs
+      | isPred && tryInfer = synthResAnnots name "F" fargs
       | otherwise          = return arg
 
     -- Checks if an abstract arg is a predicate or a resource
@@ -817,39 +835,27 @@ withLocalEnv c = do
 
 -- Conditional qualifier shit
 
--- | A conditional qualifier, used as a template for building resource annotations
--- | with conditional expressions.
-data Qualifier
-  = Cond Guard Qualifier Qualifier
-  | RVar
-  deriving (Ord, Eq, Show)
-
--- | A guard qualifier, part of conditional qualifiers.
--- | Guard qualifiers are just Formulas, except we use (Var AnyS "sym") to
--- | represent variable holes.
-type Guard = Formula
-
 -- | Get all the conditional qualifiers of a normalized program
-extractCondFromProg :: UProgram -> [Qualifier]
-extractCondFromProg (Program (PFun _ body) _) = extractCondFromProg body
-extractCondFromProg (Program (PMatch _ cases) _) =
+extractQuals :: UProgram -> [Qualifier]
+extractQuals (Program (PFun _ body) _) = extractQuals body
+extractQuals (Program (PMatch _ cases) _) =
   mconcat $ fmap extractFromCase cases
   where
-    extractFromCase (Case _ _ e) = extractCondFromProg e
-extractCondFromProg (Program (PFix _ body) _) = extractCondFromProg body
-extractCondFromProg (Program (PLet _ val body) _) =
-  (++) (extractCondFromProg val) (extractCondFromProg body)
-extractCondFromProg (Program (PIf (Program (PLet var val body) _) p1 p2) _) =
+    extractFromCase (Case _ _ e) = extractQuals e
+extractQuals (Program (PFix _ body) _) = extractQuals body
+extractQuals (Program (PLet _ val body) _) =
+  (++) (extractQuals val) (extractQuals body)
+extractQuals (Program (PIf (Program (PLet var val body) _) p1 p2) _) =
   undefined
-extractCondFromProg (Program (PIf (Program (PFun _ _) _) _ _) _) = mempty
-extractCondFromProg (Program (PIf (Program (PFix _ _) _) _ _) _) = mempty
-extractCondFromProg (Program (PIf (Program PErr _) _ _) _) = mempty
-extractCondFromProg (Program (PIf g p1 p2) _) = do
-  p1s <- extractCondFromProg p1
-  p2s <- extractCondFromProg p2
+extractQuals (Program (PIf (Program (PFun _ _) _) _ _) _) = mempty
+extractQuals (Program (PIf (Program (PFix _ _) _) _ _) _) = mempty
+extractQuals (Program (PIf (Program PErr _) _ _) _) = mempty
+extractQuals (Program (PIf g p1 p2) _) = do
+  p1s <- extractQuals p1
+  p2s <- extractQuals p2
   gs <- progToGuard g
   return $ Cond gs p1s p2s
-extractCondFromProg _ = pure RVar
+extractQuals _ = pure RVar
 
 psymToLit :: Id -> Guard
 psymToLit s = case asInteger s of
@@ -899,8 +905,9 @@ progToGuard (Program PHole _) = pure $ Var AnyS "sym"
 progToGuard _ = []
 
 -- | Synthesize a resource annotation from multiple possible qualifier structures.
-synthResAnnots :: Id -> String -> [(Formula, RType)] -> [Qualifier] -> Resolver Formula
-synthResAnnots fname prefix vars quals = do
+synthResAnnots :: Id -> String -> [(Formula, RType)] -> Resolver Formula
+synthResAnnots fname prefix vars = do
+  quals <- use inferCondQuals
   let base = if RVar `elem` quals then return fzero else freshInferredPotl fname prefix vars >>= return . Var IntS
   foldl' (\a b -> (|+|) <$> a <*> b) base $ fmap (synthResAnnot fname prefix vars) quals
 
@@ -909,10 +916,13 @@ synthResAnnots fname prefix vars quals = do
 -- | conditional qualifier. Also takes the name of the function this resource annotation
 -- | will be inserted into and a prefix for the fresh resource variables
 synthResAnnot :: Id -> String -> [(Formula, RType)] -> Qualifier -> Resolver Formula
-synthResAnnot fname prefix vars qual = do
-  let forms = [evalStateT (subst qual) vs | vs <- cartProd (nvars qual) vars]
-  foldl' (\a b -> (|+|) <$> a <*> b) (return fzero) forms
-  
+synthResAnnot fname prefix vars qual =
+  if (length vars) < (nvars qual)
+    then return fzero
+    else do
+      let forms = [evalStateT (subst qual) vs | vs <- fmap (take (nvars qual)) (permutations vars)]
+      foldl' (\a b -> (|+|) <$> a <*> b) (return fzero) forms
+
   where
     -- Get the number of vars we have to subst for here
     nvars :: Qualifier -> Int
@@ -925,13 +935,6 @@ synthResAnnot fname prefix vars qual = do
     nvarsG (Unary _ f)      = nvarsG f
     nvarsG (Ite i t e)      = (nvarsG i) + (nvarsG t) + (nvarsG e)
     nvarsG _                = 0
-
-    cartProd :: Int -> [a] -> [[a]]
-    cartProd 0 _  = return []
-    cartProd n xs = do
-      x <- xs
-      prod <- cartProd (n - 1) xs
-      return $ x : prod
 
     -- Substitute in a list of vars in order into a qualifier and substitute in
     -- fresh resource variables for rvar holes
