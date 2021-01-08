@@ -20,6 +20,7 @@ import Synquid.Util
 
 import           Control.Monad.Except
 import           Control.Monad.State
+import           Control.Monad.Trans.Maybe
 import           Control.Lens
 import qualified Data.Map as Map
 import           Data.Map (Map)
@@ -908,8 +909,9 @@ progToGuard _ = []
 synthResAnnots :: Id -> String -> [(Formula, RType)] -> Resolver Formula
 synthResAnnots fname prefix vars = do
   quals <- use inferCondQuals
-  let base = if RVar `elem` quals then return fzero else freshInferredPotl fname prefix vars >>= return . Var IntS
-  foldl' (\a b -> (|+|) <$> a <*> b) base $ fmap (synthResAnnot fname prefix vars) quals
+  let quals' = delete RVar $ nub quals
+  let base = freshInferredPotl fname prefix vars >>= return . Var IntS
+  foldl' (\a b -> (|+|) <$> a <*> b) base $ fmap (synthResAnnot fname prefix vars) quals'
 
 -- | Synthesize a resource annotation, which may include conditional expressions,
 -- | based on the available in-scope variables (with their types) and a given
@@ -920,8 +922,8 @@ synthResAnnot fname prefix vars qual =
   if (length vars) < (nvars qual)
     then return fzero
     else do
-      let forms = [evalStateT (subst qual) vs | vs <- fmap (take (nvars qual)) (permutations vars)]
-      foldl' (\a b -> (|+|) <$> a <*> b) (return fzero) forms
+      forms <- fmap catMaybes $ sequenceA [runMaybeT (evalStateT (subst qual) vs) | vs <- fmap (take (nvars qual)) (permutations vars)]
+      return $ foldl' (|+|) fzero forms
 
   where
     -- Get the number of vars we have to subst for here
@@ -938,25 +940,38 @@ synthResAnnot fname prefix vars qual =
 
     -- Substitute in a list of vars in order into a qualifier and substitute in
     -- fresh resource variables for rvar holes
-    subst :: Qualifier -> StateT [(Formula, RType)] (StateT ResolverState (Except ErrorMessage)) Formula
+    subst :: Qualifier -> StateT [(Formula, RType)] (MaybeT (StateT ResolverState (Except ErrorMessage))) Formula
     subst (Cond fml q1 q2) = do
       fml' <- substG fml
       q1'  <- subst q1
       q2'  <- subst q2
       return $ Ite fml' q1' q2'
     subst RVar = do
-      pVar <- lift $ freshInferredPotl fname prefix vars
+      pVar <- lift $ lift $ freshInferredPotl fname prefix vars
       return $ Var IntS pVar
 
-    substG :: Guard -> StateT [(Formula, RType)] (StateT ResolverState (Except ErrorMessage)) Formula
+    -- Returns if the type is a datatype or not.
+    -- TODO: For now, we never substitute in datatype vars. We should fix this.
+    isDT :: TypeSkeleton r p -> Bool
+    isDT (ScalarT (DatatypeT _ _ _) _ _) = True
+    isDT (ScalarT _ _ _) = False
+    isDT _               = True
+
+    substG :: Guard -> StateT [(Formula, RType)] (MaybeT (StateT ResolverState (Except ErrorMessage))) Formula
     substG (Var AnyS "sym") = do
       svars <- get
       case svars of
-        (v, _):xs -> do
-          put xs
-          return v
+        (v, t):xs -> do
+          if isDT t
+            then lift mzero
+            else do
+              put xs
+              return v
         [] -> error "no vars to subst in with"
     substG (Binary op f1 f2) = Binary op <$> substG f1 <*> substG f2
     substG (Unary op f)     = Unary op <$> substG f
     substG (Ite i t e)      = Ite <$> substG i <*> substG t <*> substG e
     substG q = return q
+
+
+-- 
